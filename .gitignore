@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+lift-journal-backup-*.json
+screenshots/
+test-results/
+_site/

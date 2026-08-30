@@ -1,0 +1,11 @@
+{
+  "name": "lift-journal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check js/data.js && node --check js/storage.js && node --check js/app.js && node --check sw.js && node scripts/check.mjs",
+    "serve": "python3 -m http.server 4173",
+    "verify:videos": "node scripts/verify-videos.mjs"
+  }
+}

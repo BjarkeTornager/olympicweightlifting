@@ -4,13 +4,18 @@ Lift Journal is a mobile-first Olympic weightlifting program and training log fo
 
 ## What it includes
 
-- Dashboard with current PRs, total, bodyweight, immediate targets, weekly programming, and recent sessions
+- Dashboard with an immediate Start/Resume action, selectable training week, compact PRs, targets, and recent sessions
+- Platform-inspired visual theme with an overhead-lift SVG illustration, competition-plate accents, and scoreboard-style PRs; no external fonts or images required
 - Persistent in-progress workouts: start a programmed day, log each set, navigate away, and resume later
-- Set-level weight, reps, RPE, and optional success/miss status
+- Set-level weight, reps, optional RPE, and explicit made/miss or logged status
+- One expanded exercise at a time, quick weight adjustments, copy-previous-set controls, and previous-session reference
+- Automatic load progression from verified prior workouts, with current recovery and a visible explanation
+- Weight and rep edits carry forward to later unlogged sets without overwriting direct edits
+- Technique overlay, collapsible notes, and a bottom workout action within thumb reach
 - Separate athlete notes, coach cues, and overall coach notes
 - Editable and deletable training history with exercise and date filters
 - Editable PRs with possible-PR prompts after finishing a workout
-- Dependency-free SVG progress charts for six core lifts
+- A selectable SVG progress chart for six core lifts, with 30-day, 90-day, and all-time views
 - Searchable Catalyst Athletics exercise library with privacy-enhanced YouTube embeds
 - Versioned JSON export/import
 - Installable PWA with an offline app shell
@@ -34,6 +39,34 @@ npm run check
 
 There are no npm dependencies; the script only uses Node.js itself.
 
+### End-to-end browser tests
+
+Use a recent Node.js version with built-in WebSocket support (Node 22 or later)
+and Google Chrome. Start Chrome in a separate
+terminal with a temporary profile:
+
+```bash
+chrome_profile=$(mktemp -d /tmp/lift-journal-browser.XXXXXX)
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless=new --disable-gpu --no-first-run \
+  --remote-debugging-address=127.0.0.1 --remote-debugging-port=9223 \
+  --user-data-dir="$chrome_profile" about:blank
+```
+
+Then run `npm run test:e2e`. On other operating systems, use the local Chrome
+executable path. `CDP_PORT` can override the debugging port.
+
+The suite serves the production files under a repository subpath on a temporary
+local port, creates a separate browser context, and disposes both afterward. It
+never clears data in an existing tab. It uses touch and keyboard events for logging,
+checks all six views at widths from 320 to 1440 pixels, and covers drafts,
+history, PRs, chart filters, backups, and offline use with the test server stopped.
+YouTube media responses
+are stubbed; the separate video verification command checks live availability.
+Screenshots and a JSON report are saved to `/tmp/lift-journal-e2e-results`
+(override with `E2E_OUTPUT`). Browser emulation does not replace testing Safari
+and the on-screen keyboard on a physical iPhone.
+
 The video catalog can be rechecked against YouTube at any time (internet required):
 
 ```bash
@@ -49,6 +82,7 @@ index.html                 Semantic app shell and dialogs
 styles.css                Mobile-first visual system and responsive layout
 js/data.js                Athlete defaults, PRs, exercise library, and program definition
 js/storage.js             Versioned local persistence, migration, export, and import
+js/progression.js         Pure progression rules, target planning, and explicit set logging
 js/app.js                 Views, workout workflow, charts, and interactions
 manifest.webmanifest       PWA metadata and repository-relative start URL
 sw.js                      Same-origin offline app-shell cache
@@ -73,6 +107,48 @@ Edit `PROGRAM_DEFINITION` in [`js/data.js`](./js/data.js). Every programmed exer
 - `videoRef`
 
 Exercise descriptions, cues, video IDs, and Catalyst source links live in `EXERCISES` in the same file. Keep IDs stable once sessions have been logged.
+
+## Automatic progression
+
+Start a programmed workout, then choose **Good · use progression** under
+**Recovery today** to apply eligible increases. Until recovery is selected,
+the app repeats the previous load and explains any available increase.
+**Limited** recovery keeps the previous load. Changing recovery or the session
+date only recalculates untouched exercises; entered work is preserved.
+
+The next workout for the same program and training day adds **2.5 kg** when:
+
+- The most recent earlier workout includes the exercise and it is complete.
+- Every prescribed working set is explicitly logged, with no misses.
+- Every set meets the snapshotted weight and rep targets.
+- You marked the sets strong and controlled, or recorded RPE 1–8 on every set.
+- No recorded set is above RPE 8, and current recovery is good.
+
+The baseline is the lightest successful working-set load, so a heavy single
+does not raise every set next time. The prescribed set count and rep target
+stay unchanged. Warm-ups mixed into the working sets can prevent an increase.
+Same-date repeats and future-dated history cannot compound increases.
+Historical records without verified logging remain readable and editable, but
+cannot qualify for an automatic increase.
+
+Each weighted program exercise can define `progression: { step: 2.5, maxWeight }`.
+Explicit load ranges are ceilings: the app holds when the next full increase
+would exceed the ceiling. A `null` ceiling means no program-specific limit is
+configured (currently pause cleans and overhead squats). Saturday's coached
+loads and accessories with unspecified weights stay manual. Edit the program
+when its training ranges need to change; PR edits alone do not change them.
+
+Within a workout, a weight or rep change updates later unlogged sets unless
+that value was edited directly. It does not mark those sets performed.
+Changing a recorded weight or rep count clears its previous result.
+Use **Made**, **Miss**, or **Log set** to record each set. **Complete exercise**
+requires every remaining set to be logged; finishing a partial workout saves
+only the recorded sets. Partial sessions and deleted prescribed sets do not
+qualify for an increase.
+
+Targets and progression reasons are included in drafts, history, and JSON
+backups. `npm run check` includes progression unit tests; `npm run test:e2e`
+also verifies successive increases, recovery holds, and draft persistence.
 
 ## Data storage and backups
 

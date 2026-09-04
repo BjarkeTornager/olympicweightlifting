@@ -18,6 +18,8 @@ import {
   saveState,
 } from "./storage.js";
 
+import { PROGRESSION_VERSION, planExercise, isLoggedSet, isValidLoggedSet, updatePendingSets } from "./progression.js";
+
 const main = document.querySelector("#app-content");
 const toast = document.querySelector("#toast");
 const confirmDialog = document.querySelector("#confirm-dialog");
@@ -32,6 +34,11 @@ let prDialogContinuation = null;
 let deferredInstallPrompt = null;
 let lastRenderedRoute = "";
 const historyFilters = { exerciseId: "", dateFrom: "", dateTo: "" };
+let selectedDayId = "";
+let historyFiltersOpen = false;
+let progressExerciseId = "snatch";
+let progressPeriod = "all";
+const techniqueDialog = document.querySelector("#technique-dialog");
 
 try {
   state = loadState();
@@ -119,7 +126,7 @@ function routeTitle(route) {
 function persist({ quiet = true } = {}) {
   try {
     state = saveState(state);
-    if (!quiet) showToast("Saved locally");
+    if (!quiet) showToast("Saved");
     return true;
   } catch (error) {
     showToast(error.message, { error: true, duration: 6500 });
@@ -233,149 +240,79 @@ function renderInstallCard() {
 }
 
 function renderDashboard() {
-  const total = Number(state.prs.snatch || 0) + Number(state.prs.clean_and_jerk || 0);
-  const recent = [...state.sessions]
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.finishedAt).localeCompare(String(a.finishedAt)))
-    .slice(0, 4);
-  const today = new Date().getDay();
+  const today = new Date();
+  const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
+  const days = PROGRAM_DEFINITION.days;
+  const nextDay = days.find((day) => day.weekday >= (today.getDay() || 7)) ?? days[0];
+  const selected = getProgramDay(selectedDayId) ?? nextDay;
   const active = state.activeWorkout;
-
+  const recent = [...state.sessions].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.finishedAt).localeCompare(String(a.finishedAt))).slice(0, 3);
+  const weekSessions = state.sessions.filter((session) => session.date >= localIsoDate(weekStart) && session.date <= localIsoDate(today));
+  const total = Number(state.prs.snatch || 0) + Number(state.prs.clean_and_jerk || 0);
   return `
-    <section class="page" aria-labelledby="dashboard-title">
-      <header class="page-header">
-        <div class="page-header-copy">
-          <p class="eyebrow">${escapeHtml(formatDate(localIsoDate(), { weekday: "long", day: "numeric", month: "long" }))}</p>
-          <h1 id="dashboard-title">Train with intent.</h1>
-          <p class="page-lead">Your technique-first program, training log and progress—kept locally on this device.</p>
-        </div>
-        <a class="button button-secondary" href="#progress">Edit PRs</a>
+    <section class="page dashboard-page" aria-labelledby="dashboard-title">
+      <header class="page-header home-heading">
+        <div><p class="eyebrow">${escapeHtml(formatDate(localIsoDate(), { weekday: "long", day: "numeric", month: "long" }))}</p>
+        <h1 id="dashboard-title">Your platform awaits.</h1></div>
+        <span class="week-count">${weekSessions.length} ${weekSessions.length === 1 ? "session" : "sessions"} this week</span>
       </header>
-
-      ${startupError ? `<div class="storage-note" role="alert"><strong>Storage notice:</strong> ${escapeHtml(startupError)}</div>` : ""}
-
-      <div class="metric-grid" aria-label="Current athlete numbers">
-        ${metricCard("Snatch PR", state.prs.snatch)}
-        ${metricCard("Clean & jerk PR", state.prs.clean_and_jerk)}
-        ${metricCard("Current total", total)}
-        ${metricCard("Bodyweight", state.profile.bodyweight)}
-      </div>
-
-      <section class="section" aria-labelledby="immediate-targets-title">
-        <div class="section-header">
-          <div>
-            <p class="eyebrow">Immediate target</p>
-            <h2 id="immediate-targets-title">70 / 105 · 175 total</h2>
-          </div>
-        </div>
-        <div class="goal-grid">
-          ${goalCard("snatch", 70)}
-          ${goalCard("clean_and_jerk", 105)}
-        </div>
-      </section>
-
-      ${
-        active
-          ? `
-            <aside class="card resume-card section" aria-label="Workout in progress">
-              <div>
-                <p class="eyebrow">Saved workout in progress</p>
-                <h2>${escapeHtml(active.title || "Open session")}</h2>
-                <p>${escapeHtml(formatDate(active.date))} · ${active.exercises?.filter((entry) => entry.completed).length ?? 0} of ${active.exercises?.length ?? 0} exercises complete</p>
-              </div>
-              <a class="button button-primary" href="#workout">Resume workout</a>
-            </aside>
-          `
-          : ""
-      }
-
-      <section class="section" aria-labelledby="weekly-plan-title">
-        <div class="section-header">
-          <div>
-            <p class="eyebrow">Current program</p>
-            <h2 id="weekly-plan-title">Your training week</h2>
-          </div>
-          <p>${escapeHtml(PROGRAM_DEFINITION.reviewWindow)} review window</p>
-        </div>
-        <div class="weekly-grid">
-          ${PROGRAM_DEFINITION.days
-            .map(
-              (day) => `
-                <article class="card day-card ${day.weekday === today ? "is-today" : ""}">
-                  <div class="day-label-row">
-                    <span class="day-label">${escapeHtml(day.name)}</span>
-                    ${day.weekday === today ? '<span class="today-pill">Today</span>' : ""}
-                  </div>
-                  <h3>${escapeHtml(day.title)}</h3>
-                  <p class="day-focus">${escapeHtml(day.focus)}</p>
-                  <ol class="day-exercises">
-                    ${day.exercises
-                      .slice(0, 4)
-                      .map((item) => `<li>${escapeHtml(getExercise(item.exerciseId).name)} · ${setsLabel(item.sets)} × ${escapeHtml(item.reps)}</li>`)
-                      .join("")}
-                    ${day.exercises.length > 4 ? `<li>+ ${day.exercises.length - 4} accessory</li>` : ""}
-                  </ol>
-                  <button class="button button-secondary button-block" data-action="start-day" data-day-id="${escapeHtml(day.id)}">
-                    ${active ? "View workout" : `Start ${escapeHtml(day.name)}`}
-                  </button>
-                </article>
-              `,
-            )
-            .join("")}
-        </div>
-      </section>
-
-      <section class="section dashboard-lower-grid" aria-label="Recent training and priorities">
-        <article class="panel">
-          <div class="section-header">
-            <div>
-              <p class="eyebrow">Training history</p>
-              <h2>Recent sessions</h2>
-            </div>
-            <a class="text-action" href="#history">View all</a>
-          </div>
-          ${
-            recent.length
-              ? `<ul class="recent-list">
-                  ${recent
-                    .map(
-                      (session) => `
-                        <li class="recent-item">
-                          <span class="recent-date">${escapeHtml(formatDate(session.date, { day: "numeric", month: "short" }))}</span>
-                          <span class="recent-name">${escapeHtml(session.title || "Training session")}</span>
-                          <span class="recent-meta">${escapeHtml(sessionExerciseNames(session))}</span>
-                        </li>
-                      `,
-                    )
-                    .join("")}
-                </ul>`
-              : '<div class="empty-state"><h3>No sessions yet</h3><p>Start a programmed day and your latest work will appear here.</p><a class="button button-primary" href="#workout">Log a workout</a></div>'
-          }
+      ${startupError ? `<div class="storage-note" role="alert">${escapeHtml(startupError)}</div>` : ""}
+      <div class="home-primary">
+        <article class="training-hero ${active ? "resume-card" : ""}" aria-label="${active ? "Workout in progress" : "Selected workout"}">
+          <div class="hero-heading"><span class="hero-badge">${active ? "In progress" : selected.weekday === today.getDay() ? "Today’s session" : selected.name + " · planned session"}</span><span class="hero-symbol" aria-hidden="true"><i></i><i></i><i></i></span></div>
+          <svg class="platform-art" viewBox="0 0 480 120" fill="none" aria-hidden="true" focusable="false">
+            <path class="platform-grid" d="M24 109h432M48 93h384M72 77h336M100 77l-22 32m96-32-11 32m77-32v32m66-32 11 32m63-32 22 32"/>
+            <circle cx="240" cy="54" r="52" fill="#ffffff" opacity=".035"/>
+            <path d="M130 21h220" stroke="#d4dadd" stroke-width="4" stroke-linecap="round"/>
+            <path d="M174 21h132" stroke="#89969e" stroke-width="2" stroke-dasharray="2 3"/>
+            <rect x="147" y="1" width="10" height="40" rx="3" fill="#e9584e"/>
+            <rect x="160" y="5" width="9" height="32" rx="2" fill="#5a94df"/>
+            <rect x="172" y="16" width="5" height="10" rx="1" fill="#f1ede3"/>
+            <rect x="323" y="1" width="10" height="40" rx="3" fill="#e9584e"/>
+            <rect x="311" y="5" width="9" height="32" rx="2" fill="#5a94df"/>
+            <rect x="303" y="16" width="5" height="10" rx="1" fill="#f1ede3"/>
+            <circle cx="240" cy="44" r="8" fill="#f1ede3"/>
+            <path d="m200 23 23 34 17 7 17-7 23-34" stroke="#f1ede3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M234 60h12l6 21h-24z" fill="#d5aa5a"/>
+            <path d="m232 82-21 5 11 17m26-22 21 5-11 17" stroke="#f1ede3" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M211 107h15m28 0h15" stroke="#f1ede3" stroke-width="6" stroke-linecap="round"/>
+            <path d="M88 115h304" stroke="#d5aa5a" stroke-width="2"/>
+          </svg>
+          <h2>${escapeHtml(active?.title || selected.title)}</h2>
+          <p>${active ? `${active.exercises?.filter((entry) => entry.completed).length ?? 0} of ${active.exercises?.length ?? 0} exercises complete · ${escapeHtml(formatDate(active.date, { day: "numeric", month: "short" }))}` : escapeHtml(selected.focus)}</p>
+          <div class="hero-meta">${active ? "Pick up where you left off." : `${selected.exercises.length} exercises · ${escapeHtml(PROGRAM_DEFINITION.name)}`}</div>
+          ${active ? '<a class="button hero-action" href="#workout">Resume workout <span aria-hidden="true">→</span></a>' : `<button class="button hero-action" data-action="start-day" data-day-id="${selected.id}">Start workout <span aria-hidden="true">→</span></button>`}
         </article>
-
-        <aside class="panel">
-          <p class="eyebrow">Keep the hierarchy clear</p>
-          <h2>Training priorities</h2>
-          <ol class="priority-list">
-            ${PROGRAM_DEFINITION.priorities.map((priority) => `<li>${escapeHtml(priority)}</li>`).join("")}
-          </ol>
-        </aside>
-      </section>
-
-      <section class="section" aria-label="Program guidance">
-        <details class="rules-details">
-          <summary>Loading rules and review criteria</summary>
-          <div class="rules-body">
-            <h3>Loading rules</h3>
-            <ul>${PROGRAM_DEFINITION.loadingRules.map((rule) => `<li>${escapeHtml(rule)}</li>`).join("")}</ul>
-            <h3 class="rules-subheading">Review after ${escapeHtml(PROGRAM_DEFINITION.reviewWindow)}</h3>
-            <ul>${PROGRAM_DEFINITION.reviewCriteria.map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join("")}</ul>
+        <section class="week-panel" aria-labelledby="weekly-plan-title">
+          <div class="section-header"><h2 id="weekly-plan-title">Your week</h2><a class="text-action" href="#workout">All sessions</a></div>
+          <div class="week-selector" aria-label="Choose a training day">
+            ${days.map((day) => {
+              const done = weekSessions.some((session) => session.programDayId === day.id);
+              return `<button class="week-day ${done ? "is-done" : ""}" data-action="select-day" data-day-id="${day.id}" aria-pressed="${selected.id === day.id}" aria-label="${day.name}${done ? ", completed this week" : ""}"><span>${day.name.slice(0, 3)}</span><span class="week-marker" aria-hidden="true">${done ? "✓" : day.weekday === today.getDay() ? "●" : "○"}</span></button>`;
+            }).join("")}
           </div>
-        </details>
+          <div class="week-preview"><h3>${escapeHtml(selected.title)}</h3><p>${selected.exercises.map((entry) => escapeHtml(getExercise(entry.exerciseId).name)).join(" · ")}</p></div>
+        </section>
+      </div>
+      <section class="section" aria-label="Current personal records">
+        <div class="section-header"><h2>Your numbers</h2><a class="text-action" href="#progress/prs">Edit PRs</a></div>
+        <div class="metric-grid compact-metrics">${metricCard("Snatch", state.prs.snatch)}${metricCard("Clean & jerk", state.prs.clean_and_jerk)}${metricCard("Total", total)}</div>
       </section>
-
+      <section class="section" aria-labelledby="recent-title">
+        <div class="section-header"><h2 id="recent-title">Recent training</h2><a class="text-action" href="#history">View all</a></div>
+        ${recent.length ? `<ul class="session-list">${recent.map((session) => `<li><a href="#history/${encodeURIComponent(session.id)}"><span class="session-list-date">${escapeHtml(formatDate(session.date, { day: "numeric", month: "short" }))}</span><span><strong>${escapeHtml(session.title || "Training session")}</strong><small>${escapeHtml(sessionExerciseNames(session))}</small></span><span aria-hidden="true">↗</span></a></li>`).join("")}</ul>` : '<div class="quiet-empty"><p>Your training story starts here.</p><span>Finish a workout to see it here.</span></div>'}
+      </section>
+      <section class="section" aria-labelledby="immediate-targets-title">
+        <div class="section-header"><h2 id="immediate-targets-title">Next milestone</h2><span>175 kg total</span></div>
+        <div class="goal-grid">${goalCard("snatch", 70)}${goalCard("clean_and_jerk", 105)}</div>
+      </section>
+      <details class="rules-details section"><summary>Program guidance</summary><div class="rules-body">
+        <h3>Training priorities</h3><ul>${PROGRAM_DEFINITION.priorities.map((priority) => `<li>${escapeHtml(priority)}</li>`).join("")}</ul>
+        <h3>Loading rules</h3><ul>${PROGRAM_DEFINITION.loadingRules.map((rule) => `<li>${escapeHtml(rule)}</li>`).join("")}</ul>
+        <h3>Review after ${escapeHtml(PROGRAM_DEFINITION.reviewWindow)}</h3><ul>${PROGRAM_DEFINITION.reviewCriteria.map((rule) => `<li>${escapeHtml(rule)}</li>`).join("")}</ul>
+      </div></details>
       ${renderInstallCard()}
-    </section>
-  `;
+    </section>`;
 }
 
 function workoutSetCount(programExercise) {
@@ -394,11 +331,14 @@ function createSet(initialWeight = "", reps = 1) {
   };
 }
 
-function createWorkoutExercise(programExercise) {
-  const count = workoutSetCount(programExercise);
+function createWorkoutExercise(programExercise, context) {
+  const plan = planExercise(programExercise, context);
+  const count = plan.sets;
   return {
     id: makeId("entry"),
     exerciseId: programExercise.exerciseId,
+    loggingVersion: PROGRESSION_VERSION,
+    strongSets: false,
     completed: false,
     athleteNotes: "",
     coachCue: "",
@@ -410,8 +350,12 @@ function createWorkoutExercise(programExercise) {
       priority: programExercise.priority,
       optional: Boolean(programExercise.optional),
       videoRef: programExercise.videoRef,
+      targetSets: count,
+      targetReps: plan.reps,
+      targetWeight: plan.weight,
+      progression: plan,
     },
-    sets: Array.from({ length: count }, () => createSet(programExercise.initialWeight, programExercise.defaultReps)),
+    sets: Array.from({ length: count }, () => createSet(plan.weight, plan.reps)),
   };
 }
 
@@ -437,10 +381,33 @@ function startProgramDay(dayId) {
     athleteNotes: "",
     coachNotes: "",
     sessionPrompt: day.sessionPrompt ?? "",
-    exercises: day.exercises.map(createWorkoutExercise),
+    recovery: "unknown",
+    exercises: day.exercises.map(exercise => createWorkoutExercise(exercise, {
+      sessions: state.sessions, programId: PROGRAM_DEFINITION.id, dayId: day.id, date: localIsoDate(),
+    })),
   };
   persist();
   navigate("workout");
+}
+
+function replanUntouchedExercises() {
+  const draft = state.activeWorkout;
+  const day = getProgramDay(draft?.programDayId);
+  if (!day || draft.editingSessionId) return;
+  for (const entry of draft.exercises) {
+    if (entry.loggingVersion !== PROGRESSION_VERSION || entry.completed ||
+      entry.sets.some(set => set.touched || isLoggedSet(set))) continue;
+    const exercise = day.exercises.find(item => item.exerciseId === entry.exerciseId);
+    if (!exercise) continue;
+    const plan = planExercise(exercise, {
+      sessions: state.sessions, programId: draft.programId, dayId: day.id,
+      date: draft.date, recovery: draft.recovery,
+    });
+    entry.prescribed.progression = plan;
+    entry.prescribed.targetWeight = plan.weight;
+    entry.prescribed.targetReps = plan.reps;
+    entry.sets.forEach(set => { set.weight = String(plan.weight); set.reps = String(plan.reps); });
+  }
 }
 
 function startOpenWorkout() {
@@ -473,8 +440,8 @@ function renderWorkoutPicker() {
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Workout</p>
-          <h1 id="workout-title">Choose today’s session.</h1>
-          <p class="page-lead">Starting a programmed day creates a local draft. It stays here through navigation, screen locks and reloads until you finish or discard it.</p>
+          <h1 id="workout-title">Choose a session.</h1>
+          <p class="page-lead">Follow your program or build an open workout.</p>
         </div>
       </header>
 
@@ -517,208 +484,117 @@ function setFieldAttributes(entry, set, field) {
 
 function renderSetRow(entry, set, index) {
   const exercise = getExercise(entry.exerciseId);
-  const resultField = exercise.tracksOutcome
-    ? `
-      <label class="set-outcome">
-        <span>Result</span>
-        <select ${setFieldAttributes(entry, set, "result")} aria-label="Set ${index + 1} result">
-          <option value="" ${set.result ? "" : "selected"}>Not marked</option>
-          <option value="success" ${set.result === "success" ? "selected" : ""}>Success</option>
-          <option value="miss" ${set.result === "miss" ? "selected" : ""}>Miss</option>
-        </select>
-      </label>
-    `
-    : '<div class="set-outcome set-outcome-empty" aria-hidden="true">—</div>';
-
+  const actionData = `data-entry-id="${escapeHtml(entry.id)}" data-set-id="${escapeHtml(set.id)}"`;
   return `
-    <div class="set-row" data-set-row="${escapeHtml(set.id)}">
-      <span class="set-number" aria-hidden="true">${index + 1}</span>
-      <label>
-        <span>Weight</span>
-        <input
-          type="number"
-          inputmode="decimal"
-          min="0"
-          step="0.5"
-          value="${escapeHtml(set.weight ?? "")}"
-          placeholder="kg"
-          ${setFieldAttributes(entry, set, "weight")}
-          aria-label="Set ${index + 1} weight in kilograms"
-        >
-      </label>
-      <label>
-        <span>Reps</span>
-        <input
-          type="number"
-          inputmode="numeric"
-          min="0"
-          step="1"
-          value="${escapeHtml(set.reps ?? "")}"
-          placeholder="Reps"
-          ${setFieldAttributes(entry, set, "reps")}
-          aria-label="Set ${index + 1} repetitions"
-        >
-      </label>
-      <label>
-        <span>RPE</span>
-        <input
-          type="number"
-          inputmode="decimal"
-          min="1"
-          max="10"
-          step="0.5"
-          value="${escapeHtml(set.rpe ?? "")}"
-          placeholder="1–10"
-          ${setFieldAttributes(entry, set, "rpe")}
-          aria-label="Set ${index + 1} RPE"
-        >
-      </label>
-      ${resultField}
-      <button
-        class="remove-set"
-        type="button"
-        data-action="remove-set"
-        data-entry-id="${escapeHtml(entry.id)}"
-        data-set-id="${escapeHtml(set.id)}"
-        aria-label="Remove set ${index + 1}"
-        title="Remove set"
-        ${entry.sets.length <= 1 ? "disabled" : ""}
-      >×</button>
-    </div>
-  `;
+    <div class="set-row ${set.result ? "is-" + escapeHtml(set.result) : set.logged ? "is-logged" : ""}" data-set-row="${escapeHtml(set.id)}">
+      <span class="set-number" aria-label="Set ${index + 1}">${index + 1}</span>
+      <label class="set-weight"><span>kg</span><input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeHtml(set.weight ?? "")}" placeholder="kg" ${setFieldAttributes(entry, set, "weight")} aria-label="Set ${index + 1} weight in kilograms"></label>
+      <label class="set-reps"><span>Reps</span><input type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(set.reps ?? "")}" ${setFieldAttributes(entry, set, "reps")} aria-label="Set ${index + 1} repetitions"></label>
+      <div class="set-result" role="group" aria-label="Set ${index + 1} result">
+        ${exercise.tracksOutcome ? `<button class="result-button" data-action="set-result" data-result="success" ${actionData} aria-pressed="${set.result === "success"}" aria-label="Set ${index + 1} made">Made</button><button class="result-button miss-button" data-action="set-result" data-result="miss" ${actionData} aria-pressed="${set.result === "miss"}" aria-label="Set ${index + 1} missed">Miss</button>` : `<button class="result-button log-button" data-action="log-set" ${actionData} aria-pressed="${Boolean(set.logged)}" aria-label="Log set ${index + 1}">${set.logged ? "✓ Done" : "Log set"}</button>`}
+      </div>
+      <details class="set-options" data-ui-details="set-${escapeHtml(set.id)}"><summary>Set options${set.rpe ? ` · RPE ${escapeHtml(set.rpe)}` : ""}</summary>
+        <div class="set-options-body">
+          <div class="weight-adjust" role="group" aria-label="Adjust set ${index + 1} weight"><button class="button button-secondary" data-action="adjust-weight" data-delta="-2.5" ${actionData} aria-label="Decrease set ${index + 1} by 2.5 kilograms">−2.5 kg</button><button class="button button-secondary" data-action="adjust-weight" data-delta="2.5" ${actionData} aria-label="Increase set ${index + 1} by 2.5 kilograms">+2.5 kg</button></div>
+          <label class="field"><span>RPE (optional)</span><input type="number" inputmode="decimal" min="1" max="10" step="0.5" value="${escapeHtml(set.rpe ?? "")}" placeholder="1–10" ${setFieldAttributes(entry, set, "rpe")} aria-label="Set ${index + 1} RPE"></label>
+          ${index ? `<button class="button button-secondary" data-action="copy-set" ${actionData}>Copy previous weight & reps</button>` : ""}
+          <button class="button button-danger-quiet" data-action="remove-set" ${actionData} ${entry.sets.length <= 1 ? "disabled" : ""}>Remove set ${index + 1}</button>
+        </div>
+      </details>
+    </div>`;
 }
 
 function renderWorkoutExercise(entry, index) {
   const exercise = getExercise(entry.exerciseId);
-  const videoLink = exercise.videoId
-    ? `<a class="button button-quiet video-shortcut" href="#library/${encodeURIComponent(exercise.id)}">Watch technique video</a>`
-    : "";
-
+  const isActive = state.activeWorkout.activeExerciseId === entry.id;
+  const previousSession = [...state.sessions].filter((session) => session.id !== state.activeWorkout.editingSessionId && session.date <= state.activeWorkout.date && session.exercises?.some((item) => item.exerciseId === entry.exerciseId))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.finishedAt).localeCompare(String(a.finishedAt)))[0];
+  const previous = previousSession?.exercises.find((item) => item.exerciseId === entry.exerciseId);
+  const previousSets = previous?.sets?.filter((set) => set.result !== "miss" && Number.parseFloat(set.weight) > 0) ?? [];
+  const best = previousSets.length ? previousSets.reduce((a, b) => Number(a.weight) > Number(b.weight) ? a : b) : null;
   return `
-    <article class="exercise-log-card ${entry.completed ? "is-complete" : ""}" id="exercise-${escapeHtml(entry.id)}">
-      <header class="exercise-card-header">
-        <div>
-          <span class="exercise-index">Exercise ${index + 1}</span>
-          <h2>${escapeHtml(exercise.name)}</h2>
-          <p class="exercise-prescription">${escapeHtml(prescriptionSummary(entry))}</p>
+    <article class="exercise-log-card ${entry.completed ? "is-complete" : ""} ${isActive ? "is-active" : ""}" id="exercise-${escapeHtml(entry.id)}">
+      <button class="exercise-heading" data-action="select-exercise" data-entry-id="${escapeHtml(entry.id)}" aria-expanded="${isActive}" aria-controls="exercise-body-${escapeHtml(entry.id)}">
+        <span class="exercise-badge" aria-hidden="true">${entry.completed ? "✓" : String(index + 1).padStart(2, "0")}</span>
+        <span class="exercise-heading-copy"><span class="exercise-name">${escapeHtml(exercise.name)}</span><span class="exercise-summary">${entry.completed ? "Complete · " : ""}${escapeHtml(prescriptionSummary(entry))}</span></span><span class="exercise-chevron" aria-hidden="true">${isActive ? "−" : "+"}</span>
+      </button>
+      <div id="exercise-body-${escapeHtml(entry.id)}" class="exercise-body" ${isActive ? "" : "hidden"}>
+        ${entry.prescribed?.notes ? `<p class="prescription-note">${escapeHtml(entry.prescribed.notes)}</p>` : ""}
+        ${entry.prescribed?.progression && entry.prescribed.progression.status !== "manual" ? `<details class="progression-note" data-ui-details="progression-${escapeHtml(entry.id)}"><summary><strong>${entry.prescribed.progression.status === "increase" ? "↑ Progressed" : "Planned"} · ${formatNumber(entry.prescribed.targetWeight)} kg × ${entry.prescribed.targetReps}</strong><span class="progression-why">Why? <span aria-hidden="true">⌄</span></span></summary><div class="progression-body"><span>${escapeHtml(entry.prescribed.progression.reason)}</span>${entry.prescribed.progression.sourceDate ? `<small>Based on ${escapeHtml(formatDate(entry.prescribed.progression.sourceDate))}</small>` : ""}<small>Weight and rep edits carry to later unlogged sets. Direct edits are kept.</small></div></details>` : ""}
+        ${best ? `<p class="last-session">Last time <strong>${formatNumber(best.weight)} kg × ${escapeHtml(best.reps)} reps</strong><span>${escapeHtml(formatDate(previousSession.date, { day: "numeric", month: "short" }))}</span></p>` : ""}
+        <div class="sets-area">
+          ${entry.sets.map((set, setIndex) => renderSetRow(entry, set, setIndex)).join("")}
+          <div class="sets-footer"><button class="button button-secondary" data-action="add-set" data-entry-id="${escapeHtml(entry.id)}">+ Add set</button>
+          ${exercise.videoId ? `<button class="button button-quiet video-shortcut" data-action="technique" data-exercise-id="${escapeHtml(exercise.id)}">▷ Technique</button>` : ""}</div>
         </div>
-        <label class="complete-toggle">
-          <input
-            type="checkbox"
-            data-action="toggle-complete"
-            data-entry-id="${escapeHtml(entry.id)}"
-            ${entry.completed ? "checked" : ""}
-          >
-          <span class="complete-label">Complete</span>
-          <span class="visually-hidden">Mark ${escapeHtml(exercise.name)} complete</span>
-        </label>
-      </header>
-      ${entry.prescribed?.notes ? `<p class="prescription-note"><strong>Focus:</strong> ${escapeHtml(entry.prescribed.notes)}</p>` : ""}
-      <div class="sets-area">
-        <div class="sets-heading" aria-hidden="true">
-          <span>Set</span><span>Weight</span><span>Reps</span><span>RPE</span><span>Result</span><span></span>
-        </div>
-        ${entry.sets.map((set, setIndex) => renderSetRow(entry, set, setIndex)).join("")}
-        <div class="sets-footer">
-          <button class="button button-secondary button-small" type="button" data-action="add-set" data-entry-id="${escapeHtml(entry.id)}">Add set</button>
-          ${videoLink}
-        </div>
+        ${entry.prescribed?.progression && entry.prescribed.progression.status !== "manual" ? `<button class="strong-sets-control" data-action="strong-sets" data-entry-id="${escapeHtml(entry.id)}" aria-pressed="${Boolean(entry.strongSets)}"><span aria-hidden="true">${entry.strongSets ? "✓" : "○"}</span> All sets felt strong and controlled</button>` : ""}
+        <details class="exercise-notes" data-ui-details="notes-${escapeHtml(entry.id)}"><summary>Notes & coach cue${entry.athleteNotes || entry.coachCue ? " · added" : ""}</summary>
+          <div class="exercise-notes-grid">
+            <label class="field"><span>Athlete notes</span><textarea rows="2" placeholder="How did it feel?" data-draft-entry-field="athleteNotes" data-entry-id="${escapeHtml(entry.id)}">${escapeHtml(entry.athleteNotes ?? "")}</textarea></label>
+            <label class="field"><span>Coach cue</span><textarea rows="2" placeholder="One cue to remember" data-draft-entry-field="coachCue" data-entry-id="${escapeHtml(entry.id)}">${escapeHtml(entry.coachCue ?? "")}</textarea></label>
+          </div>
+        </details>
+        ${entry.completed ? `<button class="button button-quiet reopen-exercise" data-action="reopen-exercise" data-entry-id="${escapeHtml(entry.id)}">Mark incomplete</button>` : ""}
       </div>
-      <div class="exercise-notes-grid">
-        <label class="field">
-          <span>Athlete notes</span>
-          <textarea
-            rows="2"
-            placeholder="How did it feel? What changed?"
-            data-draft-entry-field="athleteNotes"
-            data-entry-id="${escapeHtml(entry.id)}"
-          >${escapeHtml(entry.athleteNotes ?? "")}</textarea>
-        </label>
-        <label class="field">
-          <span>Coach cue</span>
-          <textarea
-            rows="2"
-            placeholder="One concise cue from Tim"
-            data-draft-entry-field="coachCue"
-            data-entry-id="${escapeHtml(entry.id)}"
-          >${escapeHtml(entry.coachCue ?? "")}</textarea>
-        </label>
-      </div>
-    </article>
-  `;
+    </article>`;
+}
+
+function renderWorkoutDock(draft) {
+  const exercises = draft.exercises ?? [];
+  const active = exercises.find(entry => entry.id === draft.activeExerciseId);
+  if (!active) return "";
+  return `<div class="workout-dock"><span class="dock-caption">${active.completed ? "All entered work saves when you finish." : `Exercise ${exercises.indexOf(active) + 1} of ${exercises.length}`}</span>
+    ${!active.completed ? `<button class="button button-primary" data-action="complete-exercise" data-entry-id="${escapeHtml(active.id)}">Complete ${escapeHtml(getExercise(active.exerciseId).name)} <span aria-hidden="true">→</span></button>` : `<button class="button button-primary" data-action="finish-workout">${draft.editingSessionId ? "Save changes" : "Finish workout"}</button>`}
+  </div>`;
+}
+
+function syncWorkoutCompletion(entry) {
+  const draft = state.activeWorkout;
+  const card = document.getElementById(`exercise-${entry.id}`);
+  card.classList.toggle("is-complete", entry.completed);
+  card.querySelector(".exercise-badge").textContent = entry.completed ? "✓" : String(draft.exercises.indexOf(entry) + 1).padStart(2, "0");
+  card.querySelector(".exercise-summary").textContent = `${entry.completed ? "Complete · " : ""}${prescriptionSummary(entry)}`;
+  if (!entry.completed) card.querySelector(".reopen-exercise")?.remove();
+  const completed = draft.exercises.filter(item => item.completed).length;
+  main.querySelector(".workout-progress-row progress").value = completed;
+  main.querySelector(".workout-progress-row > span").textContent = `${completed} / ${draft.exercises.length} complete`;
+  const dock = main.querySelector(".workout-dock");
+  if (dock) dock.outerHTML = renderWorkoutDock(draft);
 }
 
 function renderWorkout() {
   const draft = state.activeWorkout;
   if (!draft) return renderWorkoutPicker();
-
   const exercises = draft.exercises ?? [];
+  if (!exercises.some((entry) => entry.id === draft.activeExerciseId)) {
+    draft.activeExerciseId = (exercises.find((entry) => !entry.completed) ?? exercises[0])?.id ?? "";
+  }
   const completed = exercises.filter((entry) => entry.completed).length;
-  const progress = exercises.length ? (completed / exercises.length) * 100 : 0;
   const isEditing = Boolean(draft.editingSessionId);
-  const exerciseOptions = [...EXERCISES]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((exercise) => `<option value="${escapeHtml(exercise.id)}">${escapeHtml(exercise.name)}</option>`)
-    .join("");
-
   return `
-    <section class="page" aria-labelledby="active-workout-title">
+    <section class="page workout-page" aria-labelledby="active-workout-title">
       <div class="workout-topbar">
-        <div>
-          <div class="workout-title-row">
-            <h1 id="active-workout-title">${escapeHtml(draft.title || "Training session")}</h1>
-            <span class="draft-saved" id="draft-saved-status">Saved locally</span>
-          </div>
-          <div class="workout-progress-row">
-            <progress class="progress-track" aria-label="Workout completion" max="${Math.max(1, exercises.length)}" value="${completed}">${Math.round(progress)}%</progress>
-            <span>${completed} / ${exercises.length} complete</span>
-          </div>
+        <div><div class="workout-title-row"><h1 id="active-workout-title">${escapeHtml(draft.title || "Training session")}</h1><span class="draft-saved" id="draft-saved-status" role="status">Saved</span></div>
+        <div class="workout-progress-row"><progress class="progress-track" aria-label="Workout completion" max="${Math.max(1, exercises.length)}" value="${completed}"></progress><span>${completed} / ${exercises.length} complete</span></div></div>
+        <button class="button button-quiet" data-action="finish-workout">${isEditing ? "Save changes" : "Finish"}</button>
+      </div>
+      ${draft.programDayId && !isEditing ? `<label class="field recovery-field"><span>Recovery today</span><select id="workout-recovery"><option value="unknown" ${draft.recovery !== "good" && draft.recovery !== "limited" ? "selected" : ""}>Choose to apply eligible increases</option><option value="good" ${draft.recovery === "good" ? "selected" : ""}>Good · use progression</option><option value="limited" ${draft.recovery === "limited" ? "selected" : ""}>Limited · repeat previous loads</option></select><small>Only untouched exercises are adjusted.</small></label>` : ""}
+      <details class="session-details" data-ui-details="session-meta"><summary>${escapeHtml(formatDate(draft.date, { day: "numeric", month: "short" }))} · Session details</summary>
+        <div class="session-meta-panel">
+          <label class="field"><span>Session date</span><input type="date" value="${escapeHtml(draft.date ?? localIsoDate())}" data-draft-session-field="date"></label>
+          <label class="field"><span>Session name</span><input type="text" value="${escapeHtml(draft.title ?? "")}" data-draft-session-field="title" autocomplete="off"></label>
+          <button class="button button-danger-quiet" data-action="abandon-workout">${isEditing ? "Cancel edit" : "Discard workout"}</button>
         </div>
-        <div class="workout-topbar-actions">
-          <button class="button button-quiet button-small" data-action="abandon-workout">${isEditing ? "Cancel edit" : "Discard"}</button>
-          <button class="button button-primary button-small" data-action="finish-workout">${isEditing ? "Save changes" : "Finish"}</button>
-        </div>
-      </div>
-
-      <div class="session-meta-panel">
-        <label class="field">
-          <span>Session date</span>
-          <input type="date" value="${escapeHtml(draft.date ?? localIsoDate())}" data-draft-session-field="date">
-        </label>
-        <label class="field">
-          <span>Session name</span>
-          <input type="text" value="${escapeHtml(draft.title ?? "")}" data-draft-session-field="title" autocomplete="off">
-        </label>
-      </div>
-
-      ${draft.sessionPrompt ? `<p class="coach-prompt"><strong>Coached session:</strong> ${escapeHtml(draft.sessionPrompt)}</p>` : ""}
-
-      ${
-        exercises.length
-          ? `<div class="exercise-stack">${exercises.map(renderWorkoutExercise).join("")}</div>`
-          : '<div class="empty-state"><h2>Add your first exercise</h2><p>This open session is already saved. Choose an exercise below to begin logging.</p></div>'
-      }
-
-      <div class="add-exercise-panel">
-        <label class="field" for="add-exercise-select">
-          <span>Add another exercise</span>
-          <select id="add-exercise-select">${exerciseOptions}</select>
-        </label>
-        <button class="button button-secondary" data-action="add-exercise">Add exercise</button>
-      </div>
-
-      <div class="card session-notes-panel">
-        <label class="field">
-          <span>Overall athlete notes</span>
-          <textarea rows="3" placeholder="Energy, recovery, session summary…" data-draft-session-field="athleteNotes">${escapeHtml(draft.athleteNotes ?? "")}</textarea>
-        </label>
-        <label class="field">
-          <span>Overall coach notes</span>
-          <textarea rows="3" placeholder="Coach feedback kept separate from your own notes…" data-draft-session-field="coachNotes">${escapeHtml(draft.coachNotes ?? "")}</textarea>
-        </label>
-      </div>
-    </section>
-  `;
+      </details>
+      ${draft.sessionPrompt ? `<p class="coach-prompt">${escapeHtml(draft.sessionPrompt)}</p>` : ""}
+      ${exercises.length ? `<div class="exercise-stack">${exercises.map(renderWorkoutExercise).join("")}</div>` : '<div class="quiet-empty"><h2>What are you training?</h2><p>Add an exercise to begin.</p></div>'}
+      <div class="add-exercise-panel"><label class="field" for="add-exercise-select"><span>Add an exercise</span><select id="add-exercise-select">${[...EXERCISES].sort((a, b) => a.name.localeCompare(b.name)).map((exercise) => `<option value="${escapeHtml(exercise.id)}">${escapeHtml(exercise.name)}</option>`).join("")}</select></label><button class="button button-secondary" data-action="add-exercise">Add exercise</button></div>
+      <details class="session-details session-notes" data-ui-details="session-notes"><summary>Session notes${draft.athleteNotes || draft.coachNotes ? " · added" : ""}</summary><div class="session-notes-panel">
+        <label class="field"><span>Overall athlete notes</span><textarea rows="3" placeholder="Energy, recovery, session summary…" data-draft-session-field="athleteNotes">${escapeHtml(draft.athleteNotes ?? "")}</textarea></label>
+        <label class="field"><span>Overall coach notes</span><textarea rows="3" placeholder="Feedback from your coach" data-draft-session-field="coachNotes">${escapeHtml(draft.coachNotes ?? "")}</textarea></label>
+      </div></details>
+      ${renderWorkoutDock(draft)}
+    </section>`;
 }
 
 function findDraftEntry(entryId) {
@@ -728,10 +604,11 @@ function findDraftEntry(entryId) {
 function markDraftSaved() {
   const savedStatus = document.querySelector("#draft-saved-status");
   if (!savedStatus) return;
-  savedStatus.textContent = "Saved locally";
+  savedStatus.textContent = "Saved";
 }
 
 function setWasPerformed(entry) {
+  if (entry.loggingVersion === PROGRESSION_VERSION) return Boolean(entry.sets?.some(isValidLoggedSet));
   return Boolean(entry.completed || entry.sets?.some((set) => set.touched));
 }
 
@@ -780,9 +657,12 @@ function finalizeWorkout() {
   const draft = state.activeWorkout;
   if (!draft) return;
 
-  const performedExercises = (draft.exercises ?? []).filter(setWasPerformed).map((entry) => clone(entry));
+  const performedExercises = (draft.exercises ?? []).filter(setWasPerformed).map((entry) => ({
+    ...clone(entry),
+    sets: (entry.sets ?? []).filter((set) => entry.loggingVersion === PROGRESSION_VERSION ? isValidLoggedSet(set) : entry.completed || set.touched || isLoggedSet(set)).map((set) => clone(set)),
+  }));
   if (!performedExercises.length) {
-    showToast("Mark an exercise complete or edit at least one set before finishing.", { error: true });
+    showToast("Mark at least one set Made, Miss, or Log set before finishing.", { error: true });
     return;
   }
 
@@ -820,10 +700,22 @@ function requestFinishWorkout() {
   if (!draft) return;
   const performed = (draft.exercises ?? []).filter(setWasPerformed);
   if (!performed.length) {
-    showToast("Mark an exercise complete or edit at least one set before finishing.", { error: true });
+    showToast("Mark at least one set Made, Miss, or Log set before finishing.", { error: true });
     return;
   }
 
+  const unlogged = (draft.exercises ?? []).filter(entry => entry.loggingVersion === PROGRESSION_VERSION)
+    .reduce((count, entry) => count + entry.sets.filter(set => set.touched && !isValidLoggedSet(set)).length, 0);
+  if (unlogged) {
+    requestConfirmation({
+      title: "Leave unlogged edits out?",
+      message: `${unlogged} edited sets have no valid logged result. Only explicitly logged sets will be saved.`,
+      confirmLabel: "Save logged sets",
+      dangerous: false,
+      onConfirm: finalizeWorkout,
+    });
+    return;
+  }
   const incomplete = performed.filter((entry) => !entry.completed).length;
   if (incomplete) {
     requestConfirmation({
@@ -848,6 +740,7 @@ function editSession(sessionId, focusedEntryId = "") {
       id: makeId("workout"),
       editingSessionId: session.id,
       focusedExerciseId: focusedEntryId,
+      activeExerciseId: focusedEntryId || session.exercises?.[0]?.id || "",
     };
     persist();
     navigate("workout");
@@ -927,13 +820,15 @@ function renderHistory() {
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Training history</p>
-          <h1 id="history-title">Every useful detail, kept.</h1>
-          <p class="page-lead">Review completed work, technical outcomes and the cues that mattered.</p>
+          <h1 id="history-title">History</h1>
+          <p class="page-lead">Your sessions, sets, and small wins.</p>
         </div>
         <a class="button button-primary" href="#workout">Log workout</a>
       </header>
 
-      <form class="card history-filters" id="history-filter-form" aria-label="Filter training history">
+      <details class="filter-panel" id="history-filters" ${historyFiltersOpen ? "open" : ""}>
+        <summary>Filter sessions${Object.values(historyFilters).some(Boolean) ? " · active" : ""}</summary>
+      <form class="history-filters" id="history-filter-form" aria-label="Filter training history">
         <label class="field filter-exercise">
           <span>Exercise</span>
           <select name="exerciseId">
@@ -952,6 +847,7 @@ function renderHistory() {
         <button class="button button-secondary" type="button" data-action="clear-history-filters">Clear</button>
       </form>
 
+      </details>
       <p class="filter-result-count" role="status">Showing ${sessions.length} of ${state.sessions.length} ${state.sessions.length === 1 ? "session" : "sessions"}</p>
 
       ${
@@ -963,18 +859,19 @@ function renderHistory() {
                     ? (session.exercises ?? []).filter((entry) => entry.exerciseId === historyFilters.exerciseId)
                     : (session.exercises ?? []);
                   return `
-                    <article class="card history-session">
-                      <header class="history-session-header">
+                    <details class="card history-session" data-ui-details="history-${escapeHtml(session.id)}" data-session-id="${escapeHtml(session.id)}" ${getRoute().parameter === session.id ? "open" : ""}>
+                      <summary class="history-session-header">
                         <time class="history-session-date" datetime="${escapeHtml(session.date)}">${escapeHtml(formatDate(session.date, { day: "numeric", month: "short", year: "numeric" }))}</time>
                         <div>
                           <h2>${escapeHtml(session.title || "Training session")}</h2>
                           <p class="history-session-summary">${entries.length} ${entries.length === 1 ? "exercise" : "exercises"} · ${entries.reduce((count, entry) => count + (entry.sets?.length ?? 0), 0)} sets</p>
                         </div>
-                        <div class="history-session-actions">
-                          <button class="button button-quiet button-small" data-action="edit-session" data-session-id="${escapeHtml(session.id)}">Edit session</button>
-                          <button class="button button-danger-quiet button-small" data-action="delete-session" data-session-id="${escapeHtml(session.id)}">Delete session</button>
-                        </div>
-                      </header>
+                        <span class="history-expand" aria-hidden="true">+</span>
+                      </summary>
+                      <div class="history-session-actions">
+                        <button class="button button-quiet" data-action="edit-session" data-session-id="${escapeHtml(session.id)}">Edit session</button>
+                        <button class="button button-danger-quiet" data-action="delete-session" data-session-id="${escapeHtml(session.id)}">Delete session</button>
+                      </div>
                       <ul class="history-exercises">${entries.map((entry) => renderHistoryEntry(session, entry)).join("")}</ul>
                       ${
                         session.athleteNotes || session.coachNotes
@@ -984,7 +881,7 @@ function renderHistory() {
                             </footer>`
                           : ""
                       }
-                    </article>
+                    </details>
                   `;
                 })
                 .join("")}
@@ -999,7 +896,7 @@ function renderHistory() {
   `;
 }
 
-function chartData(exerciseId) {
+function chartData(exerciseId, period = "all") {
   const dailyBest = new Map();
   const ordered = [...state.sessions].sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
@@ -1015,8 +912,11 @@ function chartData(exerciseId) {
     }
   }
 
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (period === "30" ? 29 : 89));
   let runningBest = 0;
   return [...dailyBest.entries()]
+    .filter(([date]) => period === "all" || (date >= localIsoDate(cutoff) && date <= localIsoDate()))
     .sort(([dateA], [dateB]) => String(dateA).localeCompare(String(dateB)))
     .map(([date, best]) => {
       runningBest = Math.max(runningBest, best);
@@ -1026,14 +926,14 @@ function chartData(exerciseId) {
 
 function renderLineChart(exerciseId) {
   const exercise = getExercise(exerciseId);
-  const points = chartData(exerciseId);
+  const points = chartData(exerciseId, progressPeriod);
   const currentPr = Number(state.prs[exerciseId] ?? 0);
 
   if (!points.length) {
     return `
       <article class="card chart-card">
         <div class="chart-card-header"><h2>${escapeHtml(exercise.name)}</h2><span class="chart-current">PR ${formatNumber(currentPr)} kg</span></div>
-        <div class="chart-empty">Log a successful weighted set<br>to begin this chart.</div>
+        <div class="chart-empty">No lifts in this period.<br>Log a set or choose a longer period.</div>
       </article>
     `;
   }
@@ -1073,8 +973,8 @@ function renderLineChart(exerciseId) {
         <path class="chart-area" d="${areaPath}"></path>
         <path class="chart-line" d="${linePath}"></path>
         ${points.map((point, index) => `<circle class="chart-dot" cx="${x(index)}" cy="${y(point.weight)}" r="4"><title>${escapeHtml(formatDate(point.date, { day: "numeric", month: "short", year: "numeric" }))}: ${formatNumber(point.weight)} kg</title></circle>`).join("")}
-        <text class="chart-axis-label" x="${x(0)}" y="${height - 7}" text-anchor="start">${escapeHtml(formatDate(points[0].date, { day: "numeric", month: "short" }))}</text>
-        <text class="chart-axis-label" x="${x(points.length - 1)}" y="${height - 7}" text-anchor="end">${escapeHtml(formatDate(points.at(-1).date, { day: "numeric", month: "short" }))}</text>
+        <text class="chart-axis-label" x="${x(0)}" y="${height - 7}" text-anchor="${points.length === 1 ? "middle" : "start"}">${escapeHtml(formatDate(points[0].date, { day: "numeric", month: "short" }))}</text>
+        ${points.length > 1 ? `<text class="chart-axis-label" x="${x(points.length - 1)}" y="${height - 7}" text-anchor="end">${escapeHtml(formatDate(points.at(-1).date, { day: "numeric", month: "short" }))}</text>` : ""}
       </svg>
       <details class="chart-values">
         <summary>View logged bests</summary>
@@ -1093,26 +993,32 @@ function currentMilestoneStage() {
 
 function renderProgress() {
   const currentStage = currentMilestoneStage();
+  const points = chartData(progressExerciseId, progressPeriod);
+  const improvement = points.length > 1 ? points.at(-1).weight - points[0].weight : null;
   return `
     <section class="page" aria-labelledby="progress-title">
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Progress</p>
-          <h1 id="progress-title">See what is actually moving.</h1>
-          <p class="page-lead">Charts use the running best successful weight from your saved sessions. Misses are excluded.</p>
+          <h1 id="progress-title">Progress</h1>
+          <p class="page-lead">Every lift adds up. Follow your bests over time.</p>
         </div>
       </header>
 
-      <div class="chart-grid" aria-label="Lift progress charts">
-        ${CHART_EXERCISE_IDS.map(renderLineChart).join("")}
+      <div class="progress-controls">
+        <label class="field"><span>Lift</span><select id="progress-exercise">${CHART_EXERCISE_IDS.map((id) => `<option value="${id}" ${id === progressExerciseId ? "selected" : ""}>${escapeHtml(getExercise(id).name)}</option>`).join("")}</select></label>
+        <div class="period-selector" role="group" aria-label="Chart period">${[["30", "30 days"], ["90", "90 days"], ["all", "All time"]].map(([value, label]) => `<button data-action="chart-period" data-period="${value}" aria-pressed="${progressPeriod === value}">${label}</button>`).join("")}</div>
       </div>
+      <div class="progress-insight"><div><span>Best in period</span><strong>${points.length ? formatNumber(points.at(-1).weight) + " kg" : "—"}</strong></div>
+      <p>${improvement === null ? "Log two training dates to see your change." : `<strong>+${formatNumber(improvement)} kg</strong> since your first lift in this period`}<small>Running best of logged lifts. Misses excluded.</small></p></div>
+      <div class="chart-grid focused-chart" aria-label="Lift progress chart">${renderLineChart(progressExerciseId)}</div>
 
       <section class="section" aria-labelledby="prs-title">
         <div class="section-header">
           <div><p class="eyebrow">Personal records</p><h2 id="prs-title">Current PRs</h2></div>
           <p>Weights in kilograms</p>
         </div>
-        <form class="panel" id="pr-form">
+        <details class="pr-editor" id="pr-editor" data-ui-details="pr-editor" ${getRoute().parameter === "prs" ? "open" : ""}><summary>Edit personal records</summary><form class="panel" id="pr-form">
           <div class="pr-form-grid">
             ${PR_DEFINITIONS.map(
               (definition) => `
@@ -1136,7 +1042,7 @@ function renderProgress() {
             ).join("")}
           </div>
           <div class="form-actions"><button class="button button-primary" type="submit">Save PRs</button></div>
-        </form>
+        </form></details>
       </section>
 
       <section class="section" aria-labelledby="milestones-title">
@@ -1203,8 +1109,8 @@ function renderLibrary(selectedExerciseId = "") {
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Exercise library</p>
-          <h1 id="library-title">A clear cue, when you need it.</h1>
-          <p class="page-lead">Concise purposes and cues with Catalyst Athletics demonstrations. Videos load only when requested and naturally require an internet connection.</p>
+          <h1 id="library-title">Exercises</h1>
+          <p class="page-lead">Find a lift. Refine your technique.</p>
         </div>
       </header>
 
@@ -1235,7 +1141,7 @@ function renderData() {
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Data & profile</p>
-          <h1 id="data-title">Your data stays yours.</h1>
+          <h1 id="data-title">Profile & backups</h1>
           <p class="page-lead">Everything is stored in this browser on this device. Export a backup regularly—especially before clearing Safari website data or changing phones.</p>
         </div>
       </header>
@@ -1295,7 +1201,18 @@ function render({ focus = false } = {}) {
     data: renderData,
   };
 
+  const opened = routeChanged ? [] : [...main.querySelectorAll("details[data-ui-details][open]")].map((item) => item.dataset.uiDetails);
+  const focused = document.activeElement;
+  const focusSelector = !routeChanged && focused?.matches("[data-action]")
+    ? Object.entries(focused.dataset).map(([key, value]) => `[data-${key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase())}="${CSS.escape(value)}"]`).join("")
+    : !routeChanged && focused?.id ? "#" + CSS.escape(focused.id) : "";
   main.innerHTML = views[route]();
+  document.body.classList.toggle("is-training", route === "workout" && Boolean(state.activeWorkout));
+  for (const key of opened) {
+    const details = main.querySelector(`details[data-ui-details="${CSS.escape(key)}"]`);
+    if (details) details.open = true;
+  }
+  if (!focus && focusSelector) main.querySelector(focusSelector)?.focus({ preventScroll: true });
   lastRenderedRoute = route;
 
   if (route === "library" && parameter) {
@@ -1314,7 +1231,16 @@ function render({ focus = false } = {}) {
 
   if (focus || routeChanged) {
     main.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }
+  if (route === "progress" && parameter === "prs" && (focus || routeChanged)) {
+    window.requestAnimationFrame(() => {
+      document.querySelector("#pr-editor")?.scrollIntoView({ block: "start", behavior: "instant" });
+      document.querySelector("#pr-form input")?.focus({ preventScroll: true });
+    });
+  }
+  if (route === "history" && parameter && (focus || routeChanged)) {
+    window.requestAnimationFrame(() => document.querySelector(`details[data-session-id="${CSS.escape(parameter)}"]`)?.scrollIntoView({ block: "start" }));
   }
 }
 
@@ -1400,6 +1326,97 @@ function handleAction(actionElement) {
   const { action, dayId, entryId, setId, sessionId, exerciseId } = actionElement.dataset;
 
   switch (action) {
+    case "select-day":
+      selectedDayId = dayId;
+      render();
+      break;
+    case "select-exercise":
+      if (!state.activeWorkout) break;
+      state.activeWorkout.activeExerciseId = entryId;
+      persist();
+      render();
+      break;
+    case "strong-sets": {
+      const entry = findDraftEntry(entryId);
+      if (!entry) break;
+      entry.strongSets = !entry.strongSets;
+      persist();
+      render();
+      break;
+    }
+    case "complete-exercise": {
+      const entry = findDraftEntry(entryId);
+      if (!entry) break;
+      const remaining = entry.sets.filter(set => !isValidLoggedSet(set)).length;
+      if (remaining) {
+        showToast(`Log the result of ${remaining} remaining ${remaining === 1 ? "set" : "sets"} first, or finish the workout to save partial work.`, { error: true });
+        break;
+      }
+      entry.completed = true;
+      const exercises = state.activeWorkout.exercises;
+      const index = exercises.indexOf(entry);
+      const next = exercises.slice(index + 1).find((item) => !item.completed) ?? exercises.find((item) => !item.completed);
+      if (next) state.activeWorkout.activeExerciseId = next.id;
+      persist();
+      render();
+      window.requestAnimationFrame(() => {
+        const heading = document.querySelector(".exercise-log-card.is-active .exercise-heading");
+        heading?.focus({ preventScroll: true });
+        heading?.scrollIntoView({ block: "start", behavior: "instant" });
+      });
+      showToast(next ? `Next: ${getExercise(next.exerciseId).name}` : "Exercises complete. Ready to finish.");
+      break;
+    }
+    case "reopen-exercise": {
+      const entry = findDraftEntry(entryId);
+      if (!entry) break;
+      entry.completed = false;
+      persist();
+      render();
+      break;
+    }
+    case "adjust-weight":
+    case "copy-set":
+    case "set-result":
+    case "log-set": {
+      const entry = findDraftEntry(entryId);
+      const set = entry?.sets?.find((item) => item.id === setId);
+      if (!set) break;
+      if (action === "adjust-weight") updatePendingSets(entry, setId, "weight", String(Math.max(0, (Number.parseFloat(set.weight) || 0) + Number(actionElement.dataset.delta))));
+      if (action === "copy-set") {
+        const previous = entry.sets[entry.sets.indexOf(set) - 1];
+        if (!previous) break;
+        updatePendingSets(entry, setId, "weight", previous.weight);
+        updatePendingSets(entry, setId, "reps", previous.reps);
+      }
+      if (action === "set-result" || action === "log-set") {
+        const result = action === "set-result" ? actionElement.dataset.result : "success";
+        if (!isValidLoggedSet({ ...set, logged: true, result })) {
+          showToast(result === "miss" ? "Enter a valid weight and rep count (0 or more) first." : "Enter a valid weight and at least one rep first.", { error: true });
+          break;
+        }
+        if (action === "set-result") {
+          set.result = set.result === actionElement.dataset.result ? "" : actionElement.dataset.result;
+          set.logged = Boolean(set.result);
+        } else set.logged = !set.logged;
+        if (!isLoggedSet(set)) { entry.completed = false; entry.strongSets = false; }
+      }
+      set.touched = true;
+      persist();
+      render();
+      break;
+    }
+    case "chart-period":
+      progressPeriod = actionElement.dataset.period;
+      render();
+      break;
+    case "technique": {
+      const exercise = getExercise(exerciseId);
+      document.querySelector("#technique-title").textContent = exercise.name;
+      document.querySelector("#technique-content").innerHTML = renderLibraryCard(exercise);
+      techniqueDialog.showModal();
+      break;
+    }
     case "start-day":
       startProgramDay(dayId);
       break;
@@ -1411,6 +1428,8 @@ function handleAction(actionElement) {
       if (!entry) break;
       const previous = entry.sets.at(-1) ?? {};
       entry.sets.push(createSet(previous.weight ?? "", previous.reps ?? 1));
+      entry.completed = false;
+      entry.strongSets = false;
       persist();
       render({ focus: false });
       window.requestAnimationFrame(() => document.querySelector(`#exercise-${CSS.escape(entryId)} .set-row:last-of-type input`)?.focus());
@@ -1420,6 +1439,8 @@ function handleAction(actionElement) {
       const entry = findDraftEntry(entryId);
       if (!entry || entry.sets.length <= 1) break;
       entry.sets = entry.sets.filter((set) => set.id !== setId);
+      entry.completed = false;
+      entry.strongSets = false;
       persist();
       render({ focus: false });
       break;
@@ -1431,6 +1452,7 @@ function handleAction(actionElement) {
       state.activeWorkout.exercises.push({
         id: makeId("entry"),
         exerciseId: selectedExercise.id,
+        loggingVersion: PROGRESSION_VERSION,
         completed: false,
         athleteNotes: "",
         coachCue: "",
@@ -1445,9 +1467,10 @@ function handleAction(actionElement) {
         },
         sets: [createSet("", 1), createSet("", 1), createSet("", 1)],
       });
+      const added = state.activeWorkout.exercises.at(-1);
+      state.activeWorkout.activeExerciseId = added.id;
       persist();
       render({ focus: false });
-      const added = state.activeWorkout.exercises.at(-1);
       window.requestAnimationFrame(() => document.querySelector(`#exercise-${CSS.escape(added.id)}`)?.scrollIntoView({ block: "center" }));
       break;
     }
@@ -1536,8 +1559,21 @@ function handleAction(actionElement) {
 main.addEventListener("click", (event) => {
   const actionElement = event.target.closest("[data-action]");
   if (!actionElement) return;
+  if (actionElement.matches("input, select, textarea")) return;
   event.preventDefault();
   handleAction(actionElement);
+});
+
+main.addEventListener("toggle", (event) => {
+  if (event.target.id === "history-filters") historyFiltersOpen = event.target.open;
+}, true);
+
+techniqueDialog.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-action]");
+  if (button) handleAction(button);
+});
+techniqueDialog.addEventListener("close", () => {
+  document.querySelector("#technique-content").replaceChildren();
 });
 
 main.addEventListener("input", (event) => {
@@ -1552,8 +1588,27 @@ main.addEventListener("input", (event) => {
     const entry = findDraftEntry(target.dataset.entryId);
     const set = entry?.sets?.find((item) => item.id === target.dataset.setId);
     if (!set) return;
-    set[target.dataset.draftSetField] = target.value;
-    set.touched = true;
+    const field = target.dataset.draftSetField;
+    if (entry.loggingVersion === PROGRESSION_VERSION) {
+      const wasComplete = entry.completed;
+      updatePendingSets(entry, set.id, field, target.value);
+      if (wasComplete !== entry.completed) syncWorkoutCompletion(entry);
+      // Update dependent controls without replacing the focused input.
+      for (const row of main.querySelectorAll(`#exercise-${CSS.escape(entry.id)} .set-row`)) {
+        const item = entry.sets.find(candidate => candidate.id === row.dataset.setRow);
+        if (!item) continue;
+        const input = row.querySelector(`[data-draft-set-field="${field}"]`);
+        if (input && input !== target) input.value = item[field];
+        row.querySelectorAll("[data-result]").forEach(button => button.setAttribute("aria-pressed", String(item.result === button.dataset.result)));
+        const log = row.querySelector('[data-action="log-set"]');
+        if (log) { log.setAttribute("aria-pressed", String(Boolean(item.logged))); log.textContent = item.logged ? "✓ Done" : "Log set"; }
+        row.classList.toggle("is-success", item.result === "success");
+        row.classList.toggle("is-miss", item.result === "miss");
+        row.classList.toggle("is-logged", Boolean(item.logged));
+      }
+      const strong = main.querySelector(`[data-action="strong-sets"][data-entry-id="${CSS.escape(entry.id)}"]`);
+      if (strong) { strong.setAttribute("aria-pressed", String(Boolean(entry.strongSets))); strong.querySelector("span").textContent = entry.strongSets ? "✓" : "○"; }
+    } else { set[field] = target.value; set.touched = true; }
     persist();
     markDraftSaved();
     return;
@@ -1579,6 +1634,27 @@ main.addEventListener("input", (event) => {
 main.addEventListener("change", (event) => {
   const target = event.target;
 
+  if (target.id === "workout-recovery") {
+    if (!state.activeWorkout) return;
+    state.activeWorkout.recovery = target.value;
+    replanUntouchedExercises();
+    persist();
+    render();
+    return;
+  }
+  if (target.matches('[data-draft-session-field="date"]')) {
+    replanUntouchedExercises();
+    persist();
+    render();
+    return;
+  }
+
+  if (target.id === "progress-exercise") {
+    progressExerciseId = target.value;
+    render();
+    return;
+  }
+
   if (target.id === "library-category") {
     filterLibrary();
     return;
@@ -1589,21 +1665,12 @@ main.addEventListener("change", (event) => {
     return;
   }
 
-  if (target.matches('[data-action="toggle-complete"]')) {
-    const entry = findDraftEntry(target.dataset.entryId);
-    if (!entry) return;
-    entry.completed = target.checked;
-    if (target.checked) entry.sets.forEach((set) => (set.touched = true));
-    persist();
-    render({ focus: false });
-    return;
-  }
-
   if (target.form?.id === "history-filter-form") {
     const formData = new FormData(target.form);
     historyFilters.exerciseId = String(formData.get("exerciseId") ?? "");
     historyFilters.dateFrom = String(formData.get("dateFrom") ?? "");
     historyFilters.dateTo = String(formData.get("dateTo") ?? "");
+    historyFiltersOpen = true;
     render({ focus: false });
   }
 });
@@ -1699,13 +1766,20 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
       const registration = await navigator.serviceWorker.register("./sw.js", { scope: "./" });
-      registration.update();
+      // An existing offline shell remains usable when an update cannot connect.
+      registration.update().catch(() => {});
     } catch (error) {
       console.error("Service worker registration failed", error);
       showToast("Offline setup could not be completed.", { error: true, duration: 5000 });
     }
   });
 }
+
+function updateKeyboardLayout() {
+  const viewport = window.visualViewport;
+  document.body.classList.toggle("keyboard-open", Boolean(viewport && window.innerHeight - viewport.height > 150));
+}
+window.visualViewport?.addEventListener("resize", updateKeyboardLayout);
 
 if (!window.location.hash) window.history.replaceState(null, "", "#dashboard");
 updateNetworkStatus();

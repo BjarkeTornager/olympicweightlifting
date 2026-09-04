@@ -35,6 +35,7 @@ const requiredShell = [
   "js/app.js",
   "js/data.js",
   "js/storage.js",
+  "js/progression.js",
   "manifest.webmanifest",
   "sw.js",
   "assets/icon.svg",

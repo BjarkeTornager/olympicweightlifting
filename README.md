@@ -293,7 +293,11 @@ The resulting URL is `https://USERNAME.github.io/REPOSITORY/`.
 
 ## Updating the PWA
 
-Change `CACHE_NAME` in `sw.js` whenever app-shell files change after deployment. The service worker removes older shell caches during activation. User workouts are not kept in the cache and are unaffected by a shell update.
+Change `CACHE_NAME` in `sw.js` whenever app-shell files change after deployment. Installation bypasses the browser's HTTP cache; online page and asset requests revalidate before falling back to the offline shell (with a five-second network timeout). Activation removes only older Lift Journal shell caches. User workouts are stored separately in localStorage and are unaffected by a shell update.
+
+The app checks for updates on load, on returning to a visible tab, and when reconnecting. A new worker offers **Reload update** without interrupting the current workout. **Profile & backups → Refresh app**, or `./refresh.html#workout`, installs and activates the latest worker before returning to the journal. This recovery page also works when an older app script is cached. It never clears website data, workout history, PRs, or drafts. If offline, it offers retry and a return to the saved journal.
+
+The browser suite starts with the previously shipped v6 worker and a fresh HTTP cache, verifies recovery to the new program while preserving history/PRs/drafts, then checks an optional update notice and offline recovery alongside the training flows.
 
 ## Privacy
 

@@ -1247,6 +1247,7 @@ function renderData() {
           <p class="privacy-note"><strong>No account and no server:</strong> training data never leaves the device unless you export it or open an external video.</p>
           <p>Last local update: <strong>${escapeHtml(formatDateTime(state.updatedAt))}</strong></p>
           <p>Active program: <strong>${escapeHtml(PROGRAM_DEFINITION.name)}</strong><br>Revision: ${escapeHtml(PROGRAM_DEFINITION.revision)}</p>
+          <a class="button button-secondary" href="./refresh.html#data">Refresh app</a>
         </aside>
       </div>
     </section>
@@ -1853,19 +1854,6 @@ window.addEventListener("appinstalled", () => {
 });
 
 window.addEventListener("hashchange", () => render({ focus: true }));
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try {
-      const registration = await navigator.serviceWorker.register("./sw.js", { scope: "./" });
-      // An existing offline shell remains usable when an update cannot connect.
-      registration.update().catch(() => {});
-    } catch (error) {
-      console.error("Service worker registration failed", error);
-      showToast("Offline setup could not be completed.", { error: true, duration: 5000 });
-    }
-  });
-}
 
 function updateKeyboardLayout() {
   const viewport = window.visualViewport;

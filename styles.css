@@ -2536,3 +2536,15 @@ h1 { font-size: clamp(1.85rem, 4vw, 2.8rem); letter-spacing: -0.045em; }
     box-shadow: none;
   }
 }
+/* The update stays optional while a workout or unsaved form is open. */
+.app-update:not([hidden]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 1120px;
+  margin: 16px auto 0;
+  padding: 12px 20px;
+  background: #f5ead5;
+}

@@ -31,7 +31,7 @@ jobs:
       - name: Prepare deployment directory
         run: |
           mkdir _site
-          cp index.html styles.css manifest.webmanifest sw.js _site/
+          cp index.html refresh.html styles.css manifest.webmanifest sw.js _site/
           cp -R assets js _site/
 
       - name: Configure GitHub Pages

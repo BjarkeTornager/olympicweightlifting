@@ -51,6 +51,11 @@
       </div>
     </header>
 
+    <aside id="app-update" class="app-update" role="status" hidden>
+      <span>A new version is ready.</span>
+      <a id="app-update-link" class="button button-secondary" href="./refresh.html">Reload update</a>
+    </aside>
+
     <main id="app-content" class="app-main" tabindex="-1">
       <div class="initial-loader" aria-live="polite">
         <span class="loader-mark" aria-hidden="true"></span>
@@ -109,6 +114,7 @@
       <div class="noscript-message">Lift Journal needs JavaScript to log and store workouts.</div>
     </noscript>
 
+    <script defer src="./js/updates.js"></script>
     <script type="module" src="./js/app.js"></script>
   </body>
 </html>

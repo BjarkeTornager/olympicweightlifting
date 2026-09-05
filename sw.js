@@ -1,4 +1,4 @@
-const CACHE_NAME = "lift-journal-shell-v6";
+const CACHE_NAME = "lift-journal-shell-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,9 @@ const APP_SHELL = [
   "./js/data.js",
   "./js/storage.js",
   "./js/progression.js",
+  "./js/updates.js",
+  "./js/refresh.js",
+  "./refresh.html",
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./assets/icon-192.png",
@@ -23,7 +26,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL.map(scopedUrl)))
+      .then((cache) => cache.addAll(APP_SHELL.map((path) => new Request(scopedUrl(path), { cache: "reload" }))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -32,48 +35,45 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("lift-journal-shell-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
+
+async function networkFirst(request, cacheKey) {
+  const cache = await caches.open(CACHE_NAME);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    // Revalidate the HTTP cache too: Safari can otherwise reuse an old script.
+    const response = await fetch(request, { cache: "no-cache", signal: controller.signal });
+    if (response.ok) {
+      // A full cache must never prevent an online page from loading.
+      await cache.put(cacheKey, response.clone()).catch(() => {});
+      return response;
+    }
+    return (await cache.match(cacheKey)) ?? response;
+  } catch (error) {
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
   const requestUrl = new URL(request.url);
-  if (requestUrl.origin !== self.location.origin) return;
+  if (requestUrl.origin !== self.location.origin || !request.url.startsWith(self.registration.scope)) return;
 
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(scopedUrl("./index.html"), copy));
-          }
-          return response;
-        })
-        .catch(async () => {
-          return (await caches.match(scopedUrl("./index.html"))) ?? (await caches.match(scopedUrl("./")));
-        }),
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const refreshed = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-
-      return cached ?? refreshed;
-    }),
-  );
+  // Keep recovery-page requests separate from the journal's offline entry page.
+  const isJournal = request.mode === "navigate" &&
+    [scopedUrl("./"), scopedUrl("./index.html")].includes(requestUrl.origin + requestUrl.pathname);
+  const cacheKey = isJournal ? scopedUrl("./index.html") : request;
+  const response = networkFirst(request, cacheKey);
+  event.respondWith(response);
+  event.waitUntil(response.then(() => {}, () => {}));
 });

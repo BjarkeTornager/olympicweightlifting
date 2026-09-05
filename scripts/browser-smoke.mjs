@@ -10,17 +10,26 @@ const downloadDirectory = await mkdtemp(output + "/downloads-");
 const shellFiles = ["index.html", "styles.css", "sw.js", "manifest.webmanifest",
   "js/app.js", "js/data.js", "js/storage.js", "js/progression.js", "assets/icon.svg",
   "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png",
-  "assets/apple-touch-icon.png"];
+  "assets/apple-touch-icon.png", "refresh.html", "js/updates.js", "js/refresh.js"];
 const files = new Map(await Promise.all(shellFiles.map(async path => [path, await readFile(new URL("../" + path, import.meta.url))])));
 const shellCacheName = files.get("sw.js").toString().match(/const CACHE_NAME = "([^"]+)"/)?.[1];
 assert.ok(shellCacheName, "The app shell must declare its cache version");
+const legacyWorker = await readFile(new URL("./fixtures/sw-v6.js", import.meta.url));
+let serveLegacyShell = true;
+let serverDataSuffix = "";
 const server = createServer((request, response) => {
   const pathname = new URL(request.url, "http://localhost").pathname;
   const path = pathname.startsWith("/lift-journal/") ? pathname.slice("/lift-journal/".length) || "index.html" : "";
   if (!files.has(path)) { response.writeHead(404).end(); return; }
   const type = path.endsWith(".js") ? "text/javascript" : path.endsWith(".css") ? "text/css" : path.endsWith(".png") ? "image/png" : path.endsWith(".svg") ? "image/svg+xml" : path.endsWith(".webmanifest") ? "application/manifest+json" : "text/html";
-  response.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
-  response.end(files.get(path));
+  // Keep a fresh HTTP cache during the upgrade regression, as on GitHub Pages.
+  response.writeHead(200, { "Content-Type": type, "Cache-Control": path === "sw.js" ? "no-cache" : "public, max-age=3600" });
+  let body = files.get(path);
+  if (serveLegacyShell && path === "sw.js") body = legacyWorker;
+  if (serveLegacyShell && path === "js/updates.js") body = 'window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js", { scope: "./" }));';
+  if (serveLegacyShell && path === "js/data.js") body = body.toString().replace('title: "Gym Accessories"', 'title: "Old cached programme"');
+  if (path === "js/data.js") body = body.toString() + serverDataSuffix;
+  response.end(body);
 });
 await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
 const appUrl = "http://127.0.0.1:" + server.address().port + "/lift-journal/";
@@ -145,13 +154,70 @@ try {
   sessionId = (await send("Target.attachToTarget", { targetId, flatten: true }, true)).sessionId;
   await Promise.all(["Page.enable", "Runtime.enable", "Network.enable", "Log.enable", "Accessibility.enable"].map(m => send(m)));
   await send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloadDirectory, browserContextId: contextId, eventsEnabled: true }, true);
-  await send("Network.setCacheDisabled", { cacheDisabled: true });
   await send("Fetch.enable", { patterns: [{ urlPattern: "https://www.youtube-nocookie.com/*", resourceType: "Document" }] });
   await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
   await viewport(390, 844);
   await send("Page.navigate", { url: appUrl });
   await until("document.querySelector('#dashboard-title') !== null");
   await until("Boolean(navigator.serviceWorker.controller)");
+
+  await route("#workout", "#workout-title");
+  assert.equal(await evaluate("document.querySelector('[data-program-day=gym_accessories] h2').textContent"), "Old cached programme");
+  await tap('[data-action="start-day"][data-day-id="monday"]');
+  await fill(weight, "53");
+  await tap(first + ' [data-result="success"]');
+  await tap('.workout-topbar [data-action="finish-workout"]');
+  await tap("#confirm-action");
+  await until("location.hash === '#history'");
+  await route("#workout", "#workout-title");
+  await tap('[data-action="start-day"][data-day-id="monday"]');
+  await fill(weight, "54");
+  const beforeUpdate = await saved();
+  assert.equal(beforeUpdate.sessions.length, 1);
+  await evaluate("caches.open('unrelated-app-cache').then(cache => cache.put('./unrelated.txt', new Response('keep me')))");
+
+  // Reproduce an already-open tab whose offline AND HTTP caches contain old JS.
+  serveLegacyShell = false;
+  await send("Page.navigate", { url: appUrl + "refresh.html#workout" });
+  await wait(300);
+  await until("location.pathname === '/lift-journal/' && location.search.includes('updated=') && document.querySelector('.workout-page') !== null", 25000);
+  const afterUpdate = await saved();
+  assert.deepEqual(afterUpdate.sessions, beforeUpdate.sessions);
+  assert.deepEqual(afterUpdate.prs, beforeUpdate.prs);
+  assert.equal(afterUpdate.activeWorkout.exercises[0].sets[0].weight, "54");
+  assert.ok(await evaluate("caches.keys().then(keys => keys.includes('unrelated-app-cache'))"));
+  assert.ok(await evaluate("caches.keys().then(keys => !keys.includes('lift-journal-shell-v6'))"));
+  await capture("updated-workout-preserved-390");
+
+  // An online reload gets fresh program code even without a worker-version bump.
+  serverDataSuffix = '\nexport const cacheRegressionMarker = "fresh-from-network";';
+  assert.ok((await evaluate("fetch('./js/data.js').then(response => response.text())")).includes("fresh-from-network"));
+  serverDataSuffix = "";
+
+  // A later deployment offers a deliberate reload and does not interrupt a set.
+  const currentWorker = files.get("sw.js");
+  files.set("sw.js", Buffer.from(currentWorker.toString() + "\n// Simulated subsequent deployment.\n"));
+  const pageBeforeUpdate = await evaluate("performance.timeOrigin");
+  await evaluate("navigator.serviceWorker.getRegistration().then(registration => registration.update())");
+  await until("document.querySelector('#app-update').hidden === false");
+  assert.equal(await evaluate("performance.timeOrigin"), pageBeforeUpdate);
+  assert.equal((await saved()).activeWorkout.exercises[0].sets[0].weight, "54");
+  await capture("update-notice-390");
+  await tap("#app-update-link");
+  await wait(300);
+  await until("location.pathname === '/lift-journal/' && document.querySelector('.workout-page') !== null", 25000);
+  assert.equal(await evaluate("location.hash"), "#workout");
+  assert.equal((await saved()).activeWorkout.exercises[0].sets[0].weight, "54");
+  // Reset only this suite's disposable context before the normal workout checks.
+  await evaluate("localStorage.removeItem('lift-journal:v2')");
+  await send("Page.navigate", { url: appUrl + "#workout" });
+  await wait(200);
+  await until("document.querySelector('#workout-title') !== null");
+  assert.equal(await evaluate("document.querySelector('[data-program-day=gym_accessories] h2').textContent"), "Gym Accessories");
+  pass("Cached v6 recovery, fresh HTTP assets, preserved history/PRs/draft and optional update notice");
+
+  await send("Network.setCacheDisabled", { cacheDisabled: true });
+  await route("#dashboard", "#dashboard-title");
   assert.equal(await evaluate("document.querySelectorAll('.week-day').length"), 4);
   assert.equal(await evaluate("document.querySelectorAll('.metric-card').length"), 3);
   assert.ok(await evaluate("document.querySelector('.hero-action').getBoundingClientRect().bottom < innerHeight-90"));
@@ -622,6 +688,17 @@ try {
   assert.ok(ax.nodes.some(n=>n.role?.value==="main"));
   assert.ok(await evaluate("(async()=> (await caches.keys()).includes(" + JSON.stringify(shellCacheName) + "))()"));
   pass("Offline reload/logging, video fallback, draft, service worker and accessibility landmarks");
+
+  const offlineDraft = (await saved()).activeWorkout;
+  await send("Page.navigate", { url: appUrl + "refresh.html#workout" });
+  await wait(200);
+  await until("document.querySelector('#refresh-retry')?.hidden === false", 25000);
+  assert.ok(await evaluate("document.querySelector('#refresh-status').textContent.includes('saved workouts')"));
+  await capture("refresh-offline-390");
+  await tap(".text-action");
+  await until("document.querySelector('.workout-page') !== null");
+  assert.deepEqual((await saved()).activeWorkout.exercises, offlineDraft.exercises);
+  pass("Offline refresh offers retry and returns to the saved workout");
 
   await route("#workout",".workout-page");
   await tap(".session-details > summary");

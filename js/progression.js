@@ -1,8 +1,14 @@
 // Pure progression rules: no storage or DOM access. Every draft snapshots its
 // targets so subsequent changes to the program cannot rewrite training history.
 export const PROGRESSION_VERSION = 1;
-export const PROGRESSION_STEP = 2.5;
-export const PROGRAM_PROGRESSION_REVISION = 2;
+export const PROGRESSION_STEP = 2;
+export const PROGRAM_PROGRESSION_REVISION = 3;
+
+// Round generated loads down, never up. Historical and manually entered weights
+// remain exact; only new prescriptions and quick adjustments use whole kilos.
+export function wholeKilograms(weight) {
+  return Math.max(0, Math.floor(Number(weight) || 0));
+}
 
 export function isLoggedSet(set) {
   return set?.logged === true || set?.result === "success" || set?.result === "miss";
@@ -34,22 +40,25 @@ function baseline(entry, fallback) {
 }
 
 export function planExercise(exercise, { sessions, programId, dayId, date, recovery = "auto", excludeSessionId } = {}) {
-  const initial = exercise.initialWeight;
+  const automatic = Boolean(exercise.progression);
+  const chooseStartingWeight = automatic && typeof exercise.initialWeight !== "number";
+  const initial = automatic && !chooseStartingWeight ? wholeKilograms(exercise.initialWeight) : exercise.initialWeight;
+  const configuredStep = exercise.progression?.step;
   const plan = {
     version: PROGRESSION_VERSION,
     policyRevision: PROGRAM_PROGRESSION_REVISION,
     weight: initial,
     reps: exercise.defaultReps,
     sets: targetSetCount(exercise),
-    step: exercise.progression?.step ?? PROGRESSION_STEP,
-    maxWeight: exercise.progression?.maxWeight ?? null,
+    step: Number.isInteger(configuredStep) && configuredStep > 0 ? configuredStep : PROGRESSION_STEP,
+    maxWeight: exercise.progression?.maxWeight == null ? null : wholeKilograms(exercise.progression.maxWeight),
     sourceSessionId: null,
     sourceDate: null,
     previousWeight: null,
-    status: "initial",
-    reason: "Starting from the program’s prescribed load.",
+    status: chooseStartingWeight ? "choose" : "initial",
+    reason: chooseStartingWeight ? "Choose a comfortable starting weight. Completed, logged work establishes your baseline for automatic progression." : "Starting from the program’s prescribed load.",
   };
-  if (!exercise.progression || typeof initial !== "number") {
+  if (!automatic) {
     return { ...plan, status: "manual", reason: "Choose the load with your coach or for the accessory you use." };
   }
   // The calendar date, not edit/save time, determines the previous workout.
@@ -63,15 +72,19 @@ export function planExercise(exercise, { sessions, programId, dayId, date, recov
   const entry = previous.exercises?.find(item => item.exerciseId === exercise.exerciseId);
   const lastEntry = entry ?? history.flatMap(session => session.exercises ?? []).find(item => item.exerciseId === exercise.exerciseId);
   const base = baseline(lastEntry, initial);
-  const weight = plan.maxWeight === null ? base : Math.min(base, plan.maxWeight);
+  if (typeof base !== "number" || !Number.isFinite(base)) return plan;
+  const roundedBase = wholeKilograms(base);
+  const weight = plan.maxWeight === null ? roundedBase : Math.min(roundedBase, plan.maxWeight);
+  const roundingNote = base !== roundedBase ? ` Previous ${base} kg rounded down to a ${roundedBase} kg baseline for whole-kilogram loading; the saved workout is unchanged.` : "";
   Object.assign(plan, { weight, previousWeight: base, sourceSessionId: previous.id, sourceDate: previous.date, status: "hold" });
-  const hold = reason => ({ ...plan, reason });
+  const hold = reason => ({ ...plan, reason: reason + roundingNote });
   if (!entry) return hold("This exercise was not logged in the last workout for this day. Repeat the last load.");
   const sets = entry.sets ?? [];
   const targetSets = Math.max(plan.sets, Number(entry.prescribed?.targetSets) || plan.sets);
   const targetReps = Math.max(plan.reps, Number(entry.prescribed?.targetReps) || plan.reps);
   const savedTarget = entry.prescribed?.targetWeight;
-  const targetWeight = savedTarget == null ? base : Number(savedTarget);
+  const targetWeight = savedTarget == null || String(savedTarget).trim() === "" || (chooseStartingWeight && Number(savedTarget) === 0) ? base : Number(savedTarget);
+  if (chooseStartingWeight && base === 0) return hold("Bodyweight work stays at 0 kg. Choose and log a comfortable added load before automatic increases begin.");
   if (!Number.isFinite(targetWeight) || targetWeight <= 0) return hold("Previous load targets are missing. Repeat the load to establish a baseline.");
   if (sets.length < targetSets || !sets.every(isValidLoggedSet)) {
     return hold("Not all prescribed sets were completed and logged. Repeat this load.");
@@ -89,12 +102,12 @@ export function planExercise(exercise, { sessions, programId, dayId, date, recov
   if (rpes.some(rpe => Number.isFinite(rpe) && rpe > 8)) {
     return hold("A previous set was above RPE 8. Repeat the load before increasing.");
   }
-  const increased = Math.round((base + plan.step) * 100) / 100;
+  const increased = roundedBase + plan.step;
   if (plan.maxWeight !== null && increased > plan.maxWeight) {
-    return { ...plan, status: "limit", reason: "The next full increase exceeds the program’s load range. Hold here and review the program." };
+    return { ...plan, status: "limit", reason: "The next full increase exceeds the program’s load range. Hold here and review the program." + roundingNote };
   }
   if (recovery === "limited") return hold("Recovery is limited today. Repeat the previous load.");
-  return { ...plan, weight: increased, status: "increase", reason: "All prescribed sets and reps were completed successfully. The program automatically adds " + plan.step + " kg." };
+  return { ...plan, weight: increased, status: "increase", reason: `All prescribed sets and reps were completed successfully. The program automatically adds ${plan.step} kg total (${plan.step / 2} kg per side).` + roundingNote };
 }
 
 // The program shows the next exposure immediately after a completed session.

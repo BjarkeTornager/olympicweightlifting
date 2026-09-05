@@ -118,7 +118,9 @@ for (const exercise of EXERCISES.filter((item) => item.videoId)) {
 }
 
 check(PROGRAM_DEFINITION.schemaVersion === APP_META.programSchemaVersion, "Program schema versions disagree");
-check(PROGRAM_DEFINITION.days.length === 4, "Program must contain four training days");
+check(PROGRAM_DEFINITION.days.filter(day => Number.isInteger(day.weekday)).length === 4, "Program must retain the four scheduled training days");
+check(PROGRAM_DEFINITION.days.some(day => day.id === "gym_accessories" && day.weekday === null), "Any-day gym accessories programme is missing");
+check(new Set(PROGRAM_DEFINITION.days.map(day => day.id)).size === PROGRAM_DEFINITION.days.length, "Programme template IDs must be unique");
 for (const day of PROGRAM_DEFINITION.days) {
   check(Boolean(day.id && day.name && day.title), "Program day metadata is incomplete");
   for (const item of day.exercises) {

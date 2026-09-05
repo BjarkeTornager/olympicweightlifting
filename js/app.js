@@ -18,7 +18,7 @@ import {
   saveState,
 } from "./storage.js";
 
-import { PROGRESSION_VERSION, PROGRAM_PROGRESSION_REVISION, planExercise, planProgramDay, upgradeProgramDraft, isLoggedSet, isValidLoggedSet, updatePendingSets } from "./progression.js";
+import { PROGRESSION_VERSION, PROGRESSION_STEP, PROGRAM_PROGRESSION_REVISION, wholeKilograms, planExercise, planProgramDay, upgradeProgramDraft, isLoggedSet, isValidLoggedSet, updatePendingSets } from "./progression.js";
 
 const main = document.querySelector("#app-content");
 const toast = document.querySelector("#toast");
@@ -35,6 +35,8 @@ let deferredInstallPrompt = null;
 let lastRenderedRoute = "";
 const historyFilters = { exerciseId: "", dateFrom: "", dateTo: "" };
 let selectedDayId = "";
+let selectedTrainingDate = "";
+let programFilter = "all";
 let historyFiltersOpen = false;
 let progressExerciseId = "snatch";
 let progressPeriod = "all";
@@ -239,30 +241,40 @@ function renderInstallCard() {
   `;
 }
 
-function currentProgramPlan(day) {
-  return planProgramDay(day, { sessions: state.sessions, programId: PROGRAM_DEFINITION.id, date: localIsoDate() });
+function currentProgramPlan(day, date = localIsoDate()) {
+  return planProgramDay(day, { sessions: state.sessions, programId: PROGRAM_DEFINITION.id, date });
+}
+
+function isSoloProgram(day) {
+  return day.exercises.some(exercise => exercise.progression);
+}
+
+function validTrainingDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(date + "T12:00:00Z");
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
 }
 
 function renderProgramTargets(day, plan = currentProgramPlan(day)) {
   const automatic = plan.exercises.some(exercise => exercise.status !== "manual");
   return `<div class="program-targets" data-program-targets="${escapeHtml(day.id)}">
     <div class="program-targets-heading"><strong>Next session loads</strong><span>${automatic ? "Auto progression" : "Coach-led"}</span></div>
-    ${plan.trainedToday ? `<p class="program-repeat-note">Next loads apply from ${escapeHtml(formatDate(plan.availableFrom, { day: "numeric", month: "short" }))}. A repeat today keeps today’s loads.</p>` : ""}
+    ${plan.trainedToday ? `<p class="program-repeat-note">Next loads apply from ${escapeHtml(formatDate(plan.availableFrom, { day: "numeric", month: "short" }))}. A repeat on the same training date keeps that date’s loads.</p>` : ""}
     <ul>${plan.exercises.map(exercise => `<li data-program-exercise="${escapeHtml(exercise.exerciseId)}" data-target-weight="${escapeHtml(exercise.weight)}">
       <span class="program-lift-name">${escapeHtml(getExercise(exercise.exerciseId).name)}</span>
-      <strong class="program-load">${exercise.status === "manual" ? "Manual" : `${formatNumber(exercise.weight)} <small>kg</small>`}</strong>
+      <strong class="program-load">${exercise.status === "manual" ? "Manual" : exercise.status === "choose" ? "Choose load" : `${formatNumber(exercise.weight)} <small>kg</small>`}</strong>
       <span class="program-dose">${exercise.sets} sets × ${exercise.reps} ${exercise.reps === 1 ? "rep" : "reps"}</span>
-      <span class="program-load-status ${exercise.status === "increase" ? "is-increase" : ""}">${exercise.status === "increase" ? `↑ +${formatNumber(exercise.step)} kg` : exercise.status === "initial" ? "Starting load" : exercise.status === "manual" ? "Coach / accessory" : "Repeat load"}</span>
+      <span class="program-load-status ${exercise.status === "increase" ? "is-increase" : ""}">${exercise.status === "increase" ? `↑ +${formatNumber(exercise.step)} kg · ${formatNumber(exercise.step / 2)} / side` : exercise.status === "initial" ? "Starting load" : exercise.status === "choose" ? "Set your baseline" : exercise.status === "manual" ? "Manual load" : "Repeat load"}</span>
       ${["hold", "limit"].includes(exercise.status) ? `<small class="program-hold-reason">${escapeHtml(exercise.reason)}</small>` : ""}
     </li>`).join("")}</ul>
-    <p class="program-rule">${automatic ? "Complete the prescribed work to earn +2.5 kg next time. Starting ranges are not permanent limits." : "Your coach sets these loads. Choose Monday, Wednesday or Friday for automatic progression."}</p>
+    <p class="program-rule">${automatic ? `Complete the prescribed work to earn +${PROGRESSION_STEP} kg total (${PROGRESSION_STEP / 2} kg per side) next time. Targets use whole kilograms; old fractional loads round down before progressing. Starting ranges are not permanent limits.` : "Your coach sets these loads. Training on your own? Choose a solo programme for automatic progression on any day."}</p>
   </div>`;
 }
 
 function renderDashboard() {
   const today = new Date();
   const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
-  const days = PROGRAM_DEFINITION.days;
+  const days = PROGRAM_DEFINITION.days.filter(day => Number.isInteger(day.weekday));
   const nextDay = days.find((day) => day.weekday >= (today.getDay() || 7)) ?? days[0];
   const selected = getProgramDay(selectedDayId) ?? nextDay;
   const active = state.activeWorkout;
@@ -279,7 +291,7 @@ function renderDashboard() {
       ${startupError ? `<div class="storage-note" role="alert">${escapeHtml(startupError)}</div>` : ""}
       <div class="home-primary">
         <article class="training-hero ${active ? "resume-card" : ""}" aria-label="${active ? "Workout in progress" : "Selected workout"}">
-          <div class="hero-heading"><span class="hero-badge">${active ? "In progress" : selected.weekday === today.getDay() ? "Today’s session" : selected.name + " · planned session"}</span><span class="hero-symbol" aria-hidden="true"><i></i><i></i><i></i></span></div>
+          <div class="hero-heading"><span class="hero-badge">${active ? "In progress" : `Today · ${isSoloProgram(selected) ? "Solo programme" : "Coached session"}`}</span><span class="hero-symbol" aria-hidden="true"><i></i><i></i><i></i></span></div>
           <svg class="platform-art" viewBox="0 0 480 120" fill="none" aria-hidden="true" focusable="false">
             <path class="platform-grid" d="M24 109h432M48 93h384M72 77h336M100 77l-22 32m96-32-11 32m77-32v32m66-32 11 32m63-32 22 32"/>
             <circle cx="240" cy="54" r="52" fill="#ffffff" opacity=".035"/>
@@ -302,9 +314,11 @@ function renderDashboard() {
           <p>${active ? `${active.exercises?.filter((entry) => entry.completed).length ?? 0} of ${active.exercises?.length ?? 0} exercises complete · ${escapeHtml(formatDate(active.date, { day: "numeric", month: "short" }))}` : escapeHtml(selected.focus)}</p>
           <div class="hero-meta">${active ? "Pick up where you left off." : `${selected.exercises.length} exercises · ${escapeHtml(PROGRAM_DEFINITION.name)}`}</div>
           ${active ? '<a class="button hero-action" href="#workout">Resume workout <span aria-hidden="true">→</span></a>' : `<button class="button hero-action" data-action="start-day" data-day-id="${selected.id}">Start workout <span aria-hidden="true">→</span></button>`}
+          ${!active ? '<button class="button hero-solo-action" data-action="choose-solo">Train on my own today <span aria-hidden="true">↗</span></button><a class="hero-picker-link" href="#workout">Choose another programme or date</a>' : ""}
         </article>
         <section class="week-panel" aria-labelledby="weekly-plan-title">
-          <div class="section-header"><h2 id="weekly-plan-title">Your week</h2><a class="text-action" href="#workout">All sessions</a></div>
+          <div class="section-header"><h2 id="weekly-plan-title">Usual weekly split</h2><a class="text-action" href="#workout">All programmes</a></div>
+          <p class="schedule-hint">Weekdays are a guide. You can train any programme on any date.</p>
           <div class="week-selector" aria-label="Choose a training day">
             ${days.map((day) => {
               const done = weekSessions.some((session) => session.programDayId === day.id);
@@ -374,9 +388,10 @@ function createWorkoutExercise(programExercise, context) {
   };
 }
 
-function startProgramDay(dayId) {
+function startProgramDay(dayId, date = localIsoDate()) {
   const day = getProgramDay(dayId);
   if (!day) return;
+  if (!validTrainingDate(date)) { showToast("Choose a valid training date.", { error: true }); return; }
 
   if (state.activeWorkout) {
     navigate("workout");
@@ -391,7 +406,7 @@ function startProgramDay(dayId) {
     programRevision: PROGRAM_DEFINITION.revision,
     programDayId: day.id,
     title: day.title,
-    date: localIsoDate(),
+    date,
     startedAt: new Date().toISOString(),
     athleteNotes: "",
     coachNotes: "",
@@ -399,7 +414,7 @@ function startProgramDay(dayId) {
     recovery: "auto",
     progressionRevision: PROGRAM_PROGRESSION_REVISION,
     exercises: day.exercises.map(exercise => createWorkoutExercise(exercise, {
-      sessions: state.sessions, programId: PROGRAM_DEFINITION.id, dayId: day.id, date: localIsoDate(),
+      sessions: state.sessions, programId: PROGRAM_DEFINITION.id, dayId: day.id, date,
     })),
   };
   persist();
@@ -436,7 +451,8 @@ function upgradeActiveProgram() {
   }
 }
 
-function startOpenWorkout() {
+function startOpenWorkout(date = localIsoDate()) {
+  if (!validTrainingDate(date)) { showToast("Choose a valid training date.", { error: true }); return; }
   if (state.activeWorkout) {
     navigate("workout");
     return;
@@ -449,7 +465,7 @@ function startOpenWorkout() {
     programRevision: null,
     programDayId: null,
     title: "Open training session",
-    date: localIsoDate(),
+    date,
     startedAt: new Date().toISOString(),
     athleteNotes: "",
     coachNotes: "",
@@ -461,27 +477,35 @@ function startOpenWorkout() {
 }
 
 function renderWorkoutPicker() {
+  const date = selectedTrainingDate || localIsoDate();
+  const dateLabel = date === localIsoDate() ? "today" : formatDate(date, { day: "numeric", month: "short" });
+  const days = PROGRAM_DEFINITION.days.filter(day => programFilter === "all" || isSoloProgram(day) === (programFilter === "solo"));
   return `
     <section class="page" aria-labelledby="workout-title">
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Workout</p>
-          <h1 id="workout-title">Your progressing program.</h1>
-          <p class="page-lead">Your next loads update automatically from completed training. Start a session to use them.</p>
+          <h1 id="workout-title">Choose your training.</h1>
+          <p class="page-lead">Pick a date and a programme. The usual weekday is just a guide—solo training works on Saturdays too.</p>
         </div>
       </header>
 
+      <section class="training-picker-controls" aria-label="Training date and programme type">
+        <div class="training-date-row"><label class="field"><span>Training date</span><input id="training-date" type="date" value="${escapeHtml(date)}" required></label><button class="button button-secondary" data-action="training-today">Today</button></div>
+        <div class="training-type-selector" role="group" aria-label="Programme type">${[["all", "All programmes"], ["solo", "On my own"], ["coached", "With my coach"]].map(([value, label]) => `<button class="button button-secondary" data-action="filter-programs" data-filter="${value}" aria-pressed="${programFilter === value}">${label}</button>`).join("")}</div>
+        <p class="schedule-hint">${programFilter === "solo" ? "No coached session today? Pick a solo programme below. " : ""}Loads follow your history for the chosen programme, not the weekday you train.</p>
+      </section>
       <div class="workout-picker-grid">
-        ${PROGRAM_DEFINITION.days
+        ${days
           .map((day) => {
-            const plan = currentProgramPlan(day);
+            const plan = currentProgramPlan(day, date);
             return `
               <article class="card workout-picker" data-program-day="${escapeHtml(day.id)}">
-                <p class="eyebrow">${escapeHtml(day.name)}</p>
+                <p class="eyebrow">${isSoloProgram(day) ? "Solo" : "Coached"} · ${day.weekday == null ? "Any day · Normal gym" : `Usual split: ${escapeHtml(day.name)}`}</p>
                 <h2>${escapeHtml(day.title)}</h2>
                 <p>${escapeHtml(day.focus)}</p>
-                <button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}">${plan.trainedToday ? "Repeat today’s session" : "Start session"}</button>
-                ${renderProgramTargets(day, plan)}
+                <button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}" data-training-date="${escapeHtml(date)}">${plan.trainedToday ? "Repeat" : "Start"} ${escapeHtml(dateLabel)}</button>
+                <details class="picker-load-preview" data-ui-details="picker-${escapeHtml(day.id)}"><summary>Preview loads · ${day.exercises.length} exercises</summary>${day.sessionPrompt ? `<p>${escapeHtml(day.sessionPrompt)}</p>` : ""}${renderProgramTargets(day, plan)}</details>
               </article>
             `;
           })
@@ -490,7 +514,7 @@ function renderWorkoutPicker() {
           <p class="eyebrow">Flexible logging</p>
           <h2>Open session</h2>
           <p>Build an unprogrammed workout one exercise at a time.</p>
-          <button class="button button-secondary" data-action="start-open-workout">Start open session</button>
+          <button class="button button-secondary" data-action="start-open-workout" data-training-date="${escapeHtml(date)}">Start open session ${escapeHtml(dateLabel)}</button>
         </article>
       </div>
     </section>
@@ -509,6 +533,12 @@ function prescriptionSummary(entry) {
   return pieces.join(" · ");
 }
 
+function progressionSummary(entry) {
+  const plan = entry.prescribed.progression;
+  if (plan.status === "choose") return `Choose starting weight · ${plan.sets} sets × ${plan.reps}`;
+  return `${plan.status === "increase" ? "↑ Progressed" : "Planned"} · ${formatNumber(entry.prescribed.targetWeight)} kg × ${entry.prescribed.targetReps}`;
+}
+
 function setFieldAttributes(entry, set, field) {
   return `data-draft-set-field="${field}" data-entry-id="${escapeHtml(entry.id)}" data-set-id="${escapeHtml(set.id)}"`;
 }
@@ -519,14 +549,14 @@ function renderSetRow(entry, set, index) {
   return `
     <div class="set-row ${set.result ? "is-" + escapeHtml(set.result) : set.logged ? "is-logged" : ""}" data-set-row="${escapeHtml(set.id)}">
       <span class="set-number" aria-label="Set ${index + 1}">${index + 1}</span>
-      <label class="set-weight"><span>kg</span><input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeHtml(set.weight ?? "")}" placeholder="kg" ${setFieldAttributes(entry, set, "weight")} aria-label="Set ${index + 1} weight in kilograms"></label>
+      <label class="set-weight"><span>kg</span><input type="number" inputmode="decimal" min="0" step="1" value="${escapeHtml(set.weight ?? "")}" placeholder="kg" ${setFieldAttributes(entry, set, "weight")} aria-label="Set ${index + 1} weight in kilograms"></label>
       <label class="set-reps"><span>Reps</span><input type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(set.reps ?? "")}" ${setFieldAttributes(entry, set, "reps")} aria-label="Set ${index + 1} repetitions"></label>
       <div class="set-result" role="group" aria-label="Set ${index + 1} result">
         ${exercise.tracksOutcome ? `<button class="result-button" data-action="set-result" data-result="success" ${actionData} aria-pressed="${set.result === "success"}" aria-label="Set ${index + 1} made">Made</button><button class="result-button miss-button" data-action="set-result" data-result="miss" ${actionData} aria-pressed="${set.result === "miss"}" aria-label="Set ${index + 1} missed">Miss</button>` : `<button class="result-button log-button" data-action="log-set" ${actionData} aria-pressed="${Boolean(set.logged)}" aria-label="Log set ${index + 1}">${set.logged ? "✓ Done" : "Log set"}</button>`}
       </div>
       <details class="set-options" data-ui-details="set-${escapeHtml(set.id)}"><summary>Set options${set.rpe ? ` · RPE ${escapeHtml(set.rpe)}` : ""}</summary>
         <div class="set-options-body">
-          <div class="weight-adjust" role="group" aria-label="Adjust set ${index + 1} weight"><button class="button button-secondary" data-action="adjust-weight" data-delta="-2.5" ${actionData} aria-label="Decrease set ${index + 1} by 2.5 kilograms">−2.5 kg</button><button class="button button-secondary" data-action="adjust-weight" data-delta="2.5" ${actionData} aria-label="Increase set ${index + 1} by 2.5 kilograms">+2.5 kg</button></div>
+          <div class="weight-adjust" role="group" aria-label="Adjust set ${index + 1} weight">${[-2, 2, -5, 5].map(delta => `<button class="button button-secondary" data-action="adjust-weight" data-delta="${delta}" ${actionData} aria-label="${delta < 0 ? "Decrease" : "Increase"} set ${index + 1} by ${Math.abs(delta)} kilograms total, ${Math.abs(delta) / 2} kilograms per side"><span>${delta < 0 ? "−" : "+"}${Math.abs(delta)} kg</span><small>${Math.abs(delta) / 2} kg / side</small></button>`).join("")}</div>
           <label class="field"><span>RPE (optional)</span><input type="number" inputmode="decimal" min="1" max="10" step="0.5" value="${escapeHtml(set.rpe ?? "")}" placeholder="1–10" ${setFieldAttributes(entry, set, "rpe")} aria-label="Set ${index + 1} RPE"></label>
           ${index ? `<button class="button button-secondary" data-action="copy-set" ${actionData}>Copy previous weight & reps</button>` : ""}
           <button class="button button-danger-quiet" data-action="remove-set" ${actionData} ${entry.sets.length <= 1 ? "disabled" : ""}>Remove set ${index + 1}</button>
@@ -551,7 +581,7 @@ function renderWorkoutExercise(entry, index) {
       </button>
       <div id="exercise-body-${escapeHtml(entry.id)}" class="exercise-body" ${isActive ? "" : "hidden"}>
         ${entry.prescribed?.notes ? `<p class="prescription-note">${escapeHtml(entry.prescribed.notes)}</p>` : ""}
-        ${entry.prescribed?.progression && entry.prescribed.progression.status !== "manual" ? `<details class="progression-note" data-ui-details="progression-${escapeHtml(entry.id)}"><summary><strong>${entry.prescribed.progression.status === "increase" ? "↑ Progressed" : "Planned"} · ${formatNumber(entry.prescribed.targetWeight)} kg × ${entry.prescribed.targetReps}</strong><span class="progression-why">Why? <span aria-hidden="true">⌄</span></span></summary><div class="progression-body"><span>${escapeHtml(entry.prescribed.progression.reason)}</span>${entry.prescribed.progression.sourceDate ? `<small>Based on ${escapeHtml(formatDate(entry.prescribed.progression.sourceDate))}</small>` : ""}<small>Weight and rep edits carry to later unlogged sets. Direct edits are kept.</small></div></details>` : ""}
+        ${entry.prescribed?.progression && entry.prescribed.progression.status !== "manual" ? `<details class="progression-note" data-ui-details="progression-${escapeHtml(entry.id)}"><summary><strong>${escapeHtml(progressionSummary(entry))}</strong><span class="progression-why">Why? <span aria-hidden="true">⌄</span></span></summary><div class="progression-body"><span>${escapeHtml(entry.prescribed.progression.reason)}</span>${entry.prescribed.progression.sourceDate ? `<small>Based on ${escapeHtml(formatDate(entry.prescribed.progression.sourceDate))}</small>` : ""}<small>Weight and rep edits carry to later unlogged sets. Direct edits are kept.</small></div></details>` : ""}
         ${best ? `<p class="last-session">Last time <strong>${formatNumber(best.weight)} kg × ${escapeHtml(best.reps)} reps</strong><span>${escapeHtml(formatDate(previousSession.date, { day: "numeric", month: "short" }))}</span></p>` : ""}
         <div class="sets-area">
           ${entry.sets.map((set, setIndex) => renderSetRow(entry, set, setIndex)).join("")}
@@ -1364,6 +1394,19 @@ function handleAction(actionElement) {
   const { action, dayId, entryId, setId, sessionId, exerciseId } = actionElement.dataset;
 
   switch (action) {
+    case "choose-solo":
+      selectedTrainingDate = localIsoDate();
+      programFilter = "solo";
+      navigate("workout");
+      break;
+    case "filter-programs":
+      programFilter = ["all", "solo", "coached"].includes(actionElement.dataset.filter) ? actionElement.dataset.filter : "all";
+      render();
+      break;
+    case "training-today":
+      selectedTrainingDate = localIsoDate();
+      render();
+      break;
     case "select-day":
       selectedDayId = dayId;
       render();
@@ -1420,7 +1463,7 @@ function handleAction(actionElement) {
       const entry = findDraftEntry(entryId);
       const set = entry?.sets?.find((item) => item.id === setId);
       if (!set) break;
-      if (action === "adjust-weight") updatePendingSets(entry, setId, "weight", String(Math.max(0, (Number.parseFloat(set.weight) || 0) + Number(actionElement.dataset.delta))));
+      if (action === "adjust-weight") updatePendingSets(entry, setId, "weight", String(Math.max(0, wholeKilograms(set.weight) + Number(actionElement.dataset.delta))));
       if (action === "copy-set") {
         const previous = entry.sets[entry.sets.indexOf(set) - 1];
         if (!previous) break;
@@ -1456,10 +1499,10 @@ function handleAction(actionElement) {
       break;
     }
     case "start-day":
-      startProgramDay(dayId);
+      startProgramDay(dayId, actionElement.dataset.trainingDate || localIsoDate());
       break;
     case "start-open-workout":
-      startOpenWorkout();
+      startOpenWorkout(actionElement.dataset.trainingDate || localIsoDate());
       break;
     case "add-set": {
       const entry = findDraftEntry(entryId);
@@ -1671,6 +1714,17 @@ main.addEventListener("input", (event) => {
 
 main.addEventListener("change", (event) => {
   const target = event.target;
+
+  if (target.id === "training-date") {
+    if (!target.validity.valid || !validTrainingDate(target.value)) {
+      showToast("Choose a valid training date.", { error: true });
+      target.value = selectedTrainingDate || localIsoDate();
+      return;
+    }
+    selectedTrainingDate = target.value;
+    render();
+    return;
+  }
 
   if (target.id === "workout-recovery") {
     if (!state.activeWorkout) return;

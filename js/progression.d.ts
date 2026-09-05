@@ -1,0 +1,12 @@
+import type { Entry, JournalState, LiftSet, Plan, ProgramDay, ProgramExercise, Workout } from "../lib/model";
+export const PROGRESSION_VERSION:number;
+export const PROGRESSION_STEP:number;
+export const PROGRAM_PROGRESSION_REVISION:number;
+export function wholeKilograms(weight:unknown):number;
+export function isLoggedSet(set:Partial<LiftSet>):boolean;
+export function isValidLoggedSet(set:Partial<LiftSet>):boolean;
+export function targetSetCount(exercise:ProgramExercise):number;
+export function planExercise(exercise:ProgramExercise, context:{sessions:JournalState["sessions"];programId:string;dayId:string;date:string;recovery?:string;excludeSessionId?:string}):Plan;
+export function planProgramDay(day:ProgramDay,context:{sessions:JournalState["sessions"];programId:string;date:string}):{availableFrom:string;trainedToday:boolean;exercises:(Plan & {exerciseId:string})[]};
+export function upgradeProgramDraft(draft:Workout|null, context:{day?:ProgramDay;sessions:JournalState["sessions"]}):Workout|null;
+export function updatePendingSets(entry:Entry,setId:string,field:string,value:string):void;

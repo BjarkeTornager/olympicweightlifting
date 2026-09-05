@@ -67,13 +67,20 @@ export function useJournal() {
         }
         if (!response.ok) throw Error("Sync is temporarily unavailable.");
         const server = (await response.json()) as Snapshot;
-        local = await changeLocal(accountId, (current) =>
-          current.dirty ? current : { ...current, ...server },
-        );
+        local = await changeLocal(accountId, (current) => {
+          if (current.dirty) return current;
+          // A restored database can be older than an already-confirmed device
+          // copy. Preserve that copy for recovery instead of silently replacing it.
+          if (server.revision < current.revision)
+            return { ...current, conflict: server };
+          return { ...current, state: server.state, revision: server.revision };
+        });
         publish(local);
-        setStatus(local.dirty ? "saved" : "synced");
+        setStatus(
+          local.conflict ? "conflict" : local.dirty ? "saved" : "synced",
+        );
         setError("");
-        if (!local.dirty) return;
+        if (local.conflict || !local.dirty) return;
       }
       local = await changeLocal(accountId, (current) => ({
         ...current,

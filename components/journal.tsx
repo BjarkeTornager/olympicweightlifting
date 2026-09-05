@@ -57,22 +57,34 @@ export function Journal() {
     [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   useEffect(() => {
     const changed = () => setRoute(location.hash.slice(1) || "dashboard");
+    const activated = () => setUpdateReady(false);
     changed();
     window.addEventListener("hashchange", changed);
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production")
+    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+      navigator.serviceWorker.addEventListener("controllerchange", activated);
       navigator.serviceWorker
         .register("/sw.js")
         .then((reg) => {
           setWorker(reg);
-          if (reg.waiting) setUpdateReady(true);
+          if (reg.waiting && navigator.serviceWorker.controller)
+            setUpdateReady(true);
           reg.addEventListener("updatefound", () =>
             reg.installing?.addEventListener("statechange", () => {
-              if (reg.waiting) setUpdateReady(true);
+              if (reg.waiting && navigator.serviceWorker.controller)
+                setUpdateReady(true);
             }),
           );
         })
         .catch(() => {});
-    return () => window.removeEventListener("hashchange", changed);
+    }
+    return () => {
+      window.removeEventListener("hashchange", changed);
+      if ("serviceWorker" in navigator)
+        navigator.serviceWorker.removeEventListener(
+          "controllerchange",
+          activated,
+        );
+    };
   }, []);
   const go = (target: string) => {
     location.hash = target;
@@ -190,6 +202,10 @@ export function Journal() {
             <Button
               variant="secondary"
               onClick={() => {
+                if (!worker?.waiting) {
+                  setUpdateReady(false);
+                  return;
+                }
                 navigator.serviceWorker.addEventListener(
                   "controllerchange",
                   () => location.reload(),

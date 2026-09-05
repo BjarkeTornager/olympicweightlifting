@@ -140,6 +140,9 @@ test("offline reload keeps recorded sets and the programme library", async ({
           ),
         );
     });
+    await expect(
+      page.getByRole("button", { name: "Reload update" }),
+    ).toHaveCount(0);
     proxy.closeAllConnections();
     await new Promise<void>((resolve) => proxy.close(() => resolve()));
     await page.reload();
@@ -266,6 +269,16 @@ test("sync client retries an interrupted acknowledgement and protects conflictin
       second.getByLabel("Set 1 weight in kilograms", { exact: true }),
     ).toHaveValue("47.5");
     expect(server.revision).toBe(1);
+    server = { state: emptyJournal(), revision: 0 };
+    await second.goto("http://127.0.0.1:34173/#data");
+    await second.getByRole("button", { name: "Sync now" }).click();
+    await expect(
+      second.getByRole("button", { name: "Use server version" }),
+    ).toBeVisible();
+    await second.goto("http://127.0.0.1:34173/#workout");
+    await expect(
+      second.getByLabel("Set 1 weight in kilograms", { exact: true }),
+    ).toHaveValue("47.5");
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

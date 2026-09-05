@@ -12,6 +12,8 @@ const shellFiles = ["index.html", "styles.css", "sw.js", "manifest.webmanifest",
   "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png",
   "assets/apple-touch-icon.png"];
 const files = new Map(await Promise.all(shellFiles.map(async path => [path, await readFile(new URL("../" + path, import.meta.url))])));
+const shellCacheName = files.get("sw.js").toString().match(/const CACHE_NAME = "([^"]+)"/)?.[1];
+assert.ok(shellCacheName, "The app shell must declare its cache version");
 const server = createServer((request, response) => {
   const pathname = new URL(request.url, "http://localhost").pathname;
   const path = pathname.startsWith("/lift-journal/") ? pathname.slice("/lift-journal/".length) || "index.html" : "";
@@ -618,7 +620,7 @@ try {
   const ax=await send("Accessibility.getFullAXTree");
   assert.ok(ax.nodes.some(n=>n.role?.value==="navigation"&&n.name?.value.includes("mobile")));
   assert.ok(ax.nodes.some(n=>n.role?.value==="main"));
-  assert.ok(await evaluate("(async()=> (await caches.keys()).includes('lift-journal-shell-v5'))()"));
+  assert.ok(await evaluate("(async()=> (await caches.keys()).includes(" + JSON.stringify(shellCacheName) + "))()"));
   pass("Offline reload/logging, video fallback, draft, service worker and accessibility landmarks");
 
   await route("#workout",".workout-page");

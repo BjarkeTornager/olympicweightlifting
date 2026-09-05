@@ -9,7 +9,7 @@ Lift Journal is a mobile-first Olympic weightlifting program and training log fo
 - Persistent in-progress workouts: start a programmed day, log each set, navigate away, and resume later
 - Set-level weight, reps, optional RPE, and explicit made/miss or logged status
 - One expanded exercise at a time, quick weight adjustments, copy-previous-set controls, and previous-session reference
-- Automatic load progression from verified prior workouts, with current recovery and a visible explanation
+- A live program with next-session loads on Home and Workout, automatically increased from explicitly logged training
 - Weight and rep edits carry forward to later unlogged sets without overwriting direct edits
 - Technique overlay, collapsible notes, and a bottom workout action within thumb reach
 - Separate athlete notes, coach cues, and overall coach notes
@@ -110,33 +110,49 @@ Exercise descriptions, cues, video IDs, and Catalyst source links live in `EXERC
 
 ## Automatic progression
 
-Start a programmed workout, then choose **Good · use progression** under
-**Recovery today** to apply eligible increases. Until recovery is selected,
-the app repeats the previous load and explains any available increase.
-**Limited** recovery keeps the previous load. Changing recovery or the session
-date only recalculates untouched exercises; entered work is preserved.
+The Home training-day selector and Workout program cards show each lift's
+**next session load**, set/rep prescription, and increase or hold status.
+Start a session and these loads are applied automatically; no recovery opt-in
+or separate strong-set confirmation is required. Exercise headings show the
+calculated prescription instead of the original fixed loading range.
+
+Choose **Limited · repeat previous loads** under **Recovery today** when needed.
+Changing recovery or the session date only recalculates untouched exercises;
+entered work is preserved. Automatic mode does not assess your recovery for you.
 
 The next workout for the same program and training day adds **2.5 kg** when:
 
-- The most recent earlier workout includes the exercise and it is complete.
+- The most recent earlier workout includes the exercise.
 - Every prescribed working set is explicitly logged, with no misses.
 - Every set meets the snapshotted weight and rep targets.
-- You marked the sets strong and controlled, or recorded RPE 1–8 on every set.
-- No recorded set is above RPE 8, and current recovery is good.
+- No recorded RPE is invalid or above 8 (RPE is optional).
+- Neither the previous session nor the current session has limited recovery.
+
+Logging every prescribed set and finishing the workout is sufficient. The
+Complete exercise button advances the workout, but it is not an extra condition
+for progression. Strong-set feedback remains optional.
 
 The baseline is the lightest successful working-set load, so a heavy single
 does not raise every set next time. The prescribed set count and rep target
 stay unchanged. Warm-ups mixed into the working sets can prevent an increase.
-Same-date repeats and future-dated history cannot compound increases.
-Historical records without verified logging remain readable and editable, but
-cannot qualify for an automatic increase.
+The program previews the next increase immediately after saving successful
+work. If you trained that day already, the preview states when the new loads
+become available; repeating today uses today's prescription. Same-date repeats
+and future-dated history cannot compound increases. Old sessions with explicit
+made/miss or logged results can qualify. Old touched/prefilled rows without
+explicit results supply a load reference only, never evidence of successful work.
 
-Each weighted program exercise can define `progression: { step: 2.5, maxWeight }`.
-Explicit load ranges are ceilings: the app holds when the next full increase
-would exceed the ceiling. A `null` ceiling means no program-specific limit is
-configured (currently pause cleans and overhead squats). Saturday's coached
-loads and accessories with unspecified weights stay manual. Edit the program
-when its training ranges need to change; PR edits alone do not change them.
+Each weighted program exercise defines `progression: { step: 2.5 }`.
+The original loading ranges are starting guidance, not permanent ceilings:
+successful training can progress 45 → 47.5 → 50 → 52.5 kg and continue beyond
+the original range. A custom `maxWeight` can still impose a deliberate ceiling,
+but the bundled program does not set one. Saturday's coached loads and
+accessories with unspecified weights stay manual. PR edits alone do not
+change the program's starting weights.
+
+Existing drafts upgrade their untouched presets to the current progression
+rules once. Recorded sets, manually edited values, notes, and saved history
+are preserved. Imported old drafts use the same upgrade path.
 
 Within a workout, a weight or rep change updates later unlogged sets unless
 that value was edited directly. It does not mark those sets performed.

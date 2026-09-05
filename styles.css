@@ -2242,6 +2242,22 @@ h1 { font-size: clamp(1.85rem, 4vw, 2.8rem); letter-spacing: -0.045em; }
 .week-preview { margin-top: 20px; }
 .week-preview h3 { margin-bottom: 7px; }
 .week-preview p { font-size: 0.85rem; line-height: 1.7; color: var(--ink-soft); }
+.program-targets { margin: 16px 0 20px; }
+.program-targets-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
+.program-targets-heading > span { color: var(--accent-strong); background: var(--accent-soft); border-radius: 6px; padding: 3px 6px; font-size: 0.67rem; font-weight: 650; }
+.program-targets ul { list-style: none; margin: 8px 0; padding: 0; }
+.program-targets li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.program-lift-name { align-self: center; font-size: 0.87rem; font-weight: 650; }
+.program-load { font-size: 1.1rem; text-align: right; font-variant-numeric: tabular-nums; }
+.program-load small { font-size: 0.72rem; font-weight: 500; }
+.program-dose, .program-load-status { font-size: 0.72rem; color: var(--ink-soft); }
+.program-load-status { text-align: right; }
+.program-load-status.is-increase { color: var(--success); font-weight: 650; }
+.program-hold-reason { grid-column: 1 / -1; font-size: 0.72rem; color: var(--ink-soft); margin-top: 4px; }
+.program-targets .program-rule, .program-targets .program-repeat-note { font-size: 0.73rem; line-height: 1.5; margin: 10px 0 0; color: var(--ink-soft); }
+.program-repeat-note { border-left: 2px solid var(--plate-gold); padding-left: 10px; }
+.workout-picker .program-targets { flex: 1; }
+.workout-picker > .button { width: 100%; margin: 0 0 8px; }
 .compact-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 22px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
 .compact-metrics .metric-card { min-height: 0; border: 0; border-radius: 0; background: none; padding: 0 24px; }
 .compact-metrics .metric-card:first-child { padding-left: 24px; }

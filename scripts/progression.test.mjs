@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PROGRAM_DEFINITION } from "../js/data.js";
-import { planExercise, isValidLoggedSet, updatePendingSets } from "../js/progression.js";
+import { planExercise, planProgramDay, upgradeProgramDraft, isValidLoggedSet, updatePendingSets } from "../js/progression.js";
 
 const monday = PROGRAM_DEFINITION.days.find(day => day.id === "monday");
 const snatch = monday.exercises[0];
-const context = { programId: PROGRAM_DEFINITION.id, dayId: "monday", date: "2026-09-14", recovery: "good" };
+const context = { programId: PROGRAM_DEFINITION.id, dayId: "monday", date: "2026-09-14", recovery: "auto" };
 
 function session(exercise = snatch, date = "2026-09-07") {
   const plan = planExercise(exercise, { ...context, sessions: [] });
@@ -48,16 +48,20 @@ test("successful controlled work increases 45 to 47.5 without increasing sets or
   assert.equal(plan.sourceDate, "2026-09-07");
 });
 
-test("unknown or limited current recovery holds the load", () => {
-  assert.equal(planFor(session(), { recovery: "unknown" }).status, "recovery");
+test("progression is automatic unless current or previous recovery is limited", () => {
+  assert.equal(planFor(session(), { recovery: undefined }).status, "increase");
+  assert.equal(planFor(session(), { recovery: "unknown" }).status, "increase");
   assert.equal(planFor(session(), { recovery: "limited" }).weight, 45);
   assert.equal(planFor(session(), { recovery: "limited" }).status, "hold");
+  const previous = session();
+  previous.recovery = "limited";
+  assert.equal(planFor(previous).status, "hold");
 });
 
 test("a miss, partial exercise, removed set, or unlogged prefill cannot unlock progression", () => {
   for (const modify of [
     entry => { entry.sets[1].result = "miss"; },
-    entry => { entry.completed = false; },
+    entry => { entry.completed = false; entry.sets = entry.sets.slice(0, 3); },
     entry => { entry.sets.pop(); },
     entry => { entry.sets[1].result = ""; entry.sets[1].logged = false; },
   ]) {
@@ -78,10 +82,11 @@ test("actual reps and loads must meet the frozen prescription", () => {
   assert.equal(planFor(previous, {}, squat).status, "hold");
 });
 
-test("controlled RPE can qualify; missing feedback, invalid RPE and high RPE hold", () => {
+test("logging all work qualifies without extra confirmations; invalid or high RPE holds", () => {
   const previous = session();
   previous.exercises[0].strongSets = false;
-  assert.equal(planFor(previous).status, "hold");
+  previous.exercises[0].completed = false;
+  assert.equal(planFor(previous).status, "increase");
   previous.exercises[0].sets.forEach(set => { set.rpe = "8"; });
   assert.equal(planFor(previous).weight, 47.5);
   for (const rpe of ["9", "0", "11", "8abc"]) {
@@ -100,12 +105,15 @@ test("progression uses the lightest successful working set, not a top single", (
   assert.equal(planFor(previous).status, "hold");
 });
 
-test("load ranges stop full increases at the program ceiling", () => {
+test("starting ranges are not fixed ceilings; an explicit custom ceiling is still respected", () => {
   const previous = session();
   previous.exercises[0].sets.forEach(set => { set.weight = "55"; });
-  assert.equal(planFor(previous).weight, 55);
-  assert.equal(planFor(previous).status, "limit");
-  const pull = monday.exercises[1];
+  assert.equal(planFor(previous).weight, 57.5);
+  assert.equal(planFor(previous).status, "increase");
+  const cappedSnatch = { ...snatch, progression: { step: 2.5, maxWeight: 55 } };
+  assert.equal(planFor(previous, {}, cappedSnatch).weight, 55);
+  assert.equal(planFor(previous, {}, cappedSnatch).status, "limit");
+  const pull = { ...monday.exercises[1], progression: { step: 2.5, maxWeight: 67 } };
   const pullSession = session(pull);
   pullSession.exercises[0].sets.forEach(set => { set.weight = "65.5"; });
   assert.equal(planFor(pullSession, {}, pull).weight, 65.5);
@@ -137,12 +145,77 @@ test("use latest training date, not edit time; skipped exercise holds old baseli
   assert.equal(planFor(old, { sessions: [old, newer] }).status, "hold");
 });
 
-test("legacy logs are preserved as a reference, never treated as verified performance", () => {
+test("explicit legacy results qualify; touched or prefilled legacy rows are only references", () => {
   const previous = session();
   delete previous.exercises[0].loggingVersion;
+  delete previous.exercises[0].prescribed;
   previous.exercises[0].sets.forEach(set => { set.weight = "50"; });
+  assert.equal(planFor(previous).weight, 52.5);
+  assert.equal(planFor(previous).status, "increase");
+  previous.exercises[0].sets.forEach(set => { set.logged = false; set.result = ""; });
   assert.equal(planFor(previous).weight, 50);
   assert.equal(planFor(previous).status, "hold");
+});
+
+test("the program keeps increasing across eight successful sessions beyond the original range", () => {
+  const history = [];
+  for (let week = 0; week < 8; week++) {
+    const date = new Date(Date.UTC(2026, 8, 7 + week * 7)).toISOString().slice(0, 10);
+    const plan = planExercise(snatch, { ...context, sessions: history, date });
+    assert.equal(plan.weight, 45 + week * 2.5);
+    const next = session(snatch, date);
+    next.id = `week-${week}`;
+    next.exercises[0].strongSets = false;
+    next.exercises[0].prescribed.targetWeight = plan.weight;
+    next.exercises[0].sets.forEach(set => { set.weight = String(plan.weight); });
+    history.push(next);
+  }
+});
+
+test("next-program preview advances after today's work without compounding same-day repeats", () => {
+  const previous = session();
+  const today = session(snatch, context.date);
+  today.id = "today";
+  today.exercises[0].prescribed.targetWeight = 47.5;
+  today.exercises[0].sets.forEach(set => { set.weight = "47.5"; });
+  const future = session(snatch, "2026-09-15");
+  future.id = "future";
+  future.exercises[0].sets.forEach(set => { set.weight = "100"; });
+  const sessions = [previous, today, future];
+  const preview = planProgramDay(monday, { ...context, sessions });
+  assert.equal(preview.trainedToday, true);
+  assert.equal(preview.availableFrom, "2026-09-15");
+  assert.equal(preview.exercises[0].weight, 50);
+  assert.equal(planExercise(snatch, { ...context, sessions }).weight, 47.5);
+  assert.equal(planProgramDay(monday, { ...context, sessions: [previous] }).exercises[0].weight, 47.5);
+});
+
+test("old drafts upgrade untouched presets once without altering entered work or saved history", () => {
+  const prior = session();
+  const draft = session(snatch, context.date);
+  draft.recovery = "unknown";
+  draft.exercises[0].completed = false;
+  draft.exercises[0].sets.forEach(set => { set.logged = false; set.result = ""; set.touched = false; });
+  const protectedEntry = session(monday.exercises[2]).exercises[0];
+  protectedEntry.id = "protected";
+  draft.exercises.push(protectedEntry);
+  const original = JSON.stringify(draft);
+  const historyBefore = JSON.stringify(prior);
+  const upgraded = upgradeProgramDraft(draft, { day: monday, sessions: [prior] });
+  assert.equal(upgraded.recovery, "auto");
+  assert.ok(upgraded.exercises[0].sets.every(set => set.weight === "47.5"));
+  assert.deepEqual(upgraded.exercises[1], protectedEntry);
+  assert.equal(JSON.stringify(draft), original);
+  assert.equal(JSON.stringify(prior), historyBefore);
+  assert.equal(upgradeProgramDraft(upgraded, { day: monday, sessions: [prior] }), upgraded);
+  assert.equal(upgradeProgramDraft({ ...draft, editingSessionId: "saved" }, { day: monday, sessions: [prior] }).editingSessionId, "saved");
+  delete draft.exercises[0].loggingVersion;
+  delete draft.exercises[0].prescribed;
+  const legacy = upgradeProgramDraft(draft, { day: monday, sessions: [prior] });
+  assert.equal(legacy.exercises[0].loggingVersion, 1);
+  assert.equal(legacy.exercises[0].prescribed.targetWeight, 47.5);
+  draft.exercises[0].sets[0].weight = "52";
+  assert.equal(upgradeProgramDraft(draft, { day: monday, sessions: [prior] }).exercises[0].sets[0].weight, "52");
 });
 
 test("pending sets inherit edits but explicitly edited or logged values are kept", () => {

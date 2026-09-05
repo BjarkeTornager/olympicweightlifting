@@ -18,7 +18,7 @@ import {
   saveState,
 } from "./storage.js";
 
-import { PROGRESSION_VERSION, planExercise, isLoggedSet, isValidLoggedSet, updatePendingSets } from "./progression.js";
+import { PROGRESSION_VERSION, PROGRAM_PROGRESSION_REVISION, planExercise, planProgramDay, upgradeProgramDraft, isLoggedSet, isValidLoggedSet, updatePendingSets } from "./progression.js";
 
 const main = document.querySelector("#app-content");
 const toast = document.querySelector("#toast");
@@ -239,6 +239,26 @@ function renderInstallCard() {
   `;
 }
 
+function currentProgramPlan(day) {
+  return planProgramDay(day, { sessions: state.sessions, programId: PROGRAM_DEFINITION.id, date: localIsoDate() });
+}
+
+function renderProgramTargets(day, plan = currentProgramPlan(day)) {
+  const automatic = plan.exercises.some(exercise => exercise.status !== "manual");
+  return `<div class="program-targets" data-program-targets="${escapeHtml(day.id)}">
+    <div class="program-targets-heading"><strong>Next session loads</strong><span>${automatic ? "Auto progression" : "Coach-led"}</span></div>
+    ${plan.trainedToday ? `<p class="program-repeat-note">Next loads apply from ${escapeHtml(formatDate(plan.availableFrom, { day: "numeric", month: "short" }))}. A repeat today keeps today’s loads.</p>` : ""}
+    <ul>${plan.exercises.map(exercise => `<li data-program-exercise="${escapeHtml(exercise.exerciseId)}" data-target-weight="${escapeHtml(exercise.weight)}">
+      <span class="program-lift-name">${escapeHtml(getExercise(exercise.exerciseId).name)}</span>
+      <strong class="program-load">${exercise.status === "manual" ? "Manual" : `${formatNumber(exercise.weight)} <small>kg</small>`}</strong>
+      <span class="program-dose">${exercise.sets} sets × ${exercise.reps} ${exercise.reps === 1 ? "rep" : "reps"}</span>
+      <span class="program-load-status ${exercise.status === "increase" ? "is-increase" : ""}">${exercise.status === "increase" ? `↑ +${formatNumber(exercise.step)} kg` : exercise.status === "initial" ? "Starting load" : exercise.status === "manual" ? "Coach / accessory" : "Repeat load"}</span>
+      ${["hold", "limit"].includes(exercise.status) ? `<small class="program-hold-reason">${escapeHtml(exercise.reason)}</small>` : ""}
+    </li>`).join("")}</ul>
+    <p class="program-rule">${automatic ? "Complete the prescribed work to earn +2.5 kg next time. Starting ranges are not permanent limits." : "Your coach sets these loads. Choose Monday, Wednesday or Friday for automatic progression."}</p>
+  </div>`;
+}
+
 function renderDashboard() {
   const today = new Date();
   const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
@@ -291,7 +311,7 @@ function renderDashboard() {
               return `<button class="week-day ${done ? "is-done" : ""}" data-action="select-day" data-day-id="${day.id}" aria-pressed="${selected.id === day.id}" aria-label="${day.name}${done ? ", completed this week" : ""}"><span>${day.name.slice(0, 3)}</span><span class="week-marker" aria-hidden="true">${done ? "✓" : day.weekday === today.getDay() ? "●" : "○"}</span></button>`;
             }).join("")}
           </div>
-          <div class="week-preview"><h3>${escapeHtml(selected.title)}</h3><p>${selected.exercises.map((entry) => escapeHtml(getExercise(entry.exerciseId).name)).join(" · ")}</p></div>
+          <div class="week-preview"><h3>${escapeHtml(selected.title)}</h3>${renderProgramTargets(selected)}</div>
         </section>
       </div>
       <section class="section" aria-label="Current personal records">
@@ -313,11 +333,6 @@ function renderDashboard() {
       </div></details>
       ${renderInstallCard()}
     </section>`;
-}
-
-function workoutSetCount(programExercise) {
-  if (typeof programExercise.sets === "number") return programExercise.sets;
-  return Number(programExercise.sets?.default ?? programExercise.sets?.min ?? 1);
 }
 
 function createSet(initialWeight = "", reps = 1) {
@@ -381,7 +396,8 @@ function startProgramDay(dayId) {
     athleteNotes: "",
     coachNotes: "",
     sessionPrompt: day.sessionPrompt ?? "",
-    recovery: "unknown",
+    recovery: "auto",
+    progressionRevision: PROGRAM_PROGRESSION_REVISION,
     exercises: day.exercises.map(exercise => createWorkoutExercise(exercise, {
       sessions: state.sessions, programId: PROGRAM_DEFINITION.id, dayId: day.id, date: localIsoDate(),
     })),
@@ -407,6 +423,16 @@ function replanUntouchedExercises() {
     entry.prescribed.targetWeight = plan.weight;
     entry.prescribed.targetReps = plan.reps;
     entry.sets.forEach(set => { set.weight = String(plan.weight); set.reps = String(plan.reps); });
+  }
+}
+
+function upgradeActiveProgram() {
+  const upgraded = upgradeProgramDraft(state.activeWorkout, {
+    day: getProgramDay(state.activeWorkout?.programDayId), sessions: state.sessions,
+  });
+  if (upgraded !== state.activeWorkout) {
+    state.activeWorkout = upgraded;
+    persist();
   }
 }
 
@@ -440,23 +466,25 @@ function renderWorkoutPicker() {
       <header class="page-header">
         <div class="page-header-copy">
           <p class="eyebrow">Workout</p>
-          <h1 id="workout-title">Choose a session.</h1>
-          <p class="page-lead">Follow your program or build an open workout.</p>
+          <h1 id="workout-title">Your progressing program.</h1>
+          <p class="page-lead">Your next loads update automatically from completed training. Start a session to use them.</p>
         </div>
       </header>
 
       <div class="workout-picker-grid">
         ${PROGRAM_DEFINITION.days
-          .map(
-            (day) => `
-              <article class="card workout-picker">
+          .map((day) => {
+            const plan = currentProgramPlan(day);
+            return `
+              <article class="card workout-picker" data-program-day="${escapeHtml(day.id)}">
                 <p class="eyebrow">${escapeHtml(day.name)}</p>
                 <h2>${escapeHtml(day.title)}</h2>
                 <p>${escapeHtml(day.focus)}</p>
-                <button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}">Start session</button>
+                <button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}">${plan.trainedToday ? "Repeat today’s session" : "Start session"}</button>
+                ${renderProgramTargets(day, plan)}
               </article>
-            `,
-          )
+            `;
+          })
           .join("")}
         <article class="card workout-picker">
           <p class="eyebrow">Flexible logging</p>
@@ -471,6 +499,9 @@ function renderWorkoutPicker() {
 
 function prescriptionSummary(entry) {
   const prescribed = entry.prescribed ?? {};
+  if (prescribed.progression?.status !== "manual" && prescribed.targetWeight != null && prescribed.targetWeight !== "") {
+    return `${prescribed.targetSets} sets × ${prescribed.targetReps} ${prescribed.targetReps === 1 ? "rep" : "reps"} · ${formatNumber(prescribed.targetWeight)} kg`;
+  }
   const setText = setsLabel(prescribed.sets);
   const pieces = [`${setText} × ${prescribed.reps ?? "open"}`];
   if (prescribed.recommendation) pieces.push(prescribed.recommendation);
@@ -527,7 +558,7 @@ function renderWorkoutExercise(entry, index) {
           <div class="sets-footer"><button class="button button-secondary" data-action="add-set" data-entry-id="${escapeHtml(entry.id)}">+ Add set</button>
           ${exercise.videoId ? `<button class="button button-quiet video-shortcut" data-action="technique" data-exercise-id="${escapeHtml(exercise.id)}">▷ Technique</button>` : ""}</div>
         </div>
-        ${entry.prescribed?.progression && entry.prescribed.progression.status !== "manual" ? `<button class="strong-sets-control" data-action="strong-sets" data-entry-id="${escapeHtml(entry.id)}" aria-pressed="${Boolean(entry.strongSets)}"><span aria-hidden="true">${entry.strongSets ? "✓" : "○"}</span> All sets felt strong and controlled</button>` : ""}
+        ${entry.prescribed?.progression && entry.prescribed.progression.status !== "manual" ? `<button class="strong-sets-control" data-action="strong-sets" data-entry-id="${escapeHtml(entry.id)}" aria-pressed="${Boolean(entry.strongSets)}"><span aria-hidden="true">${entry.strongSets ? "✓" : "○"}</span> Sets felt strong and controlled (optional)</button>` : ""}
         <details class="exercise-notes" data-ui-details="notes-${escapeHtml(entry.id)}"><summary>Notes & coach cue${entry.athleteNotes || entry.coachCue ? " · added" : ""}</summary>
           <div class="exercise-notes-grid">
             <label class="field"><span>Athlete notes</span><textarea rows="2" placeholder="How did it feel?" data-draft-entry-field="athleteNotes" data-entry-id="${escapeHtml(entry.id)}">${escapeHtml(entry.athleteNotes ?? "")}</textarea></label>
@@ -578,7 +609,7 @@ function renderWorkout() {
         <div class="workout-progress-row"><progress class="progress-track" aria-label="Workout completion" max="${Math.max(1, exercises.length)}" value="${completed}"></progress><span>${completed} / ${exercises.length} complete</span></div></div>
         <button class="button button-quiet" data-action="finish-workout">${isEditing ? "Save changes" : "Finish"}</button>
       </div>
-      ${draft.programDayId && !isEditing ? `<label class="field recovery-field"><span>Recovery today</span><select id="workout-recovery"><option value="unknown" ${draft.recovery !== "good" && draft.recovery !== "limited" ? "selected" : ""}>Choose to apply eligible increases</option><option value="good" ${draft.recovery === "good" ? "selected" : ""}>Good · use progression</option><option value="limited" ${draft.recovery === "limited" ? "selected" : ""}>Limited · repeat previous loads</option></select><small>Only untouched exercises are adjusted.</small></label>` : ""}
+      ${draft.programDayId && !isEditing ? `<label class="field recovery-field"><span>Recovery today</span><select id="workout-recovery"><option value="auto" ${draft.recovery !== "limited" ? "selected" : ""}>Automatic · follow program</option><option value="limited" ${draft.recovery === "limited" ? "selected" : ""}>Limited · repeat previous loads</option></select><small>Progression is on. Limited recovery holds untouched exercises.</small></label>` : ""}
       <details class="session-details" data-ui-details="session-meta"><summary>${escapeHtml(formatDate(draft.date, { day: "numeric", month: "short" }))} · Session details</summary>
         <div class="session-meta-panel">
           <label class="field"><span>Session date</span><input type="date" value="${escapeHtml(draft.date ?? localIsoDate())}" data-draft-session-field="date"></label>
@@ -653,12 +684,18 @@ function showPrSuggestions(candidates, continuation) {
   prDialog.showModal();
 }
 
+function allSetsLogged(entry) {
+  return entry.loggingVersion === PROGRESSION_VERSION && entry.sets?.length > 0 &&
+    entry.sets.length >= (entry.prescribed?.targetSets ?? entry.sets.length) && entry.sets.every(isValidLoggedSet);
+}
+
 function finalizeWorkout() {
   const draft = state.activeWorkout;
   if (!draft) return;
 
   const performedExercises = (draft.exercises ?? []).filter(setWasPerformed).map((entry) => ({
     ...clone(entry),
+    completed: entry.completed || allSetsLogged(entry),
     sets: (entry.sets ?? []).filter((set) => entry.loggingVersion === PROGRESSION_VERSION ? isValidLoggedSet(set) : entry.completed || set.touched || isLoggedSet(set)).map((set) => clone(set)),
   }));
   if (!performedExercises.length) {
@@ -716,7 +753,7 @@ function requestFinishWorkout() {
     });
     return;
   }
-  const incomplete = performed.filter((entry) => !entry.completed).length;
+  const incomplete = performed.filter((entry) => !entry.completed && !allSetsLogged(entry)).length;
   if (incomplete) {
     requestConfirmation({
       title: "Finish this workout?",
@@ -1307,6 +1344,7 @@ async function importBackup(file) {
       onConfirm: () => {
         try {
           state = replaceState(imported);
+          upgradeActiveProgram();
           showToast("Backup imported");
           render({ focus: true });
         } catch (error) {
@@ -1781,6 +1819,7 @@ function updateKeyboardLayout() {
 }
 window.visualViewport?.addEventListener("resize", updateKeyboardLayout);
 
+upgradeActiveProgram();
 if (!window.location.hash) window.history.replaceState(null, "", "#dashboard");
 updateNetworkStatus();
 render({ focus: false });

@@ -5,6 +5,7 @@ Lift Journal is a mobile-first Olympic weightlifting program and training log fo
 ## What it includes
 
 - Dashboard with an immediate Start/Resume action, a Train on my own today shortcut, selectable training week, compact PRs, targets, and recent sessions
+- A permanent Gym Accessories shortcut on Home and links under an active workout's Session details; `#workout/gym_accessories` shows every exercise, prescription, technique video and source link even with another workout open or a coached-only picker filter
 - Date-first programme picker with solo/coached filters and compact, expandable load previews; any programme can be trained on any date
 - Platform-inspired visual theme with an overhead-lift SVG illustration, competition-plate accents, and scoreboard-style PRs; no external fonts or images required
 - Persistent in-progress workouts: start a programmed day, log each set, navigate away, and resume later
@@ -74,7 +75,7 @@ The video catalog can be rechecked against YouTube at any time (internet require
 npm run verify:videos
 ```
 
-The library includes technique videos and source links for all five Gym Accessories exercises. In a workout, tap **Technique** under the sets to load the demonstration, open it on YouTube, or read the provider's exercise notes. Videos are also available through **Exercises → Accessory**, including in existing workout drafts. Split squat guidance uses E3 Rehab's standard split squat, and dead bug guidance calls out the bent-knee variation. The verification command checks both YouTube metadata and the privacy-enhanced embed endpoint.
+The library includes technique videos and source links for all five Gym Accessories exercises. Open **Home → Gym Accessories** to view the program before starting, or go directly to `./refresh.html#workout/gym_accessories` to update and open it. **All programmes** opens the picker even when a workout is active. Viewing programs preserves the current draft; the program page explains when a different saved workout must be finished or discarded before logging a new one. In a workout, tap **Technique** under the sets to load the demonstration, open it on YouTube, or read the provider's exercise notes. Videos are also available through **Exercises → Accessory**, including in existing workout drafts. Split squat guidance uses E3 Rehab's standard split squat, and dead bug guidance calls out the bent-knee variation. The verification command checks both YouTube metadata and the privacy-enhanced embed endpoint.
 
 ## Project structure
 

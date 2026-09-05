@@ -314,10 +314,12 @@ function renderDashboard() {
           <p>${active ? `${active.exercises?.filter((entry) => entry.completed).length ?? 0} of ${active.exercises?.length ?? 0} exercises complete · ${escapeHtml(formatDate(active.date, { day: "numeric", month: "short" }))}` : escapeHtml(selected.focus)}</p>
           <div class="hero-meta">${active ? "Pick up where you left off." : `${selected.exercises.length} exercises · ${escapeHtml(PROGRAM_DEFINITION.name)}`}</div>
           ${active ? '<a class="button hero-action" href="#workout">Resume workout <span aria-hidden="true">→</span></a>' : `<button class="button hero-action" data-action="start-day" data-day-id="${selected.id}">Start workout <span aria-hidden="true">→</span></button>`}
-          ${!active ? '<button class="button hero-solo-action" data-action="choose-solo">Train on my own today <span aria-hidden="true">↗</span></button><a class="hero-picker-link" href="#workout">Choose another programme or date</a>' : ""}
+          <a class="button hero-solo-action" href="#workout/gym_accessories">Gym Accessories <span aria-hidden="true">→</span></a>
+          ${!active ? '<button class="button hero-solo-action" data-action="choose-solo">Train on my own today <span aria-hidden="true">↗</span></button>' : ""}
+          <a class="hero-picker-link" data-action="choose-programs" href="#workout/choose">Choose another programme or date</a>
         </article>
         <section class="week-panel" aria-labelledby="weekly-plan-title">
-          <div class="section-header"><h2 id="weekly-plan-title">Usual weekly split</h2><a class="text-action" href="#workout">All programmes</a></div>
+          <div class="section-header"><h2 id="weekly-plan-title">Usual weekly split</h2><a class="text-action" data-action="choose-programs" href="#workout/choose">All programmes</a></div>
           <p class="schedule-hint">Weekdays are a guide. You can train any programme on any date.</p>
           <div class="week-selector" aria-label="Choose a training day">
             ${days.map((day) => {
@@ -394,8 +396,7 @@ function startProgramDay(dayId, date = localIsoDate()) {
   if (!validTrainingDate(date)) { showToast("Choose a valid training date.", { error: true }); return; }
 
   if (state.activeWorkout) {
-    navigate("workout");
-    showToast("Your saved workout is still in progress.");
+    navigate(state.activeWorkout.programDayId === dayId ? "workout" : `workout/${dayId}`);
     return;
   }
 
@@ -473,7 +474,54 @@ function startOpenWorkout(date = localIsoDate()) {
     exercises: [],
   };
   persist();
-  render({ focus: true });
+  navigate("workout");
+}
+
+function renderProgramPage(day) {
+  const date = localIsoDate();
+  const plan = currentProgramPlan(day, date);
+  const active = state.activeWorkout;
+  const isCurrent = active?.programDayId === day.id;
+  return `
+    <section class="page program-page" aria-labelledby="program-title" data-program-page="${escapeHtml(day.id)}">
+      <header class="page-header">
+        <div class="page-header-copy">
+          <p class="eyebrow">${isSoloProgram(day) ? "Solo training" : "Coached training"} · ${day.exercises.length} exercises</p>
+          <h1 id="program-title">${escapeHtml(day.title)}</h1>
+          <p class="page-lead">${escapeHtml(day.focus)}</p>
+        </div>
+      </header>
+      ${active && !isCurrent ? `
+        <aside class="card program-current" aria-label="Saved workout">
+          <strong>${escapeHtml(active.title)} is still in progress.</strong>
+          <p>You can view this program below. To start logging it, finish or discard your saved workout first.</p>
+          <a class="button button-secondary" href="#workout">Resume saved workout</a>
+        </aside>` : `
+        <div class="button-row program-start">
+          ${isCurrent ? `<a class="button button-primary" href="#workout">Resume ${escapeHtml(day.title)}</a>` : `<button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}" data-training-date="${date}">${plan.trainedToday ? "Repeat" : "Start"} today</button>`}
+        </div>`}
+      <a class="text-action program-browse-link" data-action="choose-programs" href="#workout/choose">All programmes and dates</a>
+      ${day.sessionPrompt ? `<details class="card program-guidance"><summary>Session guidance</summary><p>${escapeHtml(day.sessionPrompt)}</p></details>` : ""}
+      <div class="program-exercises">
+        ${day.exercises.map((entry, index) => {
+          const exercise = getExercise(entry.exerciseId);
+          const target = planExercise(entry, { sessions: state.sessions, programId: PROGRAM_DEFINITION.id, dayId: day.id, date });
+          const load = target.status === "choose" ? "Choose a comfortable starting weight" : target.status === "manual" && target.weight !== 0 ? entry.recommendation : `${formatNumber(target.weight)} kg${target.weight === 0 ? " · bodyweight" : ""}`;
+          return `<article class="card program-exercise" data-program-preview-exercise="${escapeHtml(exercise.id)}">
+            <p class="eyebrow">Exercise ${index + 1}</p>
+            <h2>${escapeHtml(exercise.name)}</h2>
+            <p class="program-exercise-dose"><strong>${target.sets} sets · ${escapeHtml(entry.reps)}${String(entry.reps).includes("per") ? "" : " reps"}</strong></p>
+            <p>${escapeHtml(load)}</p>
+            <p class="program-exercise-note">${escapeHtml(entry.notes)}</p>
+            ${exercise.videoId ? `<div class="button-row">
+              <button class="button button-secondary" data-action="technique" data-exercise-id="${escapeHtml(exercise.id)}">▷ Technique video</button>
+              <a class="text-action" href="https://www.youtube.com/watch?v=${encodeURIComponent(exercise.videoId)}" target="_blank" rel="noopener noreferrer">YouTube<span class="visually-hidden"> (opens in a new tab)</span></a>
+              ${exercise.sourceUrl ? `<a class="text-action" href="${escapeHtml(exercise.sourceUrl)}" target="_blank" rel="noopener noreferrer">Exercise notes<span class="visually-hidden"> (opens in a new tab)</span></a>` : ""}
+            </div>` : ""}
+          </article>`;
+        }).join("")}
+      </div>
+    </section>`;
 }
 
 function renderWorkoutPicker() {
@@ -489,6 +537,7 @@ function renderWorkoutPicker() {
           <p class="page-lead">Pick a date and a programme. The usual weekday is just a guide—solo training works on Saturdays too.</p>
         </div>
       </header>
+      ${state.activeWorkout ? `<aside class="card program-current"><strong>Saved workout: ${escapeHtml(state.activeWorkout.title)}</strong><p>Browse any program below, or resume your saved session.</p><a class="button button-secondary" href="#workout">Resume saved workout</a></aside>` : ""}
 
       <section class="training-picker-controls" aria-label="Training date and programme type">
         <div class="training-date-row"><label class="field"><span>Training date</span><input id="training-date" type="date" value="${escapeHtml(date)}" required></label><button class="button button-secondary" data-action="training-today">Today</button></div>
@@ -502,9 +551,9 @@ function renderWorkoutPicker() {
             return `
               <article class="card workout-picker" data-program-day="${escapeHtml(day.id)}">
                 <p class="eyebrow">${isSoloProgram(day) ? "Solo" : "Coached"} · ${day.weekday == null ? "Any day · Normal gym" : `Usual split: ${escapeHtml(day.name)}`}</p>
-                <h2>${escapeHtml(day.title)}</h2>
+                <h2><a href="#workout/${escapeHtml(day.id)}">${escapeHtml(day.title)}</a></h2>
                 <p>${escapeHtml(day.focus)}</p>
-                <button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}" data-training-date="${escapeHtml(date)}">${plan.trainedToday ? "Repeat" : "Start"} ${escapeHtml(dateLabel)}</button>
+                ${state.activeWorkout ? `<a class="button button-primary" href="#workout/${escapeHtml(day.id)}">View program</a>` : `<button class="button button-primary" data-action="start-day" data-day-id="${escapeHtml(day.id)}" data-training-date="${escapeHtml(date)}">${plan.trainedToday ? "Repeat" : "Start"} ${escapeHtml(dateLabel)}</button>`}
                 <details class="picker-load-preview" data-ui-details="picker-${escapeHtml(day.id)}"><summary>Preview loads · ${day.exercises.length} exercises</summary>${day.sessionPrompt ? `<p>${escapeHtml(day.sessionPrompt)}</p>` : ""}${renderProgramTargets(day, plan)}</details>
               </article>
             `;
@@ -623,7 +672,10 @@ function syncWorkoutCompletion(entry) {
   if (dock) dock.outerHTML = renderWorkoutDock(draft);
 }
 
-function renderWorkout() {
+function renderWorkout(parameter = "") {
+  const program = getProgramDay(parameter);
+  if (program) return renderProgramPage(program);
+  if (parameter === "choose") return renderWorkoutPicker();
   const draft = state.activeWorkout;
   if (!draft) return renderWorkoutPicker();
   const exercises = draft.exercises ?? [];
@@ -645,6 +697,7 @@ function renderWorkout() {
           <label class="field"><span>Session date</span><input type="date" value="${escapeHtml(draft.date ?? localIsoDate())}" data-draft-session-field="date"></label>
           <label class="field"><span>Session name</span><input type="text" value="${escapeHtml(draft.title ?? "")}" data-draft-session-field="title" autocomplete="off"></label>
           <button class="button button-danger-quiet" data-action="abandon-workout">${isEditing ? "Cancel edit" : "Discard workout"}</button>
+          <div class="button-row workout-program-links"><a class="text-action" href="#workout/gym_accessories">Gym Accessories</a><a class="text-action" data-action="choose-programs" href="#workout/choose">All programmes</a></div>
         </div>
       </details>
       ${draft.sessionPrompt ? `<p class="coach-prompt">${escapeHtml(draft.sessionPrompt)}</p>` : ""}
@@ -1263,7 +1316,7 @@ function render({ focus = false } = {}) {
 
   const views = {
     dashboard: renderDashboard,
-    workout: renderWorkout,
+    workout: () => renderWorkout(parameter),
     history: renderHistory,
     progress: renderProgress,
     library: () => renderLibrary(parameter),
@@ -1276,7 +1329,7 @@ function render({ focus = false } = {}) {
     ? Object.entries(focused.dataset).map(([key, value]) => `[data-${key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase())}="${CSS.escape(value)}"]`).join("")
     : !routeChanged && focused?.id ? "#" + CSS.escape(focused.id) : "";
   main.innerHTML = views[route]();
-  document.body.classList.toggle("is-training", route === "workout" && Boolean(state.activeWorkout));
+  document.body.classList.toggle("is-training", Boolean(main.querySelector(".workout-page")));
   for (const key of opened) {
     const details = main.querySelector(`details[data-ui-details="${CSS.escape(key)}"]`);
     if (details) details.open = true;
@@ -1291,7 +1344,7 @@ function render({ focus = false } = {}) {
     });
   }
 
-  if (route === "workout" && state.activeWorkout?.focusedExerciseId) {
+  if (main.querySelector(".workout-page") && state.activeWorkout?.focusedExerciseId) {
     const focusedId = state.activeWorkout.focusedExerciseId;
     delete state.activeWorkout.focusedExerciseId;
     persist();
@@ -1301,6 +1354,10 @@ function render({ focus = false } = {}) {
   if (focus || routeChanged) {
     main.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "instant" });
+    // Opening a program from a scrolled picker must reveal its title and start action.
+    if (main.querySelector(".program-page")) {
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    }
   }
   if (route === "progress" && parameter === "prs" && (focus || routeChanged)) {
     window.requestAnimationFrame(() => {
@@ -1342,7 +1399,7 @@ function loadExerciseVideo(exerciseId) {
   shell.innerHTML = `
     <iframe
       src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(exercise.videoId)}?rel=0&playsinline=1"
-      title="${escapeHtml(exercise.name)} demonstration by Catalyst Athletics"
+      title="${escapeHtml(exercise.name)} demonstration by ${escapeHtml(exercise.sourceName ?? "Catalyst Athletics")}"
       loading="lazy"
       referrerpolicy="strict-origin-when-cross-origin"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -1399,7 +1456,11 @@ function handleAction(actionElement) {
     case "choose-solo":
       selectedTrainingDate = localIsoDate();
       programFilter = "solo";
-      navigate("workout");
+      navigate("workout/choose");
+      break;
+    case "choose-programs":
+      programFilter = "all";
+      navigate("workout/choose");
       break;
     case "filter-programs":
       programFilter = ["all", "solo", "coached"].includes(actionElement.dataset.filter) ? actionElement.dataset.filter : "all";

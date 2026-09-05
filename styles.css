@@ -2548,3 +2548,19 @@ h1 { font-size: clamp(1.85rem, 4vw, 2.8rem); letter-spacing: -0.045em; }
   padding: 12px 20px;
   background: #f5ead5;
 }
+.program-current { padding: 20px; margin-bottom: 18px; }
+.program-current p { margin: 10px 0 16px; }
+.program-browse-link { display: inline-flex; align-items: center; min-height: 44px; margin: 8px 0 16px; }
+.program-guidance { padding: 16px 20px; margin-bottom: 20px; }
+.program-guidance summary { cursor: pointer; font-weight: 650; min-height: 44px; display: flex; align-items: center; }
+.program-guidance p { margin: 12px 0 0; }
+.program-exercises { display: grid; gap: 16px; }
+.program-exercise { padding: 20px; min-width: 0; }
+.program-exercise h2 { margin: 4px 0 12px; }
+.program-exercise p { margin-bottom: 12px; }
+.program-exercise-note { color: var(--ink-soft); font-size: 0.9rem; }
+.program-exercise .button-row { gap: 10px 16px; flex-wrap: wrap; }
+.program-exercise .text-action, .workout-program-links a { display: inline-flex; align-items: center; min-height: 44px; }
+.workout-program-links { margin-bottom: 12px; gap: 20px; }
+.workout-picker h2 a { color: inherit; text-decoration: none; }
+.workout-picker h2 a:hover { text-decoration: underline; }

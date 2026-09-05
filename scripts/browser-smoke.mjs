@@ -190,6 +190,42 @@ try {
   assert.ok(await evaluate("caches.keys().then(keys => !keys.includes('lift-journal-shell-v6'))"));
   await capture("updated-workout-preserved-390");
 
+  // An active workout and a coached-only filter must not hide accessories.
+  const savedBeforeBrowsing = (await saved()).activeWorkout;
+  await route("#dashboard", "#dashboard-title");
+  await tap('a[href="#workout/gym_accessories"]');
+  await until("document.querySelector('#program-title')?.textContent === 'Gym Accessories'");
+  assert.equal(await evaluate("document.querySelectorAll('[data-program-preview-exercise]').length"), 5);
+  assert.equal(await evaluate("document.body.classList.contains('is-training')"), false);
+  assert.equal(await evaluate("document.querySelector('.program-page [data-action=start-day]')"), null);
+  assert.ok(await evaluate("document.querySelector('.program-current').textContent.includes('still in progress')"));
+  assert.deepEqual((await saved()).activeWorkout, savedBeforeBrowsing);
+  await tap('[data-action=choose-programs]');
+  await until("document.querySelectorAll('[data-program-day]').length === 5");
+  await tap('[data-filter=coached]');
+  assert.equal(await evaluate("document.querySelector('[data-program-day=gym_accessories]')"), null);
+  await route("#dashboard", "#dashboard-title");
+  await tap('a[href="#workout/gym_accessories"]');
+  await until("document.querySelector('#program-title')?.textContent === 'Gym Accessories'");
+  await tap('[data-exercise-id=romanian_deadlift][data-action=technique]');
+  assert.ok(await evaluate("document.querySelector('#technique-dialog').open"));
+  await tap('#technique-dialog button[value=close]');
+  await send("Page.navigate", { url: appUrl + "refresh.html#workout/gym_accessories" });
+  await wait(300);
+  await until("location.pathname === '/lift-journal/' && document.querySelector('#program-title')?.textContent === 'Gym Accessories'", 25000);
+  assert.deepEqual((await saved()).activeWorkout, savedBeforeBrowsing);
+  for (const [width, height] of [[320,740],[390,844],[768,1024],[1440,1000]]) {
+    await viewport(width,height);
+    assert.ok(await evaluate("document.documentElement.scrollWidth <= innerWidth"));
+    await capture("accessories-direct-saved-workout-" + width);
+  }
+  await viewport(390,844);
+  await tap('[data-action=choose-programs]');
+  assert.equal(await evaluate("document.querySelectorAll('[data-program-day]').length"), 5);
+  await tap('.program-current a[href="#workout"]');
+  await until("document.querySelector('.workout-page') !== null");
+  pass("Direct accessories page, Home shortcut, coached-filter bypass and fresh-link recovery preserve the active workout");
+
   // An online reload gets fresh program code even without a worker-version bump.
   serverDataSuffix = '\nexport const cacheRegressionMarker = "fresh-from-network";';
   assert.ok((await evaluate("fetch('./js/data.js').then(response => response.text())")).includes("fresh-from-network"));
@@ -586,13 +622,22 @@ try {
   assert.ok(await evaluate("document.querySelector('[data-program-day=gym_accessories] .program-load').textContent.includes('Choose load')"));
   assert.ok(await evaluate("document.querySelector('[data-program-day=gym_accessories]').textContent.includes('no platform')"));
   await capture("gym-accessories-preview-390");
-  await tap('[data-action="start-day"][data-day-id="gym_accessories"]');
+  await tap('[data-program-day=gym_accessories] h2 a');
+  await until("document.querySelector('#program-title')?.textContent === 'Gym Accessories'");
+  assert.equal(await evaluate("document.querySelectorAll('.program-exercise [data-action=technique]').length"), 5);
+  await capture("accessories-direct-start-390");
+  await tap('.program-page [data-action="start-day"][data-day-id="gym_accessories"]');
   const newGymDraft = (await saved()).activeWorkout;
   assert.equal(newGymDraft.date, "2026-09-05");
   assert.equal(newGymDraft.title, "Gym Accessories");
   assert.equal(newGymDraft.exercises.length, 5);
   assert.equal(newGymDraft.exercises[0].sets[0].weight, "");
   assert.ok(await evaluate("document.querySelector('.is-active .progression-note').textContent.includes('Choose starting weight')"));
+  await route("#workout/gym_accessories", "#program-title");
+  assert.ok(await evaluate("document.querySelector('.program-start a').textContent.includes('Resume Gym Accessories')"));
+  await tap('.program-start a');
+  await until("document.querySelector('.workout-page') !== null");
+  assert.equal((await saved()).activeWorkout.id, newGymDraft.id);
   const gymWeights = ["40", "20", "30", "0", "0"];
   for (let index = 0; index < 5; index++) {
     const entry = (await saved()).activeWorkout.exercises[index];

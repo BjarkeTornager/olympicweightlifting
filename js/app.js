@@ -1156,10 +1156,11 @@ function renderLibraryCard(exercise) {
       <div class="library-card-body">
         <div class="library-card-title"><h2>${escapeHtml(exercise.name)}</h2><span class="tag">${escapeHtml(exercise.category)}</span></div>
         <p class="library-purpose">${escapeHtml(exercise.purpose)}</p>
+        ${exercise.videoNote ? `<p class="library-purpose"><strong>For this session:</strong> ${escapeHtml(exercise.videoNote)}</p>` : ""}
         <ul class="cue-list">${exercise.cues.map((cue) => `<li>${escapeHtml(cue)}</li>`).join("")}</ul>
         <div class="library-links">
           <a href="https://www.youtube.com/watch?v=${encodeURIComponent(exercise.videoId)}" target="_blank" rel="noopener noreferrer">Open on YouTube<span class="visually-hidden"> (opens in a new tab)</span></a>
-          ${exercise.sourceUrl ? `<a href="${escapeHtml(exercise.sourceUrl)}" target="_blank" rel="noopener noreferrer">Catalyst exercise notes<span class="visually-hidden"> (opens in a new tab)</span></a>` : ""}
+          ${exercise.sourceUrl ? `<a href="${escapeHtml(exercise.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(exercise.sourceName ?? "Catalyst Athletics")} exercise notes<span class="visually-hidden"> (opens in a new tab)</span></a>` : ""}
         </div>
       </div>
     </article>

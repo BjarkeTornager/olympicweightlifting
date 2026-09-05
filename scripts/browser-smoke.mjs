@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { EXERCISES } from "../js/data.js";
 
 const output = process.env.E2E_OUTPUT ?? "/tmp/lift-journal-e2e-results";
 await mkdir(output, { recursive: true });
@@ -596,6 +597,18 @@ try {
   for (let index = 0; index < 5; index++) {
     const entry = (await saved()).activeWorkout.exercises[index];
     if (index) await tap('[data-action="select-exercise"][data-entry-id="' + entry.id + '"]');
+    const exercise = EXERCISES.find(item => item.id === entry.exerciseId);
+    await tap('.is-active [data-action="technique"]');
+    assert.equal(await evaluate("document.querySelector('#technique-title').textContent"), exercise.name);
+    assert.deepEqual(await evaluate("[...document.querySelectorAll('#technique-dialog .library-links a')].map(link => link.href)"), [
+      "https://www.youtube.com/watch?v=" + exercise.videoId, exercise.sourceUrl,
+    ]);
+    assert.ok(await evaluate("document.querySelector('#technique-dialog .library-links').textContent.includes(" + JSON.stringify(exercise.sourceName ?? "Catalyst Athletics") + ")"));
+    if (index === 3) await capture("split-squat-technique-390");
+    await tap('#technique-dialog [data-action="load-video"]');
+    assert.ok((await evaluate("document.querySelector('#technique-dialog iframe').src")).startsWith("https://www.youtube-nocookie.com/embed/" + exercise.videoId + "?"));
+    await tap('#technique-dialog button[value="close"]');
+    assert.equal(await evaluate("document.querySelector('#technique-dialog iframe')"), null);
     await fill(weight, gymWeights[index]);
     for (let set = 1; set <= 3; set++) await tap('.is-active .set-row:nth-of-type(' + set + ') [data-action="log-set"]');
   }
@@ -626,7 +639,7 @@ try {
   await tap('[data-action="training-today"]');
   await tap('[data-filter=all]');
   await route("#data", "#data-title");
-  pass("Gym Accessories: chosen loads, all 15 sets logged, saved history, +2 kg next-session progression, bodyweight holds, recovery and reload");
+  pass("Gym Accessories: five technique videos/source links, chosen loads, all 15 sets logged, saved history, +2 kg next-session progression, bodyweight holds, recovery and reload");
 
   const dates = await evaluate("(() => { const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); const old=new Date();old.setDate(old.getDate()-60);return [iso(old),iso(new Date())];})()");
   const dated = structuredClone(backup);

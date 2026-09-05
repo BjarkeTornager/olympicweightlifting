@@ -17,7 +17,7 @@ Lift Journal is a mobile-first Olympic weightlifting program and training log fo
 - Editable and deletable training history with exercise and date filters
 - Editable PRs with possible-PR prompts after finishing a workout
 - A selectable SVG progress chart for six core lifts, with 30-day, 90-day, and all-time views
-- Searchable Catalyst Athletics exercise library with privacy-enhanced YouTube embeds
+- Searchable exercise library with Catalyst Athletics and E3 Rehab technique videos, written guides, and privacy-enhanced YouTube embeds
 - Versioned JSON export/import
 - Installable PWA with an offline app shell
 - Repository-relative paths for `https://USERNAME.github.io/REPOSITORY/`
@@ -74,7 +74,7 @@ The video catalog can be rechecked against YouTube at any time (internet require
 npm run verify:videos
 ```
 
-The 13 unique Catalyst Athletics videos bundled with this version were last checked on 30 August 2026. The verification checks both YouTube metadata and the privacy-enhanced embed endpoint.
+The library includes technique videos and source links for all five Gym Accessories exercises. In a workout, tap **Technique** under the sets to load the demonstration, open it on YouTube, or read the provider's exercise notes. Videos are also available through **Exercises → Accessory**, including in existing workout drafts. Split squat guidance uses E3 Rehab's standard split squat, and dead bug guidance calls out the bent-knee variation. The verification command checks both YouTube metadata and the privacy-enhanced embed endpoint.
 
 ## Project structure
 
@@ -107,7 +107,7 @@ Edit `PROGRAM_DEFINITION` in [`js/data.js`](./js/data.js). Every programmed exer
 - `priority`
 - `videoRef`
 
-Exercise descriptions, cues, video IDs, and Catalyst source links live in `EXERCISES` in the same file. Keep IDs stable once sessions have been logged.
+Exercise descriptions, cues, video IDs, and source links live in `EXERCISES` in the same file. `sourceName` can override the default Catalyst Athletics credit, and `videoNote` explains which variation to use. Keep IDs stable once sessions have been logged.
 
 ## Choose a programme for any day
 
@@ -301,4 +301,4 @@ The browser suite starts with the previously shipped v6 worker and a fresh HTTP 
 
 ## Privacy
 
-The app has no analytics, authentication, or backend. User-entered training data remains in the browser unless explicitly exported. Loading or opening a technique video connects to YouTube/Catalyst Athletics under their own privacy terms.
+The app has no analytics, authentication, or backend. User-entered training data remains in the browser unless explicitly exported. Loading or opening a technique video connects to YouTube, and source links open Catalyst Athletics or E3 Rehab under their own privacy terms.

@@ -56,7 +56,10 @@ export function Journal() {
   const [updateReady, setUpdateReady] = useState(false),
     [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   useEffect(() => {
-    const changed = () => setRoute(location.hash.slice(1) || "dashboard");
+    const changed = () => {
+      setRoute(location.hash.slice(1) || "dashboard");
+      window.scrollTo({ top: 0, behavior: "instant" });
+    };
     const activated = () => setUpdateReady(false);
     changed();
     window.addEventListener("hashchange", changed);

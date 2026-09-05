@@ -89,10 +89,11 @@ test("backup preview imports an active draft without duplicate records", async (
   await expect(
     page.getByLabel("Set 1 weight in kilograms", { exact: true }),
   ).toHaveValue("52.5");
-  await page.goto("/#workout/gym_accessories");
+  await page.goto("/#dashboard");
+  await page.locator('a[href="#workout/gym_accessories"]').click();
   await expect(
     page.getByRole("heading", { name: "Gym Accessories", exact: true }),
-  ).toBeVisible();
+  ).toBeInViewport();
   await expect(
     page.getByText("Snatch + Back Squat is in progress.", { exact: false }),
   ).toBeVisible();

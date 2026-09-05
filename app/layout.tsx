@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
+const inter = localFont({
+  src: "./fonts/InterVariable.woff2",
+  variable: "--font-journal",
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+  adjustFontFallback: "Arial",
+});
 export const metadata: Metadata = {
   title: "Lift Journal",
   description: "Your programme. Your progress. Your next lift.",
@@ -20,7 +29,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body>{children}</body>
     </html>
   );

@@ -1,7 +1,7 @@
 @import "tailwindcss";
-@theme {
+@theme inline {
   --color-brand: #245d77;
-  --font-sans: "Avenir Next", "Segoe UI", sans-serif;
+  --font-sans: var(--font-journal), Arial, sans-serif;
 }
 :root {
   --canvas: #f5f4f0;
@@ -21,9 +21,14 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-journal), Arial, sans-serif;
+  font-optical-sizing: auto;
+  font-feature-settings:
+    "cv05" 1,
+    "cv08" 1;
+  font-variant-numeric: lining-nums tabular-nums;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 button,
 input,
@@ -65,7 +70,7 @@ button {
   gap: 12px;
   font-size: 17px;
   letter-spacing: 1px;
-  font-weight: 850;
+  font-weight: 700;
 }
 .main {
   width: 100%;
@@ -76,26 +81,32 @@ button {
 .eyebrow {
   font-size: 12px;
   letter-spacing: 2px;
-  font-weight: 750;
+  font-weight: 600;
+}
+strong,
+b {
+  font-weight: 600;
 }
 h1 {
   font-size: clamp(36px, 5vw, 64px);
-  letter-spacing: -2px;
-  line-height: 1.05;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
   margin: 20px 0;
-  font-weight: 750;
+  font-weight: 600;
 }
 h1 em {
   font-style: normal;
   color: var(--blue);
 }
 h2 {
-  font-weight: 750;
+  font-weight: 600;
   font-size: 28px;
-  letter-spacing: -0.7px;
+  letter-spacing: -0.01em;
 }
 .lead {
   color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
 }
 .training-card {
   padding: 32px;
@@ -182,12 +193,12 @@ button:disabled {
 }
 .brand-light {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 3.2px;
   font-weight: 550;
 }
 .sidebar-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.8px;
   color: #879096;
@@ -239,7 +250,7 @@ button:disabled {
 }
 .account-button small {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.7;
 }
@@ -253,7 +264,7 @@ button:disabled {
   border-radius: 50%;
   width: 35px;
   height: 35px;
-  font-weight: 750;
+  font-weight: 600;
   flex-shrink: 0;
 }
 .main {
@@ -302,8 +313,8 @@ button:disabled {
   font-size: clamp(36px, 3.5vw, 52px);
   margin-top: 16px;
   margin-bottom: 0;
-  letter-spacing: -1.8px;
-  line-height: 1.08;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 .page-heading .lead {
   margin: 15px 0 0;
@@ -359,7 +370,7 @@ button:disabled {
 }
 .card-top .eyebrow {
   color: #bdced6;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1.6px;
 }
 .pill {
@@ -369,7 +380,7 @@ button:disabled {
   padding: 5px 8px;
   background: #edf1f0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.6px;
   white-space: nowrap;
@@ -459,7 +470,7 @@ button:disabled {
   align-items: center;
   flex-direction: column;
   gap: 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: #859097;
 }
 .week-day {
@@ -553,8 +564,8 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 1.3px;
   color: var(--muted);
 }
@@ -563,7 +574,7 @@ button:disabled {
 }
 .stat-number {
   font-size: 42px;
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: -1.5px;
   margin: 12px 0 3px;
   line-height: 1.2;
@@ -624,7 +635,7 @@ button:disabled {
   color: #426b54;
 }
 .program-card small {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.7px;
   font-weight: 700;
   color: var(--muted);
@@ -632,7 +643,7 @@ button:disabled {
 .program-card h3 {
   margin: 3px 0 5px;
   font-size: 15px;
-  font-weight: 750;
+  font-weight: 600;
   line-height: 1.3;
 }
 .program-card p {
@@ -992,7 +1003,7 @@ summary {
   background: #eaf0f2;
   color: var(--blue);
   border-radius: 9px;
-  font-weight: 750;
+  font-weight: 600;
 }
 .exercise-number.complete {
   background: #e2f0e9;
@@ -1019,7 +1030,7 @@ summary {
   gap: 12px;
 }
 .set-labels {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.8px;
   font-weight: 700;
   color: var(--muted);
@@ -1078,7 +1089,7 @@ summary {
   border-color: var(--red);
 }
 .set-options > summary {
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
   color: var(--muted);
   padding-bottom: 0;
@@ -1101,7 +1112,7 @@ summary {
 }
 .adjustments small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 500;
 }
@@ -1190,7 +1201,7 @@ summary {
 }
 .dialog-title {
   font-size: 26px;
-  font-weight: 750;
+  font-weight: 600;
   margin: 0 35px 12px 0;
   line-height: 1.2;
 }
@@ -1273,7 +1284,7 @@ summary {
 }
 .date-tile small {
   text-transform: uppercase;
-  font-size: 10px !important;
+  font-size: 12px !important;
 }
 .history-content {
   padding: 0 25px 25px;
@@ -1555,7 +1566,7 @@ summary {
     font-size: 12px;
   }
   .sync-status {
-    font-size: 11px;
+    font-size: 12px;
   }
   .page-heading {
     margin-bottom: 24px;
@@ -1563,8 +1574,8 @@ summary {
   }
   .page-heading h1 {
     font-size: 36px;
-    line-height: 1.1;
-    letter-spacing: -1.4px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
   }
   .page-heading.compact h1 {
     font-size: 32px;
@@ -1573,7 +1584,7 @@ summary {
     margin-top: 20px;
   }
   .lead {
-    font-size: 14px;
+    font-size: 16px;
   }
   .training-card {
     min-height: 270px;
@@ -1585,14 +1596,18 @@ summary {
     max-width: 280px;
   }
   .training-card p {
-    font-size: 13px;
+    font-size: 14px;
     max-width: 260px;
   }
   .card-top .eyebrow {
-    font-size: 10px;
+    font-size: 12px;
   }
   .stats-grid {
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .stats-grid > :last-child {
+    grid-column: 1 / -1;
   }
   .stat-card {
     padding: 16px 12px;
@@ -1602,7 +1617,7 @@ summary {
     right: 12px;
   }
   .stat-label {
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.6;
     letter-spacing: 0.5px;
     min-height: 28px;
@@ -1619,7 +1634,7 @@ summary {
     margin-left: 4px;
   }
   .stat-card > .muted {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.6;
     display: block;
   }
@@ -1639,7 +1654,7 @@ summary {
     font-size: 16px;
   }
   .program-card small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .bottom-grid {
     grid-template-columns: 1fr;
@@ -1668,7 +1683,7 @@ summary {
     gap: 5px;
     color: #566b75;
     min-height: 46px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 650;
   }
   .mobile-nav > a.active {
@@ -1712,7 +1727,7 @@ summary {
   }
   .prescription .pill {
     white-space: normal;
-    font-size: 10px;
+    font-size: 12px;
   }
   .prescription > .section-top {
     align-items: start;
@@ -1754,7 +1769,7 @@ summary {
     gap: 7px;
   }
   .set-labels {
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 0.1px;
   }
   .set-row input {
@@ -1775,7 +1790,7 @@ summary {
     flex-wrap: wrap;
   }
   .set-extra .button {
-    font-size: 11px;
+    font-size: 12px;
   }
   .adjustments {
     gap: 6px;
@@ -1794,7 +1809,7 @@ summary {
     border-radius: 12px;
   }
   .workout-dock > span {
-    font-size: 11px;
+    font-size: 12px;
     gap: 5px;
   }
   .workout-dock > span > svg {
@@ -1838,7 +1853,7 @@ summary {
     font-size: 15px;
   }
   .history-detail > summary small {
-    font-size: 11px;
+    font-size: 12px;
   }
   .history-content {
     padding: 0 16px 20px;
@@ -1899,13 +1914,13 @@ summary {
     padding-inline: 3px;
   }
   .mobile-nav > a {
-    font-size: 9px;
+    font-size: 12px;
   }
   .topbar-date {
-    font-size: 11px;
+    font-size: 12px;
   }
   .sync-status {
-    font-size: 10px;
+    font-size: 12px;
   }
   .form-grid {
     grid-template-columns: 1fr;

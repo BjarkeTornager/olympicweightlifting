@@ -73,7 +73,9 @@ import UIKit
       error = nil
     } catch {
       guard epoch == generation else { return }
-      handle(error)
+      // Keep presented forms mounted beneath the privacy window on connection
+      // loss. A root alert would dismiss their sheet and discard unsaved text.
+      if user.isNull || (error as? ServiceError)?.status == 401 { handle(error) }
       verified = false
     }
   }

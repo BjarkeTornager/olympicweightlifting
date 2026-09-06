@@ -47,12 +47,15 @@ import XCTest
     XCTAssertTrue(
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Saved · ")).firstMatch
         .waitForExistence(timeout: 10))
+    let keyboardGone = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "exists == false"), object: app.keyboards.firstMatch)
+    XCTAssertEqual(XCTWaiter.wait(for: [keyboardGone], timeout: 5), .completed)
     let coach = XCTAttachment(screenshot: app.screenshot())
     coach.name = "native-coach"
     coach.lifetime = .keepAlways
     add(coach)
     app.tabBars.buttons["Journal"].tap()
-    XCTAssertTrue(app.navigationBars["Journal"].exists)
+    XCTAssertTrue(app.navigationBars["Journal"].waitForExistence(timeout: 5))
     app.tabBars.buttons["You"].tap()
     XCTAssertFalse(app.buttons["Invitations"].exists)
   }
@@ -119,10 +122,16 @@ import XCTest
     app.navigationBars.buttons["Save"].tap()
     try waitForFormToClose(app, title: "Log set")
     XCTAssertTrue(app.buttons["Finish workout"].waitForExistence(timeout: 10))
-    app.swipeUp()
     app.buttons["Finish workout"].tap()
-    let finishButtons = app.buttons.matching(identifier: "Finish workout")
-    finishButtons.element(boundBy: finishButtons.count - 1).tap()
+    guard
+      let confirm = app.buttons.matching(identifier: "Finish workout").allElementsBoundByIndex
+        .first(where: { $0.isHittable })
+    else {
+      throw NSError(
+        domain: "NativeFlow", code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "Missing workout confirmation"])
+    }
+    confirm.tap()
     XCTAssertTrue(app.buttons["Start workout"].waitForExistence(timeout: 10))
     let snapshot = try await fixture("__state")
     let state = snapshot["state"] as! [String: Any]

@@ -150,11 +150,13 @@ struct WorkoutView: View {
           }
         }
       }
-      Section {
-        Button("Finish workout", systemImage: "checkmark.circle.fill") { finishing = true }
-          .disabled(!store.canSave)
-      }
     }.navigationTitle("Workout").navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Finish") { finishing = true }.accessibilityLabel("Finish workout").disabled(
+            !store.canSave)
+        }
+      }
       .sheet(item: $selected) { exercise in NavigationStack { SetForm(exercise: exercise) } }
       .confirmationDialog(
         "Finish and save this workout?", isPresented: $finishing, titleVisibility: .visible

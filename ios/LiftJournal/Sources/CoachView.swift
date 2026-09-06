@@ -123,7 +123,7 @@ struct CoachView: View {
                 store.cancelCoach()
               } else {
                 follow = true
-                focused = false
+                dismissKeyboard()
                 store.send()
                 proxy.scrollTo("latest", anchor: .bottom)
               }
@@ -144,7 +144,18 @@ struct CoachView: View {
     }
     .background(Color(.systemGroupedBackground))
     .navigationTitle("Coach").navigationBarTitleDisplayMode(.inline)
+    .onChange(of: store.streaming) { _, _ in
+      dismissKeyboard()
+      Task { @MainActor in
+        await Task.yield()
+        dismissKeyboard()
+      }
+    }
     .toolbar {
+      ToolbarItemGroup(placement: .keyboard) {
+        Spacer()
+        Button("Done") { dismissKeyboard() }
+      }
       ToolbarItem(placement: .topBarTrailing) {
         Button("Refresh conversation", systemImage: "arrow.clockwise") {
           Task { await store.refresh() }
@@ -169,6 +180,11 @@ struct CoachView: View {
         Task { do { try await store.upload(image) } catch { store.handle(error) } }
       }.ignoresSafeArea()
     }
+  }
+  private func dismissKeyboard() {
+    focused = false
+    UIApplication.shared.sendAction(
+      #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
   }
   private var welcome: some View {
     VStack(alignment: .leading, spacing: 24) {

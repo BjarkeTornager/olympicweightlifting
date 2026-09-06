@@ -1,4 +1,5 @@
 "use client";
+import { ImageLibrary } from "./image-library";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -305,9 +306,14 @@ export function DailyOverview({
           <h1>Your day, in focus.</h1>
           <p>{subtitle}</p>
         </div>
-        <button className="health-history-link" onClick={() => go("health")}>
-          Health history <ArrowRight size={16} />
-        </button>
+        <div className="daily-heading-actions">
+          <button className="health-history-link" onClick={() => go("images")}>
+            Images & screenshots <ArrowRight size={16} />
+          </button>
+          <button className="health-history-link" onClick={() => go("health")}>
+            Health history <ArrowRight size={16} />
+          </button>
+        </div>
       </div>
       <div className="daily-hero">
         <div className="daily-hero-copy">
@@ -457,9 +463,11 @@ export function DailyOverview({
 export function HealthView({
   journal,
   go,
+  onLogin,
 }: {
   journal: JournalController;
   go: (route: string) => void;
+  onLogin: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null),
     [deleting, setDeleting] = useState<string | null>(null),
@@ -610,6 +618,13 @@ export function HealthView({
           </Button>
         )}
       </section>
+      <ImageLibrary
+        key={journal.identity?.id ?? "guest"}
+        accountId={journal.identity?.id}
+        onLogin={onLogin}
+        go={go}
+        scope="health"
+      />
       <p className="health-footnote">
         Your entries sync with your account and are included in journal backups.
         Coach supports everyday habits and training decisions; medical concerns

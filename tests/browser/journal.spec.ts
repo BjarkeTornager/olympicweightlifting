@@ -42,6 +42,7 @@ test("all main screens fit mobile and desktop", async ({ page }) => {
       "coach",
       "health",
       "food",
+      "images",
       "dashboard",
       "workout/choose",
       "workout/gym_accessories",
@@ -294,6 +295,7 @@ test("key screens have no WCAG A/AA violations and the skip link keeps the route
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of [
     "coach",
+    "images",
     "dashboard",
     "workout/monday",
     "workout",

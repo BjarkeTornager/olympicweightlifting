@@ -90,7 +90,7 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section className="space-y-3">
-        <h2>Food journal and meal photos</h2>
+        <h2>Food journal and private images</h2>
         <p>
           Meals, portions, nutrition estimates and diet targets are saved to
           your account alongside your training, and included in journal backups.
@@ -98,12 +98,18 @@ export default function PrivacyPage() {
           read your own logged nutrition when answering food questions.
         </p>
         <p>
-          Uploaded meal photos are stored privately in the account database on
-          Railway. We resize and re-encode photos, removing embedded location
-          and camera metadata. They require sign-in and internet to view; photos
-          are not stored in the offline cache. Choosing Send in Coach shares the
-          attached images with the configured assistant provider for analysis.
-          Uploading to the library alone does not send them to the provider.
+          Uploaded food, sleep, activity and other images are stored privately
+          in the account database on Railway. We resize and re-encode photos,
+          removing embedded location and camera metadata. They require sign-in
+          and internet to view; photos are not stored in the offline cache.
+          Choosing Send in Coach shares the attached images with the configured
+          assistant provider for analysis. With automatic tagging enabled,
+          uploading also sends the image to that provider to identify its
+          category and descriptive tags. You can turn automatic tagging off
+          before uploading, or choose Retag automatically later. Existing
+          uploads are not sent for tagging without that action. Uncertain images
+          stay in Needs review. Categories and tags are editable; tagging does
+          not create meal or health records.
         </p>
         <p>
           Food lets you edit or delete meals, download individual photos and
@@ -111,9 +117,10 @@ export default function PrivacyPage() {
           clearing chat keeps its catalog photos. Photos are retained until you
           delete them or your account; recovery backups may retain deleted data
           until they expire. Journal JSON backups contain meal photo references,
-          not image files. Download photos separately from Food. Calorie and
-          macro estimates can be inaccurate; you can correct them before or
-          after saving.
+          not image files or category metadata. Download images from the image
+          library; operational database backups include images and their tags.
+          Calorie and macro estimates can be inaccurate; you can correct them
+          before or after saving.
         </p>
       </section>
       <section className="space-y-3">

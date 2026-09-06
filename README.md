@@ -70,3 +70,5 @@ Use the original app's JSON export, then sign into the new origin and import thr
 Coach is the conversational home for training history, programme questions and reviewed workout changes. OpenRouter runs on the hosted server; Ollama is available for local development. See [assistant operations](docs/agent-operations.md) for setup, privacy controls, spending limits and real-provider tests.
 
 Train includes personal routines, exercise reordering and a rest timer. History can repeat a session or save it as a routine. Progress adds weekly volume, rep records and session comparisons. Settings includes larger text, device sign-out and offline-copy controls. Local saves can be undone while they remain the latest change.
+
+Image uploads are automatically sorted into Food, Sleep, Activity, Health, Other or Needs review, with editable tags and a private account library. See [image classification and storage](docs/images.md).

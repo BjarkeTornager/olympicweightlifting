@@ -78,7 +78,7 @@ export async function writeJournal(
     ];
     if (photoIds.length) {
       const owned = await tx
-        .select({ id: foodPhotos.id })
+        .select({ id: foodPhotos.id, category: foodPhotos.category })
         .from(foodPhotos)
         .where(
           and(eq(foodPhotos.userId, userId), inArray(foodPhotos.id, photoIds)),
@@ -86,6 +86,10 @@ export async function writeJournal(
       if (owned.length !== photoIds.length)
         throw new MissingMealPhoto(
           "A meal photo is missing from this account. Edit the meal in Food and remove unavailable photo links before syncing.",
+        );
+      if (owned.some((image) => image.category !== "food"))
+        throw new MissingMealPhoto(
+          "Only images categorised as Food can be linked to meals. Correct the category in Images or remove the image link in Food before syncing.",
         );
     }
     state.updatedAt = new Date().toISOString();

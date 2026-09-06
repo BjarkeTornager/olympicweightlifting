@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import type { UserImage } from "../../lib/images";
 import { emptyJournal } from "../../lib/domain";
 import sharp from "sharp";
 import { createServer, request } from "node:http";
@@ -183,13 +184,7 @@ test.describe("authenticated photo UI", () => {
     };
     let server = { state: emptyJournal(), revision: 0 },
       writes = 0;
-    const photos: {
-      id: string;
-      label: string;
-      date: string;
-      bytes: number;
-      createdAt: string;
-    }[] = [];
+    const photos: UserImage[] = [];
     const image = await sharp({
       create: { width: 80, height: 60, channels: 3, background: "#d3ae70" },
     })
@@ -203,29 +198,39 @@ test.describe("authenticated photo UI", () => {
     await context.route("**/api/journal", (r) =>
       r.fulfill({ json: { accountId: user.id, ...server } }),
     );
-    await context.route("**/api/food/photos", async (r) => {
+    await context.route(/\/api\/images(?:\?category=food)?$/, async (r) => {
       expect(r.request().headers()["x-journal-account"]).toBe(user.id);
       if (r.request().method() === "POST") {
         const data = r.request().postDataJSON();
         expect(data.image.length).toBeGreaterThan(100);
-        const photo = {
+        const photo: UserImage = {
           id: data.id,
           label: data.label,
           date: data.date,
           bytes: image.length,
+          category: "food",
+          classification: {
+            source: "automatic",
+            status: "ready",
+            confidence: "high",
+            tags: ["meal"],
+          },
+          version: 1,
           createdAt: new Date().toISOString(),
         };
         photos.push(photo);
         await r.fulfill({ json: photo });
-      } else await r.fulfill({ json: { photos } });
+      } else await r.fulfill({ json: { images: photos } });
     });
-    await context.route("**/api/food/photos/*", (r) =>
-      r.fulfill({
+    await context.route("**/api/images/*", (r) => {
+      if (new URL(r.request().url()).searchParams.get("metadata") === "1")
+        return r.fulfill({ json: photos[0] });
+      return r.fulfill({
         body: image,
         contentType: "image/jpeg",
         headers: { "Cache-Control": "private, no-store" },
-      }),
-    );
+      });
+    });
     const meal = {
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -284,20 +289,22 @@ test.describe("authenticated photo UI", () => {
     await page.goto("/#food");
     await page.getByLabel("Food date", { exact: true }).fill("2026-09-06");
     await page.getByLabel("Photo label", { exact: true }).fill("Lunch plate");
-    await page.getByLabel("Upload meal photo", { exact: true }).setInputFiles({
+    await page.getByLabel("Upload image", { exact: true }).setInputFiles({
       name: "plate.jpg",
       mimeType: "image/jpeg",
       buffer: image,
     });
     await expect(
-      page.getByText("Photo saved to your account.", { exact: false }),
+      page.getByText("Photo saved to your account under Food.", {
+        exact: false,
+      }),
     ).toBeVisible();
     await expect(page.getByRole("img", { name: "Lunch plate" })).toBeVisible();
     await page
       .getByRole("button", { name: "Estimate meal", exact: true })
       .click();
     await expect(
-      page.getByRole("img", { name: "Meal photo ready to send" }),
+      page.getByRole("img", { name: "Image ready to send" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(

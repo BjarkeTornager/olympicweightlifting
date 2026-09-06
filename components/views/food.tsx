@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Camera, Plus, MessageCircle, Utensils } from "lucide-react";
+import { useState } from "react";
+import { Plus, MessageCircle, Utensils } from "lucide-react";
 import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
@@ -10,9 +10,8 @@ import {
   nutritionSummary,
   type Meal,
   type FoodItem,
-  type FoodPhoto,
 } from "@/lib/nutrition";
-import { uploadFoodPhoto } from "@/lib/food-client";
+import { ImageLibrary } from "../image-library";
 import { FoodPhotoImage } from "../food-photo";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -77,34 +76,9 @@ export function FoodView({
     [notice, setNotice] = useState("");
   const [targets, setTargets] = useState(nutrition.targets),
     [showTargets, setShowTargets] = useState(false);
-  const [photos, setPhotos] = useState<FoodPhoto[]>([]),
-    [uploading, setUploading] = useState(false),
-    [label, setLabel] = useState("");
-  const [filter, setFilter] = useState(""),
-    [visiblePhotos, setVisiblePhotos] = useState(12),
-    [remove, setRemove] = useState<{
-      kind: "meal" | "photo";
-      id: string;
-    } | null>(null);
-  useEffect(() => {
-    if (!accountId) return;
-    const controller = new AbortController();
-    fetch("/api/food/photos", {
-      headers: { "X-Journal-Account": accountId },
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw Error(data.error ?? "Photo library unavailable.");
-        return data.photos;
-      })
-      .then(setPhotos)
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [accountId]);
+  const [remove, setRemove] = useState<{ kind: "meal"; id: string } | null>(
+    null,
+  );
   const run = async (work: () => Promise<unknown>, message: string) => {
     setError("");
     setNotice("");
@@ -117,22 +91,6 @@ export function FoodView({
       );
     }
   };
-  const upload = async (file?: File) => {
-    if (!file || !accountId) return;
-    setUploading(true);
-    await run(async () => {
-      const photo = await uploadFoodPhoto(
-        file,
-        accountId,
-        date,
-        label || "Meal photo",
-      );
-      setPhotos((old) => [photo, ...old]);
-      setFilter("");
-      setVisiblePhotos(12);
-    }, "Photo saved to your account. Select Estimate meal to ask Coach about it.");
-    setUploading(false);
-  };
   const meals = nutrition.meals.filter((m) => m.date === date);
   const totals = totalNutrients(meals.flatMap((m) => m.items));
   const start = new Date(`${date}T12:00:00Z`);
@@ -141,9 +99,6 @@ export function FoodView({
     nutrition,
     Number.isNaN(start.getTime()) ? date : start.toISOString().slice(0, 10),
     date,
-  );
-  const catalog = photos.filter((p) =>
-    `${p.label} ${p.date}`.toLowerCase().includes(filter.toLowerCase()),
   );
   return (
     <div className="food-page">
@@ -312,120 +267,14 @@ export function FoodView({
           your full intake.
         </p>
       </section>
-      <section className="panel food-catalog">
-        <div className="section-heading">
-          <h2>Your meal photos</h2>
-          <span>{photos.length} photos</span>
-        </div>
-        <p>
-          Photos are private to your account and kept here until you delete
-          them, including photos not yet linked to a meal.
-        </p>
-        {!accountId ? (
-          <Button onClick={onLogin}>Sign in to save meal photos</Button>
-        ) : (
-          <>
-            <div className="food-toolbar">
-              <label>
-                Photo label
-                <input
-                  value={label}
-                  maxLength={160}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder="Lunch · chicken and rice"
-                />
-              </label>
-              <label className="food-upload">
-                <Camera size={17} />{" "}
-                {uploading ? "Saving photo…" : "Take photo"}
-                <input
-                  aria-label="Take meal photo"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  disabled={uploading}
-                  onChange={(e) => {
-                    void upload(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              <label className="food-upload">
-                Upload photo
-                <input
-                  aria-label="Upload meal photo"
-                  type="file"
-                  accept="image/*"
-                  disabled={uploading}
-                  onChange={(e) => {
-                    void upload(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-            <p className="fine-print">
-              Saved under {date}. Photos are sent to the assistant provider only
-              when you choose to estimate a meal in Coach. Photos require
-              internet; manual meals also work offline.
-            </p>
-            <label>
-              Search photo library
-              <input
-                value={filter}
-                onChange={(e) => {
-                  setFilter(e.target.value);
-                  setVisiblePhotos(12);
-                }}
-                placeholder="Label or YYYY-MM-DD"
-              />
-            </label>
-            <div className="food-photo-grid">
-              {catalog.slice(0, visiblePhotos).map((photo) => (
-                <article key={photo.id}>
-                  <FoodPhotoImage
-                    key={`${accountId}:${photo.id}`}
-                    id={photo.id}
-                    accountId={accountId}
-                    label={photo.label}
-                    download
-                  />
-                  <strong>{photo.label}</strong>
-                  <span>{photo.date}</span>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => go(`coach/photo/${photo.id}`)}
-                  >
-                    Estimate meal
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setRemove({ kind: "photo", id: photo.id })}
-                  >
-                    Delete photo
-                  </Button>
-                </article>
-              ))}
-            </div>
-            {catalog.length > visiblePhotos && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setVisiblePhotos((v) => v + 12)}
-              >
-                Show more photos
-              </Button>
-            )}
-            <p className="fine-print">
-              Meal data and targets are included in Settings → Export backup.
-              Download images from their photo cards. Library limit: 1,000
-              photos or 250 MB.
-            </p>
-          </>
-        )}
-      </section>
+      <ImageLibrary
+        key={accountId ?? "guest"}
+        accountId={accountId}
+        onLogin={onLogin}
+        go={go}
+        scope="food"
+        date={date}
+      />
       <Dialog
         open={Boolean(editor)}
         onOpenChange={(open) => {
@@ -720,15 +569,6 @@ export function FoodView({
                     (m) => m.id !== remove.id,
                   );
                 });
-              else {
-                const r = await fetch(`/api/food/photos/${remove.id}`, {
-                  method: "DELETE",
-                  headers: { "X-Journal-Account": accountId! },
-                });
-                const data = await r.json();
-                if (!r.ok) throw Error(data.error);
-                setPhotos((old) => old.filter((p) => p.id !== remove.id));
-              }
               setRemove(null);
             }, "Entry deleted.")
           }

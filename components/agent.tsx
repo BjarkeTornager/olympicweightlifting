@@ -12,7 +12,9 @@ import {
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
 import { exerciseName, today } from "@/lib/domain";
-import { uploadFoodPhoto } from "@/lib/food-client";
+import { uploadUserImage } from "@/lib/food-client";
+import { imageCoachPrompt, type UserImage } from "@/lib/images";
+import { ImageBadge } from "./image-library";
 import { FoodPhotoImage } from "./food-photo";
 import { MealDetails } from "./views/food";
 import { formatSet } from "@/lib/training";
@@ -40,11 +42,7 @@ export function TrainingAgent({
   initialPhotoId?: string;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]),
-    [message, setMessage] = useState(
-      initialPhotoId
-        ? "Estimate this meal from the attached photo and prepare a food entry. Use its catalog date. Explain the portion assumptions."
-        : "",
-    ),
+    [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [connection, setConnection] = useState<{
@@ -55,12 +53,40 @@ export function TrainingAgent({
   const [acting, setActing] = useState<string | null>(null),
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
-  const [photoIds, setPhotoIds] = useState<string[]>(
-    initialPhotoId ? [initialPhotoId] : [],
+  const [photoIds, setPhotoIds] = useState<string[]>([]);
+  const [imageDetails, setImageDetails] = useState<Record<string, UserImage>>(
+    {},
   );
+  const [loadingImage, setLoadingImage] = useState(Boolean(initialPhotoId));
+  const [autoTag, setAutoTag] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
   const accountId = journal.identity?.id;
+  useEffect(() => {
+    if (!initialPhotoId || !accountId) return;
+    const abort = new AbortController();
+    fetch(`/api/images/${encodeURIComponent(initialPhotoId)}?metadata=1`, {
+      headers: { "X-Journal-Account": accountId },
+      cache: "no-store",
+      signal: abort.signal,
+    })
+      .then(async (r) => {
+        const image: UserImage & { error?: string } = await r.json();
+        if (!r.ok) throw Error(image.error ?? "Image unavailable.");
+        if (!abort.signal.aborted) {
+          setPhotoIds([image.id]);
+          setImageDetails({ [image.id]: image });
+          setMessage((current) => current || imageCoachPrompt(image.category));
+        }
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setError(e.message);
+      })
+      .finally(() => {
+        if (!abort.signal.aborted) setLoadingImage(false);
+      });
+    return () => abort.abort();
+  }, [initialPhotoId, accountId]);
   const headers = useCallback(
     () => ({
       "Content-Type": "application/json",
@@ -108,20 +134,26 @@ export function TrainingAgent({
     journal.record?.conflict,
   );
   const ready = Boolean(
-    accountId && connection?.enabled && !pending && journal.status === "synced",
+    accountId &&
+    connection?.enabled &&
+    !pending &&
+    !loadingImage &&
+    journal.status === "synced",
   );
   const attach = async (file?: File) => {
     if (!file || !accountId || photoIds.length >= 4) return;
     setUploading(true);
     setError("");
     try {
-      const photo = await uploadFoodPhoto(
+      const photo = await uploadUserImage(
         file,
         accountId,
         today(),
-        message.trim().slice(0, 160) || "Meal photo",
+        "Uploaded image",
+        autoTag,
       );
       setPhotoIds((ids) => [...ids, photo.id]);
+      setImageDetails((old) => ({ ...old, [photo.id]: photo }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not upload photo.");
     } finally {
@@ -133,7 +165,13 @@ export function TrainingAgent({
       provided?.trim() ||
       message.trim() ||
       (photoIds.length
-        ? "Estimate the meal in these photos and prepare a food entry for today. Explain your portion assumptions."
+        ? imageCoachPrompt(
+            photoIds.every((id) => imageDetails[id]?.category === "food")
+              ? "food"
+              : photoIds.every((id) => imageDetails[id]?.category === "sleep")
+                ? "sleep"
+                : "unclassified",
+          )
         : "");
     if (!question || busy || uploading || !ready) return;
     const attachments = [...photoIds];
@@ -176,6 +214,7 @@ export function TrainingAgent({
         ),
       );
       setPhotoIds([]);
+      setImageDetails({});
     } catch (e) {
       setError(
         e instanceof Error
@@ -374,7 +413,7 @@ export function TrainingAgent({
                             key={`${accountId}:${id}`}
                             id={id}
                             accountId={accountId}
-                            label="Attached meal photo"
+                            label="Attached image"
                           />
                         ))}
                       </div>
@@ -579,14 +618,18 @@ export function TrainingAgent({
               <div className="food-attachments">
                 <label className="food-upload">
                   <Camera size={17} />{" "}
-                  {uploading ? "Saving photo…" : "Take meal photo"}
+                  {uploading ? "Saving & tagging…" : "Take photo"}
                   <input
                     type="file"
-                    aria-label="Take meal photo"
+                    aria-label="Take photo"
                     accept="image/*"
                     capture="environment"
                     disabled={
-                      busy || uploading || !accountId || photoIds.length >= 4
+                      busy ||
+                      uploading ||
+                      loadingImage ||
+                      !accountId ||
+                      photoIds.length >= 4
                     }
                     onChange={(e) => {
                       void attach(e.target.files?.[0]);
@@ -595,13 +638,17 @@ export function TrainingAgent({
                   />
                 </label>
                 <label className="food-upload">
-                  Attach photo
+                  Attach image
                   <input
                     type="file"
-                    aria-label="Attach meal photo"
+                    aria-label="Attach image"
                     accept="image/*"
                     disabled={
-                      busy || uploading || !accountId || photoIds.length >= 4
+                      busy ||
+                      uploading ||
+                      loadingImage ||
+                      !accountId ||
+                      photoIds.length >= 4
                     }
                     onChange={(e) => {
                       void attach(e.target.files?.[0]);
@@ -609,8 +656,23 @@ export function TrainingAgent({
                     }}
                   />
                 </label>
-                <a href="#food">Food journal & photo library</a>
+                <a href="#images">Image library & categories</a>
               </div>
+              <label className="image-auto-tag">
+                <input
+                  type="checkbox"
+                  checked={autoTag}
+                  disabled={busy || uploading}
+                  onChange={(e) => setAutoTag(e.target.checked)}
+                />{" "}
+                Tag uploads automatically
+              </label>
+              <p className="fine-print">
+                Automatic tagging sends each new image to{" "}
+                {connection?.provider ?? "your configured assistant provider"}{" "}
+                to identify food, sleep, activity or other content. Turn it off
+                to save in Needs review. No journal entry is created by tagging.
+              </p>
               {photoIds.length > 0 && accountId && (
                 <>
                   <div className="food-photo-strip">
@@ -619,8 +681,11 @@ export function TrainingAgent({
                         <FoodPhotoImage
                           id={id}
                           accountId={accountId}
-                          label="Meal photo ready to send"
+                          label="Image ready to send"
                         />
+                        {imageDetails[id] && (
+                          <ImageBadge image={imageDetails[id]} />
+                        )}
                         <Button
                           type="button"
                           variant="ghost"
@@ -635,10 +700,12 @@ export function TrainingAgent({
                     ))}
                   </div>
                   <p className="fine-print">
-                    Saved privately in Food. Sending shares these photos with{" "}
-                    {connection?.provider ?? "the assistant provider"} for
-                    estimation. Removing an attachment keeps its catalog copy.
-                    Up to 4 photos per message.
+                    Saved in your private image library. Sending shares these
+                    images with{" "}
+                    {connection?.provider ?? "the assistant provider"} for your
+                    question. Removing an attachment keeps its catalog copy. Up
+                    to 4 images per message.{" "}
+                    <a href="#images">Review categories</a>
                   </p>
                 </>
               )}

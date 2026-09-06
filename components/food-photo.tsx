@@ -16,7 +16,7 @@ export function FoodPhotoImage({
   useEffect(() => {
     const controller = new AbortController();
     let objectUrl = "";
-    fetch(`/api/food/photos/${encodeURIComponent(id)}`, {
+    fetch(`/api/images/${encodeURIComponent(id)}`, {
       headers: { "X-Journal-Account": accountId },
       cache: "no-store",
       signal: controller.signal,
@@ -47,7 +47,7 @@ export function FoodPhotoImage({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={label} width={320} height={240} />
           {download && (
-            <a href={url} download={`meal-${id}.jpg`}>
+            <a href={url} download={`image-${id}.jpg`}>
               Download photo
             </a>
           )}

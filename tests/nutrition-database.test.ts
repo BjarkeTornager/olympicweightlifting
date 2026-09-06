@@ -22,10 +22,12 @@ test(
     process.env.ALLOWED_EMAILS = emails.join(",");
     const { getAuth } = await import("../lib/auth"),
       { getPool } = await import("../lib/db");
-    const { GET: list, POST: upload } =
-      await import("../app/api/food/photos/route");
-    const { GET: read, DELETE: remove } =
-      await import("../app/api/food/photos/[id]/route");
+    const { GET: list, POST: upload } = await import("../app/api/images/route");
+    const {
+      GET: read,
+      DELETE: remove,
+      PATCH: patch,
+    } = await import("../app/api/images/[id]/route");
     const { runTurn, applyProposal, history } =
       await import("../lib/agent/engine");
     const { readJournal, writeJournal } = await import("../lib/server");
@@ -92,13 +94,39 @@ test(
       );
       const uploaded = await upload(request(0, "POST", body));
       assert.equal(uploaded.status, 200, await uploaded.clone().text());
+      const edit = { category: "food", tags: ["meal"], version: 0 };
+      assert.equal(
+        (await patch(request(1, "PATCH", edit), context)).status,
+        404,
+      );
+      assert.equal(
+        (
+          await patch(
+            request(0, "PATCH", edit, "https://attacker.test"),
+            context,
+          )
+        ).status,
+        403,
+      );
+      assert.equal(
+        (await patch(request(2, "PATCH", edit), context)).status,
+        401,
+      );
+      assert.equal(
+        (await patch(request(0, "PATCH", edit), context)).status,
+        200,
+      );
+      assert.equal(
+        (await patch(request(0, "PATCH", edit), context)).status,
+        409,
+      );
       assert.equal(
         (await upload(request(0, "POST", body))).status,
         200,
         "retry does not duplicate upload",
       );
-      assert.equal((await (await list(request(0))).json()).photos.length, 1);
-      assert.equal((await (await list(request(1))).json()).photos.length, 0);
+      assert.equal((await (await list(request(0))).json()).images.length, 1);
+      assert.equal((await (await list(request(1))).json()).images.length, 0);
       assert.equal((await read(request(1), context)).status, 404);
       assert.equal((await read(request(2), context)).status, 401);
       const stale = request(1);

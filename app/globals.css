@@ -2544,3 +2544,143 @@ summary {
 .assistant-response ul { display: grid; gap: 10px; list-style: disc; padding-left: 22px; font-size: 13px; line-height: 1.85; color: #405965; }
 .answer-step-number { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 7px; color: #39655f; background: #eaf3ed; font-size: 12px; }
 .coach-answer-step { border: 1px solid #e2eaec; border-radius: 11px; padding: 18px; background: #fbfdfd; }
+
+/* Private image collections */
+.image-library {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.image-library :is(h1, h2) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.image-library .section-heading {
+  flex-wrap: wrap;
+}
+.image-upload-area {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  background: #f7f9f8;
+}
+.image-auto-tag {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  margin: 12px 0 4px;
+}
+.image-auto-tag input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.image-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.image-filters button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: var(--paper);
+  font-size: 14px;
+}
+.image-filters button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.image-filters button span {
+  font-size: 12px;
+  opacity: 0.85;
+}
+.image-category {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #eef2f4;
+  color: #304653;
+  font-weight: 650;
+  font-size: 13px;
+}
+.image-category small {
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+}
+.image-category-food {
+  background: #e9f2e6;
+  color: #325330;
+}
+.image-category-sleep {
+  background: #efeafa;
+  color: #4b3e75;
+}
+.image-category-activity {
+  background: #e5f1fa;
+  color: #294f6d;
+}
+.image-category-health {
+  background: #e7f3f0;
+  color: #24574d;
+}
+.image-category-unclassified {
+  background: #fff2d9;
+  color: #73500b;
+}
+.image-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.image-tags span {
+  padding: 3px 8px;
+  background: #f2f4f4;
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.image-empty {
+  padding: 26px 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.image-library .notice button {
+  text-decoration: underline;
+  padding: 4px;
+}
+@media (max-width: 600px) {
+  .image-upload-area {
+    padding: 12px;
+  }
+  .image-library {
+    gap: 14px;
+  }
+  .image-filters button {
+    padding: 8px 11px;
+  }
+}
+.daily-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  justify-content: flex-end;
+}
+@media (max-width: 700px) {
+  .daily-heading-actions {
+    justify-content: flex-start;
+  }
+}

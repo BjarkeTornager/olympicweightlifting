@@ -29,6 +29,13 @@
       "when": 1788687348861,
       "tag": "0003_sloppy_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788700502141,
+      "tag": "0004_last_professor_monster",
+      "breakpoints": true
     }
   ]
 }

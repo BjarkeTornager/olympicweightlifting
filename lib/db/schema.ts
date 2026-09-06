@@ -16,6 +16,11 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { JournalState, Workout, Entry } from "../model";
+import {
+  unclassifiedImage,
+  type ImageCategory,
+  type ImageClassification,
+} from "../images";
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 export const foodPhotos = pgTable(
   "food_photos",
@@ -29,6 +34,15 @@ export const foodPhotos = pgTable(
     bytes: integer("bytes").notNull(),
     digest: text("digest").notNull(),
     data: bytea("data").notNull(),
+    category: text("category")
+      .$type<ImageCategory>()
+      .notNull()
+      .default("unclassified"),
+    classification: jsonb("classification")
+      .$type<ImageClassification>()
+      .notNull()
+      .default(unclassifiedImage),
+    version: integer("version").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -36,6 +50,7 @@ export const foodPhotos = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.id] }),
     index("food_photos_user_date_idx").on(t.userId, t.date),
+    index("images_user_category_idx").on(t.userId, t.category),
   ],
 );
 export const user = pgTable("users", {

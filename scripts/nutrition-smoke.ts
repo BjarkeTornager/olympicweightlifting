@@ -56,6 +56,7 @@ try {
     id: crypto.randomUUID(),
     date: "2026-09-06",
     label: "Synthetic yogurt label",
+    autoTag: true,
     image: bytes.toString("base64"),
   });
   const vision = await runTurn(userId, {

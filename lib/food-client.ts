@@ -1,10 +1,11 @@
-import type { FoodPhoto } from "./nutrition";
-export async function uploadFoodPhoto(
+import type { UserImage } from "./images";
+export async function uploadUserImage(
   file: File,
   accountId: string,
   date: string,
   label: string,
-): Promise<FoodPhoto> {
+  autoTag = true,
+): Promise<UserImage> {
   if (!file.type.startsWith("image/") || file.size > 25 * 1024 * 1024)
     throw Error("Choose an image smaller than 25 MB.");
   const url = URL.createObjectURL(file);
@@ -30,7 +31,7 @@ export async function uploadFoodPhoto(
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const imageData = canvas.toDataURL("image/jpeg", 0.82).split(",")[1];
-    const response = await fetch("/api/food/photos", {
+    const response = await fetch("/api/images", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -40,9 +41,10 @@ export async function uploadFoodPhoto(
         id: crypto.randomUUID(),
         image: imageData,
         date,
-        label: label.trim().slice(0, 160) || "Meal photo",
+        label: label.trim().slice(0, 160) || "Uploaded image",
+        autoTag,
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(45000),
     });
     const data = await response.json();
     if (!response.ok)

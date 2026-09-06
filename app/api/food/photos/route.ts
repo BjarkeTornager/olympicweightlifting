@@ -26,10 +26,18 @@ export async function POST(request: Request) {
         "Please wait a minute before uploading more photos.",
         429,
       );
-    return Response.json(
-      await saveFoodPhoto(user.id, await readJson(request, 2900000)),
-      { headers: { "Cache-Control": "private, no-store" } },
+    const image = await saveFoodPhoto(
+      user.id,
+      await readJson(request, 2900000),
     );
+    if (image.category !== "food")
+      throw new ApiError(
+        "Image saved in Images for category review. Refresh the app to open the image library.",
+        422,
+      );
+    return Response.json(image, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
   } catch (error) {
     return apiFailure(error);
   }

@@ -17,6 +17,7 @@ import {
   WifiOff,
   Utensils,
   HeartPulse,
+  Images,
 } from "lucide-react";
 import { useJournal } from "@/lib/use-journal";
 import { backup, days, today, createWorkout } from "@/lib/domain";
@@ -27,6 +28,7 @@ import { Workouts } from "./views/workouts";
 import { TrainingAgent } from "./agent";
 import { FoodView } from "./views/food";
 import { HealthView } from "./health";
+import { ImageLibrary } from "./image-library";
 import { RestTimer } from "./rest-timer";
 import {
   HistoryView,
@@ -42,6 +44,7 @@ const navigation = [
   { id: "workout", label: "Train", icon: Dumbbell },
   { id: "food", label: "Food", icon: Utensils },
   { id: "health", label: "Health", icon: HeartPulse },
+  { id: "images", label: "Images", icon: Images },
   { id: "history", label: "History", icon: History },
   { id: "progress", label: "Progress", icon: BarChart3 },
   { id: "library", label: "Exercises", icon: BookOpen },
@@ -416,6 +419,15 @@ export function Journal() {
                 key={identity?.id ?? "guest"}
                 journal={journal}
                 go={go}
+                onLogin={() => setLogin(true)}
+              />
+            )}
+            {section === "images" && (
+              <ImageLibrary
+                key={identity?.id ?? "guest"}
+                accountId={identity?.id}
+                onLogin={() => setLogin(true)}
+                go={go}
               />
             )}
             {section === "food" && (
@@ -444,7 +456,9 @@ export function Journal() {
       </main>
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {navigation
-          .filter((n) => !["dashboard", "library", "health"].includes(n.id))
+          .filter(
+            (n) => !["dashboard", "library", "health", "images"].includes(n.id),
+          )
           .map(({ id, label, icon: Icon }) => (
             <a
               key={id}

@@ -211,7 +211,7 @@ export async function callModel(
         : response.status === 402
           ? "The assistant’s provider credit or spending cap has been reached. Add OpenRouter credit or wait for the monthly cap to reset; manual logging is still available."
           : response.status === 400 && messages.some((m) => m.images?.length)
-            ? "The provider could not process this photo request. Try a text description or ask the host to check that the configured model supports images and tools. Your photos are saved in Food."
+            ? "The provider could not process this image request. Try a text description or ask the host to check that the configured model supports images and tools. Your uploads are saved in Images."
             : "The assistant provider is unavailable. Try again shortly.",
       response.status === 402 ? 402 : response.status === 429 ? 429 : 503,
     );

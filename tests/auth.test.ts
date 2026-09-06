@@ -18,6 +18,7 @@ test(
     process.env.LOCAL_PASSWORD_AUTH = "true";
     const email = `auth-${crypto.randomUUID()}@example.test`;
     const uninvited = `uninvited-${crypto.randomUUID()}@example.test`;
+    delete process.env.OWNER_EMAIL;
     process.env.ALLOWED_EMAILS = email;
     process.env.BETTER_AUTH_SECRET ??= "test-only-secret-".repeat(4);
     process.env.BETTER_AUTH_URL = "http://localhost:3000";

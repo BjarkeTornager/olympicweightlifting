@@ -27,6 +27,12 @@ export default function PrivacyPage() {
           journal interface.
         </p>
         <p>
+          The site owner can invite a specific Google email and revoke its
+          access. We store invited email addresses and invitation dates for
+          this purpose. Only the owner can see and manage that invitation
+          list; inviting someone does not share either person's journal.
+        </p>
+        <p>
           We store the profile details, workouts, weights, personal records and
           notes you enter so you can keep a training history and synchronize it
           across your devices. Your journal is available to your signed-in

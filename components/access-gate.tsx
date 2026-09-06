@@ -16,6 +16,8 @@ export type AuthOptions = {
   google: boolean;
   localPassword: boolean;
   configured: boolean;
+  canInvite?: boolean;
+  signinFailed?: boolean;
 };
 export type PrivateSessionProps = {
   identity: Identity;
@@ -46,6 +48,11 @@ function Landing({
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const signInError =
+    error ||
+    (auth.signinFailed
+      ? "Could not sign in. Use the Google account the owner invited, or ask the owner for access."
+      : "");
   const signIn = async (path: string, body: unknown) => {
     setBusy(true);
     setError("");
@@ -115,6 +122,7 @@ function Landing({
                   void signIn("sign-in/social", {
                     provider: "google",
                     callbackURL: location.origin + "/" + location.hash,
+                    errorCallbackURL: location.origin + "/?signin=failed",
                   })
                 }
               >
@@ -163,9 +171,9 @@ function Landing({
                 <Button disabled={busy}>Sign in</Button>
               </form>
             )}
-            {error && (
+            {signInError && (
               <p className="error-text" role="alert">
-                {error}
+                {signInError}
               </p>
             )}
             <p className="landing-assurance">
@@ -255,6 +263,9 @@ export function AccessGate() {
           google: Boolean(session.google),
           localPassword: Boolean(session.localPassword),
           configured: Boolean(session.configured),
+          canInvite: Boolean(session.canInvite),
+          signinFailed:
+            new URLSearchParams(location.search).get("signin") === "failed",
         });
         if (!session.user) {
           lock();

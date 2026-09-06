@@ -1,5 +1,6 @@
+import { userAllowed } from "@/lib/access";
 import { z } from "zod";
-import { getAuth, pilotEmailAllowed } from "../auth";
+import { getAuth } from "../auth";
 import { RevisionConflict, MissingMealPhoto } from "../server";
 import { ProviderError } from "./provider";
 export class ApiError extends Error {
@@ -18,7 +19,7 @@ export async function requireAthlete(request: Request, mutation = false) {
   }
   const user = (await getAuth().api.getSession({ headers: request.headers }))
     ?.user;
-  if (!user || !pilotEmailAllowed(user.email))
+  if (!user || !(await userAllowed(user)))
     throw new ApiError("Sign in to use your personal journal.", 401);
   if (request.headers.get("x-journal-account") !== user.id)
     throw new ApiError("Your account changed. Reload before continuing.", 401);

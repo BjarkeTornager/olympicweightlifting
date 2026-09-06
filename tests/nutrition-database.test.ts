@@ -19,6 +19,7 @@ test(
     });
     process.env.BETTER_AUTH_SECRET ??= "test-only-secret-".repeat(4);
     const emails = [0, 1].map(() => `food-${crypto.randomUUID()}@example.test`);
+    delete process.env.OWNER_EMAIL;
     process.env.ALLOWED_EMAILS = emails.join(",");
     const { getAuth } = await import("../lib/auth"),
       { getPool } = await import("../lib/db");

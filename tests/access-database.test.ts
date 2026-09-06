@@ -24,6 +24,7 @@ test(
     const emails = [0, 1].map(
       () => `access-${crypto.randomUUID()}@example.test`,
     );
+    delete process.env.OWNER_EMAIL;
     process.env.ALLOWED_EMAILS = emails.join(",");
     const { getAuth } = await import("../lib/auth");
     const { getDb, getPool } = await import("../lib/db");

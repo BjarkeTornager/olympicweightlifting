@@ -1,5 +1,6 @@
+import { userAllowed } from "@/lib/access";
 import { z } from "zod";
-import { getAuth, pilotEmailAllowed } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { journalSchema } from "@/lib/model";
 import {
   readJournal,
@@ -20,7 +21,7 @@ const schema = z.object({
 async function identity(request: Request) {
   const user = (await getAuth().api.getSession({ headers: request.headers }))
     ?.user;
-  return user && pilotEmailAllowed(user.email) ? user : undefined;
+  return user && (await userAllowed(user)) ? user : undefined;
 }
 export async function GET(request: Request) {
   try {

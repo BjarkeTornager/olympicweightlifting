@@ -9,6 +9,7 @@ const paths = [
   "/api/auth/get-session",
   "/api/auth/list-sessions",
   "/api/auth/list-users",
+  "/api/invitations",
   "/api/journal",
   "/api/agent",
   "/api/images",
@@ -47,6 +48,7 @@ for (const path of paths) {
   );
   if (
     [
+      "/api/invitations",
       "/api/journal",
       "/api/agent",
       "/api/images",
@@ -72,6 +74,7 @@ for (const path of paths) {
   if (
     [
       "/api/session",
+      "/api/invitations",
       "/api/journal",
       "/api/agent",
       "/api/images",
@@ -123,4 +126,29 @@ for (const origin of [new URL(base).origin, "https://untrusted.example"]) {
       status: response.status,
     }),
   );
+}
+// Invitation changes must fail before parsing a body or touching membership.
+for (const method of ["POST", "DELETE"]) {
+  for (const origin of [new URL(base).origin, "https://untrusted.example"]) {
+    const r = await fetch(`${base}/api/invitations`, {
+      method,
+      headers: {
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Journal-Account": "unauthenticated-audit",
+      },
+      body: "{}",
+    });
+    assert.equal(r.status, origin === new URL(base).origin ? 401 : 403);
+    assert.match(r.headers.get("cache-control") ?? "", /no-store/);
+    assert.equal(r.headers.get("access-control-allow-origin"), null);
+    console.log(
+      JSON.stringify({
+        path: "/api/invitations",
+        method,
+        trustedOrigin: origin === new URL(base).origin,
+        status: r.status,
+      }),
+    );
+  }
 }

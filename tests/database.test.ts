@@ -14,6 +14,7 @@ test(
       `qa-a-${suffix}@example.test`,
       `qa-b-${suffix}@example.test`,
     ];
+    delete process.env.OWNER_EMAIL;
     process.env.ALLOWED_EMAILS = emails.join(",");
     process.env.BETTER_AUTH_SECRET ??= "test-only-secret-".repeat(4);
     process.env.BETTER_AUTH_URL = "http://localhost:3000";

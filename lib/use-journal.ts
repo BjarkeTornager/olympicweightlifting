@@ -20,7 +20,12 @@ export type SyncStatus =
   | "error";
 export function useJournal(
   identity: Identity,
-  auth: { google: boolean; localPassword: boolean; configured: boolean },
+  auth: {
+    google: boolean;
+    localPassword: boolean;
+    configured: boolean;
+    canInvite?: boolean;
+  },
   onSessionInvalid: () => void,
 ) {
   const [record, setRecord] = useState<LocalRecord | null>(null),

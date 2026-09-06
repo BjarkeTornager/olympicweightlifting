@@ -1,4 +1,5 @@
 "use client";
+import { Invitations } from "../invitations";
 import { privateFetch } from "@/lib/private-fetch";
 import { useState } from "react";
 import {
@@ -646,6 +647,7 @@ export function SettingsView({
         </div>
       </div>
       <div className="settings-grid">
+        {journal.auth.canInvite && <Invitations accountId={identity.id} />}
         <section className="panel">
           <h2>Your account</h2>
           <p>
@@ -959,8 +961,8 @@ function DeviceSettings({
   return (
     <div className="device-settings">
       <p className="fine-print">
-        Normal sign-out keeps an offline copy on this browser. Use the option
-        below on a shared device.
+        Sign-out clears the confirmed copy after syncing. Unsynced edits stay
+        locked until you sign in again.
       </p>
       <div className="button-row">
         <Button

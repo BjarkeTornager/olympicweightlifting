@@ -53,6 +53,27 @@ export const foodPhotos = pgTable(
     index("images_user_category_idx").on(t.userId, t.category),
   ],
 );
+export const journalInvitations = pgTable(
+  "journal_invitations",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull().unique(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      "invitation_email_normalized",
+      sql`${t.email} = lower(btrim(${t.email})) AND length(${t.email}) <= 254`,
+    ),
+  ],
+);
+
 export const user = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

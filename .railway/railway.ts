@@ -16,6 +16,7 @@ export default defineRailway(() => {
     // Values are provisioned directly in Railway, never stored in this repo.
     env: {
       ALLOWED_EMAILS: preserve(),
+      OWNER_EMAIL: preserve(),
       BETTER_AUTH_SECRET: preserve(),
       BETTER_AUTH_URL: preserve(),
       DATABASE_URL: preserve(),

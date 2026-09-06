@@ -1,4 +1,5 @@
-import { getAuth, pilotEmailAllowed } from "@/lib/auth";
+import { userAllowed } from "@/lib/access";
+import { getAuth } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const origin = new URL(process.env.BETTER_AUTH_URL ?? request.url).origin;
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const user = (await getAuth().api.getSession({ headers: request.headers }))
       ?.user;
-    if (!user || !pilotEmailAllowed(user.email))
+    if (!user || !(await userAllowed(user)))
       return Response.json({ error: "Sign in again." }, { status: 401 });
     if (request.headers.get("x-journal-account") !== user.id)
       return Response.json(

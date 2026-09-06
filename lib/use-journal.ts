@@ -1,14 +1,13 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  cachedIdentity,
-  cacheIdentity,
   changeLocal,
   getLocal,
-  removeLocal,
+  removeConfirmedLocal,
   type LocalRecord,
 } from "./local";
 import type { Identity, JournalState, Snapshot } from "./model";
+import { privateFetch } from "./private-fetch";
 export type SyncStatus =
   | "loading"
   | "local"
@@ -19,17 +18,15 @@ export type SyncStatus =
   | "conflict"
   | "signin"
   | "error";
-export function useJournal() {
+export function useJournal(
+  identity: Identity,
+  auth: { google: boolean; localPassword: boolean; configured: boolean },
+  onSessionInvalid: () => void,
+) {
   const [record, setRecord] = useState<LocalRecord | null>(null),
-    [identity, setIdentity] = useState<Identity | null>(null),
     [status, setStatus] = useState<SyncStatus>("loading"),
     [error, setError] = useState("");
-  const [auth, setAuth] = useState({
-    google: false,
-    localPassword: false,
-    configured: false,
-  });
-  const account = useRef("guest"),
+  const account = useRef(identity.id),
     channel = useRef<BroadcastChannel | null>(null),
     syncing = useRef(false),
     retry = useRef<ReturnType<typeof setTimeout> | null>(null),
@@ -58,13 +55,13 @@ export function useJournal() {
       }
       setStatus("syncing");
       if (!local.dirty) {
-        const response = await fetch("/api/journal", {
+        const response = await privateFetch("/api/journal", {
           headers: { "X-Journal-Account": accountId },
           cache: "no-store",
           signal: AbortSignal.timeout(10000),
         });
         if (response.status === 401) {
-          setStatus("signin");
+          onSessionInvalid();
           return;
         }
         if (!response.ok) throw Error("Sync is temporarily unavailable.");
@@ -101,7 +98,7 @@ export function useJournal() {
         },
       }));
       const pending = local.pending!;
-      const response = await fetch("/api/journal", {
+      const response = await privateFetch("/api/journal", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -111,7 +108,7 @@ export function useJournal() {
         signal: AbortSignal.timeout(10000),
       });
       if (response.status === 401) {
-        setStatus("signin");
+        onSessionInvalid();
         return;
       }
       const server = await response.json();
@@ -172,7 +169,7 @@ export function useJournal() {
     } finally {
       syncing.current = false;
     }
-  }, [publish]);
+  }, [publish, onSessionInvalid]);
   useEffect(() => {
     alive.current = true;
     channel.current = new BroadcastChannel("lift-journal-sync");
@@ -181,52 +178,30 @@ export function useJournal() {
         event.data?.type === "signed-out" &&
         event.data.accountId === account.current
       ) {
-        cacheIdentity(null);
-        account.current = "guest";
-        setIdentity(null);
-        setRecord(await getLocal("guest"));
-        setStatus("local");
+        onSessionInvalid();
         return;
       }
-      if (event.data === account.current)
-        setRecord(await getLocal(account.current));
+      if (event.data === account.current) {
+        const value = await getLocal(account.current);
+        if (alive.current && value.accountId === account.current)
+          setRecord(value);
+      }
     };
-    const init = async () => {
-      let user = cachedIdentity();
-      let authenticated = false;
-      account.current = user?.id ?? "guest";
-      setIdentity(user);
-      publish(await getLocal(account.current));
-      setStatus(user ? "saved" : "local");
-      try {
-        const response = await fetch("/api/session", {
-          cache: "no-store",
-          signal: AbortSignal.timeout(8000),
-        });
-        if (response.ok) {
-          const session = await response.json();
-          setAuth(session);
-          if (session.user) {
-            user = session.user;
-            cacheIdentity(user);
-            authenticated = true;
-          } else if (!user) cacheIdentity(null);
-        }
-      } catch {}
-      if (!alive.current) return;
-      account.current = user?.id ?? "guest";
-      setIdentity(user);
-      const local = await getLocal(account.current);
-      publish(local);
-      setStatus(user ? (authenticated ? "saved" : "signin") : "local");
-      if (authenticated) void sync();
-    };
-    void init().catch(() => {
-      setError(
-        "Device storage is unavailable. Enable website storage before logging workouts.",
-      );
-      setStatus("error");
-    });
+    // AccessGate verifies the server session before this hook is mounted.
+    // A stored identity or offline copy can never grant access to the app.
+    void getLocal(account.current)
+      .then((local) => {
+        if (!alive.current) return;
+        publish(local);
+        setStatus("saved");
+        void sync();
+      })
+      .catch(() => {
+        setError(
+          "Device storage is unavailable. Enable website storage before logging workouts.",
+        );
+        setStatus("error");
+      });
     const refresh = () => {
       if (document.visibilityState === "visible") void sync();
     };
@@ -236,8 +211,14 @@ export function useJournal() {
     window.addEventListener("offline", offline);
     document.addEventListener("visibilitychange", refresh);
     const interval = setInterval(() => void sync(), 15000);
+    const mountedAccount = account.current;
     return () => {
       alive.current = false;
+      void removeConfirmedLocal(mountedAccount).catch(() => {});
+      try {
+        localStorage.removeItem(`lift-agent:${mountedAccount}`);
+        localStorage.removeItem("lift-cloud:identity");
+      } catch {}
       channel.current?.close();
       clearInterval(interval);
       if (retry.current) clearTimeout(retry.current);
@@ -245,7 +226,7 @@ export function useJournal() {
       window.removeEventListener("offline", offline);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [sync, publish]);
+  }, [sync, publish, onSessionInvalid]);
   const update = useCallback(
     async (fn: (state: JournalState) => JournalState | void) => {
       try {
@@ -301,7 +282,7 @@ export function useJournal() {
     );
     await sync();
   };
-  const signOut = async (clearDevice = false) => {
+  const signOut = async () => {
     const accountId = account.current;
     const work = async () => {
       const current = await getLocal(accountId);
@@ -315,17 +296,14 @@ export function useJournal() {
         body: "{}",
       });
       if (!response.ok) throw Error("Sign-out failed. Try again when online.");
-      if (clearDevice) {
-        await removeLocal(accountId);
-        localStorage.removeItem(`lift-agent:${accountId}`);
-        localStorage.removeItem(`lift-rest:${accountId}`);
-      }
+      // Always lock the app immediately after server sign-out. Confirmed data
+      // can be recovered from the account; do not leave it on a shared browser.
       channel.current?.postMessage({ type: "signed-out", accountId });
-      cacheIdentity(null);
-      account.current = "guest";
-      setIdentity(null);
-      publish(await getLocal("guest"));
-      setStatus("local");
+      onSessionInvalid();
+      await removeConfirmedLocal(accountId);
+      localStorage.removeItem("lift-cloud:identity");
+      localStorage.removeItem(`lift-agent:${accountId}`);
+      localStorage.removeItem(`lift-rest:${accountId}`);
     };
     if (navigator.locks)
       await navigator.locks.request(`lift-sync:${accountId}`, work);

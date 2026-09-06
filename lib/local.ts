@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { emptyJournal } from "./domain";
-import type { Identity, JournalState, Snapshot } from "./model";
+import type { JournalState, Snapshot } from "./model";
 import { nutritionSchema } from "./nutrition";
 import { healthSchema } from "./health";
 export type LocalRecord = Snapshot & {
@@ -79,17 +79,16 @@ export async function changeLocal(
   await tx.done;
   return result;
 }
-export function cachedIdentity(): Identity | null {
-  try {
-    return JSON.parse(localStorage.getItem("lift-cloud:identity") ?? "null");
-  } catch {
-    return null;
-  }
-}
-export function cacheIdentity(value: Identity | null) {
-  if (value) localStorage.setItem("lift-cloud:identity", JSON.stringify(value));
-  else localStorage.removeItem("lift-cloud:identity");
-}
 export async function removeLocal(accountId: string) {
   await (await database()).delete("journals", accountId);
+}
+
+export async function removeConfirmedLocal(accountId: string) {
+  const db = await database();
+  const tx = db.transaction("journals", "readwrite");
+  const current = await tx.store.get(accountId);
+  // Never discard an unsynced edit during expiry or a concurrent sign-out.
+  if (current && !current.dirty && !current.pending)
+    await tx.store.delete(accountId);
+  await tx.done;
 }

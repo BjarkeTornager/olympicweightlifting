@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { createServer, request } from "node:http";
 import { emptyJournal, createWorkout, days, backup } from "../../lib/domain";
@@ -52,6 +52,8 @@ test("all main screens fit mobile and desktop", async ({ page }) => {
       "data",
     ]) {
       await page.goto("/#" + route);
+      await expect(page.locator(".private-shell")).toBeVisible();
+      await expect(page.locator(".private-shell")).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(
         "Opening your journal…",
       );
@@ -102,66 +104,122 @@ test("backup preview imports an active draft without duplicate records", async (
     page.getByText("Snatch + Back Squat is in progress.", { exact: false }),
   ).toBeVisible();
 });
-test("offline reload keeps recorded sets and the programme library", async ({
-  page,
-}) => {
-  // Stop a real HTTP origin: WebKit's setOffline emulation can fail internally
-  // before dispatching the navigation to its service worker.
-  const proxy = createServer((incoming, outgoing) => {
-    const upstream = request(
-      `http://127.0.0.1:34173${incoming.url}`,
-      {
-        method: incoming.method,
-        headers: incoming.headers,
-      },
-      (response) => {
-        outgoing.writeHead(response.statusCode ?? 502, response.headers);
-        response.pipe(outgoing);
-      },
-    );
-    upstream.on("error", () => {
-      outgoing.writeHead(502);
-      outgoing.end();
-    });
-    incoming.pipe(upstream);
-  });
-  await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
-  const address = proxy.address();
-  if (!address || typeof address === "string")
-    throw Error("Missing test origin");
-  const origin = `http://127.0.0.1:${address.port}`;
-  try {
-    await page.goto(`${origin}/#workout/monday`);
-    await page.getByRole("button", { name: "Start this programme" }).click();
-    await page.getByLabel("Set 1 made", { exact: true }).click();
-    await page.evaluate(async () => {
-      await navigator.serviceWorker.ready;
-      if (!navigator.serviceWorker.controller)
-        await new Promise<void>((resolve) =>
-          navigator.serviceWorker.addEventListener(
-            "controllerchange",
-            () => resolve(),
-            { once: true },
-          ),
+test.describe("authenticated offline shell", () => {
+  test.use({ mockSession: false, serviceWorkers: "allow" });
+  test("offline reload locks the journal and keeps edits for verified reconnection", async ({
+    page,
+  }) => {
+    // Stop a real HTTP origin: WebKit's setOffline emulation can fail internally
+    // before dispatching the navigation to its service worker.
+    let serverState = emptyJournal(),
+      revision = 0;
+    const proxy = createServer(async (incoming, outgoing) => {
+      if (incoming.url === "/api/session") {
+        outgoing.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        });
+        outgoing.end(
+          JSON.stringify({
+            user: {
+              id: "browser-test-account",
+              name: "Synthetic athlete",
+              email: "browser@example.test",
+            },
+            google: true,
+            configured: true,
+            localPassword: false,
+          }),
         );
+        return;
+      }
+      if (incoming.url === "/api/journal") {
+        if (incoming.method === "PUT") {
+          const chunks = [];
+          for await (const chunk of incoming) chunks.push(chunk);
+          serverState = JSON.parse(Buffer.concat(chunks).toString()).state;
+          revision++;
+        }
+        outgoing.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        });
+        outgoing.end(
+          JSON.stringify({
+            accountId: "browser-test-account",
+            state: serverState,
+            revision,
+          }),
+        );
+        return;
+      }
+      const upstream = request(
+        `http://127.0.0.1:34173${incoming.url}`,
+        {
+          method: incoming.method,
+          headers: incoming.headers,
+        },
+        (response) => {
+          outgoing.writeHead(response.statusCode ?? 502, response.headers);
+          response.pipe(outgoing);
+        },
+      );
+      upstream.on("error", () => {
+        outgoing.writeHead(502);
+        outgoing.end();
+      });
+      incoming.pipe(upstream);
     });
-    await expect(
-      page.getByRole("button", { name: "Reload update" }),
-    ).toHaveCount(0);
-    proxy.closeAllConnections();
-    await new Promise<void>((resolve) => proxy.close(() => resolve()));
-    await page.reload();
-    await expect(
-      page.getByLabel("Set 1 made", { exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
-    await page.goto(`${origin}/#library`);
-    await expect(
-      page.getByRole("heading", { name: "Your technique library." }),
-    ).toBeVisible();
-  } finally {
-    proxy.closeAllConnections();
-    proxy.close();
-  }
+    await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+    const address = proxy.address();
+    if (!address || typeof address === "string")
+      throw Error("Missing test origin");
+    const origin = `http://127.0.0.1:${address.port}`;
+    try {
+      await page.goto(`${origin}/#workout/monday`);
+      await page.getByRole("button", { name: "Start this programme" }).click();
+      await page.getByLabel("Set 1 weight in kilograms", { exact: true }).fill("45");
+      await page.getByLabel("Set 1 made", { exact: true }).click();
+      await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute("aria-pressed", "true");
+      await page.evaluate(async () => {
+        await navigator.serviceWorker.ready;
+        if (!navigator.serviceWorker.controller)
+          await new Promise<void>((resolve) =>
+            navigator.serviceWorker.addEventListener(
+              "controllerchange",
+              () => resolve(),
+              { once: true },
+            ),
+          );
+      });
+      await expect(
+        page.getByRole("button", { name: "Reload update" }),
+      ).toHaveCount(0);
+      proxy.closeAllConnections();
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+      await page.reload();
+      await expect(page.locator(".public-landing")).toBeVisible();
+      await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveCount(
+        0,
+      );
+      await page.goto(`${origin}/#library`);
+      await expect(page.locator(".public-landing")).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Your technique library." }),
+      ).toHaveCount(0);
+      await new Promise<void>((resolve) =>
+        proxy.listen(address.port, "127.0.0.1", resolve),
+      );
+      await page.goto(`${origin}/#workout`);
+      await page.getByRole("button", { name: "Check connection" }).click();
+      await expect(
+        page.getByLabel("Set 1 made", { exact: true }),
+      ).toHaveAttribute("aria-pressed", "true");
+    } finally {
+      proxy.closeAllConnections();
+      proxy.close();
+    }
+  });
 });
 
 test("sync client retries an interrupted acknowledgement and protects conflicting device edits", async ({
@@ -305,6 +363,7 @@ test("key screens have no WCAG A/AA violations and the skip link keeps the route
     "history",
   ]) {
     await page.goto("/#" + route);
+    await expect(page.locator(".private-shell")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(
       "Opening your journal…",
     );

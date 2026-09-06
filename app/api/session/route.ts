@@ -26,6 +26,10 @@ export async function GET(request: Request) {
               email: session.user.email,
             }
           : null,
+      expiresAt:
+        session && pilotEmailAllowed(session.user.email)
+          ? session.session.expiresAt.toISOString()
+          : null,
       google: googleEnabled(),
       localPassword: localPasswordEnabled(),
       configured: true,

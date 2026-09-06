@@ -1,3 +1,4 @@
+import { privateFetch } from "@/lib/private-fetch";
 import type { UserImage } from "./images";
 export async function uploadUserImage(
   file: File,
@@ -31,7 +32,7 @@ export async function uploadUserImage(
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const imageData = canvas.toDataURL("image/jpeg", 0.82).split(",")[1];
-    const response = await fetch("/api/images", {
+    const response = await privateFetch("/api/images", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -30,10 +30,7 @@ export async function GET(request: Request) {
         { error: "Sign in to sync your journal." },
         { status: 401 },
       );
-    if (
-      request.headers.has("x-journal-account") &&
-      request.headers.get("x-journal-account") !== user.id
-    )
+    if (request.headers.get("x-journal-account") !== user.id)
       return Response.json(
         { error: "The signed-in account changed. Reload before syncing." },
         { status: 401 },
@@ -78,10 +75,7 @@ export async function PUT(request: Request) {
         { error: "Sign in again to sync." },
         { status: 401 },
       );
-    if (
-      request.headers.has("x-journal-account") &&
-      request.headers.get("x-journal-account") !== user.id
-    )
+    if (request.headers.get("x-journal-account") !== user.id)
       return Response.json(
         { error: "The signed-in account changed. Reload before syncing." },
         { status: 401 },

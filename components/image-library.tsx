@@ -1,4 +1,5 @@
 "use client";
+import { privateFetch } from "@/lib/private-fetch";
 import { useEffect, useState } from "react";
 import { Camera, Images, RefreshCw } from "lucide-react";
 import { today } from "@/lib/domain";
@@ -65,7 +66,7 @@ export function ImageLibrary({
   useEffect(() => {
     if (!accountId) return;
     const abort = new AbortController();
-    fetch(`/api/images${scope === "food" ? "?category=food" : ""}`, {
+    privateFetch(`/api/images${scope === "food" ? "?category=food" : ""}`, {
       headers: { "X-Journal-Account": accountId },
       cache: "no-store",
       signal: abort.signal,
@@ -89,7 +90,7 @@ export function ImageLibrary({
     body?: unknown,
     suffix = "",
   ) => {
-    const response = await fetch(`/api/images/${id}${suffix}`, {
+    const response = await privateFetch(`/api/images/${id}${suffix}`, {
       method,
       headers: {
         "Content-Type": "application/json",

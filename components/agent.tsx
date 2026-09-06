@@ -1,4 +1,5 @@
 "use client";
+import { privateFetch } from "@/lib/private-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -113,11 +114,14 @@ export function TrainingAgent({
   useEffect(() => {
     if (!initialPhotoId || !accountId) return;
     const abort = new AbortController();
-    fetch(`/api/images/${encodeURIComponent(initialPhotoId)}?metadata=1`, {
-      headers: { "X-Journal-Account": accountId },
-      cache: "no-store",
-      signal: abort.signal,
-    })
+    privateFetch(
+      `/api/images/${encodeURIComponent(initialPhotoId)}?metadata=1`,
+      {
+        headers: { "X-Journal-Account": accountId },
+        cache: "no-store",
+        signal: abort.signal,
+      },
+    )
       .then(async (r) => {
         const image: UserImage & { error?: string } = await r.json();
         if (!r.ok) throw Error(image.error ?? "Image unavailable.");
@@ -144,7 +148,7 @@ export function TrainingAgent({
   );
   const refresh = useCallback(async () => {
     if (!accountId) return;
-    const r = await fetch("/api/agent", {
+    const r = await privateFetch("/api/agent", {
       headers: headers(),
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
@@ -157,7 +161,7 @@ export function TrainingAgent({
   useEffect(() => {
     if (!accountId) return;
     const controller = new AbortController();
-    fetch("/api/agent", {
+    privateFetch("/api/agent", {
       headers: headers(),
       cache: "no-store",
       signal: controller.signal,
@@ -235,7 +239,7 @@ export function TrainingAgent({
     setToolsOpen(false);
     input.current?.blur();
     try {
-      const r = await fetch("/api/agent", {
+      const r = await privateFetch("/api/agent", {
         method: "POST",
         headers: headers(),
         body: JSON.stringify({
@@ -281,7 +285,7 @@ export function TrainingAgent({
     setError("");
     setNotice("");
     try {
-      const r = await fetch("/api/agent/action", {
+      const r = await privateFetch("/api/agent/action", {
         method: "POST",
         headers: headers(),
         body: JSON.stringify({ id: p.id, undo }),
@@ -973,7 +977,7 @@ export function TrainingAgent({
           variant="danger"
           onClick={async () => {
             try {
-              const r = await fetch("/api/agent", {
+              const r = await privateFetch("/api/agent", {
                 method: "DELETE",
                 headers: headers(),
               });

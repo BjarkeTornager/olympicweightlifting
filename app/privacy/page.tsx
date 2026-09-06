@@ -43,13 +43,14 @@ export default function PrivacyPage() {
           policy.
         </p>
         <p>
-          Your browser also keeps a local copy for offline training. Signing out
-          hides this copy in the app but does not erase it from the device. Use
-          “Sign out & clear this device” in Settings to remove this browser’s
-          account copy after syncing. Revoking other sessions does not erase
-          their offline copies. Export anything you want to keep before clearing
-          the website&apos;s browser data. Guest training stays on the device
-          until you explicitly bring it into a signed-in account.
+          Your browser keeps a device copy to protect edits until they sync. The
+          app requires an online session check before opening your profile or
+          records; a cached identity cannot unlock the journal. Signing out or
+          losing authorization clears confirmed account copies from this
+          browser. Unsynced edits are retained for recovery after the owner
+          signs in again. Revoking a session cannot remotely erase a
+          disconnected device or an exported backup. Clear this website’s
+          browser data on shared devices after saving anything you need to keep.
         </p>
       </section>
       <section className="space-y-3">
@@ -94,8 +95,8 @@ export default function PrivacyPage() {
         <p>
           Meals, portions, nutrition estimates and diet targets are saved to
           your account alongside your training, and included in journal backups.
-          The browser keeps these records for offline use. The assistant can
-          read your own logged nutrition when answering food questions.
+          The browser keeps a device copy behind the sign-in gate. The assistant
+          can read your own logged nutrition when answering food questions.
         </p>
         <p>
           Uploaded food, sleep, activity and other images are stored privately
@@ -129,8 +130,8 @@ export default function PrivacyPage() {
           You can choose to record sleep, energy, muscle soreness, water,
           bodyweight and personal notes. These are sensitive, self-reported
           health details. They are stored in your account journal, kept in your
-          browser’s offline copy and included in journal backups. You can edit
-          or delete them in Health history.
+          browser’s device copy and included in journal backups. You can edit or
+          delete them in Health history.
         </p>
         <p>
           When you ask Coach for a daily plan or health guidance, relevant

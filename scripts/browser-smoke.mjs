@@ -9,7 +9,7 @@ const downloadDirectory = await mkdtemp(output + "/downloads-");
 // Serve actual production files under a repository path, on an isolated port.
 // Stopping this server proves offline reloads cannot fall back to the network.
 const shellFiles = ["index.html", "styles.css", "sw.js", "manifest.webmanifest",
-  "js/app.js", "js/data.js", "js/storage.js", "js/progression.js", "assets/icon.svg",
+  "js/app.js", "js/data.js", "js/public-data.js", "js/storage.js", "js/progression.js", "assets/icon.svg",
   "assets/icon-192.png", "assets/icon-512.png", "assets/icon-maskable-512.png",
   "assets/apple-touch-icon.png", "refresh.html", "js/updates.js", "js/refresh.js"];
 const files = new Map(await Promise.all(shellFiles.map(async path => [path, await readFile(new URL("../" + path, import.meta.url))])));
@@ -628,7 +628,9 @@ try {
   await capture("accessories-direct-start-390");
   await tap('.program-page [data-action="start-day"][data-day-id="gym_accessories"]');
   const newGymDraft = (await saved()).activeWorkout;
-  assert.equal(newGymDraft.date, "2026-09-05");
+  // The direct programme button explicitly starts today, regardless of the
+  // date previously selected on the training picker.
+  assert.equal(newGymDraft.date, await evaluate("(() => {const date=new Date();return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');})()"));
   assert.equal(newGymDraft.title, "Gym Accessories");
   assert.equal(newGymDraft.exercises.length, 5);
   assert.equal(newGymDraft.exercises[0].sets[0].weight, "");
@@ -662,7 +664,7 @@ try {
   await until("location.hash === '#history'");
   const loggedGym = (await saved()).sessions.at(-1);
   assert.equal(loggedGym.programDayId, "gym_accessories");
-  assert.equal(loggedGym.date, "2026-09-05");
+  assert.equal(loggedGym.date, newGymDraft.date);
   assert.ok(loggedGym.exercises.every(entry => entry.completed && entry.sets.length === 3));
   assert.deepEqual((await saved()).sessions.slice(0, -1), beforeAccessories);
   await route("#workout", "#workout-title");

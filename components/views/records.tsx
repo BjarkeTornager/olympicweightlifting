@@ -1,4 +1,5 @@
 "use client";
+import { privateFetch } from "@/lib/private-fetch";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -22,7 +23,6 @@ import {
   PR_DEFINITIONS,
   today,
 } from "@/lib/domain";
-import { getLocal } from "@/lib/local";
 import { isValidLoggedSet } from "@/js/progression.js";
 import type { JournalState, Workout } from "@/lib/model";
 import type { JournalController } from "../journal";
@@ -476,9 +476,6 @@ export function ProgressView({ state, update, notify }: Props) {
               {state.prs[p.exerciseId] || "—"}
               <small> kg</small>
             </strong>
-            {p.target && (
-              <span className="muted">Next target: {p.target} kg</span>
-            )}
           </div>
         ))}
       </div>
@@ -843,14 +840,6 @@ export function SettingsView({
               }}
             />
           </label>
-          {identity && (
-            <Button
-              variant="ghost"
-              onClick={async () => prepare((await getLocal("guest")).state)}
-            >
-              Import this device’s unsigned journal
-            </Button>
-          )}
           {importError && (
             <p className="error-text" role="alert">
               {importError}
@@ -858,11 +847,11 @@ export function SettingsView({
           )}
         </section>
         <section className="panel">
-          <h2>App & offline access</h2>
+          <h2>App & device storage</h2>
           <p className="muted">
             On iPhone, open this site in Safari and choose Share → Add to Home
-            Screen. Open it online once before training offline. Technique
-            videos need an internet connection.
+            Screen. An online session check is required to open your journal.
+            Device storage keeps pending edits safe until they sync.
           </p>
           <Button
             variant="secondary"
@@ -980,7 +969,7 @@ function DeviceSettings({
           onClick={async () => {
             setBusy(true);
             try {
-              const r = await fetch("/api/devices/revoke", {
+              const r = await privateFetch("/api/devices/revoke", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -993,7 +982,7 @@ function DeviceSettings({
                   "Could not sign out other devices. Try again online.",
                 );
               notify(
-                "Other cloud sessions signed out. Offline copies on those devices remain until cleared there.",
+                "Other sessions signed out. Those devices must sign in again to open the journal.",
               );
             } catch (e) {
               notify(
@@ -1022,7 +1011,7 @@ function DeviceSettings({
           onClick={async () => {
             setBusy(true);
             try {
-              await journal.signOut(true);
+              await journal.signOut();
               setClear(false);
             } catch (e) {
               notify(e instanceof Error ? e.message : "Sign-out failed.");

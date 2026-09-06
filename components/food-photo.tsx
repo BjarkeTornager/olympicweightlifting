@@ -1,4 +1,5 @@
 "use client";
+import { privateFetch } from "@/lib/private-fetch";
 import { useEffect, useState } from "react";
 export function FoodPhotoImage({
   id,
@@ -16,7 +17,7 @@ export function FoodPhotoImage({
   useEffect(() => {
     const controller = new AbortController();
     let objectUrl = "";
-    fetch(`/api/images/${encodeURIComponent(id)}`, {
+    privateFetch(`/api/images/${encodeURIComponent(id)}`, {
       headers: { "X-Journal-Account": accountId },
       cache: "no-store",
       signal: controller.signal,

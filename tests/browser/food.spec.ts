@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import type { UserImage } from "../../lib/images";
 import { emptyJournal } from "../../lib/domain";
 import sharp from "sharp";
 import { createServer, request } from "node:http";
-test("manual food logging, extra ingredients, correction, targets and offline reload", async ({
+test("manual food logging, extra ingredients, correction, targets and locking on connection loss", async ({
   page,
   context,
 }) => {
@@ -66,7 +66,6 @@ test("manual food logging, extra ingredients, correction, targets and offline re
     await expect(page.locator(".food-totals")).toContainText("35");
     await page.reload();
     await expect(page.getByText("Lunch bowl", { exact: true })).toBeVisible();
-    await context.setOffline(true);
     await page.getByRole("button", { name: "Edit meal", exact: true }).click();
     await dialog
       .getByLabel("Calories (kcal)", { exact: true })
@@ -75,22 +74,6 @@ test("manual food logging, extra ingredients, correction, targets and offline re
     await dialog
       .getByRole("button", { name: "Save meal", exact: true })
       .click();
-    await expect(page.locator(".food-totals")).toContainText("295");
-    await context.setOffline(false);
-    await page.evaluate(async () => {
-      await navigator.serviceWorker.ready;
-      if (!navigator.serviceWorker.controller)
-        await new Promise<void>((resolve) =>
-          navigator.serviceWorker.addEventListener(
-            "controllerchange",
-            () => resolve(),
-            { once: true },
-          ),
-        );
-    });
-    proxy.closeAllConnections();
-    await new Promise<void>((resolve) => proxy.close(() => resolve()));
-    await page.reload();
     await expect(page.locator(".food-totals")).toContainText("295");
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -116,6 +99,9 @@ test("manual food logging, extra ingredients, correction, targets and offline re
       .getByRole("button", { name: "Delete meal", exact: true })
       .click();
     await expect(page.getByText("Lunch bowl", { exact: true })).toHaveCount(0);
+    await context.setOffline(true);
+    await expect(page.locator(".public-landing")).toBeVisible();
+    await expect(page.locator(".private-shell")).toBeHidden();
   } finally {
     proxy.closeAllConnections();
     proxy.close();
@@ -139,11 +125,11 @@ test("old device journals open Food without losing training data", async ({
       const legacy = { ...state, nutrition: undefined };
       legacy.profile.bodyweight = 88;
       store.put({
-        accountId: "guest",
+        accountId: "browser-test-account",
         state: legacy,
         revision: 0,
         seq: 0,
-        dirty: false,
+        dirty: true,
       });
       tx.oncomplete = () => resolve();
     });
@@ -162,7 +148,10 @@ test("old device journals open Food without losing training data", async ({
       r.onsuccess = () => resolve(r.result);
     });
     return new Promise<number>((resolve) => {
-      const r = db.transaction("journals").objectStore("journals").get("guest");
+      const r = db
+        .transaction("journals")
+        .objectStore("journals")
+        .get("browser-test-account");
       r.onsuccess = () => {
         resolve(r.result.state.profile.bodyweight);
         db.close();

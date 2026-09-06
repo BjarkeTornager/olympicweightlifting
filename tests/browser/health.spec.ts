@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
 import { saveCheckin, offsetDate } from "../../lib/health";

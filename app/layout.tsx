@@ -11,6 +11,7 @@ const inter = localFont({
 });
 export const metadata: Metadata = {
   title: "Lift Journal",
+  robots: { index: false, follow: false },
   description:
     "Your training, nutrition and recovery, connected with a personal daily coach.",
   manifest: "/manifest.webmanifest",

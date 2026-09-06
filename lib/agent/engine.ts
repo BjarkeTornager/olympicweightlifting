@@ -605,7 +605,7 @@ export async function applyProposal(userId: string, id: string, undo = false) {
             ),
           },
         })
-        .where(eq(agentTurns.id, turn.id));
+        .where(and(eq(agentTurns.id, turn.id), eq(agentTurns.userId, userId)));
     return { accountId: userId, ...result, status };
   });
 }

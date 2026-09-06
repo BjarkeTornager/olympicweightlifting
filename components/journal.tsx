@@ -20,6 +20,7 @@ import {
   Images,
 } from "lucide-react";
 import { useJournal } from "@/lib/use-journal";
+import type { PrivateSessionProps } from "./access-gate";
 import { backup, days, today, createWorkout } from "@/lib/domain";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -61,8 +62,12 @@ const labels = {
   signin: "Sign in to sync",
   error: "Storage unavailable",
 };
-export function Journal() {
-  const journal = useJournal();
+export function Journal(props: PrivateSessionProps) {
+  const journal = useJournal(
+    props.identity,
+    props.auth,
+    props.onSessionInvalid,
+  );
   const { state, identity, status, auth, error } = journal;
   const [route, setRoute] = useState("coach"),
     [login, setLogin] = useState(false),

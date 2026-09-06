@@ -1,10 +1,5 @@
 import { canonicalJson } from "./json";
-import {
-  APP_META,
-  EXERCISES,
-  PROGRAM_DEFINITION,
-  PR_DEFINITIONS,
-} from "../js/data.js";
+import { APP_META, EXERCISES, PROGRAM_DEFINITION } from "../js/public-data.js";
 import {
   planExercise,
   PROGRESSION_VERSION,
@@ -20,7 +15,19 @@ import {
   type Entry,
   type ProgramExercise,
 } from "./model";
-export { EXERCISES, PR_DEFINITIONS, APP_META };
+export { EXERCISES, APP_META };
+export const PR_DEFINITIONS = [
+  { exerciseId: "snatch", label: "Snatch" },
+  { exerciseId: "clean_and_jerk", label: "Clean & jerk" },
+  { exerciseId: "back_squat", label: "Back squat" },
+  { exerciseId: "front_squat", label: "Front squat" },
+  { exerciseId: "power_snatch", label: "Power snatch" },
+  { exerciseId: "power_clean", label: "Power clean" },
+  { exerciseId: "snatch_balance", label: "Snatch balance" },
+  { exerciseId: "push_press", label: "Push press" },
+  { exerciseId: "clean", label: "Clean" },
+  { exerciseId: "clean_pull", label: "Clean pull / deadlift" },
+] as const;
 export const program = PROGRAM_DEFINITION;
 export const days = PROGRAM_DEFINITION.days as ProgramDay[];
 export const today = () => {

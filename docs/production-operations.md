@@ -68,7 +68,7 @@ Replace `railway` with the actual database name. Run default-privilege commands 
 - Verify `/api/health` returns 200 and `/api/ready` returns 200. Verify an unauthenticated `/api/journal` request returns 401 and the response has `Cache-Control: private, no-store`.
 - Sign in through Google with an invited email. Confirm an uninvited account is rejected. Removing an email from `ALLOWED_EMAILS` and redeploying revokes journal API access, including existing sessions.
 - Import a disposable backup, log 47.5 kg, finish once, reload and confirm it on a second signed-in browser. Test another athlete account. Test conflicting offline edits and both recovery choices using disposable data.
-- On a physical iPhone, install the PWA, open it online once, then test airplane-mode cold start, number inputs with the keyboard visible, logging, app restart, reconnect and a version update. Desktop WebKit automation does not replace this.
+- On a physical iPhone, install the PWA, open it online once, then verify airplane-mode cold start stays at the public landing page. Test authenticated number inputs with the keyboard visible, logging, app restart, safe recovery of pending edits after reconnect, and a version update. Desktop WebKit automation does not replace this.
 - Measure first-use performance and local save latency with realistic history. Exercise a few thousand sessions before widening scope. The current snapshot API limits each upload to 5 MB.
 
 ## 4. Backups before importing real workouts
@@ -101,7 +101,7 @@ The pilot keeps mutation IDs indefinitely so very old retries cannot duplicate a
 
 ## Privacy and account removal
 
-Stored data includes account email/name, session metadata, training profile, PRs, notes and workouts. Technique media connects to YouTube only when opened. No analytics SDK is installed. Device caches retain the account's authorized offline copy; use a trusted device and export before clearing website data. Signing out hides the account from the ordinary interface but does not erase its offline record.
+Stored data includes account email/name, session metadata, training profile, PRs, notes, workouts, nutrition, sleep/check-ins, images and chat. Technique media connects to YouTube only when opened. No analytics SDK is installed. Every private screen requires an online session check. Sign-out or confirmed loss of authorization clears confirmed device copies; unsynced records remain for the owner to recover after signing in. IndexedDB is not encrypted by the application: use a trusted device and export before clearing website data. See [private access](private-access.md) for the checked boundaries and remaining device limitations.
 
 For this private pilot, the owner handles deletion requests: verify the requested account, offer export, remove its invitation, delete its `users` row through a parameterized administrative operation (dependent rows cascade), and explain when backups expire. Cloud deletion cannot erase offline copies on disconnected devices. Implement self-service deletion, a complete retention policy and published privacy terms before public registration. Coach access is not implemented.
 

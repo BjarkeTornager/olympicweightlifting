@@ -50,8 +50,11 @@ test(
         .getSetCookie()
         .map((value) => value.split(";")[0])
         .join("; ");
+    let currentAccount = "";
     const request = (cookie: string) =>
-      new Request("http://localhost:3000/api/session", { headers: { cookie } });
+      new Request("http://localhost:3000/api/session", {
+        headers: { cookie, "X-Journal-Account": currentAccount },
+      });
 
     try {
       const rejected = await post("sign-up/email", {
@@ -76,6 +79,7 @@ test(
       });
       assert.equal(signup.status, 200);
       const userId = (await signup.json()).user.id;
+      currentAccount = userId;
       const createdCookie = cookieFrom(signup);
       assert.match(signup.headers.get("set-cookie")!, /HttpOnly/i);
       assert.match(signup.headers.get("set-cookie")!, /SameSite=Lax/i);

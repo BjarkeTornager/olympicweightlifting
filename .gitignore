@@ -10,7 +10,8 @@ node_modules/
 !.env.example
 *.tsbuildinfo
 playwright-report/
-.railway/
+.railway/*
+!.railway/railway.ts
 public/offline.html
 public/sw.js
 .deployment/

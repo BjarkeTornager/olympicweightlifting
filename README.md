@@ -1,8 +1,8 @@
 # Lift Journal
 
-An Olympic weightlifting journal with a Next.js/React interface, PostgreSQL persistence, personal accounts and offline workout logging. The new application lives alongside the original GitHub Pages PWA while the Railway pilot is prepared.
+An Olympic weightlifting journal with a Next.js/React interface, PostgreSQL persistence, personal accounts and offline workout logging. The new application runs on Railway alongside the original GitHub Pages PWA.
 
-**Status:** implementation is available on `codex/railway-next-app`. Railway hosting, Google OAuth credentials, backup scheduling and the production cutover still need account configuration. The existing GitHub Pages URL continues to run the original app.
+**Live private pilot:** [Lift Journal](https://lift-journal-production.up.railway.app). Google sign-in and PostgreSQL persistence were verified on 6 September 2026. Access is restricted to invited accounts. See the [deployment record](docs/deployment-2026-09-06.md) for verification and remaining operational work. Existing training data must be exported from the original GitHub Pages app and imported into the new account.
 
 ## Run the new app
 
@@ -50,7 +50,7 @@ The application uses pinned Next.js 16.3, React 19.2, Tailwind 4 and strict Type
 | `lib/auth.ts`, `lib/server.ts` | Sessions, access checks and transactional saves |
 | `lib/db/`, `drizzle/` | PostgreSQL schema and reviewed migrations |
 | `scripts/build-offline.mjs` | Public shell and service-worker generation |
-| `Dockerfile`, `railway.toml` | Standalone Railway build and release settings |
+| `Dockerfile`, `.railway/railway.ts` | Standalone Railway build and application infrastructure settings |
 | `tests/` | Domain, PostgreSQL, browser, offline and accessibility checks |
 
 Read [Railway setup and operations](docs/production-operations.md) for configuration, backups, migration and release procedures. [Implementation status](docs/implementation-status.md) records the pilot's scope and remaining launch gates. The [original plan](docs/production-readiness-plan.md) includes the larger production roadmap.

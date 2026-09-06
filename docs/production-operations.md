@@ -1,11 +1,11 @@
 # Railway setup and operations
 
-This runbook targets an invitation-only pilot with one Next.js application and one PostgreSQL 18 service in the same Railway European region. Use separate Railway environments and databases for staging and production. The repository prepares deployment; it does not claim that infrastructure or backups have been provisioned.
+This runbook targets an invitation-only pilot with one Next.js application and one PostgreSQL 18 service in the same Railway European region. The private pilot is live; see the [deployment record](deployment-2026-09-06.md) for actual provisioning and verification. Separate staging infrastructure remains part of the broader launch work.
 
 ## 1. Configure the project
 
-1. Sign in with `railway login`, select the intended workspace and create/link a dedicated Lift Journal project. Add PostgreSQL with persistent storage and pin its major version to 18. Select the same region for app and database.
-2. Add an application service from this repository/branch. Railway uses `Dockerfile` and `railway.toml`. No database is queried during image build. Release runs `node migrate.cjs`, then the service starts `node server.js` as a non-root user.
+1. Use Railway CLI 5.49.2 or a verified compatible release. If browser callback login fails, use `railway login --browserless`. Select the intended workspace and link the dedicated Lift Journal project. Add PostgreSQL with persistent storage and pin its major version to 18. Select the same region for app and database.
+2. Add an application service from this repository/branch. Railway uses `Dockerfile` and the infrastructure definition in `.railway/railway.ts`. Apply the definition as described below before uploading a release. No database is queried during image build. Release runs `node migrate.cjs`, then the service starts `node server.js` as a non-root user.
 3. Generate the Railway public HTTPS hostname. Configure Google OAuth as a web application, with that exact origin and callback `https://YOUR_HOST/api/auth/callback/google`. Keep the consent application restricted to your pilot users. Configure staging as a separate allowed callback or OAuth application.
 4. Set the application variables below in Railway's secret-variable UI. Do not put secret values in Git, a PR, screenshots or chat. Redeploy after changing them.
 
@@ -24,6 +24,24 @@ Railway supplies `PORT`. Do not configure `LOCAL_PASSWORD_AUTH` or `TEST_DATABAS
 The readiness endpoint deliberately returns 503 until auth configuration and the migrated database are available. Placeholder OAuth values can exercise startup locally but cannot validate a real Google login. Complete the hosted OAuth round trip before inviting anyone.
 
 Sources: [Railway Next.js deployment](https://docs.railway.com/guides/nextjs), [private networking](https://docs.railway.com/networking/private-networking), [PostgreSQL](https://docs.railway.com/databases/postgresql).
+
+### Apply application infrastructure
+
+Railway's current infrastructure format replaces `railway.toml` for new services. The checked-in definition deliberately uses `partial = "lift-journal"` so it does not own or delete PostgreSQL, its volume or its recovery bucket. Existing secret variables use `preserve()`; provision them separately before the first apply. Add any future application variables to this definition too, since omitted variables can be deleted.
+
+From the linked project, with dependencies installed:
+
+```sh
+npm exec --yes --package @railway/cli@5.49.2 -- railway config plan --out /tmp/lift-config-plan.json
+# Review the plan. No database, volume, bucket or secret deletion is expected.
+npm exec --yes --package @railway/cli@5.49.2 -- railway config apply --plan /tmp/lift-config-plan.json --yes
+```
+
+A normal plan must preserve secrets and storage. Do not add `--confirm-destructive` to bypass an unexpected deletion. Applying configuration and deploying an application image are separate steps. Inspect the resulting deployment metadata and logs for `node migrate.cjs`, `/api/ready`, a 120-second health-check timeout and one replica in `europe-west4-drams3a`.
+
+The initial release was uploaded from an exact `git archive` of the tested commit. This excludes ignored environment files, local screenshots and unrelated untracked files. GitHub automatic deployment is not connected yet; uploading source is an explicit release action.
+
+Source: [Railway infrastructure as code](https://docs.railway.com/infrastructure-as-code).
 
 ## 2. Separate database privileges
 

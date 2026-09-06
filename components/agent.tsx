@@ -9,6 +9,11 @@ import {
   Undo2,
   Camera,
   Moon,
+  Plus,
+  Utensils,
+  MoreHorizontal,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
@@ -62,6 +67,40 @@ export function TrainingAgent({
   const [acting, setActing] = useState<string | null>(null),
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+  const conversation = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<"conversation" | "today">("conversation");
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(6);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+  const newestId = turns.at(-1)?.id;
+  const needsReview = (proposal: ActionPreview) =>
+    !proposal.status && new Date(proposal.expiresAt).getTime() > now;
+  const reviewCount = turns.reduce(
+    (count, turn) => count + (turn.proposals?.filter(needsReview).length ?? 0),
+    0,
+  );
+  useEffect(() => {
+    if (view === "conversation" && newestId) {
+      const frame = requestAnimationFrame(() => {
+        const latest = conversation.current?.querySelector<HTMLElement>(
+          ".conversation-turn:last-child",
+        );
+        if (latest && conversation.current)
+          conversation.current.scrollTop = latest.offsetTop - 16;
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [newestId, view]);
+  const draft = (text: string) => {
+    setView("conversation");
+    setMessage((current) => (current.trim() ? `${current}\n\n${text}` : text));
+    requestAnimationFrame(() => input.current?.focus({ preventScroll: true }));
+  };
   const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [imageDetails, setImageDetails] = useState<Record<string, UserImage>>(
     {},
@@ -192,11 +231,9 @@ export function TrainingAgent({
       ...old,
       { id, question, photoIds: attachments, status: "running" },
     ]);
-    requestAnimationFrame(() =>
-      document
-        .getElementById("coach-conversation")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
+    setView("conversation");
+    setToolsOpen(false);
+    input.current?.blur();
     try {
       const r = await fetch("/api/agent", {
         method: "POST",
@@ -230,13 +267,12 @@ export function TrainingAgent({
           ? e.message
           : "The request failed. Your journal is safe.",
       );
-      setMessage(question);
+      setMessage((current) => current || question);
       setTurns((old) =>
         old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
       );
     } finally {
       setBusy(false);
-      input.current?.focus();
     }
   };
   const apply = async (p: ActionPreview, undo = false) => {
@@ -282,6 +318,11 @@ export function TrainingAgent({
       onLogin();
       return;
     }
+    setView("conversation");
+    if (message.trim() || photoIds.length) {
+      draft(question);
+      return;
+    }
     setMessage(question);
     if (ready) void send(question);
     else {
@@ -296,13 +337,56 @@ export function TrainingAgent({
   };
   return (
     <div className="agent-page">
-      <DailyOverview
-        journal={journal}
-        onCheckin={() => setCheckinDate(today())}
-        onAsk={ask}
-        go={go}
-        busy={busy || Boolean(acting) || uploading}
-      />
+      <header className="coach-header">
+        <div className="coach-title">
+          <span className="coach-avatar" aria-hidden="true">
+            <Sparkles size={22} />
+          </span>
+          <div>
+            <h1>Coach</h1>
+            <p>Your training, nutrition & recovery</p>
+          </div>
+          <Button
+            variant="ghost"
+            aria-label="Coach options"
+            onClick={() => setOptionsOpen(true)}
+          >
+            <MoreHorizontal size={22} />
+          </Button>
+        </div>
+        <div className="coach-navigation">
+          <nav aria-label="Coach views" className="coach-view-switch">
+            <button
+              aria-pressed={view === "conversation"}
+              onClick={() => setView("conversation")}
+            >
+              Conversation
+            </button>
+            <button
+              aria-pressed={view === "today"}
+              onClick={() => setView("today")}
+            >
+              Today
+            </button>
+          </nav>
+          <span className={`coach-connection ${ready ? "connected" : ""}`}>
+            {ready
+              ? "Ready to help"
+              : accountId
+                ? "Connecting…"
+                : "Personal to you"}
+          </span>
+        </div>
+      </header>
+      <div className="coach-today" hidden={view !== "today"}>
+        <DailyOverview
+          journal={journal}
+          onCheckin={() => setCheckinDate(today())}
+          onAsk={ask}
+          go={go}
+          busy={busy || Boolean(acting) || uploading}
+        />
+      </div>
       <CheckinDialog
         journal={journal}
         date={checkinDate}
@@ -310,26 +394,9 @@ export function TrainingAgent({
       />
       <section
         className="coach-workspace"
+        hidden={view !== "conversation"}
         aria-label="Coach conversation workspace"
       >
-        <div className="coach-workspace-heading">
-          <span className="coach-avatar">
-            <Sparkles size={21} />
-          </span>
-          <div>
-            <h2>Your coach, in conversation.</h2>
-            <p>
-              Describe a meal, log how you feel, or work out your next step.
-            </p>
-          </div>
-          <span className={`coach-connection ${ready ? "connected" : ""}`}>
-            {ready
-              ? "Ready to help"
-              : accountId
-                ? "Connect to chat"
-                : "Personal to you"}
-          </span>
-        </div>
         {!accountId ? (
           <section className="panel agent-welcome">
             <MessageCircle size={28} />
@@ -375,42 +442,113 @@ export function TrainingAgent({
                 </Button>
               </div>
             )}
-            {connection?.provider && (
-              <p className="agent-provider">
-                Uses {connection.provider} · Chat, attached photos and relevant
-                training, food and health check-ins are sent to your assistant
-                provider. <a href="/privacy">Privacy</a>
-              </p>
-            )}
-            {!turns.length && (
-              <div className="agent-prompts">
-                {[
-                  "What should I focus on today?",
-                  "How is my recovery looking?",
-                  "Help me log what I ate",
-                  "Review my training this week",
-                ].map((text) => (
+            {(turns.length > 1 || reviewCount > 0) && (
+              <div className="coach-thread-tools">
+                {reviewCount > 0 ? (
                   <button
-                    key={text}
+                    className="coach-review-jump"
                     onClick={() => {
-                      ask(text);
+                      const index = turns.findIndex((turn) =>
+                        turn.proposals?.some(needsReview),
+                      );
+                      setVisibleCount((count) =>
+                        Math.max(count, turns.length - index),
+                      );
+                      requestAnimationFrame(() => {
+                        const proposal =
+                          conversation.current?.querySelector<HTMLElement>(
+                            '[data-needs-review="true"]',
+                          );
+                        if (proposal && conversation.current) {
+                          const scroller = conversation.current;
+                          const details = proposal.querySelector("details");
+                          if (details) details.open = true;
+                          scroller.scrollTop +=
+                            proposal.getBoundingClientRect().top -
+                            scroller.getBoundingClientRect().top -
+                            16;
+                          proposal
+                            .querySelector<HTMLElement>("summary")
+                            ?.focus({ preventScroll: true });
+                        }
+                      });
                     }}
                   >
-                    <Sparkles size={17} />
-                    {text}
-                    <ArrowRight size={16} />
+                    Review ({reviewCount})
                   </button>
-                ))}
+                ) : (
+                  <span>Recent conversation</span>
+                )}
+                <button
+                  onClick={() => {
+                    const latest =
+                      conversation.current?.querySelector<HTMLElement>(
+                        ".conversation-turn:last-child",
+                      );
+                    if (latest && conversation.current)
+                      conversation.current.scrollTop = latest.offsetTop - 16;
+                  }}
+                >
+                  Latest message <ChevronDown size={14} />
+                </button>
               </div>
             )}
             <div
               className="conversation"
+              ref={conversation}
               role="log"
               id="coach-conversation"
+              tabIndex={0}
               aria-label="Coach conversation"
               aria-busy={busy}
             >
-              {turns.map((t) => (
+              {!turns.length && (
+                <div className="coach-start">
+                  <span className="coach-start-icon" aria-hidden="true">
+                    <Sparkles size={26} />
+                  </span>
+                  <h2>What’s on your mind today?</h2>
+                  <p>
+                    Log a meal, make sense of your sleep, or plan your next
+                    session.
+                  </p>
+                  <div className="agent-prompts">
+                    {[
+                      "What should I focus on today?",
+                      "How is my recovery looking?",
+                    ].map((text) => (
+                      <button
+                        key={text}
+                        disabled={busy}
+                        onClick={() => ask(text)}
+                      >
+                        {text}
+                        <ArrowRight size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {turns.length > visibleCount && (
+                <Button
+                  variant="ghost"
+                  className="coach-older"
+                  onClick={() => {
+                    const scroller = conversation.current;
+                    const height = scroller?.scrollHeight ?? 0;
+                    const top = scroller?.scrollTop ?? 0;
+                    setVisibleCount((count) => count + 10);
+                    requestAnimationFrame(() => {
+                      if (scroller)
+                        scroller.scrollTop =
+                          top + scroller.scrollHeight - height;
+                    });
+                  }}
+                >
+                  Earlier messages ({turns.length - visibleCount})
+                </Button>
+              )}
+              {turns.slice(-visibleCount).map((t) => (
                 <article className="conversation-turn" key={t.id}>
                   <div className="chat-user">
                     <span className="sr-only">You: </span>
@@ -452,122 +590,135 @@ export function TrainingAgent({
                     <section
                       key={p.id}
                       className={`agent-proposal ${p.status ?? "pending"}`}
-                      aria-label="Review training change"
+                      aria-label="Review journal change"
+                      data-needs-review={needsReview(p)}
                     >
-                      <div className="eyebrow">
-                        {p.status === "saved"
-                          ? "SAVED"
-                          : p.status === "undone"
-                            ? "UNDONE"
-                            : "REVIEW BEFORE SAVING"}
-                      </div>
-                      <h2>{p.title}</h2>
-                      <p>{p.detail}</p>
-                      {p.checkin && (
-                        <>
-                          <p className="proposal-date">
-                            Check-in · {p.checkin.date}
-                          </p>
-                          <CheckinDetails checkin={p.checkin} />
-                        </>
-                      )}
-                      {p.meal && <MealDetails meal={p.meal} />}
-                      {p.targets && (
-                        <div className="meal-details">
-                          <p>Goal: {p.targets.goal} weight</p>
-                          {(
-                            ["calories", "protein", "carbs", "fat"] as const
-                          ).map((key) => (
-                            <p key={key}>
-                              {key}: {p.targets![key] ?? "No target"}
-                              {p.targets![key] != null
-                                ? key === "calories"
-                                  ? " kcal"
-                                  : " g"
-                                : ""}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                      {p.workout && (
-                        <>
-                          <div className="proposal-date">
-                            <strong>{p.workout.title}</strong>
-                            <span>{p.workout.date}</span>
-                          </div>
-                          {p.workout.exercises.map((e) => (
-                            <div className="proposal-exercise" key={e.id}>
-                              <h3>{exerciseName(e.exerciseId)}</h3>
-                              <div className="set-chips">
-                                {e.sets.map((s) => (
-                                  <span key={s.id}>
-                                    {formatSet(s.weight, s.reps)}
-                                    {s.result === "miss"
-                                      ? " · miss"
-                                      : s.result
-                                        ? " · made"
-                                        : " · planned"}
-                                    {s.rpe ? ` · RPE ${s.rpe}` : ""}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                          {p.workout.athleteNotes && (
-                            <p>{p.workout.athleteNotes}</p>
+                      <details
+                        key={`${p.id}-${p.status ?? "pending"}`}
+                        open={p.status ? undefined : true}
+                      >
+                        <summary className="proposal-summary">
+                          <span className="eyebrow">
+                            {p.status === "saved"
+                              ? "SAVED"
+                              : p.status === "undone"
+                                ? "UNDONE"
+                                : "REVIEW BEFORE SAVING"}
+                          </span>
+                          <h2>{p.title}</h2>
+                          <ChevronDown size={18} aria-hidden="true" />
+                        </summary>
+                        <div className="proposal-body">
+                          <p>{p.detail}</p>
+                          {p.checkin && (
+                            <>
+                              <p className="proposal-date">
+                                Check-in · {p.checkin.date}
+                              </p>
+                              <CheckinDetails checkin={p.checkin} />
+                            </>
                           )}
-                        </>
-                      )}
-                      <div className="button-row">
-                        {!p.status && (
-                          <Button
-                            disabled={
-                              !ready ||
-                              Boolean(acting) ||
-                              busy ||
-                              new Date(p.expiresAt).getTime() < Date.now()
-                            }
-                            onClick={() => void apply(p)}
-                          >
-                            <Check size={17} />
-                            {acting === p.id ? "Saving…" : "Save this change"}
-                          </Button>
-                        )}
-                        {p.status === "saved" && (
-                          <Button
-                            variant="secondary"
-                            disabled={pending || Boolean(acting) || busy}
-                            onClick={() => void apply(p, true)}
-                          >
-                            <Undo2 size={17} />
-                            Undo this change
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          onClick={() =>
-                            go(
-                              p.checkin
-                                ? "health"
-                                : p.meal || p.targets
-                                  ? "food"
-                                  : p.workout &&
-                                      p.workout.exercises.some((e) =>
-                                        e.sets.some((s) => !s.result),
-                                      )
-                                    ? "workout"
-                                    : "history",
-                            )
-                          }
-                        >
-                          Open journal <ArrowRight size={17} />
-                        </Button>
-                      </div>
-                      <p className="fine-print">
-                        {p.status
-                          ? "Undo is available for 24 hours while no later journal change has been saved."
-                          : `Proposal expires ${new Date(p.expiresAt).toLocaleString()}. A newer journal change requires a fresh proposal.`}
-                      </p>
+                          {p.meal && <MealDetails meal={p.meal} />}
+                          {p.targets && (
+                            <div className="meal-details">
+                              <p>Goal: {p.targets.goal} weight</p>
+                              {(
+                                ["calories", "protein", "carbs", "fat"] as const
+                              ).map((key) => (
+                                <p key={key}>
+                                  {key}: {p.targets![key] ?? "No target"}
+                                  {p.targets![key] != null
+                                    ? key === "calories"
+                                      ? " kcal"
+                                      : " g"
+                                    : ""}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {p.workout && (
+                            <>
+                              <div className="proposal-date">
+                                <strong>{p.workout.title}</strong>
+                                <span>{p.workout.date}</span>
+                              </div>
+                              {p.workout.exercises.map((e) => (
+                                <div className="proposal-exercise" key={e.id}>
+                                  <h3>{exerciseName(e.exerciseId)}</h3>
+                                  <div className="set-chips">
+                                    {e.sets.map((s) => (
+                                      <span key={s.id}>
+                                        {formatSet(s.weight, s.reps)}
+                                        {s.result === "miss"
+                                          ? " · miss"
+                                          : s.result
+                                            ? " · made"
+                                            : " · planned"}
+                                        {s.rpe ? ` · RPE ${s.rpe}` : ""}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                              {p.workout.athleteNotes && (
+                                <p>{p.workout.athleteNotes}</p>
+                              )}
+                            </>
+                          )}
+                          <div className="button-row">
+                            {!p.status && (
+                              <Button
+                                disabled={
+                                  !ready ||
+                                  Boolean(acting) ||
+                                  busy ||
+                                  new Date(p.expiresAt).getTime() < now
+                                }
+                                onClick={() => void apply(p)}
+                              >
+                                <Check size={17} />
+                                {acting === p.id
+                                  ? "Saving…"
+                                  : "Save this change"}
+                              </Button>
+                            )}
+                            {p.status === "saved" && (
+                              <Button
+                                variant="secondary"
+                                disabled={pending || Boolean(acting) || busy}
+                                onClick={() => void apply(p, true)}
+                              >
+                                <Undo2 size={17} />
+                                Undo this change
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              onClick={() =>
+                                go(
+                                  p.checkin
+                                    ? "health"
+                                    : p.meal || p.targets
+                                      ? "food"
+                                      : p.workout &&
+                                          p.workout.exercises.some((e) =>
+                                            e.sets.some((s) => !s.result),
+                                          )
+                                        ? "workout"
+                                        : "history",
+                                )
+                              }
+                            >
+                              Open journal <ArrowRight size={17} />
+                            </Button>
+                          </div>
+                          <p className="fine-print">
+                            {p.status
+                              ? "Undo is available for 24 hours while no later journal change has been saved."
+                              : `Proposal expires ${new Date(p.expiresAt).toLocaleString()}. A newer journal change requires a fresh proposal.`}
+                          </p>
+                        </div>
+                      </details>
                     </section>
                   ))}
                 </article>
@@ -592,29 +743,14 @@ export function TrainingAgent({
               }}
             >
               <label htmlFor="training-message">Message your coach</label>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={busy || uploading || loadingImage}
-                onClick={() => {
-                  setMessage((current) =>
-                    current.trim()
-                      ? `${current}\n\nPlease use this to log my sleep. Ask about any unclear date or time asleep and prepare the entry for review.`
-                      : sleepLoggingPrompt(photoIds.length > 0),
-                  );
-                  input.current?.focus();
-                }}
-              >
-                <Moon size={16} /> Log sleep
-              </Button>
               <textarea
                 id="training-message"
                 ref={input}
                 value={message}
                 maxLength={6000}
-                rows={3}
+                rows={2}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Log 7 hours 47 minutes of sleep last night, or read my attached sleep screenshot…"
+                placeholder="Tell me what you ate, how you slept, or what you need…"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();
@@ -623,9 +759,44 @@ export function TrainingAgent({
                 }}
               />
               <div className="composer-actions">
-                <span className="fine-print">
-                  Review entries before saving. The assistant can make mistakes.
-                </span>
+                <div className="composer-quick-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label="Add images"
+                    aria-expanded={toolsOpen}
+                    aria-controls="coach-image-tools"
+                    onClick={() => setToolsOpen((open) => !open)}
+                  >
+                    <Plus size={20} />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={busy || uploading || loadingImage}
+                    onClick={() =>
+                      draft(
+                        "Help me log what I ate. Ask for any missing meal details and prepare it for review.",
+                      )
+                    }
+                  >
+                    <Utensils size={16} /> <span>Log food</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={busy || uploading || loadingImage}
+                    onClick={() =>
+                      draft(
+                        message.trim()
+                          ? "Please use this to log my sleep. Ask about any unclear date or time asleep and prepare the entry for review."
+                          : sleepLoggingPrompt(photoIds.length > 0),
+                      )
+                    }
+                  >
+                    <Moon size={16} /> <span>Log sleep</span>
+                  </Button>
+                </div>
                 <Button
                   type="submit"
                   disabled={
@@ -639,67 +810,74 @@ export function TrainingAgent({
                   {busy ? "Thinking…" : "Send"}
                 </Button>
               </div>
-              <div className="food-attachments">
-                <label className="food-upload">
-                  <Camera size={17} />{" "}
-                  {uploading ? "Saving & tagging…" : "Take photo"}
+              <div
+                id="coach-image-tools"
+                className="coach-image-tools"
+                hidden={!toolsOpen}
+              >
+                <div className="food-attachments">
+                  <label className="food-upload">
+                    <Camera size={17} />{" "}
+                    {uploading ? "Saving & tagging…" : "Take photo"}
+                    <input
+                      type="file"
+                      aria-label="Take photo"
+                      accept="image/*"
+                      capture="environment"
+                      disabled={
+                        busy ||
+                        uploading ||
+                        loadingImage ||
+                        !accountId ||
+                        photoIds.length >= 4
+                      }
+                      onChange={(e) => {
+                        void attach(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <label className="food-upload">
+                    Attach image
+                    <input
+                      type="file"
+                      aria-label="Attach image"
+                      accept="image/*"
+                      disabled={
+                        busy ||
+                        uploading ||
+                        loadingImage ||
+                        !accountId ||
+                        photoIds.length >= 4
+                      }
+                      onChange={(e) => {
+                        void attach(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <a href="#images">Image library & categories</a>
+                </div>
+                <label className="image-auto-tag">
                   <input
-                    type="file"
-                    aria-label="Take photo"
-                    accept="image/*"
-                    capture="environment"
-                    disabled={
-                      busy ||
-                      uploading ||
-                      loadingImage ||
-                      !accountId ||
-                      photoIds.length >= 4
-                    }
-                    onChange={(e) => {
-                      void attach(e.target.files?.[0]);
-                      e.target.value = "";
-                    }}
-                  />
+                    type="checkbox"
+                    checked={autoTag}
+                    disabled={busy || uploading}
+                    onChange={(e) => setAutoTag(e.target.checked)}
+                  />{" "}
+                  Tag uploads automatically
                 </label>
-                <label className="food-upload">
-                  Attach image
-                  <input
-                    type="file"
-                    aria-label="Attach image"
-                    accept="image/*"
-                    disabled={
-                      busy ||
-                      uploading ||
-                      loadingImage ||
-                      !accountId ||
-                      photoIds.length >= 4
-                    }
-                    onChange={(e) => {
-                      void attach(e.target.files?.[0]);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                <a href="#images">Image library & categories</a>
+                <p className="fine-print">
+                  Automatic tagging sends each new image to{" "}
+                  {connection?.provider ?? "your configured assistant provider"}{" "}
+                  to identify food, sleep, activity or other content. Turn it
+                  off to save in Needs review. No journal entry is created by
+                  tagging.
+                </p>
               </div>
-              <label className="image-auto-tag">
-                <input
-                  type="checkbox"
-                  checked={autoTag}
-                  disabled={busy || uploading}
-                  onChange={(e) => setAutoTag(e.target.checked)}
-                />{" "}
-                Tag uploads automatically
-              </label>
-              <p className="fine-print">
-                Automatic tagging sends each new image to{" "}
-                {connection?.provider ?? "your configured assistant provider"}{" "}
-                to identify food, sleep, activity or other content. Turn it off
-                to save in Needs review. No journal entry is created by tagging.
-              </p>
               {photoIds.length > 0 && accountId && (
                 <>
-                  <div className="food-photo-strip">
+                  <div className="coach-attachment-strip">
                     {photoIds.map((id) => (
                       <div key={id}>
                         <FoodPhotoImage
@@ -714,22 +892,21 @@ export function TrainingAgent({
                           type="button"
                           variant="ghost"
                           disabled={busy}
+                          aria-label="Remove attachment"
                           onClick={() =>
                             setPhotoIds((ids) => ids.filter((v) => v !== id))
                           }
                         >
-                          Remove attachment
+                          <X size={16} />
                         </Button>
                       </div>
                     ))}
                   </div>
                   <p className="fine-print">
-                    Saved in your private image library. Sending shares these
-                    images with{" "}
-                    {connection?.provider ?? "the assistant provider"} for your
-                    question. Removing an attachment keeps its catalog copy. Up
-                    to 4 images per message.{" "}
-                    <a href="#images">Review categories</a>
+                    Attached images are shared with{" "}
+                    {connection?.provider ?? "your assistant provider"} when you
+                    send. Copies stay in your{" "}
+                    <a href="#images">private image library</a>.
                   </p>
                 </>
               )}
@@ -739,26 +916,53 @@ export function TrainingAgent({
                 </p>
               )}
             </form>
-            {turns.length > 0 && (
-              <Button
-                variant="ghost"
-                disabled={busy || Boolean(acting)}
-                onClick={() => setClear(true)}
-              >
-                Clear conversation
-              </Button>
-            )}
+            <p className="coach-composer-note">
+              Review suggested entries before saving.{" "}
+              <button onClick={() => setOptionsOpen(true)}>
+                Privacy & details
+              </button>
+            </p>
           </>
         )}
       </section>
-      <div className="agent-shortcuts">
-        <a href="#health">Health history</a>
-        <a href="#food">Food journal & photos</a>
-        <a href="#workout/choose">Programmes & routines</a>
-        <a href="#library">Exercise library</a>
-        <a href="#progress">Training progress</a>
-        <a href="#data">Account & backups</a>
-      </div>
+      <Dialog
+        open={optionsOpen}
+        onOpenChange={setOptionsOpen}
+        title="Coach options"
+      >
+        <div className="coach-options">
+          <Button variant="secondary" onClick={() => go("health")}>
+            Health history <ArrowRight size={17} />
+          </Button>
+          <Button variant="secondary" onClick={() => go("images")}>
+            Image library & categories <ArrowRight size={17} />
+          </Button>
+          <Button variant="secondary" onClick={() => go("workout/choose")}>
+            Programmes & routines <ArrowRight size={17} />
+          </Button>
+          <Button variant="secondary" onClick={() => go("library")}>
+            Exercise library <ArrowRight size={17} />
+          </Button>
+          <p className="fine-print">
+            Coach can make mistakes. Your chat, attached images and relevant
+            journal entries are sent to{" "}
+            {connection?.provider ?? "your assistant provider"} when you ask for
+            help. <a href="/privacy">Read our privacy policy</a>.
+          </p>
+          {turns.length > 0 && (
+            <Button
+              variant="ghost"
+              disabled={busy || Boolean(acting)}
+              onClick={() => {
+                setOptionsOpen(false);
+                setClear(true);
+              }}
+            >
+              Clear conversation
+            </Button>
+          )}
+        </div>
+      </Dialog>
       <Dialog
         open={clear}
         onOpenChange={setClear}

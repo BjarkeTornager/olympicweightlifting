@@ -1,8 +1,12 @@
 # Daily Coach and health journal
 
-Coach now opens with a daily overview for training, nutrition and recovery. The interface uses a shared navy, pale green and neutral palette, consistent cards, measured typography and layouts for phone and desktop. A week strip shows actual check-in, food and training entries; missing entries stay visibly missing. There is no invented health score.
+Coach opens directly into **Conversation**, with the latest exchange and a message box that stays available while the chat scrolls. **Today** opens the daily training, nutrition and recovery overview. Switching these views preserves the current message and attached images.
 
-**Plan my day** sends an explicit request to the configured assistant. Its health overview tool retrieves the authenticated user's check-ins, seven days of training, current food totals and chosen nutrition targets. The assistant explains at most three priorities, connects suggestions to recorded observations and calls out missing information. This is an on-demand conversation; it does not run in the background or send notifications. The overview's “good next step” cards use deterministic journal rules and are labelled as starting points; they are not presented as an AI assessment.
+Use **Log food** or **Log sleep** to prepare a message, **+** to attach/take images and change automatic tagging, and **Coach options (···)** for health history, image categories, programmes, privacy and clearing chat. The last six exchanges appear first; **Earlier messages** reveals older saved exchanges and **Latest message** returns to the newest one. **Review** jumps to pending, unexpired proposals. Saved and undone entries collapse into summaries; expand one to inspect its details, open the journal or use an available undo.
+
+Replies use readable paragraphs, headings, real numbered/bulleted lists, bold and italic emphasis. The daily overview retains the navy, pale green and neutral palette and a week strip of actual check-in, food and training entries. Missing entries remain missing; there is no invented health score.
+
+**Plan my day** in Today sends an explicit request to the configured assistant when the composer is empty. If a message or attachment is already being prepared, it adds the request to that draft for review before sending. Its health overview tool retrieves the authenticated user's check-ins, seven days of training, current food totals and chosen nutrition targets. The assistant explains at most three priorities, connects suggestions to recorded observations and calls out missing information. This is an on-demand conversation; it does not run in the background or send notifications. The overview's “good next step” cards use deterministic journal rules and are labelled as starting points; they are not presented as an AI assessment.
 
 ## Daily check-ins
 
@@ -10,7 +14,7 @@ Coach now opens with a daily overview for training, nutrition and recovery. The 
 
 The sleep flow is [deployed and verified on Railway](sleep-deployment-2026-09-06.md).
 
-Tell Coach “I slept 7 hours 47 minutes last night,” or attach a sleep screenshot and ask it to log the night. **Log sleep** beside the message box prepares the request without sending it or replacing typed text. The Sleep card on Coach and **Log sleep with Coach** in Health open the sleep flow. Sleep images in the library offer both **Read sleep image** for explanation and **Log sleep with Coach** for a save proposal.
+Tell Coach “I slept 7 hours 47 minutes last night,” or attach a sleep screenshot and ask it to log the night. **Log sleep** beside the message box prepares the request without sending it or replacing typed text. The Sleep card in Coach → Today and **Log sleep with Coach** in Health open the sleep flow. Sleep images in the library offer both **Read sleep image** for explanation and **Log sleep with Coach** for a save proposal.
 
 Coach reads the existing check-in before preparing a merged review. The night belongs to its wake-up date: “last night” uses today in the athlete's timezone, while a clear screenshot date takes precedence over upload date. Time asleep is distinct from time in bed and weekly averages. Unclear dates or durations require clarification. Hours and minutes convert to decimal hours for storage and display as hours/minutes in the review and history. Sleep corrections replace that date's value; other measurements and notes remain intact. The manual form accepts minute-precision stored values so editing water later does not fail step validation. Saves require the existing review action and retain idempotency, conflict handling, undo, account ownership and backup support.
 

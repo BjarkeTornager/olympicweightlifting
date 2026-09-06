@@ -117,6 +117,10 @@ export function Journal() {
       const open = editing && viewport.scale === 1 && inset > 150;
       document.documentElement.toggleAttribute("data-keyboard-open", open);
       document.documentElement.style.setProperty(
+        "--coach-viewport-height",
+        `${viewport.height}px`,
+      );
+      document.documentElement.style.setProperty(
         "--keyboard-inset",
         `${open ? inset : 0}px`,
       );
@@ -132,6 +136,7 @@ export function Journal() {
           });
       }
     };
+    refreshKeyboard();
     viewport.addEventListener("resize", refreshKeyboard);
     window.addEventListener("focusin", refreshKeyboard);
     window.addEventListener("focusout", refreshKeyboard);
@@ -141,6 +146,7 @@ export function Journal() {
       window.removeEventListener("focusout", refreshKeyboard);
       document.documentElement.removeAttribute("data-keyboard-open");
       document.documentElement.style.removeProperty("--keyboard-inset");
+      document.documentElement.style.removeProperty("--coach-viewport-height");
     };
   }, []);
   const go = (target: string) => {
@@ -165,7 +171,7 @@ export function Journal() {
   const section = route.split("/")[0];
   return (
     <div
-      className={`journal ${state?.preferences.largeText ? "large-text" : ""}`}
+      className={`journal ${section === "coach" ? "coach-mode" : ""} ${state?.preferences.largeText ? "large-text" : ""}`}
     >
       <a
         className="skip-link"
@@ -251,36 +257,39 @@ export function Journal() {
             <span>{labels[status]}</span>
           </button>
         </header>
-        {state && (
-          <div className="save-detail">
-            <span>
-              {journal.record?.dirty
-                ? "Changes waiting to sync"
-                : identity && journal.record?.lastSyncedAt
-                  ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                  : "This browser holds your offline copy"}{" "}
-              · Device saved{" "}
-              {new Date(state.updatedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-            {journal.record?.undo && !journal.record.conflict && (
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  void journal
-                    .undo()
-                    .then(() => setMessage("Last change undone."))
-                    .catch((e) => setMessage(e.message))
-                }
-              >
-                <Undo2 size={15} />
-                Undo last change
-              </Button>
-            )}
-          </div>
-        )}
+        {state &&
+          (section !== "coach" ||
+            journal.record?.dirty ||
+            journal.record?.undo) && (
+            <div className="save-detail">
+              <span>
+                {journal.record?.dirty
+                  ? "Changes waiting to sync"
+                  : identity && journal.record?.lastSyncedAt
+                    ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                    : "This browser holds your offline copy"}{" "}
+                · Device saved{" "}
+                {new Date(state.updatedAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              {journal.record?.undo && !journal.record.conflict && (
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    void journal
+                      .undo()
+                      .then(() => setMessage("Last change undone."))
+                      .catch((e) => setMessage(e.message))
+                  }
+                >
+                  <Undo2 size={15} />
+                  Undo last change
+                </Button>
+              )}
+            </div>
+          )}
         {updateReady && (
           <div className="notice">
             <span>

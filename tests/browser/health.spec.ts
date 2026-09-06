@@ -6,6 +6,7 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
   page,
 }) => {
   await page.goto("/#coach");
+  await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Your day, in focus." }),
   ).toBeVisible();
@@ -41,6 +42,7 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
   ).toBeVisible();
   await expect(page.locator(".daily-metric.lilac")).toContainText("6.5");
   await page.reload();
+  await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(page.locator(".daily-metric.sky")).toContainText("0.5");
   await page.locator(".hero-checkin").click();
   await dialog.getByLabel("Water today", { exact: true }).fill("750");
@@ -182,6 +184,7 @@ test.describe("daily coach with a personal journal", () => {
     });
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.goto("/#coach");
+    await page.getByRole("button", { name: "Today", exact: true }).click();
     await expect(
       page.getByText("Ready to help", { exact: true }),
     ).toBeVisible();

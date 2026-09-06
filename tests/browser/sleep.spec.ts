@@ -155,6 +155,7 @@ test.describe("sleep with Coach", () => {
       ).toBeVisible();
       expect(saves).toBe(1);
       expect(state.nutrition.meals).toHaveLength(0);
+      await page.getByRole("button", { name: "Coach options" }).click();
       await page
         .getByRole("button", { name: "Health history", exact: true })
         .click();

@@ -472,13 +472,13 @@ test("agent review saves once, syncs the journal and offers undo without reveali
   try {
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: "Your day, in focus." }),
+      page.getByRole("heading", { name: "Coach", exact: true }),
     ).toBeVisible();
     await page
       .getByLabel("Message your coach")
       .fill("Log yesterday's bodyweight dead bugs: 16 reps, made.");
     await page.getByRole("button", { name: "Send", exact: true }).click();
-    const card = page.getByRole("region", { name: "Review training change" });
+    const card = page.getByRole("region", { name: "Review journal change" });
     await expect(card.getByText("2026-09-05", { exact: true })).toBeVisible();
     expect(writes).toBe(0);
     await expect(page.getByText(user.name, { exact: false })).toHaveCount(0);
@@ -502,6 +502,7 @@ test("agent review saves once, syncs the journal and offers undo without reveali
       page.getByText("Saved to your account.", { exact: true }),
     ).toBeVisible();
     expect(writes).toBe(1);
+    await card.locator("summary").click();
     await card.getByRole("button", { name: "Undo this change" }).click();
     await expect(
       page.getByText("Change undone and saved to your account."),

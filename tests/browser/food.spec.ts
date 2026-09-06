@@ -317,6 +317,7 @@ test.describe("authenticated photo UI", () => {
     await expect(
       page.getByRole("status").filter({ hasText: "Saved to your account." }),
     ).toBeVisible();
+    await page.locator(".agent-proposal.saved summary").click();
     await page
       .getByRole("button", { name: "Open journal", exact: false })
       .click();

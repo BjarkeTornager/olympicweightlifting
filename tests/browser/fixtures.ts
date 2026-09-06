@@ -21,6 +21,11 @@ export const test = base.extend<{
       }
       let state = emptyJournal(),
         revision = 0;
+      const unmocked: string[] = [];
+      await context.route("**/api/**", (r) => {
+        unmocked.push(`${r.request().method()} ${new URL(r.request().url()).pathname}`);
+        return r.fulfill({ status: 401, json: { error: "Unmocked test API" } });
+      });
       await context.route("**/api/session", (r) =>
         r.fulfill({
           json: {
@@ -46,13 +51,14 @@ export const test = base.extend<{
           json: { enabled: true, provider: "Test provider", turns: [] },
         }),
       );
-      await context.route("**/api/images", (r) =>
+      await context.route(/\/api\/images(?:\?.*)?$/, (r) =>
         r.fulfill({ json: { images: [] } }),
       );
-      await context.route("**/api/food/photos", (r) =>
+      await context.route(/\/api\/food\/photos(?:\?.*)?$/, (r) =>
         r.fulfill({ json: { photos: [] } }),
       );
       await use();
+      expect(unmocked, "Every API used by this simulated account needs a fixture").toEqual([]);
     },
     { auto: true },
   ],

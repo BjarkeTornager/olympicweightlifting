@@ -53,7 +53,6 @@ test("all main screens fit mobile and desktop", async ({ page }) => {
     ]) {
       await page.goto("/#" + route);
       await expect(page.locator(".private-shell")).toBeVisible();
-      await expect(page.locator(".private-shell")).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(
         "Opening your journal…",
       );

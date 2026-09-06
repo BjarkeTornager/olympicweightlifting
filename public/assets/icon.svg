@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Lift Journal</title>
+  <rect width="512" height="512" rx="104" fill="#f4f3ef"/>
+  <rect x="76" y="76" width="360" height="360" rx="84" fill="#ffffff" stroke="#c5cac4" stroke-width="8"/>
+  <path d="M150 256h212" fill="none" stroke="#18201c" stroke-width="22" stroke-linecap="round"/>
+  <path d="M174 204v104M203 222v68M338 204v104M309 222v68" fill="none" stroke="#23664e" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="11" fill="#18201c"/>
+</svg>

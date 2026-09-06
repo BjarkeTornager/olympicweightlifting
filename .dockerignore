@@ -1,0 +1,11 @@
+.git
+.next
+.deployment
+node_modules
+.env*
+artifacts
+test-results
+playwright-report
+public/sw.js
+public/offline.html
+*.log

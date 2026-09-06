@@ -4,3 +4,14 @@ lift-journal-backup-*.json
 screenshots/
 test-results/
 _site/
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+playwright-report/
+.railway/*
+!.railway/railway.ts
+public/offline.html
+public/sw.js
+.deployment/

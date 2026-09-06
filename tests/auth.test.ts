@@ -171,6 +171,23 @@ test(
       assert.deepEqual((await ownChat.json()).turns, []);
       assert.equal((await clearAgent(privateRequest("DELETE"))).status, 200);
 
+      const logout = await post("sign-out", {}, loginCookie);
+      assert.equal(logout.status, 200);
+      assert.equal(
+        (await getJournal(request(loginCookie))).status,
+        401,
+        "Signed-out cookies cannot be replayed",
+      );
+      assert.equal(
+        (await (await getSession(request(loginCookie))).json()).user,
+        null,
+      );
+      assert.equal(
+        (await getJournal(request(createdCookie))).status,
+        200,
+        "Other device sessions remain valid",
+      );
+
       const thirdLogin = await post("sign-in/email", { email, password });
       const thirdCookie = cookieFrom(thirdLogin);
       assert.equal(
@@ -191,23 +208,6 @@ test(
         (await getJournal(request(createdCookie))).status,
         200,
         "The current device stays signed in",
-      );
-
-      const logout = await post("sign-out", {}, loginCookie);
-      assert.equal(logout.status, 200);
-      assert.equal(
-        (await getJournal(request(loginCookie))).status,
-        401,
-        "Signed-out cookies cannot be replayed",
-      );
-      assert.equal(
-        (await (await getSession(request(loginCookie))).json()).user,
-        null,
-      );
-      assert.equal(
-        (await getJournal(request(createdCookie))).status,
-        200,
-        "Other device sessions remain valid",
       );
 
       await getPool().query(

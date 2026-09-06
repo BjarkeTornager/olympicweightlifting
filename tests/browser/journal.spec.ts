@@ -495,7 +495,7 @@ test("agent review saves once, syncs the journal and offers undo without reveali
     ).toBe(true);
     await card.getByRole("button", { name: "Save this change" }).click();
     await expect(
-      page.getByText("Saved to your account. Your journal is up to date."),
+      page.getByText("Saved to your account.", { exact: true }),
     ).toBeVisible();
     expect(writes).toBe(1);
     await card.getByRole("button", { name: "Undo this change" }).click();

@@ -21,6 +21,21 @@ type Turn = {
   proposals?: ActionPreview[];
   status: string;
 };
+function AssistantText({ text }: { text: string }) {
+  // Render only inline emphasis. Model output stays escaped React text;
+  // HTML, remote links and other executable content are never interpreted.
+  return text
+    .split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g)
+    .map((part, i) =>
+      part.startsWith("**") && part.endsWith("**") ? (
+        <strong key={i}>{part.slice(2, -2)}</strong>
+      ) : part.startsWith("`") && part.endsWith("`") ? (
+        <span key={i}>{part.slice(1, -1)}</span>
+      ) : (
+        part
+      ),
+    );
+}
 export function TrainingAgent({
   journal,
   onLogin,
@@ -248,9 +263,8 @@ export function TrainingAgent({
           )}
           {connection?.provider && (
             <p className="agent-provider">
-              Uses {connection.provider} · Chat and relevant training
-              are sent to your assistant provider.{" "}
-              <a href="/privacy">Privacy</a>
+              Uses {connection.provider} · Chat and relevant training are sent
+              to your assistant provider. <a href="/privacy">Privacy</a>
             </p>
           )}
           {!turns.length && (
@@ -291,7 +305,9 @@ export function TrainingAgent({
                     <span className="assistant-mark">
                       <Sparkles size={16} /> Lift Journal
                     </span>
-                    <p>{t.reply}</p>
+                    <p>
+                      <AssistantText text={t.reply} />
+                    </p>
                   </div>
                 )}
                 {t.status === "running" && (

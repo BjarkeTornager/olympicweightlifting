@@ -10,7 +10,7 @@ The repository now includes a real SwiftUI app with native Coach, Today, Train, 
 
 ## Run the new app
 
-Latest release: [cardio tracking and Coach activity logging](docs/cardio-deployment-2026-09-06.md), verified on Railway with invitation-only access, 166 local checks and nine focused live browser checks.
+Latest release: [native iPhone app and private sign-in support](docs/ios-deployment-2026-09-06.md). The backend is live on Railway; the native app passed simulator tests and an unsigned physical-device build. Verification includes 180 local checks and six focused live browser checks.
 
 Use Node 22 and Docker. Copy `.env.example` to `.env.local`, set a local database password in both database variables, generate a random authentication secret, and enter your email in `ALLOWED_EMAILS`. Never commit this file.
 

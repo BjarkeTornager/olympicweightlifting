@@ -2,6 +2,10 @@
 
 A native SwiftUI client for the existing private Railway health journal. Requires iOS 18 or later and Xcode 26.3 or later. There is no embedded web view, third-party SDK, Apple Health integration, wearable integration or background sensor collection. Google sign-in uses Apple's secure web authentication session.
 
+## Preview
+
+Passing iPhone simulator screenshots with synthetic data: [Coach](previews/native-coach.png), [Today](previews/native-today.png), [Cardio](previews/native-cardio.png), and [private reconnection](previews/native-private-reconnect.png).
+
 ## Run in the simulator
 
 Open `LiftJournal.xcodeproj`, select the **LiftJournal** scheme and an iPhone simulator, then Run. No Apple Developer membership is needed. The normal app connects to `https://lift-journal-production.up.railway.app`; sign in with the owner or an invited Google account. An invitation does not share another account's journal.

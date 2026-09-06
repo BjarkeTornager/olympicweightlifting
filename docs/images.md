@@ -14,7 +14,7 @@ The classifier uses pixels without the user-supplied label or journal contents. 
 
 Food queries only Food images. Health displays Sleep, Activity and Health images. The general library includes all categories and supports category filters and label/tag/date search. An Apple Health sleep screenshot uploaded from Food is saved in Sleep and can be opened from Health or Images; it is not appended to the meal gallery. Needs review and Other images are visible in the general library.
 
-Coach reads attachment metadata before choosing a default prompt. Food offers meal estimation; Sleep opens a screenshot-reading request without asking to save a meal or check-in. Other categories get a neutral review prompt. The assistant can prepare a requested health check-in from clearly visible values after reading existing health context, but the user still reviews and saves it. Upload dates do not become sleep dates automatically. Server-side meal writes and assistant proposals reject image links outside Food, including stale proposals saved after recategorisation.
+Coach reads attachment metadata before choosing a default prompt. Food offers meal estimation; Sleep offers **Read sleep image** for explanation and **Log sleep with Coach** for a reviewed sleep entry. Other categories get a neutral review prompt. The assistant can prepare a requested health check-in from clearly visible values after reading existing health context, but the user still reviews and saves it. Upload dates do not become sleep dates automatically. Server-side meal writes and assistant proposals reject image links outside Food, including stale proposals saved after recategorisation.
 
 ## Storage and migration
 

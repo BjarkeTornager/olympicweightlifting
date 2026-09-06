@@ -8,12 +8,17 @@ import {
   Sparkles,
   Undo2,
   Camera,
+  Moon,
 } from "lucide-react";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
 import { exerciseName, today } from "@/lib/domain";
 import { uploadUserImage } from "@/lib/food-client";
-import { imageCoachPrompt, type UserImage } from "@/lib/images";
+import {
+  imageCoachPrompt,
+  sleepLoggingPrompt,
+  type UserImage,
+} from "@/lib/images";
 import { ImageBadge } from "./image-library";
 import { FoodPhotoImage } from "./food-photo";
 import { MealDetails } from "./views/food";
@@ -35,14 +40,18 @@ export function TrainingAgent({
   onLogin,
   go,
   initialPhotoId,
+  initialSleepLog = false,
 }: {
   journal: JournalController;
   onLogin: () => void;
   go: (r: string) => void;
   initialPhotoId?: string;
+  initialSleepLog?: boolean;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]),
-    [message, setMessage] = useState(""),
+    [message, setMessage] = useState(
+      initialSleepLog ? sleepLoggingPrompt(Boolean(initialPhotoId)) : "",
+    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [connection, setConnection] = useState<{
@@ -583,6 +592,21 @@ export function TrainingAgent({
               }}
             >
               <label htmlFor="training-message">Message your coach</label>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy || uploading || loadingImage}
+                onClick={() => {
+                  setMessage((current) =>
+                    current.trim()
+                      ? `${current}\n\nPlease use this to log my sleep. Ask about any unclear date or time asleep and prepare the entry for review.`
+                      : sleepLoggingPrompt(photoIds.length > 0),
+                  );
+                  input.current?.focus();
+                }}
+              >
+                <Moon size={16} /> Log sleep
+              </Button>
               <textarea
                 id="training-message"
                 ref={input}
@@ -590,7 +614,7 @@ export function TrainingAgent({
                 maxLength={6000}
                 rows={3}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="I slept 7 hours, feel a little sore, and had eggs on toast. Help me plan today…"
+                placeholder="Log 7 hours 47 minutes of sleep last night, or read my attached sleep screenshot…"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();

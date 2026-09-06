@@ -6,8 +6,46 @@ import {
   parseLegacyBackup,
   mergeImport,
 } from "../lib/domain";
-import { dailyHealth, saveCheckin, healthSchema } from "../lib/health";
+import {
+  dailyHealth,
+  saveCheckin,
+  healthSchema,
+  formatSleepDuration,
+} from "../lib/health";
 import { prepareAction } from "../lib/agent/actions";
+test("sleep minutes stay precise through proposals, backups and partial daily updates", () => {
+  const state = emptyJournal(),
+    date = "2026-09-06";
+  saveCheckin(
+    state,
+    { date, waterMl: 750, bodyweight: 80, notes: "Keep this note" },
+    date,
+  );
+  const prepared = prepareAction(
+    state,
+    { kind: "record_checkin", checkin: { date, sleepHours: 7 + 47 / 60 } },
+    date,
+  );
+  assert.equal(prepared.title, "Log your sleep");
+  assert.equal(
+    formatSleepDuration(prepared.checkin!.sleepHours!),
+    "7 h 47 min",
+  );
+  assert.equal(formatSleepDuration(0), "0 min");
+  assert.equal(formatSleepDuration(59 / 60), "59 min");
+  assert.equal(formatSleepDuration(7.999999), "8 h");
+  assert.equal(formatSleepDuration(24), "24 h");
+  assert.equal(state.health.checkins[0].sleepHours, null);
+  const restored = mergeImport(
+    emptyJournal(),
+    parseLegacyBackup(backup(prepared.state)),
+  );
+  saveCheckin(restored, { date, waterMl: 1000 }, date);
+  assert.equal(restored.health.checkins.length, 1);
+  assert.equal(restored.health.checkins[0].sleepHours, 7 + 47 / 60);
+  assert.equal(restored.health.checkins[0].bodyweight, 80);
+  assert.equal(restored.health.checkins[0].notes, "Keep this note");
+});
 test("health check-ins preserve unspecified measurements and distinguish missing from zero", () => {
   const state = emptyJournal();
   assert.equal(dailyHealth(state, "2026-09-06").checkin, null);

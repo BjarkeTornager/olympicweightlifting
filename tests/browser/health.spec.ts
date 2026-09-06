@@ -58,7 +58,7 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
     "750 ml water",
   );
   await expect(page.locator(".health-records article")).toContainText(
-    "6.5 h sleep",
+    "6 h 30 min sleep",
   );
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 950 });

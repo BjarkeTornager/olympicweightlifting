@@ -58,3 +58,9 @@ export function imageCoachPrompt(category: ImageCategory) {
     return "Help me read this sleep screenshot. Explain only clearly visible information and ask about anything unclear. The upload date may differ from the sleep date. Do not save a check-in unless I ask.";
   return "Help me understand this image in the context of my journal. Identify what it shows first; do not assume it is food. Do not save an entry unless I ask.";
 }
+
+export function sleepLoggingPrompt(hasImage = false) {
+  return hasImage
+    ? "Log my sleep from this screenshot. Use the clearly visible time asleep and wake-up date, not time in bed or a weekly average. Ask if the date or duration is unclear. Read my existing check-in and prepare the sleep entry for review, keeping my other daily values."
+    : "Help me log my sleep. I can describe the night or attach a sleep screenshot. Ask for any missing time asleep or wake-up date, then prepare a sleep entry for review while keeping my other daily check-in values.";
+}

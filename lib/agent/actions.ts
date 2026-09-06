@@ -325,7 +325,10 @@ export function prepareAction(
       "Copies exercises, weights and reps into a fresh draft with every set unlogged.";
   } else if (action.kind === "record_checkin") {
     checkin = saveCheckin(next, action.checkin, currentDate);
-    title = "Save your daily check-in";
+    title =
+      action.checkin.sleepHours != null
+        ? "Log your sleep"
+        : "Save your daily check-in";
     detail = `Updates your check-in for ${checkin.date}. Values you haven’t changed are kept. This records how you feel without changing your workout or diet targets.`;
   } else if (action.kind === "record_meal" || action.kind === "update_meal") {
     if (action.meal.date > currentDate)

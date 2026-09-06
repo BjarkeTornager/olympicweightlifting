@@ -368,6 +368,10 @@ export function Journal() {
             {section === "coach" && (
               <TrainingAgent
                 key={`${identity?.id ?? "guest"}:${route}`}
+                initialSleepLog={
+                  route === "coach/sleep" ||
+                  /^coach\/photo\/[^/]+\/sleep$/.test(route)
+                }
                 initialPhotoId={
                   route.startsWith("coach/photo/")
                     ? route.split("/")[2]

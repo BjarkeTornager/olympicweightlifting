@@ -19,6 +19,7 @@ import type { JournalController } from "./journal";
 import { today } from "@/lib/domain";
 import {
   dailyHealth,
+  formatSleepDuration,
   offsetDate,
   saveCheckin,
   type Checkin,
@@ -31,7 +32,9 @@ const energyNames = ["Very low", "Low", "Okay", "Good", "Great"];
 const sorenessNames = ["None", "Mild", "Moderate", "High", "Very high"];
 export function CheckinDetails({ checkin }: { checkin: Checkin }) {
   const items = [
-    checkin.sleepHours == null ? null : `${checkin.sleepHours} h sleep`,
+    checkin.sleepHours == null
+      ? null
+      : `${formatSleepDuration(checkin.sleepHours)} sleep`,
     checkin.energy == null ? null : `Energy ${checkin.energy}/5`,
     checkin.soreness == null ? null : `Soreness ${checkin.soreness}/5`,
     checkin.waterMl == null ? null : `${checkin.waterMl} ml water`,
@@ -110,7 +113,7 @@ function CheckinForm({
       <div className="checkin-number-grid">
         {(
           [
-            ["sleepHours", "Sleep last night", "hours", Moon, 0, 24, 0.1],
+            ["sleepHours", "Sleep last night", "hours", Moon, 0, 24, "any"],
             ["waterMl", "Water today", "ml total", Droplets, 0, 15000, 1],
             ["bodyweight", "Bodyweight", "kg", Scale, 20, 500, 0.1],
           ] as const
@@ -254,13 +257,16 @@ export function DailyOverview({
     {
       title: "Sleep",
       icon: Moon,
-      value: view.checkin?.sleepHours ?? "—",
+      value:
+        view.checkin?.sleepHours == null
+          ? "—"
+          : Math.round(view.checkin.sleepHours * 100) / 100,
       unit: "hours",
       detail:
         view.checkin?.sleepHours != null
-          ? "Logged for last night"
+          ? `${formatSleepDuration(view.checkin.sleepHours)} logged for last night`
           : "Add last night’s sleep",
-      route: "checkin",
+      route: "coach/sleep",
       color: "lilac",
     },
     {
@@ -489,9 +495,14 @@ export function HealthView({
             Sleep, energy and recovery, in your own words and numbers.
           </p>
         </div>
-        <Button onClick={() => setEditing(today())}>
-          <Plus size={16} /> Daily check-in
-        </Button>
+        <div className="button-row">
+          <Button variant="secondary" onClick={() => go("coach/sleep")}>
+            <Moon size={16} /> Log sleep with Coach
+          </Button>
+          <Button onClick={() => setEditing(today())}>
+            <Plus size={16} /> Daily check-in
+          </Button>
+        </div>
       </div>
       <div className="health-summary-grid">
         <section className="panel">
@@ -541,7 +552,7 @@ export function HealthView({
               <button
                 key={date}
                 onClick={() => setEditing(date)}
-                aria-label={`${date}: ${c?.sleepHours != null ? `${c.sleepHours} hours sleep` : "sleep not logged"}. Edit check-in.`}
+                aria-label={`${date}: ${c?.sleepHours != null ? `${formatSleepDuration(c.sleepHours)} sleep` : "sleep not logged"}. Edit check-in.`}
               >
                 <span className="sleep-bar-track">
                   <span
@@ -554,7 +565,11 @@ export function HealthView({
                     className={c?.sleepHours == null ? "missing" : ""}
                   />
                 </span>
-                <strong>{c?.sleepHours ?? "—"}</strong>
+                <strong>
+                  {c?.sleepHours == null
+                    ? "—"
+                    : Math.round(c.sleepHours * 10) / 10}
+                </strong>
                 <small>{date.slice(8)}</small>
               </button>
             );

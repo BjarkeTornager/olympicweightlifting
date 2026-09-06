@@ -49,6 +49,17 @@ export const healthSchema = z
   });
 export type Checkin = z.infer<typeof checkinSchema>;
 export type CheckinPatch = z.infer<typeof checkinPatchSchema>;
+export function formatSleepDuration(hours: number) {
+  const totalMinutes = Math.round(hours * 60);
+  const wholeHours = Math.floor(totalMinutes / 60),
+    minutes = totalMinutes % 60;
+  return [
+    wholeHours ? `${wholeHours} h` : "",
+    minutes || !wholeHours ? `${minutes} min` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 export function saveCheckin(
   state: JournalState,
   raw: unknown,

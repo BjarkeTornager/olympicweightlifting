@@ -23,7 +23,7 @@ Free personal provisioning expires after seven days, so you may need to run the 
 
 Apple: [membership options](https://developer.apple.com/support/compare-memberships/) and [running on a device](https://developer.apple.com/documentation/xcode/running-your-app-in-simulator-or-on-a-device).
 
-For sharing with friends, see [distribution options and TestFlight readiness](DISTRIBUTION.md).
+Current plan: use the Railway website for testing, then release the native app directly through the App Store. See [website testing and App Store readiness](DISTRIBUTION.md). TestFlight testing is not planned.
 
 ## Native workflows
 

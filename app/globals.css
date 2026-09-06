@@ -2848,3 +2848,46 @@ summary {
   .landing-coach h2 { font-size: 23px; }
   .landing-footer { flex-wrap: wrap; font-size: 10px; }
 }
+
+/* Coach's generated views share the journal's private, responsive workspace. */
+.coach-visuals { display: grid; gap: 18px; min-width: 0; margin-top: 18px; }
+.coach-visual { --coach-graph-line: #67877a; --coach-graph-node: #edf4ef; --coach-graph-border: #ccddd3; margin: 0; min-width: 0; border: 1px solid #d9e3df; border-radius: 14px; overflow: hidden; background: #fff; }
+.coach-visual figcaption { padding: 18px 20px 16px; background: linear-gradient(120deg, #f3f8f5, #fbfcfb); border-bottom: 1px solid #e3ebe6; }
+.coach-visual-label { display: flex; gap: 7px; align-items: center; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; color: #496b5d; }
+.coach-visual h3 { font-size: 16px; line-height: 1.4; margin: 8px 0 0; color: #263e34; overflow-wrap: anywhere; }
+.chat-assistant .coach-visual figcaption p { font-size: 12px; line-height: 1.6; margin: 8px 0 0; color: #52675d; white-space: normal; }
+.coach-table-scroll { overflow-x: auto; max-width: 100%; min-width: 0; margin: 12px 0; border: 1px solid #dce5e0; border-radius: 10px; overscroll-behavior-x: contain; }
+.coach-visual .coach-table-scroll { border: 0; border-radius: 0; margin: 0; }
+.coach-table-scroll:focus-visible, .coach-diagram-scroll:focus-visible { outline: 2px solid #356b53; outline-offset: -3px; }
+.coach-table-scroll table { border-collapse: collapse; width: 100%; font-size: 12px; line-height: 1.55; text-align: left; }
+.coach-table-scroll :is(th, td) { min-width: 108px; max-width: 260px; padding: 12px 16px; border: 0; border-bottom: 1px solid #e8ede9; overflow-wrap: anywhere; vertical-align: top; }
+.coach-table-scroll thead th { color: #425c4e; background: #f5f8f6; font-size: 11px; font-weight: 600; }
+.coach-table-scroll tbody th { color: #293f34; font-weight: 600; }
+.coach-table-scroll tr:last-child :is(th, td) { border-bottom: 0; }
+.coach-table-scroll tbody tr:nth-child(even) { background: #fafcfb; }
+.coach-bar-chart { display: grid; gap: 18px; list-style: none; padding: 20px; margin: 0; }
+.coach-bar-chart li > div:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; font-size: 12px; margin-bottom: 7px; overflow-wrap: anywhere; }
+.coach-bar-chart strong { color: #305b47; font-variant-numeric: tabular-nums; }
+.coach-bar-track { height: 9px; background: #edf2ee; border-radius: 4px; overflow: hidden; }
+.coach-bar-track span { display: block; height: 100%; background: #547e66; border-radius: inherit; }
+.coach-diagram-scroll { overflow: auto; max-height: 450px; padding: 10px 0; overscroll-behavior: contain; }
+.coach-diagram-scroll svg { display: block; width: 100%; min-width: 350px; max-width: 480px; margin: auto; font: 13px var(--font-sans), sans-serif; fill: #284537; }
+.coach-diagram-scroll .coach-diagram-number { font-size: 11px; font-weight: 600; }
+.coach-diagram-details { padding: 12px 20px; border-top: 1px solid #e5ece7; font-size: 12px; color: #405d4d; }
+.coach-diagram-details summary { cursor: pointer; padding: 4px 0; font-weight: 600; }
+.coach-diagram-details ul { display: grid; gap: 12px; margin: 12px 0; padding: 0; list-style: none; }
+.coach-diagram-details li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.coach-diagram-details li svg { flex-shrink: 0; }
+.coach-diagram-details li strong { width: 100%; font-size: 11px; }
+.coach-run-activity { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coach-run-activity p { display: flex; align-items: center; gap: 8px; color: #546d60; font-size: 12px; margin: 8px 0; }
+.coach-run-activity p svg { flex-shrink: 0; animation: coach-working 1.5s linear infinite; }
+.coach-run-activity button { display: flex; align-items: center; gap: 5px; color: #496051; border: 1px solid #d6e1da; border-radius: 8px; padding: 8px 10px; min-height: 36px; font-size: 11px; }
+@keyframes coach-working { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .coach-visual figcaption { padding: 14px; }
+  .coach-table-scroll :is(th, td) { padding: 10px 12px; }
+  .coach-bar-chart { padding: 16px 14px; gap: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .coach-run-activity p svg { animation: none; } }
+.coach-diagram-scroll .coach-diagram-edge { font-size: 10px; fill: #506b5c; }

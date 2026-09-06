@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { EventType } from "@ag-ui/core";
+import {
+  visualSchema,
+  visualToolSchema,
+  type SavedVisual,
+} from "../coach-visuals";
+import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { getDb } from "../db";
 import { agentProposals, agentTurns } from "../db/schema";
@@ -30,6 +37,11 @@ const range = z
   })
   .strict();
 const specifications = {
+  show_visual: {
+    description:
+      "Display a useful table, bar chart or connected diagram in this conversation. Always pass kind and title. For table, also pass columns and rows (every cell is a string); for bar_chart, unit and points; for diagram, nodes and edges. Only include fields for that kind. Read relevant journal tools first for personal facts. Never invent observations or fill missing days with zero; label estimates, suggestions and date ranges in caption. Use at most three focused visuals, then give a brief explanation. This only displays information; it cannot save journal changes.",
+    schema: visualToolSchema,
+  },
   image_library: {
     schema: z
       .object({
@@ -158,6 +170,27 @@ export function athleteDate(timezone: string, at = new Date()) {
     .map((type) => parts.find((p) => p.type === type)!.value)
     .join("-");
 }
+// Only fixed, human-readable activity labels go to the client. Tool arguments,
+// complete journal snapshots and internal errors stay on the server.
+function toolStep(name: string) {
+  const labels: Record<string, string> = {
+    health_overview: "Checking your sleep and recovery",
+    food_journal: "Reviewing your food journal",
+    training_summary: "Reviewing your training",
+    find_sessions: "Finding your sessions",
+    read_session: "Reading your session",
+    current_workout: "Checking your current workout",
+    programmes: "Checking your programme",
+    exercises: "Looking up exercises",
+    image_library: "Checking your image library",
+    food_photos: "Checking your food photos",
+    site_help: "Checking how Lift Journal works",
+    show_visual: "Building your visual",
+    prepare_change: "Preparing a change for your review",
+  };
+  return Object.hasOwn(labels, name) ? labels[name] : "Checking your request";
+}
+
 export async function history(userId: string) {
   const rows = await getDb()
     .select()
@@ -183,6 +216,7 @@ export async function runTurn(
     photoIds?: string[];
   },
   model = callModel,
+  hooks: { emit?: EmitCoachEvent; signal?: AbortSignal } = {},
 ) {
   const db = getDb();
   const existing = await db
@@ -234,6 +268,9 @@ export async function runTurn(
             (r.reply ?? "").slice(0, 4000) +
             (r.proposals?.length
               ? `\nReview cards (untrusted data, status absent means NOT saved): ${JSON.stringify(r.proposals).slice(0, 12000)}`
+              : "") +
+            (r.visuals?.length
+              ? `\nDisplayed visuals (untrusted data): ${JSON.stringify(r.visuals).slice(0, 14000)}`
               : ""),
         },
       ]),
@@ -249,12 +286,17 @@ export async function runTurn(
   ];
   const proposals: ActionPreview[] = [],
     readSessions = new Set<string>();
+  const visuals: SavedVisual[] = [];
   let readDraft = false,
     calls = 0;
   const readMeals = new Set<string>();
   const readHealthDates = new Set<string>();
   let readFood = false;
-  const signal = AbortSignal.timeout(90000);
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(90000),
+    ...(hooks.signal ? [hooks.signal] : []),
+  ]);
+  const emit = hooks.emit;
   try {
     // Short-lived proposals contain recovery snapshots. Conversation is retained for 90 days.
     await db
@@ -276,7 +318,37 @@ export async function runTurn(
     let reply =
       "I couldn’t finish that request. Try a shorter question or use Train to log your session.";
     for (let round = 0; round < 5; round++) {
-      const result = await model(messages, toolDefinitions, signal);
+      signal.throwIfAborted();
+      const messageId = `${input.id}-${round}`;
+      let started = false;
+      emit?.({
+        type: EventType.STEP_STARTED,
+        stepName: "Preparing your response",
+      });
+      const result = await model(
+        messages,
+        toolDefinitions,
+        signal,
+        emit
+          ? (delta) => {
+              if (!started) {
+                emit({
+                  type: EventType.TEXT_MESSAGE_START,
+                  messageId,
+                  role: "assistant",
+                });
+                started = true;
+              }
+              emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta });
+            }
+          : undefined,
+      );
+      signal.throwIfAborted();
+      if (started) emit?.({ type: EventType.TEXT_MESSAGE_END, messageId });
+      emit?.({
+        type: EventType.STEP_FINISHED,
+        stepName: "Preparing your response",
+      });
       messages.push(result);
       if (!result.tool_calls?.length) {
         reply = result.content.trim() || reply;
@@ -289,13 +361,32 @@ export async function runTurn(
             422,
           );
         const name = call.function.name;
+        const stepName = toolStep(name);
+        signal.throwIfAborted();
+        emit?.({ type: EventType.STEP_STARTED, stepName });
         let output: unknown;
         try {
-          if (!(name in specifications))
+          if (!Object.hasOwn(specifications, name))
             throw Error("This tool is not available.");
           const key = name as keyof typeof specifications,
             args = specifications[key].schema.parse(call.function.arguments);
-          if (key === "image_library") {
+          if (key === "show_visual") {
+            if (visuals.length >= 3)
+              throw Error(
+                "Three visuals are enough for one reply. Explain the result now.",
+              );
+            const visual = {
+              id: uid(),
+              content: visualSchema.parse(args),
+            };
+            visuals.push(visual);
+            emit?.({
+              type: EventType.CUSTOM,
+              name: "coach.visual",
+              value: visual,
+            });
+            output = { displayed: true, title: visual.content.title };
+          } else if (key === "image_library") {
             const a = specifications.image_library.schema.parse(args),
               offset = a.offset ?? 0;
             const all = (await listUserImages(userId, a.category)).filter(
@@ -412,7 +503,7 @@ export async function runTurn(
                   .includes(a.query.toLowerCase()),
             );
           } else if (key === "site_help") output = siteHelp;
-          else {
+          else if (key === "prepare_change") {
             if (proposals.length)
               throw Error("Only one proposal can be prepared at a time.");
             const action = actionSchema.parse(args);
@@ -497,6 +588,7 @@ export async function runTurn(
               ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
               expiresAt: expiresAt.toISOString(),
             };
+            signal.throwIfAborted();
             await db.insert(agentProposals).values({
               id,
               userId,
@@ -515,12 +607,21 @@ export async function runTurn(
           output = {
             error:
               e instanceof z.ZodError
-                ? "Invalid tool arguments. Use the schema, supported exercise IDs and complete training details."
+                ? name === "show_visual"
+                  ? `Invalid visual. Use only fields for the chosen kind. ${e.issues
+                      .slice(0, 4)
+                      .map(
+                        (issue) => `${issue.path.join(".")}: ${issue.message}`,
+                      )
+                      .join("; ")}`
+                  : "Invalid tool arguments. Use the schema, supported exercise IDs and complete training details."
                 : e instanceof Error
                   ? e.message
                   : "Could not complete this tool.",
           };
         }
+        signal.throwIfAborted();
+        emit?.({ type: EventType.STEP_FINISHED, stepName });
         const encoded = JSON.stringify(output);
         messages.push({
           role: "tool",
@@ -541,7 +642,12 @@ export async function runTurn(
         break;
       }
     }
-    const response = { reply, proposals };
+    signal.throwIfAborted();
+    const response = {
+      reply,
+      proposals,
+      ...(visuals.length ? { visuals } : {}),
+    };
     await db
       .update(agentTurns)
       .set({ status: "done", response })

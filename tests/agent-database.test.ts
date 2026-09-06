@@ -7,6 +7,10 @@ test(
   "agent uses owned tools, persists chat, commits once, prevents stale writes and guards undo",
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {
+    assert.ok(
+      new URL(process.env.TEST_DATABASE_URL!).pathname.endsWith("_test"),
+      "Use a disposable database",
+    );
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
     const { getPool } = await import("../lib/db"),
       { runTurn, applyProposal, history } = await import("../lib/agent/engine"),
@@ -115,6 +119,86 @@ test(
         messages[1].find((m) => m.role === "tool")!.content,
       );
       assert.equal(result.total, 0, "athlete B never sees A's records");
+      const events: unknown[] = [];
+      let visualRound = 0;
+      const visual = {
+        kind: "bar_chart",
+        title: "Illustrative example",
+        caption: "Example values, not journal observations.",
+        unit: "hours",
+        points: [{ label: "Example night", value: 7.5 }],
+      };
+      const shown = await runTurn(
+        b,
+        { ...makeInput(), message: "Show an illustrative sleep chart" },
+        async (_messages, _tools, _signal, onText) => {
+          if (++visualRound === 1)
+            return {
+              role: "assistant",
+              content: "",
+              tool_calls: [
+                { function: { name: "show_visual", arguments: visual } },
+              ],
+            };
+          onText?.("Here is an illustrative example.");
+          return {
+            role: "assistant",
+            content: "Here is an illustrative example.",
+          };
+        },
+        {
+          emit: (event) => {
+            events.push(event);
+          },
+        },
+      );
+      assert.equal(shown.visuals?.[0].content.title, "Illustrative example");
+      assert.ok(events.some((e) => (e as { type: string }).type === "CUSTOM"));
+      assert.ok(
+        events.some(
+          (e) => (e as { type: string }).type === "TEXT_MESSAGE_CONTENT",
+        ),
+      );
+      assert.equal(
+        (await history(b)).at(-1)?.visuals?.[0].id,
+        shown.visuals?.[0].id,
+      );
+      assert.equal(
+        (await readJournal(b)).revision,
+        0,
+        "a generated visual cannot mutate the journal",
+      );
+      assert.doesNotMatch(
+        JSON.stringify(await history(a)),
+        /Illustrative example/,
+      );
+      assert.doesNotMatch(
+        JSON.stringify(events),
+        /userId|athleteNotes|bodyweight|api.key/i,
+      );
+      const abort = new AbortController();
+      await assert.rejects(
+        runTurn(
+          b,
+          makeInput(),
+          async () => {
+            abort.abort();
+            return {
+              role: "assistant",
+              content: "",
+              tool_calls: [
+                { function: { name: "prepare_change", arguments: action } },
+              ],
+            };
+          },
+          { signal: abort.signal },
+        ),
+      );
+      assert.equal(
+        (await readJournal(b)).revision,
+        0,
+        "a cancelled run cannot prepare or apply a journal change",
+      );
       await assert.rejects(runTurn(a, makeInput(0), proposalModel), /Sync/);
       const count = (await history(a)).length;
       await assert.rejects(

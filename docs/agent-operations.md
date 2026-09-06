@@ -1,5 +1,7 @@
 # Training assistant operations
 
+Coach supports AG-UI streaming and generated tables, charts and diagrams. See [the protocol, privacy boundary and verification guide](coach-agui.md).
+
 Lift Journal's default screen is Coach. The model runs behind authenticated server routes; the browser never receives provider keys. Both OpenRouter and Ollama adapters use the same validated training tools.
 
 ## Hosted provider

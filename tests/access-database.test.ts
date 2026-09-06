@@ -37,6 +37,7 @@ test(
     const { GET: chatGet, DELETE: chatDelete } =
       await import("../app/api/agent/route");
     const { POST: action } = await import("../app/api/agent/action/route");
+    const { POST: chatRun } = await import("../app/api/agent/run/route");
     const { GET: imageList } = await import("../app/api/images/route");
     const {
       GET: imageGet,
@@ -135,12 +136,77 @@ test(
       const snapshot = await readJournal(users[0].id),
         proposalId = crypto.randomUUID(),
         turnId = crypto.randomUUID();
-      await getDb().insert(agentTurns).values({
-        id: turnId,
-        userId: users[0].id,
-        question: "PRIVATE-0-PROPOSAL",
-        status: "done",
+      await getDb()
+        .insert(agentTurns)
+        .values({
+          id: turnId,
+          userId: users[0].id,
+          question: "PRIVATE-0-PROPOSAL",
+          status: "done",
+          response: {
+            reply: "PRIVATE-0-STREAM-RESPONSE",
+            proposals: [],
+            visuals: [
+              {
+                id: crypto.randomUUID(),
+                content: {
+                  kind: "table",
+                  title: "PRIVATE-0-VISUAL",
+                  columns: ["Day", "Value"],
+                  rows: [["Today", "Synthetic"]],
+                },
+              },
+            ],
+          },
+        });
+      const runBody = {
+        threadId: users[1].id, // thread IDs cannot select another athlete
+        runId: turnId,
+        state: {},
+        context: [],
+        tools: [],
+        messages: [{ id: turnId, role: "user", content: "PRIVATE-0-PROPOSAL" }],
+        forwardedProps: {
+          revision: snapshot.revision,
+          timezone: "Europe/Copenhagen",
+          photoIds: [],
+        },
+      };
+      Object.assign(process.env, {
+        AGENT_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "test-not-a-real-key",
+        AGENT_MODEL: "test-no-provider-call",
       });
+      try {
+        const stream = await chatRun(
+          request(0, "/api/agent/run", "POST", runBody),
+        );
+        assert.equal(stream.status, 200);
+        assert.match(stream.headers.get("content-type")!, /text\/event-stream/);
+        assert.match(stream.headers.get("cache-control")!, /private, no-store/);
+        const events = await stream.text();
+        assert.match(events, /RUN_FINISHED/);
+        assert.match(events, /PRIVATE-0-VISUAL/);
+        const other = await chatRun(
+          request(1, "/api/agent/run", "POST", runBody),
+        );
+        const otherEvents = await other.text();
+        assert.match(otherEvents, /RUN_ERROR/);
+        assert.doesNotMatch(
+          otherEvents,
+          /PRIVATE-0-STREAM-RESPONSE|PRIVATE-0-VISUAL/,
+        );
+        assert.equal(
+          (
+            await chatRun(
+              request(0, "/api/agent/run", "POST", runBody, users[1].id),
+            )
+          ).status,
+          401,
+        );
+      } finally {
+        process.env.AGENT_PROVIDER = "";
+      }
       await getDb()
         .insert(agentProposals)
         .values({
@@ -328,6 +394,7 @@ test(
         [journalPut, "/api/journal", "PUT"],
         [chatDelete, "/api/agent", "DELETE"],
         [action, "/api/agent/action", "POST"],
+        [chatRun, "/api/agent/run", "POST"],
       ] as const) {
         assert.equal(
           (

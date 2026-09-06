@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { turnInputSchema } from "@/lib/agent/input";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agentTurns } from "@/lib/db/schema";
@@ -13,25 +13,6 @@ import { history, runTurn } from "@/lib/agent/engine";
 import { providerConfig } from "@/lib/agent/provider";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
-const inputSchema = z
-  .object({
-    id: z.string().uuid(),
-    message: z.string().trim().min(1).max(6000),
-    photoIds: z.array(z.string().uuid()).max(4).default([]),
-    revision: z.number().int().min(0),
-    timezone: z
-      .string()
-      .max(100)
-      .refine((v) => {
-        try {
-          new Intl.DateTimeFormat("en", { timeZone: v });
-          return true;
-        } catch {
-          return false;
-        }
-      }),
-  })
-  .strict();
 export async function GET(request: Request) {
   try {
     const user = await requireAthlete(request),
@@ -40,6 +21,7 @@ export async function GET(request: Request) {
       {
         enabled: Boolean(config),
         provider: config?.label ?? null,
+        protocol: "ag-ui",
         turns: await history(user.id),
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -61,7 +43,7 @@ export async function POST(request: Request) {
         "Please wait a minute before sending another message.",
         429,
       );
-    const input = inputSchema.parse(await readJson(request));
+    const input = turnInputSchema.parse(await readJson(request));
     return Response.json(await runTurn(user.id, input), {
       headers: { "Cache-Control": "no-store" },
     });

@@ -96,3 +96,31 @@ for (const path of paths) {
     assert.equal(r.status, 404);
   assert.equal(r.headers.get("access-control-allow-origin"), null);
 }
+// AG-UI is an authenticated POST stream. Probe without a cookie or content;
+// authentication must deny it before any model run can start.
+for (const origin of [new URL(base).origin, "https://untrusted.example"]) {
+  const response = await fetch(`${base}/api/agent/run`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+      "X-Journal-Account": "unauthenticated-audit",
+    },
+    body: "{}",
+  });
+  assert.equal(response.status, origin === new URL(base).origin ? 401 : 403);
+  assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
+  assert.doesNotMatch(
+    response.headers.get("content-type") ?? "",
+    /event-stream/,
+  );
+  console.log(
+    JSON.stringify({
+      path: "/api/agent/run",
+      method: "POST",
+      trustedOrigin: origin === new URL(base).origin,
+      status: response.status,
+    }),
+  );
+}

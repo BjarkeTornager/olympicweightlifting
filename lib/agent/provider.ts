@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { readModelStream } from "./model-stream";
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -117,7 +118,9 @@ export function modelRequest(
         })),
         tools,
         stream: false,
-        max_tokens: 1800,
+        max_tokens: tools.some((t) => t.function.name === "show_visual")
+          ? 3200
+          : 1800,
         provider: {
           require_parameters: true,
           data_collection: "deny",
@@ -133,7 +136,12 @@ export function modelRequest(
       tools,
       stream: false,
       think: false,
-      options: { temperature: 0.2, num_predict: 1800 },
+      options: {
+        temperature: 0.2,
+        num_predict: tools.some((t) => t.function.name === "show_visual")
+          ? 3200
+          : 1800,
+      },
     },
   };
 }
@@ -187,6 +195,7 @@ export async function callModel(
   messages: ModelMessage[],
   tools: ToolDefinition[],
   signal: AbortSignal,
+  onText?: (delta: string) => void,
 ): Promise<ModelMessage> {
   const config = providerConfig();
   if (!config)
@@ -194,6 +203,7 @@ export async function callModel(
       "The training assistant is not connected yet. Your journal and manual logging are ready to use.",
     );
   const request = modelRequest(messages, tools, config);
+  if (onText) request.body.stream = true;
   const response = await fetch(request.url, {
     method: "POST",
     headers: {
@@ -214,6 +224,11 @@ export async function callModel(
             ? "The provider could not process this image request. Try a text description or ask the host to check that the configured model supports images and tools. Your uploads are saved in Images."
             : "The assistant provider is unavailable. Try again shortly.",
       response.status === 402 ? 402 : response.status === 429 ? 429 : 503,
+    );
+  if (onText)
+    return parseModelResponse(
+      await readModelStream(response, config.kind, onText, signal),
+      config.kind,
     );
   const reader = response.body?.getReader();
   if (!reader) throw Error("The assistant returned an empty response.");

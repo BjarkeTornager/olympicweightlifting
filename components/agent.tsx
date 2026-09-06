@@ -1,6 +1,7 @@
 "use client";
 import { privateFetch } from "@/lib/private-fetch";
 import { useConversationScroll } from "@/lib/use-conversation-scroll";
+import type { SavedVisual } from "@/lib/coach-visuals";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -16,6 +17,8 @@ import {
   MoreHorizontal,
   ChevronDown,
   X,
+  LoaderCircle,
+  Square,
 } from "lucide-react";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
@@ -34,6 +37,7 @@ import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { DailyOverview, CheckinDialog, CheckinDetails } from "./health";
 import { AssistantText } from "./assistant-text";
+import { CoachVisuals } from "./coach-visuals";
 type Turn = {
   id: string;
   question: string;
@@ -41,6 +45,8 @@ type Turn = {
   proposals?: ActionPreview[];
   status: string;
   photoIds?: string[];
+  visuals?: SavedVisual[];
+  activity?: string;
 };
 export function TrainingAgent({
   journal,
@@ -64,11 +70,14 @@ export function TrainingAgent({
   const [connection, setConnection] = useState<{
       enabled: boolean;
       provider: string | null;
+      protocol?: string;
     } | null>(null),
     [clear, setClear] = useState(false);
   const [acting, setActing] = useState<string | null>(null),
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+  const activeRun = useRef<AbortController | null>(null);
+  useEffect(() => () => activeRun.current?.abort(), []);
   const [view, setView] = useState<"conversation" | "today">("conversation");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -145,7 +154,11 @@ export function TrainingAgent({
     });
     const data = await r.json();
     if (!r.ok) throw Error(data.error ?? "The assistant is unavailable.");
-    setConnection({ enabled: data.enabled, provider: data.provider });
+    setConnection({
+      enabled: data.enabled,
+      provider: data.provider,
+      protocol: data.protocol,
+    });
     setTurns(data.turns);
   }, [accountId, headers]);
   useEffect(() => {
@@ -162,7 +175,11 @@ export function TrainingAgent({
         return data;
       })
       .then((data) => {
-        setConnection({ enabled: data.enabled, provider: data.provider });
+        setConnection({
+          enabled: data.enabled,
+          provider: data.provider,
+          protocol: data.protocol,
+        });
         setTurns(data.turns);
       })
       .catch((e) => {
@@ -218,6 +235,8 @@ export function TrainingAgent({
     if (!question || busy || uploading || !ready) return;
     const attachments = [...photoIds];
     const id = crypto.randomUUID();
+    const abort = new AbortController();
+    activeRun.current = abort;
     setBusy(true);
     setError("");
     setMessage("");
@@ -229,23 +248,65 @@ export function TrainingAgent({
     setToolsOpen(false);
     input.current?.blur();
     try {
-      const r = await privateFetch("/api/agent", {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({
-          id,
-          message: question,
-          revision: journal.record!.revision,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          photoIds: attachments,
-        }),
-        signal: AbortSignal.timeout(110000),
-      });
-      const result = await r.json();
-      if (!r.ok)
-        throw Error(
-          result.error ?? "The assistant could not complete that request.",
-        );
+      const { runCoach } = await import("@/lib/coach-client");
+      const payload = {
+        id,
+        message: question,
+        revision: journal.record!.revision,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        photoIds: attachments,
+      };
+      const signal = AbortSignal.any([
+        abort.signal,
+        AbortSignal.timeout(110000),
+      ]);
+      const result =
+        connection?.protocol === "ag-ui"
+          ? await runCoach(accountId!, payload, signal, (update) => {
+              if (signal.aborted) return;
+              setTurns((old) =>
+                old.map((t) =>
+                  t.id === id
+                    ? {
+                        ...t,
+                        ...(update.reply !== undefined
+                          ? { reply: update.reply }
+                          : {}),
+                        ...(update.activity
+                          ? { activity: update.activity }
+                          : {}),
+                        ...(update.visual
+                          ? {
+                              visuals: [
+                                ...(t.visuals ?? []).filter(
+                                  (v) => v.id !== update.visual!.id,
+                                ),
+                                update.visual,
+                              ].slice(0, 3),
+                            }
+                          : {}),
+                      }
+                    : t,
+                ),
+              );
+            })
+          : await (async () => {
+              // Compatibility during rolling releases; never retry a failed run
+              // using a second transport, which could prepare duplicate changes.
+              const r = await privateFetch("/api/agent", {
+                method: "POST",
+                headers: headers(),
+                body: JSON.stringify(payload),
+                signal,
+              });
+              const data = await r.json();
+              if (!r.ok)
+                throw Error(
+                  data.error ??
+                    "The assistant could not complete that request.",
+                );
+              return data;
+            })();
       setTurns((old) =>
         old.map((t) =>
           t.id === id
@@ -257,15 +318,18 @@ export function TrainingAgent({
       setImageDetails({});
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : "The request failed. Your journal is safe.",
+        abort.signal.aborted
+          ? "Response stopped. Your message is ready to edit or send again."
+          : e instanceof Error
+            ? e.message
+            : "The request failed. Your journal is safe.",
       );
       setMessage((current) => current || question);
       setTurns((old) =>
         old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
       );
     } finally {
+      if (activeRun.current === abort) activeRun.current = null;
       setBusy(false);
     }
   };
@@ -514,12 +578,14 @@ export function TrainingAgent({
                     <h2>What’s on your mind today?</h2>
                     <p>
                       Log a meal, make sense of your sleep, or plan your next
-                      session.
+                      session. Ask for a table, chart or diagram when a visual
+                      helps.
                     </p>
                     <div className="agent-prompts">
                       {[
                         "What should I focus on today?",
                         "How is my recovery looking?",
+                        "Show my week in a table",
                       ].map((text) => (
                         <button
                           key={text}
@@ -571,20 +637,37 @@ export function TrainingAgent({
                         </div>
                       )}
                     </div>
-                    {t.reply && (
+                    {(t.reply || Boolean(t.visuals?.length)) && (
                       <div className="chat-assistant">
                         <span className="assistant-mark">
                           <Sparkles size={16} /> Lift Journal
                         </span>
-                        <AssistantText text={t.reply} />
+                        {t.reply && <AssistantText text={t.reply} />}
+                        {Boolean(t.visuals?.length) && (
+                          <CoachVisuals visuals={t.visuals!} />
+                        )}
                       </div>
                     )}
                     {t.status === "running" && (
-                      <p className="muted">
-                        {busy
-                          ? "Looking through your journal…"
-                          : "This request has not completed. You can ask again."}
-                      </p>
+                      <div className="coach-run-activity">
+                        <p role="status">
+                          {busy && t.id === newestId && (
+                            <LoaderCircle size={15} aria-hidden="true" />
+                          )}
+                          {busy && t.id === newestId
+                            ? (t.activity ?? "Looking through your journal…")
+                            : "This request has not completed. You can ask again."}
+                        </p>
+                        {busy && t.id === newestId && (
+                          <button
+                            onClick={() => activeRun.current?.abort()}
+                            aria-label="Stop response"
+                          >
+                            <Square size={12} aria-hidden="true" />
+                            Stop
+                          </button>
+                        )}
+                      </div>
                     )}
                     {t.status === "failed" && (
                       <p className="fine-print">

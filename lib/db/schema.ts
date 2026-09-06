@@ -240,10 +240,8 @@ export const agentTurns = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     question: text("question").notNull(),
     photoIds: jsonb("photo_ids").$type<string[]>().notNull().default([]),
-    response: jsonb("response").$type<{
-      reply: string;
-      proposals: import("../agent/actions").ActionPreview[];
-    }>(),
+    response:
+      jsonb("response").$type<import("../coach-visuals").CoachResponse>(),
     status: text("status").notNull().default("running"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

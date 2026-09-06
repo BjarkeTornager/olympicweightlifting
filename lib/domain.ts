@@ -1,10 +1,5 @@
 import { canonicalJson } from "./json";
-import {
-  APP_META,
-  EXERCISES,
-  PROGRAM_DEFINITION,
-  PR_DEFINITIONS,
-} from "../js/data.js";
+import { APP_META, EXERCISES, PROGRAM_DEFINITION } from "../js/public-data.js";
 import {
   planExercise,
   PROGRESSION_VERSION,
@@ -20,7 +15,19 @@ import {
   type Entry,
   type ProgramExercise,
 } from "./model";
-export { EXERCISES, PR_DEFINITIONS, APP_META };
+export { EXERCISES, APP_META };
+export const PR_DEFINITIONS = [
+  { exerciseId: "snatch", label: "Snatch" },
+  { exerciseId: "clean_and_jerk", label: "Clean & jerk" },
+  { exerciseId: "back_squat", label: "Back squat" },
+  { exerciseId: "front_squat", label: "Front squat" },
+  { exerciseId: "power_snatch", label: "Power snatch" },
+  { exerciseId: "power_clean", label: "Power clean" },
+  { exerciseId: "snatch_balance", label: "Snatch balance" },
+  { exerciseId: "push_press", label: "Push press" },
+  { exerciseId: "clean", label: "Clean" },
+  { exerciseId: "clean_pull", label: "Clean pull / deadlift" },
+] as const;
 export const program = PROGRAM_DEFINITION;
 export const days = PROGRAM_DEFINITION.days as ProgramDay[];
 export const today = () => {
@@ -40,6 +47,19 @@ export function emptyJournal(): JournalState {
     prs: Object.fromEntries(PR_DEFINITIONS.map((p) => [p.exerciseId, 0])),
     sessions: [],
     activeWorkout: null,
+    templates: [],
+    health: { checkins: [] },
+    cardio: { sessions: [] },
+    nutrition: {
+      meals: [],
+      targets: {
+        goal: "maintain",
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
     program: {
       activeProgramId: program.id,
       programRevision: program.revision,
@@ -227,8 +247,52 @@ export function mergeImport(
     );
   const fresh =
     !current.sessions.length &&
+    !current.cardio.sessions.length &&
+    !current.nutrition.meals.length &&
+    !current.health.checkins.length &&
+    current.nutrition.targets.goal === "maintain" &&
+    ["calories", "protein", "carbs", "fat"].every(
+      (key) =>
+        current.nutrition.targets[
+          key as "calories" | "protein" | "carbs" | "fat"
+        ] == null,
+    ) &&
     !current.activeWorkout &&
     Object.values(current.prs).every((v) => v === 0);
+  const templates = new Map((current.templates ?? []).map((t) => [t.id, t]));
+  const cardio = new Map(current.cardio.sessions.map((s) => [s.id, s]));
+  for (const activity of incoming.cardio.sessions) {
+    const old = cardio.get(activity.id);
+    if (old && canonicalJson(old) !== canonicalJson(activity))
+      throw Error(
+        `A different version of cardio activity on ${activity.date} already exists. Review both backups before importing.`,
+      );
+    cardio.set(activity.id, activity);
+  }
+  const meals = new Map(current.nutrition.meals.map((m) => [m.id, m]));
+  const checkins = new Map(current.health.checkins.map((c) => [c.date, c]));
+  for (const checkin of incoming.health.checkins) {
+    const old = checkins.get(checkin.date);
+    if (old && canonicalJson(old) !== canonicalJson(checkin))
+      throw Error(
+        `A different check-in for ${checkin.date} already exists. Review both backups before importing.`,
+      );
+    checkins.set(checkin.date, checkin);
+  }
+  for (const meal of incoming.nutrition.meals) {
+    const old = meals.get(meal.id);
+    if (old && canonicalJson(old) !== canonicalJson(meal))
+      throw Error(`A different version of meal “${meal.name}” already exists.`);
+    meals.set(meal.id, meal);
+  }
+  for (const template of incoming.templates ?? []) {
+    const old = templates.get(template.id);
+    if (old && canonicalJson(old) !== canonicalJson(template))
+      throw Error(
+        `A different version of template “${template.name}” already exists.`,
+      );
+    templates.set(template.id, template);
+  }
   return journalSchema.parse({
     ...current,
     ...(fresh
@@ -240,6 +304,13 @@ export function mergeImport(
         }
       : {}),
     sessions: [...sessions.values()],
+    templates: [...templates.values()],
+    health: { checkins: [...checkins.values()] },
+    cardio: { sessions: [...cardio.values()] },
+    nutrition: {
+      meals: [...meals.values()],
+      targets: fresh ? incoming.nutrition.targets : current.nutrition.targets,
+    },
     activeWorkout: current.activeWorkout ?? incoming.activeWorkout,
   });
 }

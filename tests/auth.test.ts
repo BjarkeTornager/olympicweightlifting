@@ -18,6 +18,7 @@ test(
     process.env.LOCAL_PASSWORD_AUTH = "true";
     const email = `auth-${crypto.randomUUID()}@example.test`;
     const uninvited = `uninvited-${crypto.randomUUID()}@example.test`;
+    delete process.env.OWNER_EMAIL;
     process.env.ALLOWED_EMAILS = email;
     process.env.BETTER_AUTH_SECRET ??= "test-only-secret-".repeat(4);
     process.env.BETTER_AUTH_URL = "http://localhost:3000";
@@ -26,6 +27,11 @@ test(
     const { getPool } = await import("../lib/db");
     const { GET: getSession } = await import("../app/api/session/route");
     const { GET: getJournal } = await import("../app/api/journal/route");
+    const { GET: getAgent, DELETE: clearAgent } =
+      await import("../app/api/agent/route");
+    const { POST: agentAction } = await import("../app/api/agent/action/route");
+    const { POST: revokeDevices } =
+      await import("../app/api/devices/revoke/route");
     const auth = getAuth();
     const password = `test-only-${crypto.randomUUID()}`;
     const post = (path: string, body: unknown, cookie = "") =>
@@ -45,8 +51,11 @@ test(
         .getSetCookie()
         .map((value) => value.split(";")[0])
         .join("; ");
+    let currentAccount = "";
     const request = (cookie: string) =>
-      new Request("http://localhost:3000/api/session", { headers: { cookie } });
+      new Request("http://localhost:3000/api/session", {
+        headers: { cookie, "X-Journal-Account": currentAccount },
+      });
 
     try {
       const rejected = await post("sign-up/email", {
@@ -71,6 +80,7 @@ test(
       });
       assert.equal(signup.status, 200);
       const userId = (await signup.json()).user.id;
+      currentAccount = userId;
       const createdCookie = cookieFrom(signup);
       assert.match(signup.headers.get("set-cookie")!, /HttpOnly/i);
       assert.match(signup.headers.get("set-cookie")!, /SameSite=Lax/i);
@@ -113,6 +123,59 @@ test(
         401,
       );
 
+      const privateRequest = (
+        method: string,
+        account = userId,
+        origin = "http://localhost:3000",
+        cookie = loginCookie,
+      ) =>
+        new Request("http://localhost:3000/api/agent", {
+          method,
+          headers: {
+            cookie,
+            origin,
+            "X-Journal-Account": account,
+            "Content-Type": "application/json",
+          },
+          ...(method === "GET" ? {} : { body: "{}" }),
+        });
+      assert.equal(
+        (await getAgent(privateRequest("GET", userId, undefined, ""))).status,
+        401,
+      );
+      for (const account of ["", "another-account"]) {
+        assert.equal(
+          (await getAgent(privateRequest("GET", account))).status,
+          401,
+        );
+        assert.equal(
+          (await clearAgent(privateRequest("DELETE", account))).status,
+          401,
+        );
+        assert.equal(
+          (await agentAction(privateRequest("POST", account))).status,
+          401,
+        );
+        assert.equal(
+          (await revokeDevices(privateRequest("POST", account))).status,
+          401,
+        );
+      }
+      for (const handler of [clearAgent, agentAction, revokeDevices])
+        assert.equal(
+          (
+            await handler(
+              privateRequest("POST", userId, "https://untrusted.example"),
+            )
+          ).status,
+          403,
+        );
+      const ownChat = await getAgent(privateRequest("GET"));
+      assert.equal(ownChat.status, 200);
+      assert.equal(ownChat.headers.get("cache-control"), "no-store");
+      assert.deepEqual((await ownChat.json()).turns, []);
+      assert.equal((await clearAgent(privateRequest("DELETE"))).status, 200);
+
       const logout = await post("sign-out", {}, loginCookie);
       assert.equal(logout.status, 200);
       assert.equal(
@@ -128,6 +191,28 @@ test(
         (await getJournal(request(createdCookie))).status,
         200,
         "Other device sessions remain valid",
+      );
+
+      const thirdLogin = await post("sign-in/email", { email, password });
+      const thirdCookie = cookieFrom(thirdLogin);
+      assert.equal(
+        (
+          await revokeDevices(
+            privateRequest("POST", userId, undefined, createdCookie),
+          )
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await getJournal(request(thirdCookie))).status,
+        401,
+        "Other device sessions are revoked",
+      );
+      assert.equal((await getJournal(request(loginCookie))).status, 401);
+      assert.equal(
+        (await getJournal(request(createdCookie))).status,
+        200,
+        "The current device stays signed in",
       );
 
       await getPool().query(

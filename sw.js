@@ -1,10 +1,11 @@
-const CACHE_NAME = "lift-journal-shell-v9";
+const CACHE_NAME = "lift-journal-shell-v10";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./js/app.js",
   "./js/data.js",
+  "./js/public-data.js",
   "./js/storage.js",
   "./js/progression.js",
   "./js/updates.js",

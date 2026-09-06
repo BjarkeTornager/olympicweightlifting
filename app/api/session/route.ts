@@ -1,9 +1,5 @@
-import {
-  getAuth,
-  googleEnabled,
-  localPasswordEnabled,
-  pilotEmailAllowed,
-} from "@/lib/auth";
+import { isOwnerEmail, userAllowed } from "@/lib/access";
+import { getAuth, googleEnabled, localPasswordEnabled } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   if (!process.env.DATABASE_URL || !process.env.BETTER_AUTH_SECRET)
@@ -12,20 +8,24 @@ export async function GET(request: Request) {
       google: false,
       localPassword: false,
       configured: false,
+      canInvite: false,
     });
   try {
     const session = await getAuth().api.getSession({
       headers: request.headers,
     });
+    const admitted =
+      session && (await userAllowed(session.user)) ? session : null;
     return Response.json({
-      user:
-        session && pilotEmailAllowed(session.user.email)
-          ? {
-              id: session.user.id,
-              name: session.user.name,
-              email: session.user.email,
-            }
-          : null,
+      user: admitted
+        ? {
+            id: admitted.user.id,
+            name: admitted.user.name,
+            email: admitted.user.email,
+          }
+        : null,
+      canInvite: Boolean(admitted && isOwnerEmail(admitted.user.email)),
+      expiresAt: admitted?.session.expiresAt.toISOString() ?? null,
       google: googleEnabled(),
       localPassword: localPasswordEnabled(),
       configured: true,

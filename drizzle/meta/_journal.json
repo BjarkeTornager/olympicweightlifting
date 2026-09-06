@@ -15,6 +15,34 @@
       "when": 1788639937801,
       "tag": "0001_dark_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788682804233,
+      "tag": "0002_keen_peter_quill",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788687348861,
+      "tag": "0003_sloppy_talon",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788700502141,
+      "tag": "0004_last_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788715350291,
+      "tag": "0005_giant_firelord",
+      "breakpoints": true
     }
   ]
 }

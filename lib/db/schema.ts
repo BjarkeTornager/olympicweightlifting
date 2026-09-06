@@ -12,9 +12,68 @@ import {
   foreignKey,
   check,
   date,
+  customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { JournalState, Workout, Entry } from "../model";
+import {
+  unclassifiedImage,
+  type ImageCategory,
+  type ImageClassification,
+} from "../images";
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+export const foodPhotos = pgTable(
+  "food_photos",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    label: text("label").notNull(),
+    date: date("meal_date").notNull(),
+    bytes: integer("bytes").notNull(),
+    digest: text("digest").notNull(),
+    data: bytea("data").notNull(),
+    category: text("category")
+      .$type<ImageCategory>()
+      .notNull()
+      .default("unclassified"),
+    classification: jsonb("classification")
+      .$type<ImageClassification>()
+      .notNull()
+      .default(unclassifiedImage),
+    version: integer("version").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.id] }),
+    index("food_photos_user_date_idx").on(t.userId, t.date),
+    index("images_user_category_idx").on(t.userId, t.category),
+  ],
+);
+export const journalInvitations = pgTable(
+  "journal_invitations",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull().unique(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      "invitation_email_normalized",
+      sql`${t.email} = lower(btrim(${t.email})) AND length(${t.email}) <= 254`,
+    ),
+  ],
+);
+
 export const user = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -192,3 +251,44 @@ export const rateLimits = pgTable("request_limits", {
   count: integer("count").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+export const agentTurns = pgTable(
+  "agent_turns",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    photoIds: jsonb("photo_ids").$type<string[]>().notNull().default([]),
+    response:
+      jsonb("response").$type<import("../coach-visuals").CoachResponse>(),
+    status: text("status").notNull().default("running"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("agent_turns_user_date_idx").on(t.userId, t.createdAt)],
+);
+export const agentProposals = pgTable(
+  "agent_proposals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    turnId: text("turn_id")
+      .notNull()
+      .references(() => agentTurns.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    before: jsonb("before_state").$type<JournalState>().notNull(),
+    after: jsonb("after_state").$type<JournalState>().notNull(),
+    preview: jsonb("preview")
+      .$type<import("../agent/actions").ActionPreview>()
+      .notNull(),
+    undoId: text("undo_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("agent_proposals_user_idx").on(t.userId)],
+);

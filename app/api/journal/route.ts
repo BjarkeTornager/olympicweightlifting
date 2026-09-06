@@ -1,11 +1,14 @@
+import { foodSnapshotForClient } from "@/lib/food-compatibility";
+import { userAllowed } from "@/lib/access";
 import { z } from "zod";
-import { getAuth, pilotEmailAllowed } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { journalSchema } from "@/lib/model";
 import {
   readJournal,
   writeJournal,
   RevisionConflict,
   MutationConflict,
+  MissingMealPhoto,
   allowRequest,
 } from "@/lib/server";
 import { planProgramDay } from "@/js/progression.js";
@@ -19,7 +22,7 @@ const schema = z.object({
 async function identity(request: Request) {
   const user = (await getAuth().api.getSession({ headers: request.headers }))
     ?.user;
-  return user && pilotEmailAllowed(user.email) ? user : undefined;
+  return user && (await userAllowed(user)) ? user : undefined;
 }
 export async function GET(request: Request) {
   try {
@@ -29,10 +32,7 @@ export async function GET(request: Request) {
         { error: "Sign in to sync your journal." },
         { status: 401 },
       );
-    if (
-      request.headers.has("x-journal-account") &&
-      request.headers.get("x-journal-account") !== user.id
-    )
+    if (request.headers.get("x-journal-account") !== user.id)
       return Response.json(
         { error: "The signed-in account changed. Reload before syncing." },
         { status: 401 },
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const snapshot = await readJournal(user.id);
     return Response.json({
       accountId: user.id,
-      ...snapshot,
+      ...foodSnapshotForClient(request, snapshot),
       plans: days.map((day) => ({
         id: day.id,
         ...planProgramDay(day, {
@@ -77,10 +77,7 @@ export async function PUT(request: Request) {
         { error: "Sign in again to sync." },
         { status: 401 },
       );
-    if (
-      request.headers.has("x-journal-account") &&
-      request.headers.get("x-journal-account") !== user.id
-    )
+    if (request.headers.get("x-journal-account") !== user.id)
       return Response.json(
         { error: "The signed-in account changed. Reload before syncing." },
         { status: 401 },
@@ -108,26 +105,41 @@ export async function PUT(request: Request) {
       }
       chunks.push(value);
     }
-    const input = schema.parse(
-      JSON.parse(Buffer.concat(chunks).toString("utf8")),
-    );
+    const raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const input = schema.parse(raw);
     return Response.json({
       accountId: user.id,
-      ...(await writeJournal(user.id, input)),
+      ...foodSnapshotForClient(
+        request,
+        await writeJournal(user.id, {
+          ...input,
+          preserveMissingFoodTags: true,
+          state: {
+            ...input.state,
+            // Preserve omission until the transaction can retain this additive
+            // field for an older client. A schema default must not mean deletion.
+            cardio:
+              raw.state.cardio === undefined ? undefined : input.state.cardio,
+          },
+        }),
+      ),
     });
   } catch (error) {
     if (error instanceof RevisionConflict)
       return Response.json(
-        { error: error.message, ...error.snapshot },
+        {
+          error: error.message,
+          ...foodSnapshotForClient(request, error.snapshot),
+        },
         { status: 409 },
       );
-    if (error instanceof MutationConflict)
+    if (error instanceof MutationConflict || error instanceof MissingMealPhoto)
       return Response.json({ error: error.message }, { status: 422 });
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return Response.json(
         {
           error:
-            "Invalid workout data. Check weights, repetitions, dates and backup format.",
+            "Invalid journal data. Check workout values, meal portions, nutrition, dates and backup format.",
         },
         { status: 400 },
       );

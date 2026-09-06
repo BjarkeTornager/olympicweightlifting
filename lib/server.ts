@@ -1,6 +1,7 @@
 import { canonicalJson } from "./json";
+import { retainFoodClassifications } from "./nutrition";
 import { createHash } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   journals,
@@ -9,6 +10,7 @@ import {
   workoutExercises,
   workoutSets,
   rateLimits,
+  foodPhotos,
 } from "./db/schema";
 import { emptyJournal } from "./domain";
 import { journalSchema, type JournalState, type Snapshot } from "./model";
@@ -21,6 +23,7 @@ export class RevisionConflict extends Error {
   }
 }
 export class MutationConflict extends Error {}
+export class MissingMealPhoto extends Error {}
 export async function readJournal(userId: string): Promise<Snapshot> {
   const db = getDb();
   await db
@@ -33,15 +36,36 @@ export async function readJournal(userId: string): Promise<Snapshot> {
     .where(eq(journals.userId, userId));
   return { state: journalSchema.parse(row.state), revision: row.revision };
 }
+export type JournalTransaction = Parameters<
+  Parameters<ReturnType<typeof getDb>["transaction"]>[0]
+>[0];
 export async function writeJournal(
   userId: string,
-  input: { state: JournalState; revision: number; mutationId: string },
+  input: {
+    state: Omit<JournalState, "cardio"> & { cardio?: JournalState["cardio"] };
+    revision: number;
+    mutationId: string;
+    preserveMissingFoodTags?: boolean;
+  },
+  transaction?: JournalTransaction,
 ): Promise<Snapshot> {
   const state = journalSchema.parse(input.state);
   const hash = createHash("sha256")
     .update(canonicalJson({ state, revision: input.revision }))
     .digest("hex");
-  return getDb().transaction(async (tx) => {
+  // A retry may have been acknowledged by the release before cardio existed.
+  // Only an empty additive field may be omitted for that legacy hash match.
+  const legacyState = { ...state } as Record<string, unknown>;
+  delete legacyState.cardio;
+  const legacyHash =
+    state.cardio.sessions.length === 0
+      ? createHash("sha256")
+          .update(
+            canonicalJson({ state: legacyState, revision: input.revision }),
+          )
+          .digest("hex")
+      : null;
+  const work = async (tx: JournalTransaction) => {
     await tx
       .insert(journals)
       .values({ userId, state: emptyJournal() })
@@ -58,15 +82,61 @@ export async function writeJournal(
         and(eq(mutations.userId, userId), eq(mutations.id, input.mutationId)),
       );
     if (prior) {
-      if (prior.hash !== hash)
+      if (prior.hash !== hash && prior.hash !== legacyHash)
         throw new MutationConflict(
           "A save identifier was reused with different content.",
         );
-      return { state: row.state, revision: row.revision };
+      return { state: journalSchema.parse(row.state), revision: row.revision };
     }
     if (row.revision !== input.revision)
-      throw new RevisionConflict({ state: row.state, revision: row.revision });
+      throw new RevisionConflict({
+        state: journalSchema.parse(row.state),
+        revision: row.revision,
+      });
+    // Older cached clients cannot intentionally edit a field they do not know.
+    // Keep its current value; an explicit empty collection still means deletion.
+    if (input.state.cardio === undefined)
+      state.cardio = journalSchema.parse(row.state).cardio;
+    const previousMeals = new Map(
+      journalSchema.parse(row.state).nutrition.meals.map((m) => [m.id, m]),
+    );
+    try {
+      if (input.preserveMissingFoodTags)
+        state.nutrition.meals = state.nutrition.meals.map((meal) => ({
+          ...meal,
+          items: retainFoodClassifications(
+            meal.items,
+            previousMeals.get(meal.id)?.items ?? [],
+            true,
+          ),
+        }));
+    } catch (error) {
+      throw new MutationConflict(
+        error instanceof Error
+          ? error.message
+          : "Review food tags before saving.",
+      );
+    }
     const revision = row.revision + 1;
+    const photoIds = [
+      ...new Set(state.nutrition.meals.flatMap((m) => m.photoIds)),
+    ];
+    if (photoIds.length) {
+      const owned = await tx
+        .select({ id: foodPhotos.id, category: foodPhotos.category })
+        .from(foodPhotos)
+        .where(
+          and(eq(foodPhotos.userId, userId), inArray(foodPhotos.id, photoIds)),
+        );
+      if (owned.length !== photoIds.length)
+        throw new MissingMealPhoto(
+          "A meal photo is missing from this account. Edit the meal in Food and remove unavailable photo links before syncing.",
+        );
+      if (owned.some((image) => image.category !== "food"))
+        throw new MissingMealPhoto(
+          "Only images categorised as Food can be linked to meals. Correct the category in Images or remove the image link in Food before syncing.",
+        );
+    }
     state.updatedAt = new Date().toISOString();
     // Account-level optimistic concurrency also covers deleted sessions: stale devices
     // must resolve before uploading, so old snapshots cannot resurrect deletions.
@@ -138,10 +208,15 @@ export async function writeJournal(
       .insert(mutations)
       .values({ userId, id: input.mutationId, hash, revision });
     return { state, revision };
-  });
+  };
+  return transaction ? work(transaction) : getDb().transaction(work);
 }
-export async function allowRequest(userId: string): Promise<boolean> {
-  const key = `journal:${userId}`;
+export async function allowRequest(
+  userId: string,
+  bucket = "journal",
+  limit = 120,
+): Promise<boolean> {
+  const key = `${bucket}:${userId}`;
   const [row] = await getDb()
     .insert(rateLimits)
     .values({ key, count: 1, expiresAt: new Date(Date.now() + 60000) })
@@ -153,5 +228,5 @@ export async function allowRequest(userId: string): Promise<boolean> {
       },
     })
     .returning();
-  return row.count <= 120;
+  return row.count <= limit;
 }

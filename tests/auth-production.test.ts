@@ -16,6 +16,7 @@ test(
     process.env.DATABASE_URL = testUrl;
     Object.assign(process.env, { NODE_ENV: "production" });
     process.env.LOCAL_PASSWORD_AUTH = "true";
+    process.env.OWNER_EMAIL = "production-test@example.test";
     process.env.ALLOWED_EMAILS = "production-test@example.test";
     process.env.BETTER_AUTH_SECRET = "test-only-secret-".repeat(4);
     process.env.BETTER_AUTH_URL = "https://lift.example.test";

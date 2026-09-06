@@ -14,6 +14,7 @@ test(
       `qa-a-${suffix}@example.test`,
       `qa-b-${suffix}@example.test`,
     ];
+    delete process.env.OWNER_EMAIL;
     process.env.ALLOWED_EMAILS = emails.join(",");
     process.env.BETTER_AUTH_SECRET ??= "test-only-secret-".repeat(4);
     process.env.BETTER_AUTH_URL = "http://localhost:3000";
@@ -23,6 +24,7 @@ test(
     const { createWorkout, days } = await import("../lib/domain");
     const ids: string[] = [];
     const auth = getAuth();
+    const accounts = new Map<string, string>();
     const signup = async (email: string) => {
       const response = await auth.handler(
         new Request("http://localhost:3000/api/auth/sign-up/email", {
@@ -41,16 +43,19 @@ test(
       assert.equal(response.status, 200, await response.clone().text());
       const body = await response.json();
       ids.push(body.user.id);
-      return response.headers
+      const cookie = response.headers
         .getSetCookie()
         .map((c) => c.split(";")[0])
         .join("; ");
+      accounts.set(cookie, body.user.id);
+      return cookie;
     };
     const request = (cookie: string, body?: unknown) =>
       new Request("http://localhost:3000/api/journal", {
         method: body ? "PUT" : "GET",
         headers: {
           cookie,
+          "X-Journal-Account": accounts.get(cookie) ?? "",
           Origin: "http://localhost:3000",
           "Content-Type": "application/json",
         },

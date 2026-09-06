@@ -8,6 +8,8 @@ Coach now opens with a daily overview for training, nutrition and recovery. The 
 
 ### Log sleep with Coach
 
+The sleep flow is [deployed and verified on Railway](sleep-deployment-2026-09-06.md).
+
 Tell Coach “I slept 7 hours 47 minutes last night,” or attach a sleep screenshot and ask it to log the night. **Log sleep** beside the message box prepares the request without sending it or replacing typed text. The Sleep card on Coach and **Log sleep with Coach** in Health open the sleep flow. Sleep images in the library offer both **Read sleep image** for explanation and **Log sleep with Coach** for a save proposal.
 
 Coach reads the existing check-in before preparing a merged review. The night belongs to its wake-up date: “last night” uses today in the athlete's timezone, while a clear screenshot date takes precedence over upload date. Time asleep is distinct from time in bed and weekly averages. Unclear dates or durations require clarification. Hours and minutes convert to decimal hours for storage and display as hours/minutes in the review and history. Sleep corrections replace that date's value; other measurements and notes remain intact. The manual form accepts minute-precision stored values so editing water later does not fail step validation. Saves require the existing review action and retain idempotency, conflict handling, undo, account ownership and backup support.

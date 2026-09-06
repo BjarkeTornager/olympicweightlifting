@@ -23,6 +23,8 @@ Free personal provisioning expires after seven days, so you may need to run the 
 
 Apple: [membership options](https://developer.apple.com/support/compare-memberships/) and [running on a device](https://developer.apple.com/documentation/xcode/running-your-app-in-simulator-or-on-a-device).
 
+For sharing with friends, see [distribution options and TestFlight readiness](DISTRIBUTION.md).
+
 ## Native workflows
 
 - **Coach:** AG-UI streaming conversation, stable reading position, native keyboard composer, camera/photo picker, categorized attachments, expandable proposals, review/save/undo, tables, bar charts and connected diagram steps.

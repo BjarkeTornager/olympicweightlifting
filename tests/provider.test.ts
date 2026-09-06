@@ -1,6 +1,33 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { modelRequest, parseModelResponse } from "../lib/agent/provider";
+test("private photo content is adapted to OpenRouter and Ollama without public URLs", () => {
+  const messages = [
+    { role: "user" as const, content: "What did I eat?", images: ["YWJj"] },
+  ];
+  const base = {
+    label: "test",
+    base: "https://example.test/api",
+    model: "vision-test",
+    key: "secret",
+  };
+  const router = JSON.parse(
+    JSON.stringify(
+      modelRequest(messages, [], { ...base, kind: "openrouter" }).body,
+    ),
+  );
+  assert.deepEqual(router.messages[0].content, [
+    { type: "text", text: "What did I eat?" },
+    { type: "image_url", image_url: { url: "data:image/jpeg;base64,YWJj" } },
+  ]);
+  assert.equal(router.provider.zdr, true);
+  const ollama = JSON.parse(
+    JSON.stringify(
+      modelRequest(messages, [], { ...base, kind: "ollama" }).body,
+    ),
+  );
+  assert.deepEqual(ollama.messages[0].images, ["YWJj"]);
+});
 test("OpenRouter adapter preserves tool IDs, JSON arguments and required privacy filters", () => {
   const response = parseModelResponse(
     {

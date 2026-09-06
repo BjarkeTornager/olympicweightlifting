@@ -41,6 +41,17 @@ export function emptyJournal(): JournalState {
     sessions: [],
     activeWorkout: null,
     templates: [],
+    health: { checkins: [] },
+    nutrition: {
+      meals: [],
+      targets: {
+        goal: "maintain",
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
     program: {
       activeProgramId: program.id,
       programRevision: program.revision,
@@ -228,9 +239,34 @@ export function mergeImport(
     );
   const fresh =
     !current.sessions.length &&
+    !current.nutrition.meals.length &&
+    !current.health.checkins.length &&
+    current.nutrition.targets.goal === "maintain" &&
+    ["calories", "protein", "carbs", "fat"].every(
+      (key) =>
+        current.nutrition.targets[
+          key as "calories" | "protein" | "carbs" | "fat"
+        ] == null,
+    ) &&
     !current.activeWorkout &&
     Object.values(current.prs).every((v) => v === 0);
   const templates = new Map((current.templates ?? []).map((t) => [t.id, t]));
+  const meals = new Map(current.nutrition.meals.map((m) => [m.id, m]));
+  const checkins = new Map(current.health.checkins.map((c) => [c.date, c]));
+  for (const checkin of incoming.health.checkins) {
+    const old = checkins.get(checkin.date);
+    if (old && canonicalJson(old) !== canonicalJson(checkin))
+      throw Error(
+        `A different check-in for ${checkin.date} already exists. Review both backups before importing.`,
+      );
+    checkins.set(checkin.date, checkin);
+  }
+  for (const meal of incoming.nutrition.meals) {
+    const old = meals.get(meal.id);
+    if (old && canonicalJson(old) !== canonicalJson(meal))
+      throw Error(`A different version of meal “${meal.name}” already exists.`);
+    meals.set(meal.id, meal);
+  }
   for (const template of incoming.templates ?? []) {
     const old = templates.get(template.id);
     if (old && canonicalJson(old) !== canonicalJson(template))
@@ -251,6 +287,11 @@ export function mergeImport(
       : {}),
     sessions: [...sessions.values()],
     templates: [...templates.values()],
+    health: { checkins: [...checkins.values()] },
+    nutrition: {
+      meals: [...meals.values()],
+      targets: fresh ? incoming.nutrition.targets : current.nutrition.targets,
+    },
     activeWorkout: current.activeWorkout ?? incoming.activeWorkout,
   });
 }

@@ -30,6 +30,8 @@ npm run test:browser
 ## Included
 
 - Responsive Home, Train, History, Progress, Exercises and Settings screens.
+- Food journal with manual or assistant text/photo meal entry, calories and macros, chosen daily diet targets, seven-day summaries and a private per-account photo catalog.
+- A daily Coach overview with contextual next steps, on-demand daily plans and private sleep, energy, soreness, water and bodyweight check-ins. See [health coach](docs/health-coach.md).
 - All five existing programmes and 23 exercise guides; programme previews remain available during a workout.
 - Exact manual loads, made/miss logging, recovery adjustments, prescription snapshots, history editing and PR prompts.
 - Google sign-in through Better Auth with a private-pilot email allowlist.

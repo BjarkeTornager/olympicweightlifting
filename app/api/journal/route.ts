@@ -6,6 +6,7 @@ import {
   writeJournal,
   RevisionConflict,
   MutationConflict,
+  MissingMealPhoto,
   allowRequest,
 } from "@/lib/server";
 import { planProgramDay } from "@/js/progression.js";
@@ -121,13 +122,13 @@ export async function PUT(request: Request) {
         { error: error.message, ...error.snapshot },
         { status: 409 },
       );
-    if (error instanceof MutationConflict)
+    if (error instanceof MutationConflict || error instanceof MissingMealPhoto)
       return Response.json({ error: error.message }, { status: 422 });
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return Response.json(
         {
           error:
-            "Invalid workout data. Check weights, repetitions, dates and backup format.",
+            "Invalid journal data. Check workout values, meal portions, nutrition, dates and backup format.",
         },
         { status: 400 },
       );

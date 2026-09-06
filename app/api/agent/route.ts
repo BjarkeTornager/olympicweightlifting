@@ -17,6 +17,7 @@ const inputSchema = z
   .object({
     id: z.string().uuid(),
     message: z.string().trim().min(1).max(6000),
+    photoIds: z.array(z.string().uuid()).max(4).default([]),
     revision: z.number().int().min(0),
     timezone: z
       .string()

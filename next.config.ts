@@ -19,7 +19,7 @@ const config: NextConfig = {
             value:
               "default-src 'self'; script-src 'self' 'unsafe-inline'" +
               (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "") +
-              "; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+              "; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
           },
         ],
       },

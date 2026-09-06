@@ -1,6 +1,6 @@
 import { canonicalJson } from "./json";
 import { createHash } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   journals,
@@ -9,6 +9,7 @@ import {
   workoutExercises,
   workoutSets,
   rateLimits,
+  foodPhotos,
 } from "./db/schema";
 import { emptyJournal } from "./domain";
 import { journalSchema, type JournalState, type Snapshot } from "./model";
@@ -21,6 +22,7 @@ export class RevisionConflict extends Error {
   }
 }
 export class MutationConflict extends Error {}
+export class MissingMealPhoto extends Error {}
 export async function readJournal(userId: string): Promise<Snapshot> {
   const db = getDb();
   await db
@@ -71,6 +73,21 @@ export async function writeJournal(
     if (row.revision !== input.revision)
       throw new RevisionConflict({ state: row.state, revision: row.revision });
     const revision = row.revision + 1;
+    const photoIds = [
+      ...new Set(state.nutrition.meals.flatMap((m) => m.photoIds)),
+    ];
+    if (photoIds.length) {
+      const owned = await tx
+        .select({ id: foodPhotos.id })
+        .from(foodPhotos)
+        .where(
+          and(eq(foodPhotos.userId, userId), inArray(foodPhotos.id, photoIds)),
+        );
+      if (owned.length !== photoIds.length)
+        throw new MissingMealPhoto(
+          "A meal photo is missing from this account. Edit the meal in Food and remove unavailable photo links before syncing.",
+        );
+    }
     state.updatedAt = new Date().toISOString();
     // Account-level optimistic concurrency also covers deleted sessions: stale devices
     // must resolve before uploading, so old snapshots cannot resurrect deletions.

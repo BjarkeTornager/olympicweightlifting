@@ -14,6 +14,14 @@ import {
   type Workout,
 } from "../model";
 import { startTemplate, templateFromWorkout } from "../training";
+import { checkinPatchSchema, saveCheckin, type Checkin } from "../health";
+import {
+  mealInputSchema,
+  dietTargetsSchema,
+  totalNutrients,
+  type Meal,
+  type DietTargets,
+} from "../nutrition";
 const date = workoutSchema.shape.date;
 const exerciseId = z
   .string()
@@ -44,6 +52,20 @@ const training = z
   })
   .strict();
 export const actionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("record_checkin"), checkin: checkinPatchSchema })
+    .strict(),
+  z.object({ kind: z.literal("record_meal"), meal: mealInputSchema }).strict(),
+  z
+    .object({
+      kind: z.literal("update_meal"),
+      mealId: z.string().uuid(),
+      meal: mealInputSchema,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("set_diet_targets"), targets: dietTargetsSchema })
+    .strict(),
   z.object({ kind: z.literal("record_session"), workout: training }).strict(),
   z.object({ kind: z.literal("plan_workout"), workout: training }).strict(),
   z
@@ -87,6 +109,10 @@ export const actionSchema = z.discriminatedUnion("kind", [
 export const actionToolSchema = z
   .object({
     kind: z.enum([
+      "record_checkin",
+      "record_meal",
+      "update_meal",
+      "set_diet_targets",
       "record_session",
       "plan_workout",
       "update_session",
@@ -103,6 +129,10 @@ export const actionToolSchema = z
     dayId: z.string().max(160).optional(),
     date: date.optional(),
     name: z.string().max(120).optional(),
+    meal: mealInputSchema.optional(),
+    mealId: z.string().uuid().optional(),
+    targets: dietTargetsSchema.optional(),
+    checkin: checkinPatchSchema.optional(),
   })
   .strict();
 export type AgentAction = z.infer<typeof actionSchema>;
@@ -111,6 +141,9 @@ export type ActionPreview = {
   title: string;
   detail: string;
   workout: Workout | null;
+  meal?: Meal;
+  targets?: DietTargets;
+  checkin?: Checkin;
   expiresAt: string;
   status?: "saved" | "undone";
 };
@@ -157,6 +190,8 @@ export function prepareAction(
   let title = "",
     detail = "",
     workout: Workout | null = null;
+  let meal: Meal | undefined, targets: DietTargets | undefined;
+  let checkin: Checkin | undefined;
   const owned = (id: string) => {
     const w = next.sessions.find((s) => s.id === id);
     if (!w) throw Error("That session is not in your journal.");
@@ -288,6 +323,37 @@ export function prepareAction(
     title = "Repeat a session";
     detail =
       "Copies exercises, weights and reps into a fresh draft with every set unlogged.";
+  } else if (action.kind === "record_checkin") {
+    checkin = saveCheckin(next, action.checkin, currentDate);
+    title = "Save your daily check-in";
+    detail = `Updates your check-in for ${checkin.date}. Values you haven’t changed are kept. This records how you feel without changing your workout or diet targets.`;
+  } else if (action.kind === "record_meal" || action.kind === "update_meal") {
+    if (action.meal.date > currentDate)
+      throw Error("Meals eaten cannot be dated in the future.");
+    const existing =
+      action.kind === "update_meal"
+        ? next.nutrition.meals.find((m) => m.id === action.mealId)
+        : undefined;
+    if (action.kind === "update_meal" && !existing)
+      throw Error("That meal is not in your food journal.");
+    meal = {
+      ...action.meal,
+      id: existing?.id ?? uid(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    };
+    next.nutrition.meals = [
+      ...next.nutrition.meals.filter((m) => m.id !== meal!.id),
+      meal,
+    ];
+    const totals = totalNutrients(meal.items);
+    title = existing ? "Update your meal" : "Log your meal";
+    detail = `${totals.calories} kcal · ${totals.protein} g protein. ${meal.estimated ? "Estimated portions and nutrition. Check the assumptions below." : "Using the nutrition values you supplied."} You can correct this proposal in chat or edit the meal in Food after saving.`;
+  } else if (action.kind === "set_diet_targets") {
+    targets = action.targets;
+    next.nutrition.targets = targets;
+    title = "Update your daily nutrition targets";
+    detail =
+      "These are your chosen daily targets. They are not a calculated calorie prescription.";
   } else {
     const template = templateFromWorkout(owned(action.sessionId), action.name);
     next.templates = [...(next.templates ?? []), template];
@@ -296,5 +362,14 @@ export function prepareAction(
     workout = startTemplate(template, currentDate);
   }
   next.updatedAt = new Date().toISOString();
-  return { state: journalSchema.parse(next), title, detail, workout, action };
+  return {
+    state: journalSchema.parse(next),
+    title,
+    detail,
+    workout,
+    meal,
+    targets,
+    checkin,
+    action,
+  };
 }

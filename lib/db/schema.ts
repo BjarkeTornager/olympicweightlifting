@@ -12,9 +12,32 @@ import {
   foreignKey,
   check,
   date,
+  customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { JournalState, Workout, Entry } from "../model";
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+export const foodPhotos = pgTable(
+  "food_photos",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    label: text("label").notNull(),
+    date: date("meal_date").notNull(),
+    bytes: integer("bytes").notNull(),
+    digest: text("digest").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.id] }),
+    index("food_photos_user_date_idx").on(t.userId, t.date),
+  ],
+);
 export const user = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -201,6 +224,7 @@ export const agentTurns = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     question: text("question").notNull(),
+    photoIds: jsonb("photo_ids").$type<string[]>().notNull().default([]),
     response: jsonb("response").$type<{
       reply: string;
       proposals: import("../agent/actions").ActionPreview[];

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getAuth, pilotEmailAllowed } from "../auth";
-import { RevisionConflict } from "../server";
+import { RevisionConflict, MissingMealPhoto } from "../server";
 import { ProviderError } from "./provider";
 export class ApiError extends Error {
   constructor(
@@ -19,7 +19,7 @@ export async function requireAthlete(request: Request, mutation = false) {
   const user = (await getAuth().api.getSession({ headers: request.headers }))
     ?.user;
   if (!user || !pilotEmailAllowed(user.email))
-    throw new ApiError("Sign in to use your training assistant.", 401);
+    throw new ApiError("Sign in to use your personal journal.", 401);
   if (request.headers.get("x-journal-account") !== user.id)
     throw new ApiError("Your account changed. Reload before continuing.", 401);
   return user;
@@ -47,6 +47,11 @@ export async function readJson(
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 export function apiFailure(error: unknown) {
+  if (error instanceof MissingMealPhoto)
+    return Response.json(
+      { error: error.message },
+      { status: 422, headers: { "Cache-Control": "no-store" } },
+    );
   if (error instanceof ApiError || error instanceof ProviderError)
     return Response.json(
       { error: error.message },

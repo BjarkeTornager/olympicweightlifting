@@ -18,6 +18,7 @@ export type ToolDefinition = {
 export type ModelMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+  images?: string[];
   tool_name?: string;
   tool_call_id?: string;
   tool_calls?: {
@@ -91,7 +92,15 @@ export function modelRequest(
         model: config.model,
         messages: messages.map((m) => ({
           role: m.role,
-          content: m.content,
+          content: m.images?.length
+            ? [
+                { type: "text", text: m.content },
+                ...m.images.map((data) => ({
+                  type: "image_url",
+                  image_url: { url: `data:image/jpeg;base64,${data}` },
+                })),
+              ]
+            : m.content,
           ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
           ...(m.tool_calls
             ? {
@@ -201,7 +210,9 @@ export async function callModel(
         ? "The assistant has reached its provider limit. Try again shortly."
         : response.status === 402
           ? "The assistant’s provider credit or spending cap has been reached. Add OpenRouter credit or wait for the monthly cap to reset; manual logging is still available."
-          : "The assistant provider is unavailable. Try again shortly.",
+          : response.status === 400 && messages.some((m) => m.images?.length)
+            ? "The provider could not process this photo request. Try a text description or ask the host to check that the configured model supports images and tools. Your photos are saved in Food."
+            : "The assistant provider is unavailable. Try again shortly.",
       response.status === 402 ? 402 : response.status === 429 ? 429 : 503,
     );
   const reader = response.body?.getReader();

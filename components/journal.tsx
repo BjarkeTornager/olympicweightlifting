@@ -15,6 +15,8 @@ import {
   Sparkles,
   Undo2,
   WifiOff,
+  Utensils,
+  HeartPulse,
 } from "lucide-react";
 import { useJournal } from "@/lib/use-journal";
 import { backup, days, today, createWorkout } from "@/lib/domain";
@@ -23,6 +25,8 @@ import { Dialog } from "./ui/dialog";
 import { Dashboard } from "./views/dashboard";
 import { Workouts } from "./views/workouts";
 import { TrainingAgent } from "./agent";
+import { FoodView } from "./views/food";
+import { HealthView } from "./health";
 import { RestTimer } from "./rest-timer";
 import {
   HistoryView,
@@ -36,6 +40,8 @@ const navigation = [
   { id: "coach", label: "Coach", icon: Sparkles },
   { id: "dashboard", label: "Home", icon: House },
   { id: "workout", label: "Train", icon: Dumbbell },
+  { id: "food", label: "Food", icon: Utensils },
+  { id: "health", label: "Health", icon: HeartPulse },
   { id: "history", label: "History", icon: History },
   { id: "progress", label: "Progress", icon: BarChart3 },
   { id: "library", label: "Exercises", icon: BookOpen },
@@ -177,7 +183,7 @@ export function Journal() {
             LIFT<span className="brand-light">JOURNAL</span>
           </span>
         </a>
-        <span className="sidebar-label">TRAINING SPACE</span>
+        <span className="sidebar-label">YOUR HEALTH SPACE</span>
         <nav aria-label="Primary">
           {navigation.map(({ id, label, icon: Icon }) => (
             <a
@@ -202,7 +208,7 @@ export function Journal() {
               <strong>Your journal</strong>
               <small>
                 {identity
-                  ? "Personal training space"
+                  ? "Training · nutrition · recovery"
                   : "Sign in for device sync"}
               </small>
             </span>
@@ -358,7 +364,12 @@ export function Journal() {
           <>
             {section === "coach" && (
               <TrainingAgent
-                key={identity?.id ?? "guest"}
+                key={`${identity?.id ?? "guest"}:${route}`}
+                initialPhotoId={
+                  route.startsWith("coach/photo/")
+                    ? route.split("/")[2]
+                    : undefined
+                }
                 journal={journal}
                 onLogin={() => setLogin(true)}
                 go={go}
@@ -400,6 +411,21 @@ export function Journal() {
               />
             )}
             {section === "library" && <LibraryView />}
+            {section === "health" && (
+              <HealthView
+                key={identity?.id ?? "guest"}
+                journal={journal}
+                go={go}
+              />
+            )}
+            {section === "food" && (
+              <FoodView
+                key={identity?.id ?? "guest"}
+                journal={journal}
+                onLogin={() => setLogin(true)}
+                go={go}
+              />
+            )}
             {section === "data" && (
               <SettingsView
                 journal={journal}
@@ -418,7 +444,7 @@ export function Journal() {
       </main>
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {navigation
-          .filter((n) => !["dashboard", "library"].includes(n.id))
+          .filter((n) => !["dashboard", "library", "health"].includes(n.id))
           .map(({ id, label, icon: Icon }) => (
             <a
               key={id}

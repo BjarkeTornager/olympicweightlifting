@@ -11,7 +11,8 @@ const inter = localFont({
 });
 export const metadata: Metadata = {
   title: "Lift Journal",
-  description: "Your programme. Your progress. Your next lift.",
+  description:
+    "Your training, nutrition and recovery, connected with a personal daily coach.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

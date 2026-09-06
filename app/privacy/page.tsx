@@ -90,6 +90,50 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section className="space-y-3">
+        <h2>Food journal and meal photos</h2>
+        <p>
+          Meals, portions, nutrition estimates and diet targets are saved to
+          your account alongside your training, and included in journal backups.
+          The browser keeps these records for offline use. The assistant can
+          read your own logged nutrition when answering food questions.
+        </p>
+        <p>
+          Uploaded meal photos are stored privately in the account database on
+          Railway. We resize and re-encode photos, removing embedded location
+          and camera metadata. They require sign-in and internet to view; photos
+          are not stored in the offline cache. Choosing Send in Coach shares the
+          attached images with the configured assistant provider for analysis.
+          Uploading to the library alone does not send them to the provider.
+        </p>
+        <p>
+          Food lets you edit or delete meals, download individual photos and
+          delete photos after removing their meal links. Deleting a meal or
+          clearing chat keeps its catalog photos. Photos are retained until you
+          delete them or your account; recovery backups may retain deleted data
+          until they expire. Journal JSON backups contain meal photo references,
+          not image files. Download photos separately from Food. Calorie and
+          macro estimates can be inaccurate; you can correct them before or
+          after saving.
+        </p>
+      </section>
+      <section className="space-y-3">
+        <h2>Daily health check-ins</h2>
+        <p>
+          You can choose to record sleep, energy, muscle soreness, water,
+          bodyweight and personal notes. These are sensitive, self-reported
+          health details. They are stored in your account journal, kept in your
+          browser’s offline copy and included in journal backups. You can edit
+          or delete them in Health history.
+        </p>
+        <p>
+          When you ask Coach for a daily plan or health guidance, relevant
+          check-ins, meals and training records are sent to the configured
+          assistant provider. The overview also displays simple suggestions
+          based on your entries. The app does not collect wearable or clinical
+          data, monitor you in the background, or diagnose conditions.
+        </p>
+      </section>
+      <section className="space-y-3">
         <h2>Cookies and other services</h2>
         <p>
           We use cookies needed for sign-in and browser storage needed to save

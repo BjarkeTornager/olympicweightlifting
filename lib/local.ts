@@ -1,6 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { emptyJournal } from "./domain";
 import type { Identity, JournalState, Snapshot } from "./model";
+import { nutritionSchema } from "./nutrition";
+import { healthSchema } from "./health";
 export type LocalRecord = Snapshot & {
   accountId: string;
   seq: number;
@@ -19,6 +21,28 @@ interface LocalDB extends DBSchema {
   journals: { key: string; value: LocalRecord };
 }
 let connection: Promise<IDBPDatabase<LocalDB>> | undefined;
+function upgradeLocal(record: LocalRecord): LocalRecord {
+  const upgrade = (state: JournalState) => ({
+    ...state,
+    nutrition: nutritionSchema.parse(state.nutrition ?? {}),
+    health: healthSchema.parse(state.health ?? {}),
+  });
+  return {
+    ...record,
+    state: upgrade(record.state),
+    ...(record.undo
+      ? { undo: { ...record.undo, state: upgrade(record.undo.state) } }
+      : {}),
+    ...(record.conflict
+      ? {
+          conflict: {
+            ...record.conflict,
+            state: upgrade(record.conflict.state),
+          },
+        }
+      : {}),
+  };
+}
 const database = () =>
   (connection ??= openDB<LocalDB>("lift-journal-cloud", 1, {
     upgrade(db) {
@@ -27,14 +51,14 @@ const database = () =>
   }));
 export async function getLocal(accountId: string) {
   const db = await database();
-  return (
+  return upgradeLocal(
     (await db.get("journals", accountId)) ?? {
       accountId,
       state: emptyJournal(),
       revision: 0,
       seq: 0,
       dirty: false,
-    }
+    },
   );
 }
 export async function changeLocal(
@@ -50,7 +74,7 @@ export async function changeLocal(
     seq: 0,
     dirty: false,
   };
-  const result = fn(structuredClone(old));
+  const result = upgradeLocal(fn(upgradeLocal(structuredClone(old))));
   await tx.store.put(result);
   await tx.done;
   return result;

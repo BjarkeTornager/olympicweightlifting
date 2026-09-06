@@ -40,6 +40,8 @@ test("all main screens fit mobile and desktop", async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const route of [
       "coach",
+      "health",
+      "food",
       "dashboard",
       "workout/choose",
       "workout/gym_accessories",
@@ -468,10 +470,10 @@ test("agent review saves once, syncs the journal and offers undo without reveali
   try {
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: "Let’s talk training." }),
+      page.getByRole("heading", { name: "Your day, in focus." }),
     ).toBeVisible();
     await page
-      .getByLabel("Message your training assistant")
+      .getByLabel("Message your coach")
       .fill("Log yesterday's bodyweight dead bugs: 16 reps, made.");
     await page.getByRole("button", { name: "Send", exact: true }).click();
     const card = page.getByRole("region", { name: "Review training change" });

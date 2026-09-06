@@ -20,10 +20,11 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2>Your account and training</h2>
         <p>
-          Lift Journal is an invitation-only training journal operated by Bjarke
-          Tornager. When you sign in with Google, we receive your name, email
-          address, profile picture and account identifier to create your account
-          and keep you signed in. We do not receive your Google password.
+          Lift Journal is an invitation-only training journal. When you sign in
+          with Google, we receive your name, email address, profile picture and
+          account identifier to create your account and keep you signed in. We
+          do not receive your Google password or display your Google name in
+          the journal interface.
         </p>
         <p>
           We store the profile details, workouts, weights, personal records and
@@ -63,14 +64,8 @@ export default function PrivacyPage() {
         <p>
           You can edit your profile and workouts, and export a journal backup
           from Settings. To request an account export, correction or deletion,
-          contact{" "}
-          <a
-            href="mailto:bjarketornager@gmail.com"
-            className="text-brand underline underline-offset-4"
-          >
-            bjarketornager@gmail.com
-          </a>
-          . We will verify the account before acting on a request.
+          contact the person who invited you to Lift Journal. We will verify
+          the account before acting on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

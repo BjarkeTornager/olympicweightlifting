@@ -609,7 +609,7 @@ export function SettingsView({
           <h2>Your account</h2>
           <p>
             {identity
-              ? identity.email
+              ? "Signed in. Your journal syncs across devices."
               : "Training is saved on this device. Sign in to sync across devices."}
           </p>
           {identity ? (
@@ -669,11 +669,11 @@ export function SettingsView({
             }}
           >
             <label>
-              Name
+              Display name (optional)
               <input
                 name="name"
                 maxLength={120}
-                defaultValue={state.profile.name ?? identity?.name ?? ""}
+                defaultValue={state.profile.name ?? ""}
               />
             </label>
             <div className="form-grid">

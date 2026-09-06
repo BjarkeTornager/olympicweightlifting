@@ -150,11 +150,9 @@ export function Journal() {
             className="account-button"
             onClick={() => (identity ? go("data") : setLogin(true))}
           >
-            <span className="avatar">
-              {identity?.name.slice(0, 1).toUpperCase() ?? "L"}
-            </span>
+            <span className="avatar">L</span>
             <span>
-              <strong>{identity?.name ?? "Your journal"}</strong>
+              <strong>Your journal</strong>
               <small>
                 {identity
                   ? "Personal training space"

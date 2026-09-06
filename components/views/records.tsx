@@ -639,6 +639,9 @@ export function SettingsView({
               ? `Last saved: ${new Date(state.updatedAt).toLocaleString()}`
               : "Export a backup before clearing browser data or changing devices."}
           </p>
+          <a href="/privacy" className="fine-print underline underline-offset-4">
+            Privacy and your data
+          </a>
         </section>
         <section className="panel">
           <h2>Athlete profile</h2>

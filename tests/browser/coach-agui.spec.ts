@@ -301,6 +301,15 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
   await expect(
     page.getByRole("button", { name: "Stop response" }),
   ).toBeVisible();
+  // Stop is available while the lazily loaded client is still downloading.
+  // Wait for our synthetic transport before injecting provider events.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as StreamWindow).coachRequests.length,
+      ),
+    )
+    .toBe(1);
   await emit(page, [
     ...startReply,
     {

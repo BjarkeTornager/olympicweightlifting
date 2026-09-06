@@ -1,5 +1,7 @@
 # Daily Coach and health journal
 
+The latest [Coach experience release](coach-experience-deployment-2026-09-06.md) is deployed and verified on Railway.
+
 Coach opens directly into **Conversation**, with the latest exchange and a message box that stays available while the chat scrolls. **Today** opens the daily training, nutrition and recovery overview. Switching these views preserves the current message and attached images.
 
 Use **Log food** or **Log sleep** to prepare a message, **+** to attach/take images and change automatic tagging, and **Coach options (···)** for health history, image categories, programmes, privacy and clearing chat. The last six exchanges appear first; **Earlier messages** reveals older saved exchanges and **Latest message** returns to the newest one. **Review** jumps to pending, unexpired proposals. Saved and undone entries collapse into summaries; expand one to inspect its details, open the journal or use an available undo.

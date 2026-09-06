@@ -1,5 +1,7 @@
 # Implementation status — 6 September 2026
 
+Latest release: [cardio health tracking](cardio-deployment-2026-09-06.md) is live on Railway. The private health journal now includes cardio, strength, food, sleep and daily check-ins, with reviewed Coach logging from text/screenshots. The current release passed 166 local checks, both exact-source Linux CI runs and nine focused live browser checks. Earlier release counts below are historical.
+
 The private-pilot application is live at [Lift Journal](https://lift-journal-production.up.railway.app), with the agent-first update on `codex/agent-first-journal`. Railway hosts the application and PostgreSQL in the Netherlands. Google sign-in, a stored account/session and an exact fractional workout save have been verified against the hosted database. The exact 5 September Gym Accessories workout was imported from the supplied screenshots and verified: five exercises and sixteen sets. The original GitHub Pages app remains available for export. See the [original deployment record](deployment-2026-09-06.md) and [verified assistant release](agent-deployment-2026-09-06.md).
 
 ## Implemented

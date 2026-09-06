@@ -1,5 +1,7 @@
 # Cardio and movement
 
+This feature is [deployed and verified on Railway](cardio-deployment-2026-09-06.md).
+
 Open **Train → Cardio & movement**, **Coach options → Cardio & movement**, or `/#cardio`. Desktop navigation also includes Cardio. It shares the private account journal with strength sessions, nutrition and health check-ins.
 
 ## Logging

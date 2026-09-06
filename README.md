@@ -6,6 +6,8 @@ A private health journal for strength training, cardio, nutrition and recovery, 
 
 ## Run the new app
 
+Latest release: [cardio tracking and Coach activity logging](docs/cardio-deployment-2026-09-06.md), verified on Railway with invitation-only access, 166 local checks and nine focused live browser checks.
+
 Use Node 22 and Docker. Copy `.env.example` to `.env.local`, set a local database password in both database variables, generate a random authentication secret, and enter your email in `ALLOWED_EMAILS`. Never commit this file.
 
 ```sh

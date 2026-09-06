@@ -23,8 +23,9 @@ export default function PrivacyPage() {
           Lift Journal is an invitation-only training journal. When you sign in
           with Google, we receive your name, email address, profile picture and
           account identifier to create your account and keep you signed in. We
-          do not receive your Google password or display your Google name in the
-          journal interface.
+          do not receive your Google password. Your name and email are shown
+          only to you in the iPhone account screen, and are not included in
+          Coach model requests.
         </p>
         <p>
           The site owner can invite a specific Google email and revoke its
@@ -58,6 +59,16 @@ export default function PrivacyPage() {
           signs in again. Revoking a session cannot remotely erase a
           disconnected device or an exported backup. Clear this website’s
           browser data on shared devices after saving anything you need to keep.
+        </p>
+        <p>
+          The native iPhone app keeps its separate sign-in credential in iOS
+          Keychain. Confirmed journal entries and images are held in memory, and
+          access is checked with the server before opening them. A prepared but
+          unacknowledged save is kept in an account-specific file using iOS file
+          protection and excluded from device backups, so it can be retried
+          without duplication. Private screens are covered while inactive or
+          awaiting access verification. User-requested JSON exports are separate
+          copies; they are not remotely erased by sign-out or revocation.
         </p>
       </section>
       <section className="space-y-3">
@@ -114,10 +125,11 @@ export default function PrivacyPage() {
           assistant provider for analysis. With automatic tagging enabled,
           uploading also sends the image to that provider to identify its
           category and descriptive tags. You can turn automatic tagging off
-          before uploading, or choose Retag automatically later. Existing
-          uploads are not sent for tagging without that action. Uncertain images
-          stay in Needs review. Categories and tags are editable; tagging does
-          not create meal or health records.
+          before uploading (in the attachment menu on iPhone), or choose Retag
+          automatically on the web later. Existing uploads are not sent for
+          tagging without that action. Uncertain images stay in Needs review.
+          Categories and tags are editable; tagging does not create meal or
+          health records.
         </p>
         <p>
           Food lets you edit or delete meals, download individual photos and

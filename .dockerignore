@@ -9,3 +9,6 @@ playwright-report
 public/sw.js
 public/offline.html
 *.log
+
+# Native sources and previews are not part of the server image
+ios

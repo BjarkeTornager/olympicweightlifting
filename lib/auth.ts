@@ -1,5 +1,6 @@
 import { betterAuth, APIError, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { bearer } from "better-auth/plugins";
 import { getDb, getPool } from "./db";
 import { assertAccessConfigured, emailAllowed, userAllowed } from "./access";
 import * as schema from "./db/schema";
@@ -24,6 +25,7 @@ export function getAuth() {
     appName: "Lift Journal",
     baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
     secret,
+    plugins: [bearer({ requireSignature: true })],
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
     socialProviders: googleEnabled()
       ? {

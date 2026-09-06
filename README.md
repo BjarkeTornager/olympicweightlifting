@@ -4,6 +4,10 @@ A private health journal for strength training, cardio, nutrition and recovery, 
 
 **Live private pilot:** [Lift Journal](https://lift-journal-production.up.railway.app). Google sign-in and PostgreSQL persistence were verified on 6 September 2026. Access is restricted to invited accounts. See the [deployment record](docs/deployment-2026-09-06.md) for verification and remaining operational work. Existing training data must be exported from the original GitHub Pages app and imported into the new account.
 
+## Native iPhone app
+
+The repository now includes a real SwiftUI app with native Coach, Today, Train, Journal and account screens. Open `ios/LiftJournal.xcodeproj` in Xcode. Simulator testing and personal-device installation can use a free Apple account; TestFlight requires membership. See [iPhone setup, privacy and verification](ios/README.md).
+
 ## Run the new app
 
 Latest release: [cardio tracking and Coach activity logging](docs/cardio-deployment-2026-09-06.md), verified on Railway with invitation-only access, 166 local checks and nine focused live browser checks.

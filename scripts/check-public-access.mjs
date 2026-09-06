@@ -5,6 +5,8 @@ const base =
 const paths = [
   "/",
   "/privacy",
+  "/mobile",
+  "/api/mobile/overview?date=2026-09-06",
   "/api/session",
   "/api/auth/get-session",
   "/api/auth/list-sessions",
@@ -49,6 +51,7 @@ for (const path of paths) {
   if (
     [
       "/api/invitations",
+      "/api/mobile/overview?date=2026-09-06",
       "/api/journal",
       "/api/agent",
       "/api/images",
@@ -101,31 +104,37 @@ for (const path of paths) {
 }
 // AG-UI is an authenticated POST stream. Probe without a cookie or content;
 // authentication must deny it before any model run can start.
-for (const origin of [new URL(base).origin, "https://untrusted.example"]) {
-  const response = await fetch(`${base}/api/agent/run`, {
-    method: "POST",
-    headers: {
-      Origin: origin,
-      "Content-Type": "application/json",
-      "X-Journal-Account": "unauthenticated-audit",
-    },
-    body: "{}",
-  });
-  assert.equal(response.status, origin === new URL(base).origin ? 401 : 403);
-  assert.match(response.headers.get("cache-control") ?? "", /no-store/);
-  assert.equal(response.headers.get("access-control-allow-origin"), null);
-  assert.doesNotMatch(
-    response.headers.get("content-type") ?? "",
-    /event-stream/,
-  );
-  console.log(
-    JSON.stringify({
-      path: "/api/agent/run",
+for (const path of [
+  "/api/agent/run",
+  "/api/mobile/authorize",
+  "/api/mobile/prepare",
+]) {
+  for (const origin of [new URL(base).origin, "https://untrusted.example"]) {
+    const response = await fetch(`${base}${path}`, {
       method: "POST",
-      trustedOrigin: origin === new URL(base).origin,
-      status: response.status,
-    }),
-  );
+      headers: {
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Journal-Account": "unauthenticated-audit",
+      },
+      body: "{}",
+    });
+    assert.equal(response.status, origin === new URL(base).origin ? 401 : 403);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
+    assert.doesNotMatch(
+      response.headers.get("content-type") ?? "",
+      /event-stream/,
+    );
+    console.log(
+      JSON.stringify({
+        path,
+        method: "POST",
+        trustedOrigin: origin === new URL(base).origin,
+        status: response.status,
+      }),
+    );
+  }
 }
 // Invitation changes must fail before parsing a body or touching membership.
 for (const method of ["POST", "DELETE"]) {

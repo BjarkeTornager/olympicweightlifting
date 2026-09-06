@@ -1,5 +1,6 @@
 "use client";
 import { privateFetch } from "@/lib/private-fetch";
+import { useConversationScroll } from "@/lib/use-conversation-scroll";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -68,7 +69,6 @@ export function TrainingAgent({
   const [acting, setActing] = useState<string | null>(null),
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
-  const conversation = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<"conversation" | "today">("conversation");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -79,24 +79,14 @@ export function TrainingAgent({
     return () => clearInterval(timer);
   }, []);
   const newestId = turns.at(-1)?.id;
+  const { conversation, content, showLatest, readHistory, remember } =
+    useConversationScroll(newestId, view === "conversation");
   const needsReview = (proposal: ActionPreview) =>
     !proposal.status && new Date(proposal.expiresAt).getTime() > now;
   const reviewCount = turns.reduce(
     (count, turn) => count + (turn.proposals?.filter(needsReview).length ?? 0),
     0,
   );
-  useEffect(() => {
-    if (view === "conversation" && newestId) {
-      const frame = requestAnimationFrame(() => {
-        const latest = conversation.current?.querySelector<HTMLElement>(
-          ".conversation-turn:last-child",
-        );
-        if (latest && conversation.current)
-          conversation.current.scrollTop = latest.offsetTop - 16;
-      });
-      return () => cancelAnimationFrame(frame);
-    }
-  }, [newestId, view]);
   const draft = (text: string) => {
     setView("conversation");
     setMessage((current) => (current.trim() ? `${current}\n\n${text}` : text));
@@ -330,13 +320,12 @@ export function TrainingAgent({
     setMessage(question);
     if (ready) void send(question);
     else {
-      input.current?.focus();
+      input.current?.focus({ preventScroll: true });
       setError(
         pending
           ? "Sync your journal first so Coach can use your latest entries."
           : "Connect your assistant and sync your journal to build a personalised plan.",
       );
-      input.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
   return (
@@ -452,6 +441,7 @@ export function TrainingAgent({
                   <button
                     className="coach-review-jump"
                     onClick={() => {
+                      readHistory();
                       const index = turns.findIndex((turn) =>
                         turn.proposals?.some(needsReview),
                       );
@@ -483,16 +473,7 @@ export function TrainingAgent({
                 ) : (
                   <span>Recent conversation</span>
                 )}
-                <button
-                  onClick={() => {
-                    const latest =
-                      conversation.current?.querySelector<HTMLElement>(
-                        ".conversation-turn:last-child",
-                      );
-                    if (latest && conversation.current)
-                      conversation.current.scrollTop = latest.offsetTop - 16;
-                  }}
-                >
+                <button onClick={showLatest}>
                   Latest message <ChevronDown size={14} />
                 </button>
               </div>
@@ -505,228 +486,254 @@ export function TrainingAgent({
               tabIndex={0}
               aria-label="Coach conversation"
               aria-busy={busy}
+              onScroll={remember}
+              onWheel={readHistory}
+              onTouchMove={readHistory}
+              onPointerDown={readHistory}
+              onKeyDown={(event) => {
+                if (
+                  [
+                    "ArrowUp",
+                    "ArrowDown",
+                    "PageUp",
+                    "PageDown",
+                    "Home",
+                    "End",
+                    " ",
+                  ].includes(event.key)
+                )
+                  readHistory();
+              }}
             >
-              {!turns.length && (
-                <div className="coach-start">
-                  <span className="coach-start-icon" aria-hidden="true">
-                    <Sparkles size={26} />
-                  </span>
-                  <h2>What’s on your mind today?</h2>
-                  <p>
-                    Log a meal, make sense of your sleep, or plan your next
-                    session.
-                  </p>
-                  <div className="agent-prompts">
-                    {[
-                      "What should I focus on today?",
-                      "How is my recovery looking?",
-                    ].map((text) => (
-                      <button
-                        key={text}
-                        disabled={busy}
-                        onClick={() => ask(text)}
-                      >
-                        {text}
-                        <ArrowRight size={16} />
-                      </button>
-                    ))}
+              <div className="conversation-content" ref={content}>
+                {!turns.length && (
+                  <div className="coach-start">
+                    <span className="coach-start-icon" aria-hidden="true">
+                      <Sparkles size={26} />
+                    </span>
+                    <h2>What’s on your mind today?</h2>
+                    <p>
+                      Log a meal, make sense of your sleep, or plan your next
+                      session.
+                    </p>
+                    <div className="agent-prompts">
+                      {[
+                        "What should I focus on today?",
+                        "How is my recovery looking?",
+                      ].map((text) => (
+                        <button
+                          key={text}
+                          disabled={busy}
+                          onClick={() => ask(text)}
+                        >
+                          {text}
+                          <ArrowRight size={16} />
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-              {turns.length > visibleCount && (
-                <Button
-                  variant="ghost"
-                  className="coach-older"
-                  onClick={() => {
-                    const scroller = conversation.current;
-                    const height = scroller?.scrollHeight ?? 0;
-                    const top = scroller?.scrollTop ?? 0;
-                    setVisibleCount((count) => count + 10);
-                    requestAnimationFrame(() => {
-                      if (scroller)
-                        scroller.scrollTop =
-                          top + scroller.scrollHeight - height;
-                    });
-                  }}
-                >
-                  Earlier messages ({turns.length - visibleCount})
-                </Button>
-              )}
-              {turns.slice(-visibleCount).map((t) => (
-                <article className="conversation-turn" key={t.id}>
-                  <div className="chat-user">
-                    <span className="sr-only">You: </span>
-                    {t.question}
-                    {accountId && (
-                      <div className="food-photo-strip">
-                        {t.photoIds?.map((id) => (
-                          <FoodPhotoImage
-                            key={`${accountId}:${id}`}
-                            id={id}
-                            accountId={accountId}
-                            label="Attached image"
-                          />
-                        ))}
+                )}
+                {turns.length > visibleCount && (
+                  <Button
+                    variant="ghost"
+                    className="coach-older"
+                    onClick={() => {
+                      readHistory();
+                      const scroller = conversation.current;
+                      const height = scroller?.scrollHeight ?? 0;
+                      const top = scroller?.scrollTop ?? 0;
+                      setVisibleCount((count) => count + 10);
+                      requestAnimationFrame(() => {
+                        if (scroller)
+                          scroller.scrollTop =
+                            top + scroller.scrollHeight - height;
+                      });
+                    }}
+                  >
+                    Earlier messages ({turns.length - visibleCount})
+                  </Button>
+                )}
+                {turns.slice(-visibleCount).map((t) => (
+                  <article className="conversation-turn" key={t.id}>
+                    <div className="chat-user">
+                      <span className="sr-only">You: </span>
+                      {t.question}
+                      {accountId && (
+                        <div className="food-photo-strip">
+                          {t.photoIds?.map((id) => (
+                            <FoodPhotoImage
+                              key={`${accountId}:${id}`}
+                              id={id}
+                              accountId={accountId}
+                              label="Attached image"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {t.reply && (
+                      <div className="chat-assistant">
+                        <span className="assistant-mark">
+                          <Sparkles size={16} /> Lift Journal
+                        </span>
+                        <AssistantText text={t.reply} />
                       </div>
                     )}
-                  </div>
-                  {t.reply && (
-                    <div className="chat-assistant">
-                      <span className="assistant-mark">
-                        <Sparkles size={16} /> Lift Journal
-                      </span>
-                      <AssistantText text={t.reply} />
-                    </div>
-                  )}
-                  {t.status === "running" && (
-                    <p className="muted">
-                      {busy
-                        ? "Looking through your journal…"
-                        : "This request has not completed. You can ask again."}
-                    </p>
-                  )}
-                  {t.status === "failed" && (
-                    <p className="fine-print">
-                      This request didn’t finish. No change was confirmed.
-                    </p>
-                  )}
-                  {t.proposals?.map((p) => (
-                    <section
-                      key={p.id}
-                      className={`agent-proposal ${p.status ?? "pending"}`}
-                      aria-label="Review journal change"
-                      data-needs-review={needsReview(p)}
-                    >
-                      <details
-                        key={`${p.id}-${p.status ?? "pending"}`}
-                        open={p.status ? undefined : true}
+                    {t.status === "running" && (
+                      <p className="muted">
+                        {busy
+                          ? "Looking through your journal…"
+                          : "This request has not completed. You can ask again."}
+                      </p>
+                    )}
+                    {t.status === "failed" && (
+                      <p className="fine-print">
+                        This request didn’t finish. No change was confirmed.
+                      </p>
+                    )}
+                    {t.proposals?.map((p) => (
+                      <section
+                        key={p.id}
+                        className={`agent-proposal ${p.status ?? "pending"}`}
+                        aria-label="Review journal change"
+                        data-needs-review={needsReview(p)}
                       >
-                        <summary className="proposal-summary">
-                          <span className="eyebrow">
-                            {p.status === "saved"
-                              ? "SAVED"
-                              : p.status === "undone"
-                                ? "UNDONE"
-                                : "REVIEW BEFORE SAVING"}
-                          </span>
-                          <h2>{p.title}</h2>
-                          <ChevronDown size={18} aria-hidden="true" />
-                        </summary>
-                        <div className="proposal-body">
-                          <p>{p.detail}</p>
-                          {p.checkin && (
-                            <>
-                              <p className="proposal-date">
-                                Check-in · {p.checkin.date}
-                              </p>
-                              <CheckinDetails checkin={p.checkin} />
-                            </>
-                          )}
-                          {p.meal && <MealDetails meal={p.meal} />}
-                          {p.targets && (
-                            <div className="meal-details">
-                              <p>Goal: {p.targets.goal} weight</p>
-                              {(
-                                ["calories", "protein", "carbs", "fat"] as const
-                              ).map((key) => (
-                                <p key={key}>
-                                  {key}: {p.targets![key] ?? "No target"}
-                                  {p.targets![key] != null
-                                    ? key === "calories"
-                                      ? " kcal"
-                                      : " g"
-                                    : ""}
+                        <details
+                          key={`${p.id}-${p.status ?? "pending"}`}
+                          open={p.status ? undefined : true}
+                        >
+                          <summary className="proposal-summary">
+                            <span className="eyebrow">
+                              {p.status === "saved"
+                                ? "SAVED"
+                                : p.status === "undone"
+                                  ? "UNDONE"
+                                  : "REVIEW BEFORE SAVING"}
+                            </span>
+                            <h2>{p.title}</h2>
+                            <ChevronDown size={18} aria-hidden="true" />
+                          </summary>
+                          <div className="proposal-body">
+                            <p>{p.detail}</p>
+                            {p.checkin && (
+                              <>
+                                <p className="proposal-date">
+                                  Check-in · {p.checkin.date}
                                 </p>
-                              ))}
-                            </div>
-                          )}
-                          {p.workout && (
-                            <>
-                              <div className="proposal-date">
-                                <strong>{p.workout.title}</strong>
-                                <span>{p.workout.date}</span>
+                                <CheckinDetails checkin={p.checkin} />
+                              </>
+                            )}
+                            {p.meal && <MealDetails meal={p.meal} />}
+                            {p.targets && (
+                              <div className="meal-details">
+                                <p>Goal: {p.targets.goal} weight</p>
+                                {(
+                                  [
+                                    "calories",
+                                    "protein",
+                                    "carbs",
+                                    "fat",
+                                  ] as const
+                                ).map((key) => (
+                                  <p key={key}>
+                                    {key}: {p.targets![key] ?? "No target"}
+                                    {p.targets![key] != null
+                                      ? key === "calories"
+                                        ? " kcal"
+                                        : " g"
+                                      : ""}
+                                  </p>
+                                ))}
                               </div>
-                              {p.workout.exercises.map((e) => (
-                                <div className="proposal-exercise" key={e.id}>
-                                  <h3>{exerciseName(e.exerciseId)}</h3>
-                                  <div className="set-chips">
-                                    {e.sets.map((s) => (
-                                      <span key={s.id}>
-                                        {formatSet(s.weight, s.reps)}
-                                        {s.result === "miss"
-                                          ? " · miss"
-                                          : s.result
-                                            ? " · made"
-                                            : " · planned"}
-                                        {s.rpe ? ` · RPE ${s.rpe}` : ""}
-                                      </span>
-                                    ))}
-                                  </div>
+                            )}
+                            {p.workout && (
+                              <>
+                                <div className="proposal-date">
+                                  <strong>{p.workout.title}</strong>
+                                  <span>{p.workout.date}</span>
                                 </div>
-                              ))}
-                              {p.workout.athleteNotes && (
-                                <p>{p.workout.athleteNotes}</p>
+                                {p.workout.exercises.map((e) => (
+                                  <div className="proposal-exercise" key={e.id}>
+                                    <h3>{exerciseName(e.exerciseId)}</h3>
+                                    <div className="set-chips">
+                                      {e.sets.map((s) => (
+                                        <span key={s.id}>
+                                          {formatSet(s.weight, s.reps)}
+                                          {s.result === "miss"
+                                            ? " · miss"
+                                            : s.result
+                                              ? " · made"
+                                              : " · planned"}
+                                          {s.rpe ? ` · RPE ${s.rpe}` : ""}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                                {p.workout.athleteNotes && (
+                                  <p>{p.workout.athleteNotes}</p>
+                                )}
+                              </>
+                            )}
+                            <div className="button-row">
+                              {!p.status && (
+                                <Button
+                                  disabled={
+                                    !ready ||
+                                    Boolean(acting) ||
+                                    busy ||
+                                    new Date(p.expiresAt).getTime() < now
+                                  }
+                                  onClick={() => void apply(p)}
+                                >
+                                  <Check size={17} />
+                                  {acting === p.id
+                                    ? "Saving…"
+                                    : "Save this change"}
+                                </Button>
                               )}
-                            </>
-                          )}
-                          <div className="button-row">
-                            {!p.status && (
+                              {p.status === "saved" && (
+                                <Button
+                                  variant="secondary"
+                                  disabled={pending || Boolean(acting) || busy}
+                                  onClick={() => void apply(p, true)}
+                                >
+                                  <Undo2 size={17} />
+                                  Undo this change
+                                </Button>
+                              )}
                               <Button
-                                disabled={
-                                  !ready ||
-                                  Boolean(acting) ||
-                                  busy ||
-                                  new Date(p.expiresAt).getTime() < now
+                                variant="ghost"
+                                onClick={() =>
+                                  go(
+                                    p.checkin
+                                      ? "health"
+                                      : p.meal || p.targets
+                                        ? "food"
+                                        : p.workout &&
+                                            p.workout.exercises.some((e) =>
+                                              e.sets.some((s) => !s.result),
+                                            )
+                                          ? "workout"
+                                          : "history",
+                                  )
                                 }
-                                onClick={() => void apply(p)}
                               >
-                                <Check size={17} />
-                                {acting === p.id
-                                  ? "Saving…"
-                                  : "Save this change"}
+                                Open journal <ArrowRight size={17} />
                               </Button>
-                            )}
-                            {p.status === "saved" && (
-                              <Button
-                                variant="secondary"
-                                disabled={pending || Boolean(acting) || busy}
-                                onClick={() => void apply(p, true)}
-                              >
-                                <Undo2 size={17} />
-                                Undo this change
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              onClick={() =>
-                                go(
-                                  p.checkin
-                                    ? "health"
-                                    : p.meal || p.targets
-                                      ? "food"
-                                      : p.workout &&
-                                          p.workout.exercises.some((e) =>
-                                            e.sets.some((s) => !s.result),
-                                          )
-                                        ? "workout"
-                                        : "history",
-                                )
-                              }
-                            >
-                              Open journal <ArrowRight size={17} />
-                            </Button>
+                            </div>
+                            <p className="fine-print">
+                              {p.status
+                                ? "Undo is available for 24 hours while no later journal change has been saved."
+                                : `Proposal expires ${new Date(p.expiresAt).toLocaleString()}. A newer journal change requires a fresh proposal.`}
+                            </p>
                           </div>
-                          <p className="fine-print">
-                            {p.status
-                              ? "Undo is available for 24 hours while no later journal change has been saved."
-                              : `Proposal expires ${new Date(p.expiresAt).toLocaleString()}. A newer journal change requires a fresh proposal.`}
-                          </p>
-                        </div>
-                      </details>
-                    </section>
-                  ))}
-                </article>
-              ))}
+                        </details>
+                      </section>
+                    ))}
+                  </article>
+                ))}
+              </div>
             </div>
 
             {error && (

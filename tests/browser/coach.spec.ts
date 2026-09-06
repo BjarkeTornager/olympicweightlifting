@@ -264,3 +264,182 @@ test.describe("focused Coach conversation", () => {
     );
   });
 });
+
+test("sending on a phone keeps the latest exchange visible through keyboard dismissal and reply layout", async ({
+  page,
+  context,
+}, testInfo) => {
+  const turns = Array.from({ length: 10 }, (_, i) => ({
+    id: `phone-turn-${i}`,
+    question: `Earlier question ${i + 1}`,
+    reply: Array.from(
+      { length: 6 },
+      () =>
+        "An earlier answer with enough detail to make this conversation scroll.",
+    ).join("\n\n"),
+    status: "done",
+    proposals: [],
+  }));
+  let finishReply: (() => Promise<void>) | undefined;
+  await context.route("**/api/agent", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        json: { enabled: true, provider: "Test provider", turns },
+      });
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      finishReply = async () => {
+        await route.fulfill({
+          json: {
+            reply:
+              "### Your next step\n" +
+              Array.from(
+                { length: 20 },
+                () =>
+                  "Here is a detailed response you can read at your own pace.",
+              ).join("\n\n"),
+            proposals: [],
+          },
+        });
+        resolve();
+      };
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#coach");
+  await expect(page.getByText("Ready to help", { exact: true })).toBeVisible();
+  const composer = page.getByLabel("Message your coach");
+  await composer.fill("What should I do next?");
+  await composer.focus();
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, "height", {
+      configurable: true,
+      value: 450,
+    });
+    window.visualViewport?.dispatchEvent(new Event("resize"));
+  });
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, "offsetTop", {
+      configurable: true,
+      value: 60,
+    });
+    window.visualViewport?.dispatchEvent(new Event("scroll"));
+  });
+  const sendBounds = await page
+    .getByRole("button", { name: "Send", exact: true })
+    .boundingBox();
+  expect(sendBounds!.y + sendBounds!.height).toBeLessThanOrEqual(510);
+  await expect(page.locator(".coach-mode .main")).toHaveCSS("top", "60px");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect.poll(() => Boolean(finishReply)).toBe(true);
+  // iOS reports several viewport changes after blur, after the first paint.
+  for (const height of [570, 700, 844]) {
+    await page.evaluate((value) => {
+      Object.defineProperty(window.visualViewport, "height", {
+        configurable: true,
+        value,
+      });
+      Object.defineProperty(window.visualViewport, "offsetTop", {
+        configurable: true,
+        value: Math.max(0, (844 - value) / 5),
+      });
+      window.visualViewport?.dispatchEvent(new Event("resize"));
+    }, height);
+    await page.waitForTimeout(60);
+  }
+  await finishReply!();
+  await expect(
+    page.getByRole("heading", { name: "Your next step" }),
+  ).toBeInViewport();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const scroller = document.querySelector(".conversation")!;
+        const question = scroller.querySelector(
+          ".conversation-turn:last-child .chat-user",
+        )!;
+        return Math.abs(
+          question.getBoundingClientRect().top -
+            scroller.getBoundingClientRect().top -
+            16,
+        );
+      }),
+    )
+    .toBeLessThan(20);
+  await expect(composer).toBeInViewport();
+  await expect(
+    page.getByRole("button", { name: "Send", exact: true }),
+  ).toBeInViewport();
+  await page.screenshot({
+    path: testInfo.outputPath("coach-phone-after-send.png"),
+    fullPage: true,
+  });
+
+  // A later reply must not interrupt someone deliberately reading history.
+  finishReply = undefined;
+  await composer.fill("And what about tomorrow?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect.poll(() => Boolean(finishReply)).toBe(true);
+  const log = page.getByRole("log", { name: "Coach conversation" });
+  await expect(
+    page.getByText("And what about tomorrow?", { exact: false }),
+  ).toBeInViewport();
+  await expect
+    .poll(() =>
+      log.evaluate((el) => {
+        const question = el.querySelector(
+          ".conversation-turn:last-child .chat-user",
+        )!;
+        return Math.abs(
+          question.getBoundingClientRect().top -
+            el.getBoundingClientRect().top -
+            16,
+        );
+      }),
+    )
+    .toBeLessThan(20);
+  const latestTop = await log.evaluate((el) => el.scrollTop);
+  await log.hover();
+  await page.mouse.wheel(0, -700);
+  await expect
+    .poll(() => log.evaluate((el) => el.scrollTop))
+    .toBeLessThan(latestTop - 100);
+  let previousTop = -1;
+  await expect
+    .poll(
+      async () => {
+        const top = await log.evaluate((el) => el.scrollTop);
+        const settled = Math.abs(top - previousTop) < 1;
+        previousTop = top;
+        return settled;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+  const readingTop = await log.evaluate((el) => el.scrollTop);
+  expect(readingTop).toBeGreaterThan(100);
+  await finishReply!();
+  await expect(
+    page.locator(".conversation-turn").last().locator(".chat-assistant"),
+  ).toBeAttached();
+  await expect
+    .poll(() => log.evaluate((el) => el.scrollTop))
+    .toBeCloseTo(readingTop, 0);
+
+  // Returning to Safari revalidates the session and briefly conceals the app.
+  await page.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent("pagehide")),
+  );
+  await expect(page.locator(".private-shell")).toBeHidden();
+  await page.evaluate(() =>
+    window.dispatchEvent(new PageTransitionEvent("pageshow")),
+  );
+  await expect(page.locator(".private-shell")).toBeVisible();
+  await expect
+    .poll(() => log.evaluate((el) => el.scrollTop))
+    .toBeCloseTo(readingTop, 0);
+  await page.getByRole("button", { name: "Latest message" }).click();
+  await expect(page.locator(".chat-user").last()).toBeInViewport();
+  await expect(composer).toBeInViewport();
+});

@@ -119,17 +119,32 @@ export function Journal(props: PrivateSessionProps) {
         0,
         window.innerHeight - viewport.height - viewport.offsetTop,
       );
-      const open = editing && viewport.scale === 1 && inset > 150;
+      // Safari blurs the input before the keyboard finishes closing. Keep the
+      // compact layout until the viewport recovers so Send cannot move between
+      // touch-down and click, and the conversation doesn't collapse mid-send.
+      const open =
+        viewport.scale === 1 &&
+        inset > 150 &&
+        (editing ||
+          document.documentElement.hasAttribute("data-keyboard-open"));
       document.documentElement.toggleAttribute("data-keyboard-open", open);
       document.documentElement.style.setProperty(
         "--coach-viewport-height",
         `${viewport.height}px`,
       );
       document.documentElement.style.setProperty(
+        "--coach-viewport-top",
+        `${viewport.offsetTop}px`,
+      );
+      document.documentElement.style.setProperty(
         "--keyboard-inset",
         `${open ? inset : 0}px`,
       );
-      if (open && document.activeElement instanceof HTMLElement) {
+      if (
+        open &&
+        document.activeElement instanceof HTMLElement &&
+        !document.activeElement.closest(".coach-mode")
+      ) {
         const bounds = document.activeElement.getBoundingClientRect();
         if (
           bounds.bottom > viewport.offsetTop + viewport.height - 90 ||
@@ -143,15 +158,18 @@ export function Journal(props: PrivateSessionProps) {
     };
     refreshKeyboard();
     viewport.addEventListener("resize", refreshKeyboard);
+    viewport.addEventListener("scroll", refreshKeyboard);
     window.addEventListener("focusin", refreshKeyboard);
     window.addEventListener("focusout", refreshKeyboard);
     return () => {
       viewport.removeEventListener("resize", refreshKeyboard);
+      viewport.removeEventListener("scroll", refreshKeyboard);
       window.removeEventListener("focusin", refreshKeyboard);
       window.removeEventListener("focusout", refreshKeyboard);
       document.documentElement.removeAttribute("data-keyboard-open");
       document.documentElement.style.removeProperty("--keyboard-inset");
       document.documentElement.style.removeProperty("--coach-viewport-height");
+      document.documentElement.style.removeProperty("--coach-viewport-top");
     };
   }, []);
   const go = (target: string) => {

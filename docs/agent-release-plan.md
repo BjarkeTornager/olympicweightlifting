@@ -13,7 +13,7 @@ Requested scope: make the agent a primary entry point while improving phone logg
 - [x] Weekly volume, repetition records and session comparison supplement the load graph.
 - [x] Bodyweight formatting, larger text, sign out other devices and clear this device's account copy.
 - [x] Scheduled encrypted backup, monitored readiness, recovery rehearsal and hosting plan reviewed; record any actual account/billing blockers.
-- [ ] Database/domain/agent tests, browser and accessibility checks, Linux build and hosted verification pass before release completion.
+- [x] Database/domain/agent tests, browser and accessibility checks, Linux build and hosted verification pass for the deployed application commit.
 
 The existing 5 September Gym Accessories session (5 exercises, 16 sets) is now in the account. Preserve it throughout verification; use disposable test databases for writes in automated tests.
 
@@ -27,7 +27,9 @@ The owner selected OpenRouter for the hosted assistant, with a $5 monthly API us
 
 - All 24 browser checks passed across Chromium, Firefox and WebKit, including accessibility checks and the agent review/save/undo flow.
 - Real OpenRouter synthetic-account test passed: exact accessory workout, review before write, history retrieval and undo. Initial verification cost $0.006972. The owner added $10; the monthly usage cap remains $5 and auto top-up is off.
-- Physical iPhone keyboard/offline checks, Linux CI and hosted read-only verification are recorded separately at release.
+- Linux CI and hosted read-only verification passed. Physical iPhone keyboard/offline checks remain outstanding. See [the release record](agent-deployment-2026-09-06.md).
+
+The rest timer, reload persistence, responsive keyboard controls and 390 × 844 layout are implemented and checked in browser automation/visual inspection. The phone acceptance item stays open until physical-device testing.
 
 ## Operational work
 

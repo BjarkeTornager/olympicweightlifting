@@ -62,3 +62,9 @@ The current pilot uses one revision for each account's complete journal. Postgre
 The static app in `index.html`, `styles.css` and `js/` remains available for migration and recovery. Run `npm run serve` and open <http://localhost:4173> to use it locally. `npm run check` retains its 23 progression tests. The Pages workflow still publishes the static app from `main`.
 
 Use the original app's JSON export, then sign into the new origin and import through Settings. Website storage cannot transfer automatically between domains. Keep the original export until counts, exact loads, notes, next-session targets and the active draft have been verified. See the [legacy documentation](docs/legacy-app.md) for its original workflows and limitations.
+
+## Training assistant and daily tools
+
+Coach is the conversational home for training history, programme questions and reviewed workout changes. OpenRouter runs on the hosted server; Ollama is available for local development. See [assistant operations](docs/agent-operations.md) for setup, privacy controls, spending limits and real-provider tests.
+
+Train includes personal routines, exercise reordering and a rest timer. History can repeat a session or save it as a routine. Progress adds weekly volume, rep records and session comparisons. Settings includes larger text, device sign-out and offline-copy controls. Local saves can be undone while they remain the latest change.

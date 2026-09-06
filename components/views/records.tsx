@@ -29,6 +29,8 @@ import type { JournalController } from "../journal";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Technique } from "./workouts";
+import { formatSet, startTemplate, templateFromWorkout } from "@/lib/training";
+import { TrainingInsights } from "../training-insights";
 type Props = {
   state: JournalState;
   update: JournalController["update"];
@@ -145,7 +147,7 @@ export function HistoryView({
                           key={set.id}
                           className={set.result === "miss" ? "missed" : ""}
                         >
-                          {set.weight} kg × {set.reps}
+                          {formatSet(set.weight, set.reps)}
                           {set.result === "miss" ? " · miss" : ""}
                           {set.rpe ? ` · RPE ${set.rpe}` : ""}
                         </span>
@@ -188,6 +190,47 @@ export function HistoryView({
                     }}
                   >
                     Edit session
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        await update((current) => {
+                          if (current.activeWorkout)
+                            throw Error(
+                              "Resume your unfinished workout first.",
+                            );
+                          current.activeWorkout = startTemplate(
+                            templateFromWorkout(s),
+                          );
+                        });
+                        go("workout");
+                      } catch (e) {
+                        notify(
+                          e instanceof Error
+                            ? e.message
+                            : "Could not repeat session.",
+                        );
+                      }
+                    }}
+                  >
+                    Repeat session
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      await update((current) => {
+                        current.templates = [
+                          ...(current.templates ?? []),
+                          templateFromWorkout(s),
+                        ];
+                      });
+                      notify(
+                        "Routine saved. Find it in Train → Your routines.",
+                      );
+                    }}
+                  >
+                    Save as routine
                   </Button>
                   <Button variant="danger" onClick={() => setRemove(s)}>
                     <Trash2 size={16} />
@@ -288,6 +331,7 @@ export function ProgressView({ state, update, notify }: Props) {
           Edit personal bests
         </Button>
       </div>
+      <TrainingInsights state={state} />
       <div className="stats-grid">
         {[
           { label: "SNATCH", value: state.prs.snatch },
@@ -636,10 +680,20 @@ export function SettingsView({
           )}
           <p className="fine-print">
             {identity
-              ? `Last saved: ${new Date(state.updatedAt).toLocaleString()}`
+              ? `Saved on device: ${new Date(state.updatedAt).toLocaleString()}`
               : "Export a backup before clearing browser data or changing devices."}
           </p>
-          <a href="/privacy" className="fine-print underline underline-offset-4">
+          <p className="fine-print">
+            {journal.record?.lastSyncedAt
+              ? `Last cloud check: ${new Date(journal.record.lastSyncedAt).toLocaleString()}`
+              : "Cloud sync has not been confirmed on this device."}
+            {journal.record?.dirty ? " Changes are waiting to sync." : ""}
+          </p>
+          {identity && <DeviceSettings journal={journal} notify={notify} />}
+          <a
+            href="/privacy"
+            className="fine-print underline underline-offset-4"
+          >
             Privacy and your data
           </a>
         </section>
@@ -704,6 +758,43 @@ export function SettingsView({
               Save profile
             </Button>
           </form>
+        </section>
+        <section className="panel form-stack">
+          <h2>Reading & rest</h2>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={Boolean(state.preferences.largeText)}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                void update((s) => {
+                  s.preferences.largeText = checked;
+                });
+              }}
+            />
+            Larger text
+          </label>
+          <label>
+            Default rest timer
+            <select
+              value={state.preferences.restSeconds ?? 90}
+              onChange={(e) => {
+                const seconds = Number(e.currentTarget.value);
+                void update((s) => {
+                  s.preferences.restSeconds = seconds;
+                });
+              }}
+            >
+              {[60, 90, 120, 180, 300].map((n) => (
+                <option value={n} key={n}>
+                  {n / 60} minutes
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">
+            You can also use your browser’s text size and zoom settings.
+          </p>
         </section>
         <section className="panel backup-panel">
           <span className="program-index">
@@ -864,5 +955,85 @@ export function SettingsView({
         </div>
       </Dialog>
     </>
+  );
+}
+
+function DeviceSettings({
+  journal,
+  notify,
+}: {
+  journal: JournalController;
+  notify: (s: string) => void;
+}) {
+  const [clear, setClear] = useState(false),
+    [busy, setBusy] = useState(false);
+  return (
+    <div className="device-settings">
+      <p className="fine-print">
+        Normal sign-out keeps an offline copy on this browser. Use the option
+        below on a shared device.
+      </p>
+      <div className="button-row">
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await fetch("/api/devices/revoke", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Journal-Account": journal.identity?.id ?? "",
+                },
+                body: "{}",
+              });
+              if (!r.ok)
+                throw Error(
+                  "Could not sign out other devices. Try again online.",
+                );
+              notify(
+                "Other cloud sessions signed out. Offline copies on those devices remain until cleared there.",
+              );
+            } catch (e) {
+              notify(
+                e instanceof Error ? e.message : "Could not update sessions.",
+              );
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Sign out other devices
+        </Button>
+        <Button variant="ghost" onClick={() => setClear(true)}>
+          Sign out & clear this device
+        </Button>
+      </div>
+      <Dialog
+        open={clear}
+        onOpenChange={setClear}
+        title="Clear the offline copy?"
+        description="Your synced journal stays in your account. This browser’s account journal, chat cache and timer will be removed. Pending changes must sync first."
+      >
+        <Button
+          variant="danger"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await journal.signOut(true);
+              setClear(false);
+            } catch (e) {
+              notify(e instanceof Error ? e.message : "Sign-out failed.");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Sign out & clear
+        </Button>
+      </Dialog>
+    </div>
   );
 }

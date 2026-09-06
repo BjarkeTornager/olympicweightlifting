@@ -33,15 +33,19 @@ export async function readJournal(userId: string): Promise<Snapshot> {
     .where(eq(journals.userId, userId));
   return { state: journalSchema.parse(row.state), revision: row.revision };
 }
+export type JournalTransaction = Parameters<
+  Parameters<ReturnType<typeof getDb>["transaction"]>[0]
+>[0];
 export async function writeJournal(
   userId: string,
   input: { state: JournalState; revision: number; mutationId: string },
+  transaction?: JournalTransaction,
 ): Promise<Snapshot> {
   const state = journalSchema.parse(input.state);
   const hash = createHash("sha256")
     .update(canonicalJson({ state, revision: input.revision }))
     .digest("hex");
-  return getDb().transaction(async (tx) => {
+  const work = async (tx: JournalTransaction) => {
     await tx
       .insert(journals)
       .values({ userId, state: emptyJournal() })
@@ -138,10 +142,15 @@ export async function writeJournal(
       .insert(mutations)
       .values({ userId, id: input.mutationId, hash, revision });
     return { state, revision };
-  });
+  };
+  return transaction ? work(transaction) : getDb().transaction(work);
 }
-export async function allowRequest(userId: string): Promise<boolean> {
-  const key = `journal:${userId}`;
+export async function allowRequest(
+  userId: string,
+  bucket = "journal",
+  limit = 120,
+): Promise<boolean> {
+  const key = `${bucket}:${userId}`;
   const [row] = await getDb()
     .insert(rateLimits)
     .values({ key, count: 1, expiresAt: new Date(Date.now() + 60000) })
@@ -153,5 +162,5 @@ export async function allowRequest(userId: string): Promise<boolean> {
       },
     })
     .returning();
-  return row.count <= 120;
+  return row.count <= limit;
 }

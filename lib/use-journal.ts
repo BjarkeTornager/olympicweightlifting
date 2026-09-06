@@ -5,6 +5,7 @@ import {
   cacheIdentity,
   changeLocal,
   getLocal,
+  removeLocal,
   type LocalRecord,
 } from "./local";
 import type { Identity, JournalState, Snapshot } from "./model";
@@ -48,6 +49,7 @@ export function useJournal() {
     }
     syncing.current = true;
     const work = async () => {
+      if (account.current !== accountId) return;
       let local = await getLocal(accountId);
       if (local.conflict) {
         publish(local);
@@ -73,7 +75,14 @@ export function useJournal() {
           // copy. Preserve that copy for recovery instead of silently replacing it.
           if (server.revision < current.revision)
             return { ...current, conflict: server };
-          return { ...current, state: server.state, revision: server.revision };
+          return {
+            ...current,
+            state: server.state,
+            revision: server.revision,
+            lastSyncedAt: new Date().toISOString(),
+            undo:
+              server.revision === current.revision ? current.undo : undefined,
+          };
         });
         publish(local);
         setStatus(
@@ -141,6 +150,9 @@ export function useJournal() {
           ...current,
           revision: server.revision,
           pending: undefined,
+          lastSyncedAt: new Date().toISOString(),
+          undo:
+            server.revision === pending.revision + 1 ? current.undo : undefined,
           ...(current.seq === pending.seq
             ? { state: server.state, dirty: false }
             : { dirty: true }),
@@ -165,6 +177,17 @@ export function useJournal() {
     alive.current = true;
     channel.current = new BroadcastChannel("lift-journal-sync");
     channel.current.onmessage = async (event) => {
+      if (
+        event.data?.type === "signed-out" &&
+        event.data.accountId === account.current
+      ) {
+        cacheIdentity(null);
+        account.current = "guest";
+        setIdentity(null);
+        setRecord(await getLocal("guest"));
+        setStatus("local");
+        return;
+      }
       if (event.data === account.current)
         setRecord(await getLocal(account.current));
     };
@@ -227,11 +250,13 @@ export function useJournal() {
     async (fn: (state: JournalState) => JournalState | void) => {
       try {
         const next = await changeLocal(account.current, (current) => {
+          const before = structuredClone(current.state);
           const result = fn(current.state);
           current.state = result ?? current.state;
           current.state.updatedAt = new Date().toISOString();
           current.seq++;
           current.dirty = true;
+          current.undo = { state: before, seq: current.seq };
           return current;
         });
         publish(next);
@@ -269,29 +294,60 @@ export function useJournal() {
           conflict: undefined,
           pending: undefined,
           dirty: choice === "local",
+          undo: undefined,
           seq: current.seq + 1,
         };
       }),
     );
     await sync();
   };
-  const signOut = async () => {
-    const current = await getLocal(account.current);
-    if (current.dirty || current.pending)
-      throw Error(
-        "Sync your pending work before signing out. You can also export a backup in Settings.",
-      );
-    const response = await fetch("/api/auth/sign-out", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
+  const signOut = async (clearDevice = false) => {
+    const accountId = account.current;
+    const work = async () => {
+      const current = await getLocal(accountId);
+      if (current.dirty || current.pending)
+        throw Error(
+          "Sync your pending work before signing out. You can also export a backup in Settings.",
+        );
+      const response = await fetch("/api/auth/sign-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!response.ok) throw Error("Sign-out failed. Try again when online.");
+      if (clearDevice) {
+        await removeLocal(accountId);
+        localStorage.removeItem(`lift-agent:${accountId}`);
+        localStorage.removeItem(`lift-rest:${accountId}`);
+      }
+      channel.current?.postMessage({ type: "signed-out", accountId });
+      cacheIdentity(null);
+      account.current = "guest";
+      setIdentity(null);
+      publish(await getLocal("guest"));
+      setStatus("local");
+    };
+    if (navigator.locks)
+      await navigator.locks.request(`lift-sync:${accountId}`, work);
+    else if (syncing.current)
+      throw Error("Wait for the current sync to finish, then sign out again.");
+    else await work();
+  };
+  const undo = async () => {
+    const next = await changeLocal(account.current, (current) => {
+      if (!current.undo || current.undo.seq !== current.seq || current.conflict)
+        throw Error("This change can no longer be undone safely.");
+      return {
+        ...current,
+        state: { ...current.undo.state, updatedAt: new Date().toISOString() },
+        seq: current.seq + 1,
+        dirty: true,
+        undo: undefined,
+      };
     });
-    if (!response.ok) throw Error("Sign-out failed. Try again when online.");
-    cacheIdentity(null);
-    account.current = "guest";
-    setIdentity(null);
-    publish(await getLocal("guest"));
-    setStatus("local");
+    publish(next);
+    setStatus(account.current === "guest" ? "local" : "saved");
+    await sync();
   };
   return {
     state: record?.state ?? null,
@@ -304,5 +360,6 @@ export function useJournal() {
     sync,
     resolveConflict,
     signOut,
+    undo,
   };
 }

@@ -40,6 +40,7 @@ export function emptyJournal(): JournalState {
     prs: Object.fromEntries(PR_DEFINITIONS.map((p) => [p.exerciseId, 0])),
     sessions: [],
     activeWorkout: null,
+    templates: [],
     program: {
       activeProgramId: program.id,
       programRevision: program.revision,
@@ -229,6 +230,15 @@ export function mergeImport(
     !current.sessions.length &&
     !current.activeWorkout &&
     Object.values(current.prs).every((v) => v === 0);
+  const templates = new Map((current.templates ?? []).map((t) => [t.id, t]));
+  for (const template of incoming.templates ?? []) {
+    const old = templates.get(template.id);
+    if (old && canonicalJson(old) !== canonicalJson(template))
+      throw Error(
+        `A different version of template “${template.name}” already exists.`,
+      );
+    templates.set(template.id, template);
+  }
   return journalSchema.parse({
     ...current,
     ...(fresh
@@ -240,6 +250,7 @@ export function mergeImport(
         }
       : {}),
     sessions: [...sessions.values()],
+    templates: [...templates.values()],
     activeWorkout: current.activeWorkout ?? incoming.activeWorkout,
   });
 }

@@ -39,6 +39,7 @@ test("all main screens fit mobile and desktop", async ({ page }) => {
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const route of [
+      "coach",
       "dashboard",
       "workout/choose",
       "workout/gym_accessories",
@@ -290,6 +291,7 @@ test("key screens have no WCAG A/AA violations and the skip link keeps the route
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of [
+    "coach",
     "dashboard",
     "workout/monday",
     "workout",
@@ -330,4 +332,178 @@ test("key screens have no WCAG A/AA violations and the skip link keeps the route
   await page.keyboard.press("Enter");
   await expect(page.locator("main")).toBeFocused();
   await expect(page).toHaveURL(/#dashboard$/);
+});
+
+test("routines repeat unlogged sets, timer survives reload, and a mistaken set tap can be undone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#workout/choose");
+  await page.getByRole("button", { name: "New routine" }).click();
+  await page.getByLabel("Routine name").fill("Accessory favourite");
+  await page
+    .getByRole("combobox", { name: "Add exercise", exact: true })
+    .selectOption("dead_bug");
+  await page.getByLabel("Set 1 · kg").fill("0");
+  await page.getByLabel("Reps", { exact: true }).fill("16");
+  await page.getByRole("button", { name: "Save routine", exact: true }).click();
+  await page
+    .locator(".routine-list")
+    .getByRole("button", { name: "Start", exact: true })
+    .click();
+  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await page.getByRole("button", { name: "Undo last change" }).click();
+  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await page.getByLabel("Rest duration").selectOption("60");
+  await page.getByRole("button", { name: "Start rest" }).click();
+  await expect(
+    page.getByRole("button", { name: "Pause", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Pause", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".timer-digits")).toHaveText(/0:\d\d|1:00/);
+  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await page
+    .locator(".workout-dock")
+    .getByRole("button", { name: "Finish workout" })
+    .click();
+  await page.getByRole("button", { name: "Save workout", exact: true }).click();
+  await page.locator(".history-detail > summary").click();
+  await expect(
+    page.getByText("Bodyweight × 16", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Repeat session" }).click();
+  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await page.goto("/#data");
+  await page.getByLabel("Larger text").click();
+  await expect(page.getByLabel("Larger text")).toBeChecked();
+  await page.goto("/#workout");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("agent review saves once, syncs the journal and offers undo without revealing account identity", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    serviceWorkers: "block",
+    viewport: { width: 390, height: 844 },
+  });
+  const user = {
+    id: "agent-ui-athlete",
+    name: "Private Full Name",
+    email: "private@example.test",
+  };
+  let server = { state: emptyJournal(), revision: 0 },
+    writes = 0;
+  const workout = createWorkout(server.state, undefined, "2026-09-05");
+  workout.title = "Accessory training";
+  workout.programDayId = "gym_accessories";
+  workout.exercises = [
+    {
+      id: "e",
+      exerciseId: "dead_bug",
+      loggingVersion: 1,
+      completed: true,
+      athleteNotes: "",
+      coachCue: "",
+      prescribed: {},
+      sets: [{ id: "s", weight: 0, reps: 16, result: "success", logged: true }],
+    },
+  ];
+  const proposal = {
+    id: crypto.randomUUID(),
+    title: "Log a completed session",
+    detail: "Adds this session to History.",
+    workout,
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+  };
+  await context.route("**/api/session", (r) =>
+    r.fulfill({
+      json: { user, configured: true, google: true, localPassword: false },
+    }),
+  );
+  await context.route("**/api/journal", (r) =>
+    r.fulfill({ json: { accountId: user.id, ...server } }),
+  );
+  await context.route("**/api/agent", (r) =>
+    r.fulfill({
+      json:
+        r.request().method() === "GET"
+          ? { enabled: true, provider: "Private Ollama", turns: [] }
+          : { reply: "Ready for your review.", proposals: [proposal] },
+    }),
+  );
+  await context.route("**/api/agent/action", (r) => {
+    writes++;
+    const undo = r.request().postDataJSON().undo;
+    server = {
+      state: { ...server.state, sessions: undo ? [] : [workout] },
+      revision: server.revision + 1,
+    };
+    return r.fulfill({
+      json: {
+        accountId: user.id,
+        ...server,
+        status: undo ? "undone" : "saved",
+      },
+    });
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { name: "Let’s talk training." }),
+    ).toBeVisible();
+    await page
+      .getByLabel("Message your training assistant")
+      .fill("Log yesterday's bodyweight dead bugs: 16 reps, made.");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const card = page.getByRole("region", { name: "Review training change" });
+    await expect(card.getByText("2026-09-05", { exact: true })).toBeVisible();
+    expect(writes).toBe(0);
+    await expect(page.getByText(user.name, { exact: false })).toHaveCount(0);
+    await expect(page.getByText(user.email, { exact: false })).toHaveCount(0);
+    const report = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    expect(
+      report.violations.map((v) => ({
+        id: v.id,
+        nodes: v.nodes.map((n) => n.failureSummary),
+      })),
+    ).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await card.getByRole("button", { name: "Save this change" }).click();
+    await expect(
+      page.getByText("Saved to your account. Your journal is up to date."),
+    ).toBeVisible();
+    expect(writes).toBe(1);
+    await card.getByRole("button", { name: "Undo this change" }).click();
+    await expect(
+      page.getByText("Change undone and saved to your account."),
+    ).toBeVisible();
+    expect(server.state.sessions.length).toBe(0);
+  } finally {
+    await context.close();
+  }
 });

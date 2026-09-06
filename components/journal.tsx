@@ -12,6 +12,8 @@ import {
   House,
   LogIn,
   Settings,
+  Sparkles,
+  Undo2,
   WifiOff,
 } from "lucide-react";
 import { useJournal } from "@/lib/use-journal";
@@ -20,6 +22,8 @@ import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { Dashboard } from "./views/dashboard";
 import { Workouts } from "./views/workouts";
+import { TrainingAgent } from "./agent";
+import { RestTimer } from "./rest-timer";
 import {
   HistoryView,
   ProgressView,
@@ -29,6 +33,7 @@ import {
 } from "./views/records";
 export type JournalController = ReturnType<typeof useJournal>;
 const navigation = [
+  { id: "coach", label: "Coach", icon: Sparkles },
   { id: "dashboard", label: "Home", icon: House },
   { id: "workout", label: "Train", icon: Dumbbell },
   { id: "history", label: "History", icon: History },
@@ -50,14 +55,14 @@ const labels = {
 export function Journal() {
   const journal = useJournal();
   const { state, identity, status, auth, error } = journal;
-  const [route, setRoute] = useState("dashboard"),
+  const [route, setRoute] = useState("coach"),
     [login, setLogin] = useState(false),
     [message, setMessage] = useState("");
   const [updateReady, setUpdateReady] = useState(false),
     [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   useEffect(() => {
     const changed = () => {
-      setRoute(location.hash.slice(1) || "dashboard");
+      setRoute(location.hash.slice(1) || "coach");
       window.scrollTo({ top: 0, behavior: "instant" });
     };
     const activated = () => setUpdateReady(false);
@@ -89,6 +94,46 @@ export function Journal() {
         );
     };
   }, []);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const refreshKeyboard = () => {
+      const editing =
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement;
+      const inset = Math.max(
+        0,
+        window.innerHeight - viewport.height - viewport.offsetTop,
+      );
+      const open = editing && viewport.scale === 1 && inset > 150;
+      document.documentElement.toggleAttribute("data-keyboard-open", open);
+      document.documentElement.style.setProperty(
+        "--keyboard-inset",
+        `${open ? inset : 0}px`,
+      );
+      if (open && document.activeElement instanceof HTMLElement) {
+        const bounds = document.activeElement.getBoundingClientRect();
+        if (
+          bounds.bottom > viewport.offsetTop + viewport.height - 90 ||
+          bounds.top < viewport.offsetTop
+        )
+          document.activeElement.scrollIntoView({
+            block: "center",
+            behavior: "smooth",
+          });
+      }
+    };
+    viewport.addEventListener("resize", refreshKeyboard);
+    window.addEventListener("focusin", refreshKeyboard);
+    window.addEventListener("focusout", refreshKeyboard);
+    return () => {
+      viewport.removeEventListener("resize", refreshKeyboard);
+      window.removeEventListener("focusin", refreshKeyboard);
+      window.removeEventListener("focusout", refreshKeyboard);
+      document.documentElement.removeAttribute("data-keyboard-open");
+      document.documentElement.style.removeProperty("--keyboard-inset");
+    };
+  }, []);
   const go = (target: string) => {
     location.hash = target;
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -110,7 +155,9 @@ export function Journal() {
   };
   const section = route.split("/")[0];
   return (
-    <div className="journal">
+    <div
+      className={`journal ${state?.preferences.largeText ? "large-text" : ""}`}
+    >
       <a
         className="skip-link"
         href="#content"
@@ -122,7 +169,7 @@ export function Journal() {
         Skip to content
       </a>
       <aside className="sidebar">
-        <a className="brand" href="#dashboard">
+        <a className="brand" href="#coach">
           <span className="brand-icon">
             <Dumbbell size={22} />
           </span>
@@ -195,6 +242,36 @@ export function Journal() {
             <span>{labels[status]}</span>
           </button>
         </header>
+        {state && (
+          <div className="save-detail">
+            <span>
+              {journal.record?.dirty
+                ? "Changes waiting to sync"
+                : identity && journal.record?.lastSyncedAt
+                  ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                  : "This browser holds your offline copy"}{" "}
+              · Device saved{" "}
+              {new Date(state.updatedAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+            {journal.record?.undo && !journal.record.conflict && (
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  void journal
+                    .undo()
+                    .then(() => setMessage("Last change undone."))
+                    .catch((e) => setMessage(e.message))
+                }
+              >
+                <Undo2 size={15} />
+                Undo last change
+              </Button>
+            )}
+          </div>
+        )}
         {updateReady && (
           <div className="notice">
             <span>
@@ -279,6 +356,21 @@ export function Journal() {
           </div>
         ) : (
           <>
+            {section === "coach" && (
+              <TrainingAgent
+                key={identity?.id ?? "guest"}
+                journal={journal}
+                onLogin={() => setLogin(true)}
+                go={go}
+              />
+            )}
+            {section === "workout" && state.activeWorkout && (
+              <RestTimer
+                key={identity?.id ?? "guest"}
+                accountId={identity?.id ?? "guest"}
+                duration={state.preferences.restSeconds ?? 90}
+              />
+            )}
             {section === "dashboard" && (
               <Dashboard state={state} onStart={start} go={go} />
             )}
@@ -325,17 +417,19 @@ export function Journal() {
         )}
       </main>
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {navigation.map(({ id, label, icon: Icon }) => (
-          <a
-            key={id}
-            href={`#${id}`}
-            className={section === id ? "active" : ""}
-            aria-current={section === id ? "page" : undefined}
-          >
-            <Icon size={20} />
-            <span>{label}</span>
-          </a>
-        ))}
+        {navigation
+          .filter((n) => !["dashboard", "library"].includes(n.id))
+          .map(({ id, label, icon: Icon }) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              className={section === id ? "active" : ""}
+              aria-current={section === id ? "page" : undefined}
+            >
+              <Icon size={20} />
+              <span>{label}</span>
+            </a>
+          ))}
       </nav>
       <Dialog
         open={login}

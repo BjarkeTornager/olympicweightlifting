@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   Check,
@@ -32,6 +34,8 @@ import {
 import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { Templates } from "../templates";
+import { formatSet } from "@/lib/training";
 type Update = (
   fn: (state: JournalState) => JournalState | void,
 ) => Promise<void>;
@@ -275,6 +279,13 @@ export function Workouts(props: Props) {
           Open workout
         </Button>
       </div>
+      <Templates
+        state={state}
+        update={props.update}
+        date={date}
+        go={go}
+        notify={props.notify}
+      />
       {state.activeWorkout && (
         <div className="notice">
           <span>
@@ -557,13 +568,47 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
               </button>
               {active && (
                 <div className="exercise-body">
+                  <div className="button-row exercise-order">
+                    {[-1, 1].map((direction) => (
+                      <Button
+                        key={direction}
+                        variant="ghost"
+                        disabled={
+                          index + direction < 0 ||
+                          index + direction >= draft.exercises.length
+                        }
+                        aria-label={`Move ${exerciseName(entry.exerciseId)} ${direction < 0 ? "up" : "down"}`}
+                        onClick={() =>
+                          save((s) => {
+                            const entries = s.activeWorkout!.exercises;
+                            const from = entries.findIndex(
+                                (e) => e.id === entry.id,
+                              ),
+                              to = from + direction;
+                            if (from >= 0 && to >= 0 && to < entries.length)
+                              [entries[from], entries[to]] = [
+                                entries[to],
+                                entries[from],
+                              ];
+                          })
+                        }
+                      >
+                        {direction < 0 ? (
+                          <ArrowUp size={17} />
+                        ) : (
+                          <ArrowDown size={17} />
+                        )}
+                        Move {direction < 0 ? "up" : "down"}
+                      </Button>
+                    ))}
+                  </div>
                   <p className="muted">{entry.prescribed.notes}</p>
                   {previous && (
                     <p className="previous">
                       Last session:{" "}
                       {previous.sets
                         .filter(isValidLoggedSet)
-                        .map((s) => `${s.weight} kg × ${s.reps}`)
+                        .map((s) => formatSet(s.weight, s.reps))
                         .join(" · ") || "No logged sets"}
                     </p>
                   )}

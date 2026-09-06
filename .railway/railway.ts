@@ -23,6 +23,12 @@ export default defineRailway(() => {
       GOOGLE_CLIENT_SECRET: preserve(),
       MIGRATION_DATABASE_URL: preserve(),
       PORT: preserve(),
+      OLLAMA_BASE_URL: preserve(),
+      OLLAMA_MODEL: preserve(),
+      OLLAMA_API_KEY: preserve(),
+      AGENT_PROVIDER: preserve(),
+      AGENT_MODEL: preserve(),
+      OPENROUTER_API_KEY: preserve(),
     },
   });
   return project("olympicweightlifting", {

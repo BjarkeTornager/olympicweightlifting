@@ -5,6 +5,8 @@ export type LocalRecord = Snapshot & {
   accountId: string;
   seq: number;
   dirty: boolean;
+  lastSyncedAt?: string;
+  undo?: { state: JournalState; seq: number };
   pending?: {
     mutationId: string;
     revision: number;
@@ -63,4 +65,7 @@ export function cachedIdentity(): Identity | null {
 export function cacheIdentity(value: Identity | null) {
   if (value) localStorage.setItem("lift-cloud:identity", JSON.stringify(value));
   else localStorage.removeItem("lift-cloud:identity");
+}
+export async function removeLocal(accountId: string) {
+  await (await database()).delete("journals", accountId);
 }

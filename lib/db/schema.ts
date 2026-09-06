@@ -192,3 +192,45 @@ export const rateLimits = pgTable("request_limits", {
   count: integer("count").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+export const agentTurns = pgTable(
+  "agent_turns",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    response: jsonb("response").$type<{
+      reply: string;
+      proposals: import("../agent/actions").ActionPreview[];
+    }>(),
+    status: text("status").notNull().default("running"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("agent_turns_user_date_idx").on(t.userId, t.createdAt)],
+);
+export const agentProposals = pgTable(
+  "agent_proposals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    turnId: text("turn_id")
+      .notNull()
+      .references(() => agentTurns.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    before: jsonb("before_state").$type<JournalState>().notNull(),
+    after: jsonb("after_state").$type<JournalState>().notNull(),
+    preview: jsonb("preview")
+      .$type<import("../agent/actions").ActionPreview>()
+      .notNull(),
+    undoId: text("undo_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("agent_proposals_user_idx").on(t.userId)],
+);

@@ -23,8 +23,8 @@ export default function PrivacyPage() {
           Lift Journal is an invitation-only training journal. When you sign in
           with Google, we receive your name, email address, profile picture and
           account identifier to create your account and keep you signed in. We
-          do not receive your Google password or display your Google name in
-          the journal interface.
+          do not receive your Google password or display your Google name in the
+          journal interface.
         </p>
         <p>
           We store the profile details, workouts, weights, personal records and
@@ -44,10 +44,49 @@ export default function PrivacyPage() {
         </p>
         <p>
           Your browser also keeps a local copy for offline training. Signing out
-          hides this copy in the app but does not erase it from the device.
-          Export anything you want to keep before clearing the website&apos;s
-          browser data. Guest training stays on the device until you explicitly
-          bring it into a signed-in account.
+          hides this copy in the app but does not erase it from the device. Use
+          “Sign out & clear this device” in Settings to remove this browser’s
+          account copy after syncing. Revoking other sessions does not erase
+          their offline copies. Export anything you want to keep before clearing
+          the website&apos;s browser data. Guest training stays on the device
+          until you explicitly bring it into a signed-in account.
+        </p>
+      </section>
+      <section className="space-y-3">
+        <h2>Your training assistant</h2>
+        <p>
+          When enabled, the assistant sends your messages, recent conversation
+          and relevant training records to the provider named in Coach.
+          OpenRouter routes requests to a model provider; this app requires tool
+          support, no data collection and zero data retention routing. These
+          filters reflect provider policies and do not guarantee processing in
+          the EU. OpenRouter and Ollama Cloud operate outside this Railway
+          database and may process data outside the Netherlands. A private
+          Ollama installation processes requests on its configured host. Your
+          Google account name, email, password and database credentials are not
+          included in model requests.
+        </p>
+        <p>
+          Conversation is stored with your account. The app removes conversation
+          older than 90 days when you next use the assistant. Proposals
+          temporarily include journal snapshots for safe save and undo; they
+          expire after 24 hours and are removed on subsequent assistant use.
+          Clear conversation removes its messages and proposals immediately,
+          while keeping saved workouts. Journal backup exports do not include
+          chat; use your browser to copy any conversation you want to keep.
+        </p>
+        <p>
+          The assistant can read only your journal through limited tools. It
+          prepares changes for review; you confirm a proposal before it is
+          saved. Provider failures do not remove your existing training. See{" "}
+          <a href="https://openrouter.ai/privacy" className="underline">
+            OpenRouter’s privacy policy
+          </a>{" "}
+          and{" "}
+          <a href="https://ollama.com/privacy" className="underline">
+            Ollama’s privacy policy
+          </a>{" "}
+          for their own data handling.
         </p>
       </section>
       <section className="space-y-3">
@@ -64,8 +103,8 @@ export default function PrivacyPage() {
         <p>
           You can edit your profile and workouts, and export a journal backup
           from Settings. To request an account export, correction or deletion,
-          contact the person who invited you to Lift Journal. We will verify
-          the account before acting on a request.
+          contact the person who invited you to Lift Journal. We will verify the
+          account before acting on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

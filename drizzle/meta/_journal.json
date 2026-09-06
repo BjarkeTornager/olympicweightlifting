@@ -15,6 +15,13 @@
       "when": 1788639937801,
       "tag": "0001_dark_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788682804233,
+      "tag": "0002_keen_peter_quill",
+      "breakpoints": true
     }
   ]
 }

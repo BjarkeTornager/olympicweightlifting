@@ -163,7 +163,7 @@ export function TrainingAgent({
       setNotice(
         undo
           ? "Change undone and saved to your account."
-          : "Saved to your account. Your journal is up to date.",
+          : "Saved to your account.",
       );
     } catch (e) {
       setError(
@@ -223,8 +223,8 @@ export function TrainingAgent({
               <div>
                 <strong>Your assistant is being connected.</strong>
                 <p>
-                  Your journal is ready. Keep logging in Train while Ollama is
-                  configured.
+                  Your journal is ready. Keep logging in Train while the
+                  assistant connection is configured.
                 </p>
               </div>
               <Button

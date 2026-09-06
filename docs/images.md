@@ -1,5 +1,7 @@
 # Private image library
 
+The image library is [published and verified on Railway](image-classification-deployment-2026-09-06.md).
+
 Open **Images & screenshots** near the top of Coach, or **Images** in the desktop navigation. Food and Health also link to the full library. Uploads are stored once per account and organised into **Food, Sleep, Activity, Health, Other, or Needs review**. Tags describe the subject, format and visibly identifiable source app, such as Apple Health.
 
 With **Tag automatically** enabled, a new upload is sent to the configured image-capable assistant provider for one classification request. The upload control and privacy page disclose this. Turn it off to save without provider processing, then choose a category manually. Explicit **Retag automatically** sends an existing image for a new classification. Opening a gallery does not send images to a provider. This is screenshot analysis, not a connection to Apple Health or another app.

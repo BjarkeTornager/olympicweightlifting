@@ -1,4 +1,5 @@
 "use client";
+import { CardioProgress } from "../cardio";
 import { Invitations } from "../invitations";
 import { privateFetch } from "@/lib/private-fetch";
 import { useState } from "react";
@@ -71,7 +72,7 @@ export function HistoryView({
           <div className="eyebrow">YOUR TRAINING STORY</div>
           <h1>Work you can build on.</h1>
           <p className="lead">
-            {state.sessions.length} saved sessions. Every one counts.
+            {state.sessions.length} saved strength sessions. Every one counts.
           </p>
         </div>
         <Button
@@ -82,6 +83,7 @@ export function HistoryView({
           Export journal
         </Button>
       </div>
+      <a className="text-link cardio-history-link" href="#cardio">Cardio activity history <ArrowRight size={16} /></a>
       <div className="picker-bar">
         <label>
           Exercise
@@ -323,15 +325,16 @@ export function ProgressView({ state, update, notify }: Props) {
       <div className="page-heading compact">
         <div>
           <div className="eyebrow">PROGRESS, SESSION BY SESSION</div>
-          <h1>See your strength grow.</h1>
+          <h1>See your progress.</h1>
           <p className="lead">
-            Your recorded lifts, personal bests and next milestones.
+            Your strength records and cardio activity, in one place.
           </p>
         </div>
         <Button variant="secondary" onClick={() => setEditing(true)}>
           Edit personal bests
         </Button>
       </div>
+      <CardioProgress state={state} compact />
       <TrainingInsights state={state} />
       <div className="stats-grid">
         {[
@@ -643,7 +646,7 @@ export function SettingsView({
         <div>
           <div className="eyebrow">YOUR JOURNAL, YOURS TO KEEP</div>
           <h1>Make yourself at home.</h1>
-          <p className="lead">Your profile, account and training backups.</p>
+          <p className="lead">Your profile, account and health journal backups.</p>
         </div>
       </div>
       <div className="settings-grid">
@@ -801,8 +804,8 @@ export function SettingsView({
           </span>
           <h2>A copy you can keep.</h2>
           <p className="muted">
-            Export your sessions, personal bests, notes and unfinished workout
-            in one portable JSON file.
+            Export your strength training, cardio, food, health check-ins and
+            unfinished workout in one portable JSON file.
           </p>
           <Button
             variant="secondary"

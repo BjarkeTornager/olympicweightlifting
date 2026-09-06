@@ -49,6 +49,7 @@ export function emptyJournal(): JournalState {
     activeWorkout: null,
     templates: [],
     health: { checkins: [] },
+    cardio: { sessions: [] },
     nutrition: {
       meals: [],
       targets: {
@@ -246,6 +247,7 @@ export function mergeImport(
     );
   const fresh =
     !current.sessions.length &&
+    !current.cardio.sessions.length &&
     !current.nutrition.meals.length &&
     !current.health.checkins.length &&
     current.nutrition.targets.goal === "maintain" &&
@@ -258,6 +260,15 @@ export function mergeImport(
     !current.activeWorkout &&
     Object.values(current.prs).every((v) => v === 0);
   const templates = new Map((current.templates ?? []).map((t) => [t.id, t]));
+  const cardio = new Map(current.cardio.sessions.map((s) => [s.id, s]));
+  for (const activity of incoming.cardio.sessions) {
+    const old = cardio.get(activity.id);
+    if (old && canonicalJson(old) !== canonicalJson(activity))
+      throw Error(
+        `A different version of cardio activity on ${activity.date} already exists. Review both backups before importing.`,
+      );
+    cardio.set(activity.id, activity);
+  }
   const meals = new Map(current.nutrition.meals.map((m) => [m.id, m]));
   const checkins = new Map(current.health.checkins.map((c) => [c.date, c]));
   for (const checkin of incoming.health.checkins) {
@@ -295,6 +306,7 @@ export function mergeImport(
     sessions: [...sessions.values()],
     templates: [...templates.values()],
     health: { checkins: [...checkins.values()] },
+    cardio: { sessions: [...cardio.values()] },
     nutrition: {
       meals: [...meals.values()],
       targets: fresh ? incoming.nutrition.targets : current.nutrition.targets,

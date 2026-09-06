@@ -104,12 +104,20 @@ export async function PUT(request: Request) {
       }
       chunks.push(value);
     }
-    const input = schema.parse(
-      JSON.parse(Buffer.concat(chunks).toString("utf8")),
-    );
+    const raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const input = schema.parse(raw);
     return Response.json({
       accountId: user.id,
-      ...(await writeJournal(user.id, input)),
+      ...(await writeJournal(user.id, {
+        ...input,
+        state: {
+          ...input.state,
+          // Preserve omission until the transaction can retain this additive
+          // field for an older client. A schema default must not mean deletion.
+          cardio:
+            raw.state.cardio === undefined ? undefined : input.state.cardio,
+        },
+      })),
     });
   } catch (error) {
     if (error instanceof RevisionConflict)

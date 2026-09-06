@@ -92,6 +92,7 @@ test.describe("private access boundaries", () => {
       "progress",
       "library",
       "history",
+      "cardio",
       "coach/photo/00000000-0000-4000-8000-000000000000",
     ]) {
       await page.goto(`/#${route}`);

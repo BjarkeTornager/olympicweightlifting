@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nutritionSchema } from "./nutrition";
+import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 
 const id = z.string().min(1).max(160);
@@ -137,6 +138,7 @@ export const journalSchema = z
     templates: z.array(templateSchema).max(100).default([]),
     nutrition: nutritionSchema.default(() => nutritionSchema.parse({})),
     health: healthSchema.default(() => healthSchema.parse({})),
+    cardio: cardioSchema.default(() => cardioSchema.parse({})),
     program: z
       .object({
         activeProgramId: z.string(),

@@ -346,6 +346,11 @@ export function ImageLibrary({
                       ? "Read sleep image"
                       : "Discuss with Coach"}
                 </Button>
+                {image.category === "activity" && (
+                  <Button onClick={() => go(`coach/photo/${image.id}/cardio`)}>
+                    Log activity with Coach
+                  </Button>
+                )}
                 {image.category === "sleep" && (
                   <Button onClick={() => go(`coach/photo/${image.id}/sleep`)}>
                     Log sleep with Coach

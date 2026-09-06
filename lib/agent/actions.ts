@@ -1,5 +1,12 @@
 import { z } from "zod";
 import {
+  cardioInputSchema,
+  cardioPatchSchema,
+  saveCardio,
+  cardioTitle,
+  type CardioEntry,
+} from "../cardio";
+import {
   createWorkout,
   days,
   EXERCISES,
@@ -52,6 +59,19 @@ const training = z
   })
   .strict();
 export const actionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("record_cardio"), cardio: cardioInputSchema })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("update_cardio"),
+      cardioId: z.string().uuid(),
+      changes: cardioPatchSchema,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("delete_cardio"), cardioId: z.string().uuid() })
+    .strict(),
   z
     .object({ kind: z.literal("record_checkin"), checkin: checkinPatchSchema })
     .strict(),
@@ -109,6 +129,9 @@ export const actionSchema = z.discriminatedUnion("kind", [
 export const actionToolSchema = z
   .object({
     kind: z.enum([
+      "record_cardio",
+      "update_cardio",
+      "delete_cardio",
       "record_checkin",
       "record_meal",
       "update_meal",
@@ -122,6 +145,9 @@ export const actionToolSchema = z
       "repeat_session",
       "save_routine",
     ]),
+    cardio: cardioInputSchema.optional(),
+    cardioId: z.string().uuid().optional(),
+    changes: cardioPatchSchema.optional(),
     workout: training.optional(),
     sessionId: z.string().max(160).optional(),
     exerciseId: exerciseId.optional(),
@@ -144,6 +170,7 @@ export type ActionPreview = {
   meal?: Meal;
   targets?: DietTargets;
   checkin?: Checkin;
+  cardio?: CardioEntry;
   expiresAt: string;
   status?: "saved" | "undone";
 };
@@ -192,6 +219,7 @@ export function prepareAction(
     workout: Workout | null = null;
   let meal: Meal | undefined, targets: DietTargets | undefined;
   let checkin: Checkin | undefined;
+  let cardio: CardioEntry | undefined;
   const owned = (id: string) => {
     const w = next.sessions.find((s) => s.id === id);
     if (!w) throw Error("That session is not in your journal.");
@@ -323,6 +351,33 @@ export function prepareAction(
     title = "Repeat a session";
     detail =
       "Copies exercises, weights and reps into a fresh draft with every set unlogged.";
+  } else if (
+    action.kind === "record_cardio" ||
+    action.kind === "update_cardio"
+  ) {
+    cardio =
+      action.kind === "record_cardio"
+        ? saveCardio(next, action.cardio, currentDate)
+        : saveCardio(next, action.changes, currentDate, action.cardioId);
+    title =
+      action.kind === "record_cardio"
+        ? "Log your cardio"
+        : "Update your cardio";
+    detail =
+      action.kind === "record_cardio" &&
+      state.cardio.sessions.some(
+        (s) => s.date === cardio!.date && s.activity === cardio!.activity,
+      )
+        ? "A similar activity is already logged on this date. Review whether this is another activity before saving."
+        : `${cardioTitle(cardio)} on ${cardio.date}. Check the details below. Other training, food and health entries are kept.`;
+  } else if (action.kind === "delete_cardio") {
+    cardio = next.cardio.sessions.find((s) => s.id === action.cardioId);
+    if (!cardio) throw Error("That activity is not in your journal.");
+    next.cardio.sessions = next.cardio.sessions.filter(
+      (s) => s.id !== action.cardioId,
+    );
+    title = "Delete this cardio activity";
+    detail = `Removes ${cardioTitle(cardio)} on ${cardio.date}. Review the activity being removed below. Other entries are kept.`;
   } else if (action.kind === "record_checkin") {
     checkin = saveCheckin(next, action.checkin, currentDate);
     title =
@@ -373,6 +428,7 @@ export function prepareAction(
     meal,
     targets,
     checkin,
+    cardio,
     action,
   };
 }

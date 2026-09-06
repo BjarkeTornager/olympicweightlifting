@@ -40,13 +40,29 @@ export type JournalTransaction = Parameters<
 >[0];
 export async function writeJournal(
   userId: string,
-  input: { state: JournalState; revision: number; mutationId: string },
+  input: {
+    state: Omit<JournalState, "cardio"> & { cardio?: JournalState["cardio"] };
+    revision: number;
+    mutationId: string;
+  },
   transaction?: JournalTransaction,
 ): Promise<Snapshot> {
   const state = journalSchema.parse(input.state);
   const hash = createHash("sha256")
     .update(canonicalJson({ state, revision: input.revision }))
     .digest("hex");
+  // A retry may have been acknowledged by the release before cardio existed.
+  // Only an empty additive field may be omitted for that legacy hash match.
+  const legacyState = { ...state } as Record<string, unknown>;
+  delete legacyState.cardio;
+  const legacyHash =
+    state.cardio.sessions.length === 0
+      ? createHash("sha256")
+          .update(
+            canonicalJson({ state: legacyState, revision: input.revision }),
+          )
+          .digest("hex")
+      : null;
   const work = async (tx: JournalTransaction) => {
     await tx
       .insert(journals)
@@ -64,14 +80,21 @@ export async function writeJournal(
         and(eq(mutations.userId, userId), eq(mutations.id, input.mutationId)),
       );
     if (prior) {
-      if (prior.hash !== hash)
+      if (prior.hash !== hash && prior.hash !== legacyHash)
         throw new MutationConflict(
           "A save identifier was reused with different content.",
         );
-      return { state: row.state, revision: row.revision };
+      return { state: journalSchema.parse(row.state), revision: row.revision };
     }
     if (row.revision !== input.revision)
-      throw new RevisionConflict({ state: row.state, revision: row.revision });
+      throw new RevisionConflict({
+        state: journalSchema.parse(row.state),
+        revision: row.revision,
+      });
+    // Older cached clients cannot intentionally edit a field they do not know.
+    // Keep its current value; an explicit empty collection still means deletion.
+    if (input.state.cardio === undefined)
+      state.cardio = journalSchema.parse(row.state).cardio;
     const revision = row.revision + 1;
     const photoIds = [
       ...new Set(state.nutrition.meals.flatMap((m) => m.photoIds)),

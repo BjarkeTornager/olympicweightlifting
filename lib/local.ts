@@ -2,6 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { emptyJournal } from "./domain";
 import type { JournalState, Snapshot } from "./model";
 import { nutritionSchema } from "./nutrition";
+import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 export type LocalRecord = Snapshot & {
   accountId: string;
@@ -26,6 +27,7 @@ function upgradeLocal(record: LocalRecord): LocalRecord {
     ...state,
     nutrition: nutritionSchema.parse(state.nutrition ?? {}),
     health: healthSchema.parse(state.health ?? {}),
+    cardio: cardioSchema.parse(state.cardio ?? {}),
   });
   return {
     ...record,

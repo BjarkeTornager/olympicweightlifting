@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: "Lift Journal",
   robots: { index: false, follow: false },
   description:
-    "Your training, nutrition and recovery, connected with a personal daily coach.",
+    "Your strength, cardio, nutrition and recovery, connected in a private health journal.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

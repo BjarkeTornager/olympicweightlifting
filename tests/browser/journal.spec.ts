@@ -24,7 +24,7 @@ test("log, reload, finish and edit a workout", async ({ page }) => {
   await page.getByRole("button", { name: "Save workout", exact: true }).click();
   await page.getByRole("button", { name: "Keep current PRs" }).click();
   await expect(
-    page.getByText("1 saved sessions.", { exact: false }),
+    page.getByText("1 saved strength sessions.", { exact: false }),
   ).toBeVisible();
   await page.locator(".history-detail > summary").click();
   await expect(page.getByText("47.5 kg × 1", { exact: false })).toBeVisible();

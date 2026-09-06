@@ -1,6 +1,6 @@
 # Lift Journal
 
-An Olympic weightlifting journal with a Next.js/React interface, PostgreSQL persistence, personal accounts and protected workout logging. The new application runs on Railway alongside the original GitHub Pages PWA.
+A private health journal for strength training, cardio, nutrition and recovery, with a conversational Coach, a Next.js/React interface and PostgreSQL persistence. The application runs on Railway alongside the original GitHub Pages weightlifting PWA.
 
 **Live private pilot:** [Lift Journal](https://lift-journal-production.up.railway.app). Google sign-in and PostgreSQL persistence were verified on 6 September 2026. Access is restricted to invited accounts. See the [deployment record](docs/deployment-2026-09-06.md) for verification and remaining operational work. Existing training data must be exported from the original GitHub Pages app and imported into the new account.
 
@@ -30,11 +30,12 @@ npm run test:browser
 ## Included
 
 - Responsive Home, Train, History, Progress, Exercises and Settings screens.
+- Cardio and movement logging for running, cycling, walking, swimming, rowing, hiking and other activities, manually or through Coach text/activity screenshots. Track duration, distance, pace/speed and optional reported measurements. See [cardio tracking](docs/cardio.md).
 - Food journal with manual or assistant text/photo meal entry, calories and macros, chosen daily diet targets, seven-day summaries and a private per-account photo catalog.
 - A daily Coach overview with contextual next steps, on-demand daily plans and private sleep, energy, soreness, water and bodyweight check-ins. See [health coach](docs/health-coach.md).
 - All five existing programmes and 23 exercise guides; programme previews remain available during a workout.
 - Exact manual loads, made/miss logging, recovery adjustments, prescription snapshots, history editing and PR prompts.
-- Google sign-in through Better Auth with a private-pilot email allowlist. Online session verification gates every journal screen, including deep links and saved device copies.
+- Google sign-in through Better Auth, restricted to the server-configured owner and accounts the owner invites. Online session verification gates every journal screen, including deep links and saved device copies.
 - PostgreSQL transactions, account ownership, runtime validation, duplicate-save protection and explicit conflict recovery.
 - IndexedDB drafts and a persistent pending-save queue; a versioned public offline shell excludes API/auth responses.
 - Previewed v1/v2 backup imports preserving existing IDs, drafts and training history.

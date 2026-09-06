@@ -28,6 +28,7 @@ import { Dashboard } from "./views/dashboard";
 import { Workouts } from "./views/workouts";
 import { TrainingAgent } from "./agent";
 import { FoodView } from "./views/food";
+import { CardioView } from "./cardio";
 import { HealthView } from "./health";
 import { ImageLibrary } from "./image-library";
 import { RestTimer } from "./rest-timer";
@@ -43,6 +44,7 @@ const navigation = [
   { id: "coach", label: "Coach", icon: Sparkles },
   { id: "dashboard", label: "Home", icon: House },
   { id: "workout", label: "Train", icon: Dumbbell },
+  { id: "cardio", label: "Cardio", icon: HeartPulse },
   { id: "food", label: "Food", icon: Utensils },
   { id: "health", label: "Health", icon: HeartPulse },
   { id: "images", label: "Images", icon: Images },
@@ -400,6 +402,10 @@ export function Journal(props: PrivateSessionProps) {
             {section === "coach" && (
               <TrainingAgent
                 key={`${identity?.id ?? "guest"}:${route}`}
+                initialCardioLog={
+                  route === "coach/cardio" ||
+                  /^coach\/photo\/[^/]+\/cardio$/.test(route)
+                }
                 initialSleepLog={
                   route === "coach/sleep" ||
                   /^coach\/photo\/[^/]+\/sleep$/.test(route)
@@ -424,6 +430,23 @@ export function Journal(props: PrivateSessionProps) {
             {section === "dashboard" && (
               <Dashboard state={state} onStart={start} go={go} />
             )}
+            {(section === "workout" || section === "cardio") && (
+              <nav className="activity-switch" aria-label="Training type">
+                <a
+                  href="#workout"
+                  aria-current={section === "workout" ? "page" : undefined}
+                >
+                  Strength
+                </a>
+                <a
+                  href="#cardio"
+                  aria-current={section === "cardio" ? "page" : undefined}
+                >
+                  Cardio & movement
+                </a>
+              </nav>
+            )}
+            {section === "cardio" && <CardioView journal={journal} go={go} />}
             {section === "workout" && (
               <Workouts
                 state={state}
@@ -493,14 +516,25 @@ export function Journal(props: PrivateSessionProps) {
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {navigation
           .filter(
-            (n) => !["dashboard", "library", "health", "images"].includes(n.id),
+            (n) =>
+              !["dashboard", "library", "health", "images", "cardio"].includes(
+                n.id,
+              ),
           )
           .map(({ id, label, icon: Icon }) => (
             <a
               key={id}
               href={`#${id}`}
-              className={section === id ? "active" : ""}
-              aria-current={section === id ? "page" : undefined}
+              className={
+                section === id || (section === "cardio" && id === "workout")
+                  ? "active"
+                  : ""
+              }
+              aria-current={
+                section === id || (section === "cardio" && id === "workout")
+                  ? "page"
+                  : undefined
+              }
             >
               <Icon size={20} />
               <span>{label}</span>

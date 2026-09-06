@@ -35,6 +35,7 @@ import { MealDetails } from "./views/food";
 import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
+import { CardioDetails } from "./cardio";
 import { DailyOverview, CheckinDialog, CheckinDetails } from "./health";
 import { AssistantText } from "./assistant-text";
 import { CoachVisuals } from "./coach-visuals";
@@ -54,16 +55,22 @@ export function TrainingAgent({
   go,
   initialPhotoId,
   initialSleepLog = false,
+  initialCardioLog = false,
 }: {
   journal: JournalController;
   onLogin: () => void;
   go: (r: string) => void;
   initialPhotoId?: string;
   initialSleepLog?: boolean;
+  initialCardioLog?: boolean;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(
-      initialSleepLog ? sleepLoggingPrompt(Boolean(initialPhotoId)) : "",
+      initialSleepLog
+        ? sleepLoggingPrompt(Boolean(initialPhotoId))
+        : initialCardioLog
+          ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then prepare it for my review."
+          : "",
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -577,9 +584,9 @@ export function TrainingAgent({
                     </span>
                     <h2>What’s on your mind today?</h2>
                     <p>
-                      Log a meal, make sense of your sleep, or plan your next
-                      session. Ask for a table, chart or diagram when a visual
-                      helps.
+                      Log a meal or a run, make sense of your sleep, or plan
+                      your next session. Ask for a table, chart or diagram when
+                      a visual helps.
                     </p>
                     <div className="agent-prompts">
                       {[
@@ -698,6 +705,7 @@ export function TrainingAgent({
                           </summary>
                           <div className="proposal-body">
                             <p>{p.detail}</p>
+                            {p.cardio && <CardioDetails entry={p.cardio} />}
                             {p.checkin && (
                               <>
                                 <p className="proposal-date">
@@ -789,16 +797,18 @@ export function TrainingAgent({
                                 variant="ghost"
                                 onClick={() =>
                                   go(
-                                    p.checkin
-                                      ? "health"
-                                      : p.meal || p.targets
-                                        ? "food"
-                                        : p.workout &&
-                                            p.workout.exercises.some((e) =>
-                                              e.sets.some((s) => !s.result),
-                                            )
-                                          ? "workout"
-                                          : "history",
+                                    p.cardio
+                                      ? "cardio"
+                                      : p.checkin
+                                        ? "health"
+                                        : p.meal || p.targets
+                                          ? "food"
+                                          : p.workout &&
+                                              p.workout.exercises.some((e) =>
+                                                e.sets.some((s) => !s.result),
+                                              )
+                                            ? "workout"
+                                            : "history",
                                   )
                                 }
                               >
@@ -1025,6 +1035,9 @@ export function TrainingAgent({
         title="Coach options"
       >
         <div className="coach-options">
+          <Button variant="secondary" onClick={() => go("cardio")}>
+            Cardio & movement <ArrowRight size={17} />
+          </Button>
           <Button variant="secondary" onClick={() => go("health")}>
             Health history <ArrowRight size={17} />
           </Button>
@@ -1061,7 +1074,7 @@ export function TrainingAgent({
         open={clear}
         onOpenChange={setClear}
         title="Clear this conversation?"
-        description="Removes your saved chat and its proposal/undo cards from your account. Your workouts, meals, health check-ins and photo library stay in the journal."
+        description="Removes your saved chat and its proposal/undo cards from your account. Your workouts, cardio, meals, health check-ins and photo library stay in the journal."
       >
         <Button
           variant="danger"

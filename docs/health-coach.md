@@ -10,6 +10,10 @@ Replies use readable paragraphs, headings, real numbered/bulleted lists, bold an
 
 **Plan my day** in Today sends an explicit request to the configured assistant when the composer is empty. If a message or attachment is already being prepared, it adds the request to that draft for review before sending. Its health overview tool retrieves the authenticated user's check-ins, seven days of training, current food totals and chosen nutrition targets. The assistant explains at most three priorities, connects suggestions to recorded observations and calls out missing information. This is an on-demand conversation; it does not run in the background or send notifications. The overview's “good next step” cards use deterministic journal rules and are labelled as starting points; they are not presented as an AI assessment.
 
+## Cardio and movement
+
+The journal also supports running, cycling, walking, swimming, rowing, hiking and other cardio activities. **Train → Cardio & movement** opens logging and activity history. Coach can prepare activities from descriptions or categorized activity screenshots, apply reviewed corrections and build tables/charts from private records. The daily overview includes strength and cardio in training totals. See [cardio tracking](cardio.md) for measurements, privacy and verification.
+
 ## Daily check-ins
 
 ### Log sleep with Coach

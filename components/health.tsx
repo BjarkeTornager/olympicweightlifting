@@ -1,4 +1,5 @@
 "use client";
+import { CardioProgress } from "./cardio";
 import { ImageLibrary } from "./image-library";
 import { useState } from "react";
 import {
@@ -297,7 +298,7 @@ export function DailyOverview({
       icon: Dumbbell,
       value: view.sessionsThisWeek,
       unit: view.sessionsThisWeek === 1 ? "session" : "sessions",
-      detail: "Recorded in the last 7 days",
+      detail: `${view.strengthSessionsThisWeek} strength · ${view.cardio.sessions} cardio in the last 7 days`,
       route: "history",
       color: "sage",
     },
@@ -315,6 +316,9 @@ export function DailyOverview({
         <div className="daily-heading-actions">
           <button className="health-history-link" onClick={() => go("images")}>
             Images & screenshots <ArrowRight size={16} />
+          </button>
+          <button className="health-history-link" onClick={() => go("cardio")}>
+            Cardio & movement <ArrowRight size={16} />
           </button>
           <button className="health-history-link" onClick={() => go("health")}>
             Health history <ArrowRight size={16} />
@@ -364,7 +368,9 @@ export function DailyOverview({
               const date = offsetDate(weekStart, i),
                 hasCheckin = state.health.checkins.some((c) => c.date === date),
                 hasFood = state.nutrition.meals.some((m) => m.date === date),
-                hasTraining = state.sessions.some((s) => s.date === date);
+                hasTraining =
+                  state.sessions.some((s) => s.date === date) ||
+                  state.cardio.sessions.some((s) => s.date === date);
               return (
                 <div
                   role="group"
@@ -633,6 +639,7 @@ export function HealthView({
           </Button>
         )}
       </section>
+      <CardioProgress state={journal.state!} compact />
       <ImageLibrary
         key={journal.identity?.id ?? "guest"}
         accountId={journal.identity?.id}

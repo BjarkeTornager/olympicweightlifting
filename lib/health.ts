@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cardioSummary, cardioTitle } from "./cardio";
 import { foodDate, totalNutrients } from "./nutrition";
 import type { JournalState } from "./model";
 
@@ -103,7 +104,13 @@ export function dailyHealth(state: JournalState, date: string) {
   const sessions = state.sessions.filter(
     (s) => s.date >= offsetDate(date, -6) && s.date <= date,
   );
-  const completedToday = sessions.filter((s) => s.date === date);
+  const cardio = cardioSummary(state, offsetDate(date, -6), date);
+  const completedToday = [
+    ...sessions.filter((s) => s.date === date),
+    ...cardio.entries
+      .filter((s) => s.date === date)
+      .map((s) => ({ id: s.id, date: s.date, title: cardioTitle(s) })),
+  ];
   const priorities: DailyPriority[] = [];
   const lowEnergy = checkin?.energy != null && checkin.energy <= 2;
   const highSoreness = checkin?.soreness != null && checkin.soreness >= 4;
@@ -145,7 +152,7 @@ export function dailyHealth(state: JournalState, date: string) {
       title: "Your training is recorded",
       reason: `${completedToday.length} ${completedToday.length === 1 ? "session" : "sessions"} saved today. Review your work or ask Coach how it fits your week.`,
       action: "Review session",
-      route: "history",
+      route: sessions.some((s) => s.date === date) ? "history" : "cardio",
     });
   else
     priorities.push({
@@ -179,7 +186,13 @@ export function dailyHealth(state: JournalState, date: string) {
     targets: state.nutrition.targets,
     priorities: priorities.slice(0, 3),
     recoveryFocus: lowEnergy || highSoreness,
-    sessionsThisWeek: sessions.length,
+    sessionsThisWeek: sessions.length + cardio.sessions,
+    strengthSessionsThisWeek: sessions.length,
+    cardio: {
+      ...cardio,
+      entries: cardio.entries.slice(0, 20),
+      nextOffset: cardio.entries.length > 20 ? 20 : null,
+    },
     completedToday: completedToday.map((s) => ({
       id: s.id,
       title: s.title,
@@ -212,6 +225,6 @@ export function dailyHealth(state: JournalState, date: string) {
       ? { value: weights.at(-1)!.bodyweight, date: weights.at(-1)!.date }
       : null,
     dataLimits:
-      "Self-reported journal records only. Missing entries do not mean zero intake, sleep or activity. No wearable, clinical measurements, diagnosis, calorie expenditure or automatic background monitoring.",
+      "Self-reported journal records only. Missing entries do not mean zero intake, sleep or activity. Cardio includes user-reported activity duration, distance and optional heart rate or energy. No wearable feeds, clinical interpretation, calculated calorie expenditure or automatic background monitoring.",
   };
 }

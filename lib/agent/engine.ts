@@ -15,6 +15,7 @@ import { readJournal, writeJournal } from "../server";
 import { trainingSummary, workoutTotals } from "../training";
 import type { Workout } from "../model";
 import { nutritionSummary, foodDate } from "../nutrition";
+import { cardioActivitySchema, cardioSummary } from "../cardio";
 import { dailyHealth } from "../health";
 import { listFoodPhotos, readFoodPhoto } from "../food-photos";
 import { listUserImages, readUserImage } from "../user-images";
@@ -37,6 +38,18 @@ const range = z
   })
   .strict();
 const specifications = {
+  cardio_journal: {
+    schema: z
+      .object({
+        from: foodDate,
+        to: foodDate,
+        activity: cardioActivitySchema.optional(),
+        offset: z.number().int().min(0).max(5000).optional(),
+      })
+      .strict(),
+    description:
+      "Read this person's cardio activities for a date range: running, cycling, walking, swimming, rowing, hiking and other activities. Returns 20 complete entries per page, duration/distance totals by activity, and daily totals. Read the target date before logging to check duplicates; read the original before updating/deleting. Pace/speed uses reported time and distance. Missing measurements are not zero; activity calories are not food intake.",
+  },
   show_visual: {
     description:
       "Display a useful table, bar chart or connected diagram in this conversation. Always pass kind and title. For table, also pass columns and rows (every cell is a string); for bar_chart, unit and points; for diagram, nodes and edges. Only include fields for that kind. Read relevant journal tools first for personal facts. Never invent observations or fill missing days with zero; label estimates, suggestions and date ranges in caption. Use at most three focused visuals, then give a brief explanation. This only displays information; it cannot save journal changes.",
@@ -57,7 +70,7 @@ const specifications = {
   health_overview: {
     schema: z.object({ date: foodDate }).strict(),
     description:
-      "Read this athlete's health check-in for a date, 14 days of sleep/energy/soreness/water/bodyweight, seven days of training, food totals and diet targets. Required before giving a daily plan, discussing recovery or preparing a check-in. Missing records are unmeasured, not zero. Returns evidence-backed starting points, not medical diagnoses.",
+      "Read this athlete's health check-in for a date, 14 days of sleep/energy/soreness/water/bodyweight, seven days of strength and cardio with durations/distances, food totals and diet targets. Required before giving a daily plan, discussing recovery or preparing a check-in. Missing records are unmeasured, not zero. Returns evidence-backed starting points, not medical diagnoses.",
   },
   food_journal: {
     schema: z
@@ -175,6 +188,7 @@ export function athleteDate(timezone: string, at = new Date()) {
 function toolStep(name: string) {
   const labels: Record<string, string> = {
     health_overview: "Checking your sleep and recovery",
+    cardio_journal: "Reviewing your cardio activities",
     food_journal: "Reviewing your food journal",
     training_summary: "Reviewing your training",
     find_sessions: "Finding your sessions",
@@ -290,6 +304,8 @@ export async function runTurn(
   let readDraft = false,
     calls = 0;
   const readMeals = new Set<string>();
+  const readCardio = new Set<string>();
+  const readCardioRanges: { from: string; to: string }[] = [];
   const readHealthDates = new Set<string>();
   let readFood = false;
   const signal = AbortSignal.any([
@@ -396,6 +412,24 @@ export async function runTurn(
               images: all.slice(offset, offset + 20),
               total: all.length,
               nextOffset: offset + 20 < all.length ? offset + 20 : null,
+            };
+          } else if (key === "cardio_journal") {
+            const a = specifications.cardio_journal.schema.parse(args);
+            if (a.from > a.to) throw Error("Choose a valid date range.");
+            const summary = cardioSummary(
+              snapshot.state,
+              a.from,
+              a.to,
+              a.activity,
+            );
+            const offset = a.offset ?? 0,
+              entries = summary.entries.slice(offset, offset + 20);
+            entries.forEach((s) => readCardio.add(s.id));
+            if (!a.activity) readCardioRanges.push({ from: a.from, to: a.to });
+            output = {
+              ...summary,
+              entries,
+              nextOffset: offset + 20 < summary.sessions ? offset + 20 : null,
             };
           } else if (key === "health_overview") {
             const a = specifications.health_overview.schema.parse(args);
@@ -514,6 +548,22 @@ export async function runTurn(
               throw Error(
                 "Read the health overview for this check-in date first, then preserve values the athlete hasn’t changed.",
               );
+            if (
+              action.kind === "record_cardio" &&
+              !readCardioRanges.some(
+                (r) =>
+                  action.cardio.date >= r.from && action.cardio.date <= r.to,
+              )
+            )
+              throw Error(
+                "Read the cardio journal for this date without an activity filter first to check existing activities.",
+              );
+            if (
+              (action.kind === "update_cardio" ||
+                action.kind === "delete_cardio") &&
+              !readCardio.has(action.cardioId)
+            )
+              throw Error("Read the full original cardio activity first.");
             if (action.kind === "update_meal" && !readMeals.has(action.mealId))
               throw Error("Read the full original meal first.");
             if (action.kind === "set_diet_targets" && !readFood)
@@ -586,6 +636,7 @@ export async function runTurn(
               ...(prepared.meal ? { meal: prepared.meal } : {}),
               ...(prepared.targets ? { targets: prepared.targets } : {}),
               ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
+              ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
               expiresAt: expiresAt.toISOString(),
             };
             signal.throwIfAborted();

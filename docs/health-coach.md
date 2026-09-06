@@ -24,6 +24,6 @@ Assistant text is rendered as escaped React text with a small allowlist of headi
 
 The real OpenRouter/Gemini test on 6 September 2026 passed natural-language health entry, context lookup, a reviewed save, adding water to an existing daily total, preservation of sleep/energy/soreness/weight, and read-only guidance that acknowledged missing food/training records. Synthetic data was removed afterwards. This verifies the product integration, not clinical effectiveness.
 
-These changes remain local until the food and health release is deployed to the hosted pilot.
+These changes are now deployed to the hosted pilot. See the [food and health release record](food-health-deployment-2026-09-06.md) for deployment and live verification.
 
-Final local verification: production build, typecheck and lint passed; 23 progression tests, 29 domain/auth/database/provider/rendering tests and all 39 browser tests passed (91 tests total). The browser suite includes 320–1440 px widths and WCAG A/AA checks. Desktop and phone screenshots use synthetic data. No production deployment was performed.
+Final local verification: production build, typecheck and lint passed; 23 progression tests, 29 domain/auth/database/provider/rendering tests and all 39 browser tests passed (91 tests total). The browser suite includes 320–1440 px widths and WCAG A/AA checks. Desktop and phone screenshots use synthetic data. Production was subsequently deployed and checked as recorded below.

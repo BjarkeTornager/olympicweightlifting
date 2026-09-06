@@ -31,4 +31,4 @@ Protocol references: [OpenRouter image inputs](https://openrouter.ai/docs/guides
 - `npm run test:browser`: all 33 checks passed across Chromium, WebKit and Firefox, including food entry/correction/targets, older local copies, a physically disconnected test origin, photo upload/review/save, accessibility and mobile overflow.
 - Real OpenRouter/Gemini smoke: text meal estimation, synthetic photo-label reading (180 kcal and 20 g protein), private photo linkage, review-before-save, persistence and undo passed. Synthetic accounts and photos were removed afterwards. This verifies the integration, not the accuracy of estimates from real plates.
 
-The changes are local and still need the existing release/deployment process before Food is available on the hosted pilot.
+Food is now available on the hosted pilot. See the [food and health release record](food-health-deployment-2026-09-06.md) for the deployed source, migration and live verification.

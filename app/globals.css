@@ -2327,7 +2327,7 @@ summary {
 .food-meal { padding: 18px 0; border-top: 1px solid var(--line); }
 .meal-details { display: grid; gap: 10px; }
 .food-item-summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 14px; }
-.food-item-summary span:last-child { color: var(--muted); }
+.food-item-summary > span:nth-child(2) { color: var(--muted); }
 .food-week { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
 .food-week button { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 12px; text-align: left; background: transparent; }
 .food-catalog { display: grid; gap: 16px; }
@@ -2952,3 +2952,20 @@ summary {
   .cardio-history summary { flex-wrap: wrap; gap: .55rem; }
   .cardio-form .form-grid { grid-template-columns: minmax(0,1fr); }
 }
+
+/* Structured food records share the same tags in the journal and Coach review. */
+.food-tags { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; margin: 6px 0; overflow-wrap: anywhere; }
+.food-tags > span { border-radius: 8px; padding: 4px 9px; font-size: 12px; line-height: 1.5; }
+.food-tags .food-group-tag { background: var(--accent-soft, #e7eeee); color: var(--ink); }
+.food-tags .food-ingredient-tag { border: 1px solid var(--line, #d2d9d8); color: var(--ink); }
+.food-tags small { font-size: 12px; }
+.food-search-controls { display: grid; grid-template-columns: 2fr 1fr 1fr; align-items: end; gap: 12px; margin: 16px 0; }
+.food-search-controls label { min-width: 0; }
+.food-search-controls .food-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+.food-tag-editor { margin: 12px 0; padding: 12px; border: 1px solid var(--line, #d2d9d8); border-radius: 12px; }
+.food-tag-editor summary { cursor: pointer; font-weight: 600; }
+.food-form .food-group-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px 0; border: 0; }
+.food-group-options label { font-size: 13px; }
+.food-evidence-list { display: grid; gap: 8px; }
+@media (max-width: 600px) { .food-search-controls { grid-template-columns: 1fr 1fr; } .food-search-controls label:first-child { grid-column: 1 / -1; } }
+@media (max-width: 360px) { .food-form .food-group-options { grid-template-columns: 1fr; } }

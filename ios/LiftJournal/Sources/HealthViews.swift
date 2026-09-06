@@ -99,6 +99,8 @@ struct CardioWeek: View {
 struct JournalView: View {
   @Environment(JournalStore.self) private var store
   @State private var category = "Cardio"
+  @State private var mealType = ""
+  @State private var foodGroup = ""
   @State private var search = ""
   @State private var sheet: LogSheet?
   var entries: [JSONValue] {
@@ -109,9 +111,20 @@ struct JournalView: View {
     case "Recovery": values = store.state["health"]["checkins"].array
     default: values = store.state["cardio"]["sessions"].array
     }
-    return values.filter {
-      search.isEmpty || recordTitle($0).localizedCaseInsensitiveContains(search)
-        || $0["date"].string.contains(search)
+    return values.filter { entry in
+      if category == "Food" {
+        if !mealType.isEmpty && entry["type"].string != mealType { return false }
+        if !foodGroup.isEmpty
+          && !entry["items"].array.contains(where: {
+            $0["classification"]["foodGroups"].array.contains(s(foodGroup))
+          })
+        {
+          return false
+        }
+      }
+      return search.isEmpty || recordTitle(entry).localizedCaseInsensitiveContains(search)
+        || entry["date"].string.contains(search)
+        || (category == "Food" && foodSearchText(entry).localizedCaseInsensitiveContains(search))
     }.sorted { $0["date"].string > $1["date"].string }
   }
   var body: some View {
@@ -119,6 +132,20 @@ struct JournalView: View {
       Picker("Journal category", selection: $category) {
         ForEach(["Cardio", "Strength", "Food", "Recovery"], id: \.self) { Text($0) }
       }.pickerStyle(.segmented).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+      if category == "Food" {
+        Picker("Meal type", selection: $mealType) {
+          Text("All meals").tag("")
+          ForEach(["breakfast", "lunch", "dinner", "snack"], id: \.self) {
+            Text($0.capitalized).tag($0)
+          }
+        }
+        Picker("Food group", selection: $foodGroup) {
+          Text("All food groups").tag("")
+          ForEach(foodGroupLabels, id: \.0) { Text($0.1).tag($0.0) }
+        }
+        Text("Search meal names or ingredient tags. Older foods may be untagged.").font(.caption)
+          .foregroundStyle(.secondary)
+      }
       if entries.isEmpty {
         EmptyJournal(
           title: "Your story starts here", detail: "Add an entry or tell Coach what you did.",
@@ -144,20 +171,22 @@ struct JournalView: View {
       } label: {
         Label("Image library", systemImage: "photo.on.rectangle")
       }
-    }.navigationTitle("Journal").searchable(text: $search, prompt: "Activity, meal or date")
-      .refreshable { await store.refresh() }
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Menu {
-            Button("Cardio activity", systemImage: "figure.run") { sheet = .cardio }
-            Button("Meal", systemImage: "fork.knife") { sheet = .food }
-            Button("Daily check-in", systemImage: "moon") { sheet = .checkin }
-          } label: {
-            Image(systemName: "plus")
-          }.accessibilityLabel("Add journal entry")
-        }
+    }.navigationTitle("Journal").searchable(
+      text: $search, prompt: "Activity, meal, ingredient or date"
+    )
+    .refreshable { await store.refresh() }
+    .toolbar {
+      ToolbarItem(placement: .topBarTrailing) {
+        Menu {
+          Button("Cardio activity", systemImage: "figure.run") { sheet = .cardio }
+          Button("Meal", systemImage: "fork.knife") { sheet = .food }
+          Button("Daily check-in", systemImage: "moon") { sheet = .checkin }
+        } label: {
+          Image(systemName: "plus")
+        }.accessibilityLabel("Add journal entry")
       }
-      .sheet(item: $sheet) { LogForm(kind: $0) }
+    }
+    .sheet(item: $sheet) { LogForm(kind: $0) }
   }
 }
 func recordTitle(_ entry: JSONValue) -> String {
@@ -188,6 +217,9 @@ struct EntryView: View {
           store.ask(
             "Discuss my \(recordTitle(entry)) on \(entry["date"].string). Read my journal first.")
         }
+        if category == "Food" {
+          Button("Edit food tags", systemImage: "tag") { editing = true }
+        }
         if category == "Cardio" {
           Button("Edit activity", systemImage: "square.and.pencil") { editing = true }
         }
@@ -195,7 +227,15 @@ struct EntryView: View {
       }.padding(20)
     }.background(Color(.systemGroupedBackground)).navigationTitle(recordTitle(current))
       .navigationBarTitleDisplayMode(.inline)
-      .sheet(isPresented: $editing) { NavigationStack { CardioForm(entry: current) } }
+      .sheet(isPresented: $editing) {
+        NavigationStack {
+          if category == "Food" {
+            FoodClassificationForm(meal: current)
+          } else {
+            CardioForm(entry: current)
+          }
+        }
+      }
       .confirmationDialog("Delete this entry?", isPresented: $deleting, titleVisibility: .visible) {
         Button("Delete entry", role: .destructive) {
           Task {
@@ -224,7 +264,8 @@ struct RecordDetails: View {
   @Environment(JournalStore.self) private var store
   let value: JSONValue
   private let fields = [
-    ("date", "Date"), ("activity", "Activity"), ("distanceKm", "Distance · km"),
+    ("type", "Meal type"), ("date", "Date"), ("activity", "Activity"),
+    ("distanceKm", "Distance · km"),
     ("durationType", "Time basis"), ("averageHeartRate", "Average heart rate · bpm"),
     ("maxHeartRate", "Maximum heart rate · bpm"), ("effort", "Effort · /10"),
     ("elevationGainM", "Elevation · m"), ("caloriesKcal", "Reported activity energy · kcal"),
@@ -254,6 +295,7 @@ struct RecordDetails: View {
           Text(
             "\(item["calories"].string) kcal · P \(item["protein"].string) g · C \(item["carbs"].string) g · F \(item["fat"].string) g"
           ).font(.caption)
+          FoodTagLabels(value: item["classification"])
         }
       }
       if value["estimated"].bool {

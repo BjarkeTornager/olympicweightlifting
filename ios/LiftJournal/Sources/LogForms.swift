@@ -248,6 +248,7 @@ struct FoodForm: View {
   @State private var fat = ""
   @State private var notes = ""
   @State private var type = "lunch"
+  @State private var classification = json(["foodGroups": .array([]), "ingredients": .array([])])
   var body: some View {
     Form {
       Section {
@@ -260,6 +261,7 @@ struct FoodForm: View {
           }
         }
       }
+      Section { NativeFoodTagEditor(value: $classification) }
       Section("Nutrition for this portion") {
         NumberRow(title: "Calories · kcal", value: $calories)
         NumberRow(title: "Protein · g", value: $protein)
@@ -284,7 +286,7 @@ struct FoodForm: View {
             message: "Enter the food, portion and nutrition values, or ask Coach for an estimate.")
         }
         let item = json([
-          "name": s(name), "portion": s(portion),
+          "name": s(name), "portion": s(portion), "classification": classification,
           "calories": try checkedNumber(calories, name: "calories"),
           "protein": try checkedNumber(protein, name: "protein"),
           "carbs": try checkedNumber(carbs, name: "carbs"),

@@ -110,6 +110,8 @@ export async function PUT(request: Request) {
       accountId: user.id,
       ...(await writeJournal(user.id, {
         ...input,
+        preserveMissingFoodTags:
+          request.headers.get("x-food-tags-version") !== "1",
         state: {
           ...input.state,
           // Preserve omission until the transaction can retain this additive

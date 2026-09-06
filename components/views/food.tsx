@@ -8,9 +8,13 @@ import {
   dietTargetsSchema,
   totalNutrients,
   nutritionSummary,
+  findMeals,
+  mealTypes,
+  foodGroups,
   type Meal,
   type FoodItem,
 } from "@/lib/nutrition";
+import { FoodTags, FoodTagEditor } from "../food-tags";
 import { ImageLibrary } from "../image-library";
 import { FoodPhotoImage } from "../food-photo";
 import { Button } from "../ui/button";
@@ -29,6 +33,7 @@ const blankItem = (): FoodItem => ({
   protein: 0,
   carbs: 0,
   fat: 0,
+  classification: { foodGroups: [], ingredients: [] },
 });
 export function MealDetails({ meal }: { meal: Meal }) {
   const total = totalNutrients(meal.items);
@@ -46,6 +51,7 @@ export function MealDetails({ meal }: { meal: Meal }) {
             {item.calories} kcal · P {item.protein} g · C {item.carbs} g · F{" "}
             {item.fat} g
           </span>
+          <FoodTags value={item.classification} />
         </div>
       ))}
       <p>
@@ -91,6 +97,19 @@ export function FoodView({
       );
     }
   };
+  const [search, setSearch] = useState("");
+  const [allDates, setAllDates] = useState(false);
+  const [mealType, setMealType] = useState<"" | Meal["type"]>("");
+  const [group, setGroup] = useState<"" | keyof typeof foodGroups>("");
+  const filteredMeals = findMeals(nutrition.meals, {
+    ...(allDates ? {} : { from: date, to: date }),
+    ...(mealType ? { mealType } : {}),
+    ...(group ? { foodGroup: group } : {}),
+    ...(search.trim() ? { query: search.trim() } : {}),
+  });
+  const filterKey = JSON.stringify([allDates, date, mealType, group, search]);
+  const [mealWindow, setMealWindow] = useState({ key: "", limit: 20 });
+  const mealLimit = mealWindow.key === filterKey ? mealWindow.limit : 20;
   const meals = nutrition.meals.filter((m) => m.date === date);
   const totals = totalNutrients(meals.flatMap((m) => m.items));
   const start = new Date(`${date}T12:00:00Z`);
@@ -205,14 +224,65 @@ export function FoodView({
         portions, ingredients and cooking fats.
       </p>
       <section className="panel">
-        <h2>Meals · {date}</h2>
-        {!meals.length && (
+        <h2>{allDates ? "Your meals" : `Meals · ${date}`}</h2>
+        <div className="food-search-controls">
+          <label>
+            Search food or ingredients
+            <input
+              type="search"
+              value={search}
+              maxLength={160}
+              placeholder="Try chicken, oats or a meal name"
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <label>
+            Filter meal type
+            <select
+              value={mealType}
+              onChange={(e) => setMealType(e.target.value as typeof mealType)}
+            >
+              <option value="">All meals</option>
+              {mealTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Filter food group
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value as typeof group)}
+            >
+              <option value="">All food groups</option>
+              {Object.entries(foodGroups).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="food-check">
+            <input
+              type="checkbox"
+              checked={allDates}
+              onChange={(e) => setAllDates(e.target.checked)}
+            />
+            Search all logged dates
+          </label>
+        </div>
+        <p className="fine-print" role="status">
+          {filteredMeals.length} matching meals. Daily totals above always
+          reflect {date}. Older foods may not have ingredient tags.
+        </p>
+        {!filteredMeals.length && (
           <p className="muted">
-            Start with a photo or a short description, such as “two eggs, toast
-            and a latte”.
+            No matching meals. Change the filters or log a meal with Coach.
           </p>
         )}
-        {meals.map((meal) => (
+        {filteredMeals.slice(0, mealLimit).map((meal) => (
           <article className="food-meal" key={meal.id}>
             <MealDetails meal={meal} />
             <div className="food-photo-strip">
@@ -245,6 +315,16 @@ export function FoodView({
           </article>
         ))}
       </section>
+      {filteredMeals.length > mealLimit && (
+        <Button
+          variant="secondary"
+          onClick={() =>
+            setMealWindow({ key: filterKey, limit: mealLimit + 20 })
+          }
+        >
+          Show more meals ({filteredMeals.length - mealLimit} remaining)
+        </Button>
+      )}
       <section className="panel">
         <h2>Last 7 days</h2>
         <p>
@@ -340,7 +420,7 @@ export function FoodView({
                     })
                   }
                 >
-                  {["breakfast", "lunch", "dinner", "snack"].map((type) => (
+                  {mealTypes.map((type) => (
                     <option key={type}>{type}</option>
                   ))}
                 </select>
@@ -382,6 +462,18 @@ export function FoodView({
                     }
                   />
                 </label>
+                <FoodTagEditor
+                  key={`${editor.id}:${index}:${item.name}:${item.portion}`}
+                  value={item.classification}
+                  onChange={(classification) =>
+                    setEditor({
+                      ...editor,
+                      items: editor.items.map((v, i) =>
+                        i === index ? { ...v, classification } : v,
+                      ),
+                    })
+                  }
+                />
                 <div className="food-fields">
                   {keys.map((key) => (
                     <label key={key}>

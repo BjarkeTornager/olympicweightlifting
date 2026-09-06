@@ -107,6 +107,7 @@ export function useJournal(
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "X-Food-Tags-Version": "1",
           "X-Journal-Account": accountId,
         },
         body: JSON.stringify(pending),

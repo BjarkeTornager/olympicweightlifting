@@ -44,6 +44,7 @@ actor APIClient {
     r.httpMethod = method
     r.setValue(Self.origin.absoluteString, forHTTPHeaderField: "Origin")
     r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    r.setValue("1", forHTTPHeaderField: "X-Food-Tags-Version")
     if let token { r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
     if let account { r.setValue(account, forHTTPHeaderField: "X-Journal-Account") }
     if let body { r.httpBody = try body.data }

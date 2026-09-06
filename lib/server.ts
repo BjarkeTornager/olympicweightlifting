@@ -1,4 +1,5 @@
 import { canonicalJson } from "./json";
+import { retainFoodClassifications } from "./nutrition";
 import { createHash } from "node:crypto";
 import { and, eq, sql, inArray } from "drizzle-orm";
 import { getDb } from "./db";
@@ -44,6 +45,7 @@ export async function writeJournal(
     state: Omit<JournalState, "cardio"> & { cardio?: JournalState["cardio"] };
     revision: number;
     mutationId: string;
+    preserveMissingFoodTags?: boolean;
   },
   transaction?: JournalTransaction,
 ): Promise<Snapshot> {
@@ -95,6 +97,25 @@ export async function writeJournal(
     // Keep its current value; an explicit empty collection still means deletion.
     if (input.state.cardio === undefined)
       state.cardio = journalSchema.parse(row.state).cardio;
+    const previousMeals = new Map(
+      journalSchema.parse(row.state).nutrition.meals.map((m) => [m.id, m]),
+    );
+    try {
+      if (input.preserveMissingFoodTags)
+        state.nutrition.meals = state.nutrition.meals.map((meal) => ({
+          ...meal,
+          items: retainFoodClassifications(
+            meal.items,
+            previousMeals.get(meal.id)?.items ?? [],
+          ),
+        }));
+    } catch (error) {
+      throw new MutationConflict(
+        error instanceof Error
+          ? error.message
+          : "Review food tags before saving.",
+      );
+    }
     const revision = row.revision + 1;
     const photoIds = [
       ...new Set(state.nutrition.meals.flatMap((m) => m.photoIds)),

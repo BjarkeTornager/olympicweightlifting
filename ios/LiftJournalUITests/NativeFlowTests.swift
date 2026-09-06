@@ -105,6 +105,12 @@ import XCTest
     app.buttons["Food"].tap()
     try fill(app.textFields["Meal or food name"], "Synthetic oats")
     try fill(app.textFields["Portion, e.g. 200 g"], "100 g")
+    app.buttons["Food groups & ingredients"].tap()
+    let ingredientField = app.descendants(matching: .any).matching(
+      identifier: "food-ingredient-tags"
+    ).firstMatch
+    try fill(ingredientField, "Oats, blueberries")
+    app.buttons["Food groups & ingredients"].tap()
     try fill(app.textFields["Calories · kcal"], "389")
     try fill(app.textFields["Protein · g"], "17")
     try fill(app.textFields["Carbs · g"], "66")
@@ -139,7 +145,32 @@ import XCTest
     let checkin = (health["checkins"] as! [[String: Any]])[0]
     XCTAssertEqual(checkin["sleepHours"] as? Double, 8.25)
     XCTAssertEqual(checkin["waterMl"] as? Int, 1000)
-    XCTAssertEqual(((state["nutrition"] as! [String: Any])["meals"] as! [Any]).count, 1)
+    let meals = (state["nutrition"] as! [String: Any])["meals"] as! [[String: Any]]
+    XCTAssertEqual(meals.count, 1)
+    let food = (meals[0]["items"] as! [[String: Any]])[0]
+    let classification = food["classification"] as! [String: Any]
+    let ingredients = classification["ingredients"] as! [[String: Any]]
+    XCTAssertEqual(ingredients.map { $0["name"] as! String }, ["oats", "blueberries"])
+    XCTAssertEqual(ingredients.map { $0["evidence"] as! String }, ["reported", "reported"])
+    app.tabBars.buttons["Journal"].tap()
+    app.segmentedControls.buttons["Food"].tap()
+    XCTAssertTrue(app.staticTexts["Synthetic Oats"].waitForExistence(timeout: 5))
+    app.staticTexts["Synthetic Oats"].tap()
+    XCTAssertTrue(app.staticTexts["blueberries"].waitForExistence(timeout: 5))
+    app.buttons["Edit food tags"].tap()
+    app.buttons["Food groups & ingredients"].tap()
+    app.buttons["Choose food groups"].tap()
+    let grainSwitch = app.switches["Grains & potatoes"]
+    grainSwitch.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+    XCTAssertEqual(grainSwitch.value as? String, "1")
+    app.navigationBars.buttons["Save"].tap()
+    try waitForFormToClose(app, title: "Edit food tags")
+    XCTAssertTrue(app.staticTexts["Grains & potatoes"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["blueberries"].exists)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "native-food-tags"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
     XCTAssertEqual((state["sessions"] as! [Any]).count, 1)
   }
   func testLostAcknowledgementRetriesOnceAndOfflineReturnHidesPrivateScreens() async throws {

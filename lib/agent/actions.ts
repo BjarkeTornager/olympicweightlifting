@@ -26,6 +26,7 @@ import {
   mealInputSchema,
   dietTargetsSchema,
   totalNutrients,
+  retainFoodClassifications,
   type Meal,
   type DietTargets,
 } from "../nutrition";
@@ -396,6 +397,10 @@ export function prepareAction(
       throw Error("That meal is not in your food journal.");
     meal = {
       ...action.meal,
+      items: retainFoodClassifications(
+        action.meal.items,
+        existing?.items ?? [],
+      ),
       id: existing?.id ?? uid(),
       createdAt: existing?.createdAt ?? new Date().toISOString(),
     };

@@ -14,7 +14,7 @@ import { planProgramDay } from "../../js/progression.js";
 import { readJournal, writeJournal } from "../server";
 import { trainingSummary, workoutTotals } from "../training";
 import type { Workout } from "../model";
-import { nutritionSummary, foodDate } from "../nutrition";
+import { queryFoodJournal, foodQuerySchema, foodDate } from "../nutrition";
 import { cardioActivitySchema, cardioSummary } from "../cardio";
 import { dailyHealth } from "../health";
 import { listFoodPhotos, readFoodPhoto } from "../food-photos";
@@ -73,15 +73,9 @@ const specifications = {
       "Read this athlete's health check-in for a date, 14 days of sleep/energy/soreness/water/bodyweight, seven days of strength and cardio with durations/distances, food totals and diet targets. Required before giving a daily plan, discussing recovery or preparing a check-in. Missing records are unmeasured, not zero. Returns evidence-backed starting points, not medical diagnoses.",
   },
   food_journal: {
-    schema: z
-      .object({
-        from: date.optional(),
-        to: date.optional(),
-        offset: z.number().int().min(0).max(10000).optional(),
-      })
-      .strict(),
+    schema: foodQuerySchema,
     description:
-      "Read this athlete's daily nutrition totals, diet targets and meals (20 per page), with private photo IDs. Defaults to today. Read before updating meals or targets. Missing days mean unlogged, never zero intake.",
+      "Search this person's saved meals by dates, mealType (breakfast/lunch/dinner/snack), foodGroup, exact ingredient tag, ingredient evidence or text query across food/meal names and ingredient tags. Filters combine with AND; foodGroup and ingredient must match the same item. Use query for partial names or older untagged records; use ingredient for exact normalized tags. Returns 20 complete meals per page, totals across ALL matching meals, separate matchingItemTotals, daily and meal-type totals, ingredient frequency (up to 40), and tagging coverage. Defaults to today; provide dates for history. Read before updating meals/targets. A zero match can mean missing tags; unknown or unlogged never means not eaten. Ingredient calories cannot be derived from a mixed food's totals.",
   },
   food_photos: {
     schema: z
@@ -437,21 +431,14 @@ export async function runTurn(
             readHealthDates.add(a.date);
           } else if (key === "food_journal") {
             const a = specifications.food_journal.schema.parse(args);
-            const from = a.from ?? currentDate,
-              to = a.to ?? currentDate,
-              offset = a.offset ?? 0;
-            const all = snapshot.state.nutrition.meals
-              .filter((m) => m.date >= from && m.date <= to)
-              .sort((a, b) => b.date.localeCompare(a.date));
-            const meals = all.slice(offset, offset + 20);
-            meals.forEach((m) => readMeals.add(m.id));
+            const result = queryFoodJournal(
+              snapshot.state.nutrition,
+              a,
+              currentDate,
+            );
+            result.meals.forEach((m) => readMeals.add(m.id));
             readFood = true;
-            output = {
-              ...nutritionSummary(snapshot.state.nutrition, from, to),
-              meals,
-              totalMeals: all.length,
-              nextOffset: offset + 20 < all.length ? offset + 20 : null,
-            };
+            output = result;
           } else if (key === "food_photos") {
             const a = specifications.food_photos.schema.parse(args),
               offset = a.offset ?? 0;

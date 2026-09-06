@@ -1,3 +1,4 @@
+import { foodSnapshotForClient } from "@/lib/food-compatibility";
 import { userAllowed } from "@/lib/access";
 import { z } from "zod";
 import { getAuth } from "@/lib/auth";
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
     const snapshot = await readJournal(user.id);
     return Response.json({
       accountId: user.id,
-      ...snapshot,
+      ...foodSnapshotForClient(request, snapshot),
       plans: days.map((day) => ({
         id: day.id,
         ...planProgramDay(day, {
@@ -108,23 +109,28 @@ export async function PUT(request: Request) {
     const input = schema.parse(raw);
     return Response.json({
       accountId: user.id,
-      ...(await writeJournal(user.id, {
-        ...input,
-        preserveMissingFoodTags:
-          request.headers.get("x-food-tags-version") !== "1",
-        state: {
-          ...input.state,
-          // Preserve omission until the transaction can retain this additive
-          // field for an older client. A schema default must not mean deletion.
-          cardio:
-            raw.state.cardio === undefined ? undefined : input.state.cardio,
-        },
-      })),
+      ...foodSnapshotForClient(
+        request,
+        await writeJournal(user.id, {
+          ...input,
+          preserveMissingFoodTags: true,
+          state: {
+            ...input.state,
+            // Preserve omission until the transaction can retain this additive
+            // field for an older client. A schema default must not mean deletion.
+            cardio:
+              raw.state.cardio === undefined ? undefined : input.state.cardio,
+          },
+        }),
+      ),
     });
   } catch (error) {
     if (error instanceof RevisionConflict)
       return Response.json(
-        { error: error.message, ...error.snapshot },
+        {
+          error: error.message,
+          ...foodSnapshotForClient(request, error.snapshot),
+        },
         { status: 409 },
       );
     if (error instanceof MutationConflict || error instanceof MissingMealPhoto)

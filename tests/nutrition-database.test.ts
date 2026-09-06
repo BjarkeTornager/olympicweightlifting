@@ -290,6 +290,59 @@ test(
         1,
         "deleting photo preserves meal nutrition",
       );
+      // A cached Safari schema can continue reading/saving while the server retains tags.
+      const { GET: journalGet, PUT: journalPut } =
+        await import("../app/api/journal/route");
+      const tagged = await readJournal(users[0].id);
+      const classification = {
+        foodGroups: ["grains" as const],
+        ingredients: [{ name: "rice", evidence: "reported" as const }],
+      };
+      tagged.state.nutrition.meals[0].items[0].classification = classification;
+      await writeJournal(users[0].id, {
+        ...tagged,
+        mutationId: crypto.randomUUID(),
+      });
+      const legacy = await (await journalGet(request(0))).json();
+      assert.equal(
+        legacy.state.nutrition.meals[0].items[0].classification,
+        undefined,
+      );
+      const modernRequest = request(0);
+      modernRequest.headers.set("X-Food-Tags-Version", "1");
+      const modern = await (await journalGet(modernRequest)).json();
+      assert.deepEqual(
+        modern.state.nutrition.meals[0].items[0].classification,
+        classification,
+      );
+      assert.equal((await journalGet(request(2))).status, 401);
+      legacy.state.profile.bodyweight = 90;
+      const oldSave = {
+        state: legacy.state,
+        revision: legacy.revision,
+        mutationId: crypto.randomUUID(),
+      };
+      const compatibilitySave = await journalPut(request(0, "PUT", oldSave));
+      assert.equal(compatibilitySave.status, 200);
+      assert.equal(
+        (await compatibilitySave.json()).state.nutrition.meals[0].items[0]
+          .classification,
+        undefined,
+      );
+      assert.deepEqual(
+        (await readJournal(users[0].id)).state.nutrition.meals[0].items[0]
+          .classification,
+        classification,
+      );
+      const conflict = await journalPut(
+        request(0, "PUT", { ...oldSave, mutationId: crypto.randomUUID() }),
+      );
+      assert.equal(conflict.status, 409);
+      assert.equal(
+        (await conflict.json()).state.nutrition.meals[0].items[0]
+          .classification,
+        undefined,
+      );
     } finally {
       await getPool().query("DELETE FROM users WHERE id=ANY($1::text[])", [
         users.map((u) => u.id),

@@ -148,9 +148,8 @@ test(
         undefined,
         "undo restores unknown metadata exactly",
       );
-      saved.state.nutrition.meals[0].items[0].classification = structuredClone(
-        tags,
-      ) as never;
+      saved.state.nutrition.meals[0].items[0].classification =
+        foodClassificationSchema.parse(tags);
       saved = await writeJournal(a, {
         ...saved,
         mutationId: crypto.randomUUID(),

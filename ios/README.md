@@ -28,7 +28,7 @@ Apple: [membership options](https://developer.apple.com/support/compare-membersh
 - **Coach:** AG-UI streaming conversation, stable reading position, native keyboard composer, camera/photo picker, categorized attachments, expandable proposals, review/save/undo, tables, bar charts and connected diagram steps.
 - **Today:** reported sleep, food intake, weekly movement and journal-based next steps; quick activity, food and check-in forms.
 - **Train:** five programmes including Gym Accessories, active workout continuation, exact loads/reps, made/miss, finishing logged work, 23 technique guides and YouTube links, cardio history and weekly chart.
-- **Journal:** searchable strength, cardio, food and recovery history, activity corrections and entry deletion. The image library keeps Food, Sleep, Activity and other categories separate, with manual corrections.
+- **Journal:** searchable strength, cardio, food and recovery history, activity corrections and entry deletion. Food adds meal-type and food-group filters, ingredient search, and editing of saved meal/ingredient tags with visible estimate labels. The image library keeps Food, Sleep, Activity and other categories separate, with manual corrections.
 - **You:** account, owner-only invitation management, refresh, JSON export, pending-save recovery and sign-out.
 
 Manual forms use the server's existing domain rules. Coach proposals are never automatically committed. Missing optional measurements remain absent; reported activity calories stay separate from food intake. Native JSON editing preserves unrelated journal fields.
@@ -65,4 +65,6 @@ xcodebuild -project ios/LiftJournal.xcodeproj -scheme LiftJournal \
   -derivedDataPath /tmp/lift-ios-device CODE_SIGNING_ALLOWED=NO build
 ```
 
-Native unit tests cover lossless round trips, callback binding, precise durations, missing values and invalid numbers. Native UI tests cover cardio/Coach review, sleep/food/strength forms, interrupted acknowledgement retries and private-sheet hiding on offline reactivation. Backend tests use a disposable `_test` database to cover signed sessions, wrong proof, expiry, replay, revocation, account isolation, read-only preparation, stale revisions and duplicate retry. Browser tests cover the Google bridge and the existing web workflows.
+Native unit tests cover lossless round trips, callback binding, precise durations, missing values and invalid numbers. Native UI tests cover cardio/Coach review, sleep/food/strength forms, ingredient logging and saved-meal group edits, interrupted acknowledgement retries and private-sheet hiding on offline reactivation. Backend tests use a disposable `_test` database to cover signed sessions, wrong proof, expiry, replay, revocation, account isolation, read-only preparation, stale revisions and duplicate retry. Browser tests cover the Google bridge and the existing web workflows.
+
+Food structure and query examples: [Food records and Coach queries](../docs/food-data.md). [Native food tags preview](previews/native-food-tags.png) uses synthetic data.

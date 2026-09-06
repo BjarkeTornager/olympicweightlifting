@@ -1,3 +1,4 @@
+import { foodSnapshotForClient } from "@/lib/food-compatibility";
 import { z } from "zod";
 import { applyProposal } from "@/lib/agent/engine";
 import {
@@ -17,9 +18,15 @@ export async function POST(request: Request) {
       .object({ id: z.string().uuid(), undo: z.boolean().default(false) })
       .strict()
       .parse(await readJson(request));
-    return Response.json(await applyProposal(user.id, input.id, input.undo), {
-      headers: { "Cache-Control": "no-store" },
-    });
+    return Response.json(
+      foodSnapshotForClient(
+        request,
+        await applyProposal(user.id, input.id, input.undo),
+      ),
+      {
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   } catch (e) {
     return apiFailure(e);
   }

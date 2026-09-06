@@ -4,7 +4,11 @@ export async function privateFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ) {
-  const response = await fetch(input, { ...init, cache: "no-store" });
+  const headers = new Headers(
+    init?.headers ?? (input instanceof Request ? input.headers : undefined),
+  );
+  headers.set("X-Food-Tags-Version", "1");
+  const response = await fetch(input, { ...init, headers, cache: "no-store" });
   if (response.status === 401 && typeof window !== "undefined")
     window.dispatchEvent(new Event("lift-session-invalid"));
   return response;

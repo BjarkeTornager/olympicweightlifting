@@ -7,6 +7,7 @@ import {
   type LocalRecord,
 } from "./local";
 import type { Identity, JournalState, Snapshot } from "./model";
+import { foodStateForUndo } from "./food-compatibility";
 import { privateFetch } from "./private-fetch";
 export type SyncStatus =
   | "loading"
@@ -80,6 +81,7 @@ export function useJournal(
           return {
             ...current,
             state: server.state,
+            foodTagsVersion: 1,
             revision: server.revision,
             lastSyncedAt: new Date().toISOString(),
             undo:
@@ -107,7 +109,6 @@ export function useJournal(
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "X-Food-Tags-Version": "1",
           "X-Journal-Account": accountId,
         },
         body: JSON.stringify(pending),
@@ -157,7 +158,7 @@ export function useJournal(
           undo:
             server.revision === pending.revision + 1 ? current.undo : undefined,
           ...(current.seq === pending.seq
-            ? { state: server.state, dirty: false }
+            ? { state: server.state, dirty: false, foodTagsVersion: 1 }
             : { dirty: true }),
         };
       });
@@ -243,7 +244,11 @@ export function useJournal(
           current.state.updatedAt = new Date().toISOString();
           current.seq++;
           current.dirty = true;
-          current.undo = { state: before, seq: current.seq };
+          current.undo = {
+            state: before,
+            seq: current.seq,
+            foodTagsVersion: current.foodTagsVersion,
+          };
           return current;
         });
         publish(next);
@@ -323,7 +328,12 @@ export function useJournal(
         throw Error("This change can no longer be undone safely.");
       return {
         ...current,
-        state: { ...current.undo.state, updatedAt: new Date().toISOString() },
+        state: {
+          ...(current.undo.foodTagsVersion === 1
+            ? foodStateForUndo(current.undo.state)
+            : current.undo.state),
+          updatedAt: new Date().toISOString(),
+        },
         seq: current.seq + 1,
         dirty: true,
         undo: undefined,

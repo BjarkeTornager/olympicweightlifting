@@ -9,7 +9,8 @@ export type LocalRecord = Snapshot & {
   seq: number;
   dirty: boolean;
   lastSyncedAt?: string;
-  undo?: { state: JournalState; seq: number };
+  foodTagsVersion?: 1;
+  undo?: { state: JournalState; seq: number; foodTagsVersion?: 1 };
   pending?: {
     mutationId: string;
     revision: number;
@@ -57,6 +58,7 @@ export async function getLocal(accountId: string) {
     (await db.get("journals", accountId)) ?? {
       accountId,
       state: emptyJournal(),
+      foodTagsVersion: 1,
       revision: 0,
       seq: 0,
       dirty: false,
@@ -72,6 +74,7 @@ export async function changeLocal(
   const old = (await tx.store.get(accountId)) ?? {
     accountId,
     state: emptyJournal(),
+    foodTagsVersion: 1,
     revision: 0,
     seq: 0,
     dirty: false,

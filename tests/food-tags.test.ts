@@ -1,3 +1,7 @@
+import {
+  foodSnapshotForClient,
+  foodStateForUndo,
+} from "../lib/food-compatibility";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
@@ -229,4 +233,63 @@ test("meal corrections retain omitted tags across portion changes but permit exp
       ),
     /ambiguous/,
   );
+});
+
+test("cached clients can read tagged snapshots; compatibility never strips stored tags or modern responses", () => {
+  const state = emptyJournal();
+  state.nutrition.meals = [meal()];
+  const before = structuredClone(state),
+    snapshot = { state, revision: 4, accountId: "synthetic" };
+  const old = foodSnapshotForClient(
+    new Request("https://example.test/api/journal"),
+    snapshot,
+  );
+  assert.equal(old.state.nutrition.meals[0].items[0].classification, undefined);
+  assert.deepEqual(state, before);
+  assert.equal(old.revision, 4);
+  assert.equal(old.accountId, "synthetic");
+  const current = foodSnapshotForClient(
+    new Request("https://example.test/api/journal", {
+      headers: { "X-Food-Tags-Version": "1" },
+    }),
+    snapshot,
+  );
+  assert.equal(current, snapshot);
+  assert.deepEqual(
+    retainFoodClassifications(
+      old.state.nutrition.meals[0].items,
+      state.nutrition.meals[0].items,
+      true,
+    ),
+    state.nutrition.meals[0].items,
+  );
+  assert.throws(
+    () =>
+      retainFoodClassifications(
+        [{ ...old.state.nutrition.meals[0].items[0], name: "Different food" }],
+        state.nutrition.meals[0].items,
+        true,
+      ),
+    /Refresh the app/,
+  );
+});
+
+test("tag-aware manual undo explicitly clears newly added tags without changing nutrients", () => {
+  const state = emptyJournal();
+  state.nutrition.meals = [meal()];
+  const before = structuredClone(state);
+  delete before.nutrition.meals[0].items[0].classification;
+  const undo = foodStateForUndo(before);
+  const merged = retainFoodClassifications(
+    undo.nutrition.meals[0].items,
+    state.nutrition.meals[0].items,
+    true,
+  );
+  assert.deepEqual(merged[0].classification, {
+    foodGroups: [],
+    ingredients: [],
+  });
+  assert.equal(merged[0].calories, before.nutrition.meals[0].items[0].calories);
+  assert.deepEqual(merged[1], before.nutrition.meals[0].items[1]);
+  assert.equal(before.nutrition.meals[0].items[0].classification, undefined);
 });

@@ -301,6 +301,7 @@ export function queryFoodJournal(
 export function retainFoodClassifications(
   items: FoodItem[],
   previous: FoodItem[],
+  rejectUnmatched = false,
 ): FoodItem[] {
   return items.map((item) => {
     if (item.classification !== undefined) return item;
@@ -309,6 +310,21 @@ export function retainFoodClassifications(
     );
     const exact = named.filter((old) => old.portion === item.portion);
     const candidates = exact.length ? exact : named;
+    if (
+      rejectUnmatched &&
+      !candidates.length &&
+      previous.some(
+        (old) =>
+          old.classification &&
+          !items.some(
+            (next) =>
+              normalizeFoodTag(next.name) === normalizeFoodTag(old.name),
+          ),
+      )
+    )
+      throw Error(
+        "Refresh the app before replacing tagged foods so their ingredients can be reviewed.",
+      );
     if (candidates.length === 1 && candidates[0].classification)
       return {
         ...item,

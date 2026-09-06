@@ -107,6 +107,7 @@ export async function writeJournal(
           items: retainFoodClassifications(
             meal.items,
             previousMeals.get(meal.id)?.items ?? [],
+            true,
           ),
         }));
     } catch (error) {

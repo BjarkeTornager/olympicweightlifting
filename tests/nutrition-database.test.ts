@@ -150,6 +150,10 @@ test(
           {
             name: "Rice",
             portion: "150 g cooked",
+            classification: {
+              foodGroups: ["grains"],
+              ingredients: [{ name: "rice", evidence: "visible" }],
+            },
             calories: 195,
             protein: 4,
             carbs: 42,
@@ -167,7 +171,9 @@ test(
       let invocations = 0;
       const model = async (messages: ModelMessage[]): Promise<ModelMessage> => {
         invocations++;
-        assert.ok(messages.at(-1)?.images?.[0]);
+        if (invocations === 1) assert.ok(messages.at(-1)?.images?.[0]);
+        else
+          assert.match(messages.at(-1)!.content, /must link its source photo/);
         return {
           role: "assistant",
           content: "",
@@ -175,7 +181,13 @@ test(
             {
               function: {
                 name: "prepare_change",
-                arguments: { kind: "record_meal", meal },
+                arguments: {
+                  kind: "record_meal",
+                  meal:
+                    invocations === 1
+                      ? { ...meal, source: "text", photoIds: [] }
+                      : meal,
+                },
               },
             },
           ],
@@ -199,7 +211,7 @@ test(
         0,
       );
       assert.deepEqual(await runTurn(users[0].id, input, model), response);
-      assert.equal(invocations, 1);
+      assert.equal(invocations, 2);
       const proposal = response.proposals[0];
       await assert.rejects(applyProposal(users[1].id, proposal.id), /expired/);
       const saved = await applyProposal(users[0].id, proposal.id);

@@ -8,7 +8,7 @@ import {
   LogIn,
   Sparkles,
   ArrowRight,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import type { Identity } from "@/lib/model";
 import { Button } from "./ui/button";
 
@@ -84,7 +84,7 @@ function Landing({
           <span className="brand-icon">
             <Dumbbell size={22} />
           </span>{" "}
-          LIFT JOURNAL
+          Lift Journal
         </Link>
         <a href="/privacy">Privacy</a>
       </header>

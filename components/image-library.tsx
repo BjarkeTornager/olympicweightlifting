@@ -1,7 +1,7 @@
 "use client";
 import { privateFetch } from "@/lib/private-fetch";
 import { useEffect, useState } from "react";
-import { Camera, Images, RefreshCw } from "lucide-react";
+import { Camera, Images, RefreshCw } from "@/components/ui/icons";
 import { today } from "@/lib/domain";
 import { uploadUserImage } from "@/lib/food-client";
 import {
@@ -326,6 +326,7 @@ export function ImageLibrary({
                   id={image.id}
                   accountId={accountId}
                   label={image.label}
+                  description={`${imageCategoryLabel[image.category]} · ${image.date}`}
                   download
                 />
                 <ImageBadge image={image} />

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { nutritionSchema } from "./nutrition";
 import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
+import { coachingSchema } from "./coaching";
 
 const id = z.string().min(1).max(160);
 const text = z.string().max(10000);
@@ -130,6 +131,7 @@ export const journalSchema = z
         unit: z.literal("kg").default("kg"),
         name: z.string().max(120).optional(),
         timezone: z.string().max(100).optional(),
+        coaching: coachingSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

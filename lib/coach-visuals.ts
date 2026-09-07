@@ -6,6 +6,11 @@ const base = {
   caption: z.string().max(400).optional(),
 };
 const nodeId = z.string().regex(/^[a-zA-Z0-9_-]{1,32}$/);
+export const galleryIdsSchema = z
+  .array(z.string().uuid())
+  .min(1)
+  .max(8)
+  .refine((ids) => new Set(ids).size === ids.length, "Choose each image once.");
 
 // Display data only: no HTML, scripts, URLs, styles or executable actions.
 export const visualSchema = z
@@ -59,6 +64,13 @@ export const visualSchema = z
           )
           .min(1)
           .max(18),
+      })
+      .strict(),
+    z
+      .object({
+        ...base,
+        kind: z.literal("photo_gallery"),
+        imageIds: galleryIdsSchema,
       })
       .strict(),
   ])

@@ -224,6 +224,7 @@ export function useJournal(
       void removeConfirmedLocal(mountedAccount).catch(() => {});
       try {
         localStorage.removeItem(`lift-agent:${mountedAccount}`);
+        localStorage.removeItem(`lift-coach:${mountedAccount}`);
         localStorage.removeItem("lift-cloud:identity");
       } catch {}
       channel.current?.close();
@@ -314,6 +315,7 @@ export function useJournal(
       await removeConfirmedLocal(accountId);
       localStorage.removeItem("lift-cloud:identity");
       localStorage.removeItem(`lift-agent:${accountId}`);
+      localStorage.removeItem(`lift-coach:${accountId}`);
       localStorage.removeItem(`lift-rest:${accountId}`);
     };
     if (navigator.locks)

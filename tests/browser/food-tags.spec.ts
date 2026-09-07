@@ -77,12 +77,44 @@ test("meal and ingredient tags survive editing and reload, filter history and re
   await expect(page.locator(".food-meal")).toContainText("Assumed ingredient");
   await page.getByRole("button", { name: "Edit meal", exact: true }).click();
   await dialog.getByText("Food groups & ingredients", { exact: true }).click();
+  await dialog.getByLabel("Ingredient tags", { exact: true }).fill("");
+  await dialog
+    .getByLabel("Ingredient tags", { exact: true })
+    .fill("CHICKEN, olive   oil");
+  await expect(dialog.getByLabel("Evidence for chicken")).toHaveValue(
+    "visible",
+  );
+  await expect(dialog.getByLabel("Evidence for olive oil")).toHaveValue(
+    "estimated",
+  );
+  await dialog.getByLabel("Evidence for olive oil").selectOption("reported");
+  await expect(dialog.getByLabel("Evidence for olive oil")).toBeVisible();
+  await dialog.getByLabel("Evidence for olive oil").selectOption("estimated");
+  await expect(dialog.getByLabel("Evidence for olive oil")).toHaveValue(
+    "estimated",
+  );
   await dialog.getByLabel("Evidence for olive oil").selectOption("reported");
   await dialog
     .getByLabel("Ingredient tags", { exact: true })
     .fill("chicken, olive oil, rice");
   await dialog.getByRole("button", { name: "Save meal", exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await expect
+    .poll(
+      () =>
+        state.nutrition.meals.find(
+          (meal) => meal.name === "Yesterday’s dinner",
+        )!.items[0].classification!.ingredients,
+    )
+    .toEqual([
+      { name: "chicken", evidence: "visible" },
+      { name: "olive oil", evidence: "reported" },
+      { name: "rice", evidence: "reported" },
+    ]);
+  await page.reload();
+  await page.getByLabel("Search all logged dates").check();
+  await page.getByLabel("Filter meal type").selectOption("dinner");
+  await page.getByLabel("Search food or ingredients").fill("chicken");
   await expect(page.locator(".food-meal")).not.toContainText(
     "Assumed ingredient",
   );

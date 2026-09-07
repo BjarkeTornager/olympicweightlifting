@@ -19,7 +19,9 @@ import {
   X,
   LoaderCircle,
   Square,
-} from "lucide-react";
+  CalendarDays,
+  Table2,
+} from "@/components/ui/icons";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
 import { exerciseName, today } from "@/lib/domain";
@@ -39,6 +41,7 @@ import { CardioDetails } from "./cardio";
 import { DailyOverview, CheckinDialog, CheckinDetails } from "./health";
 import { AssistantText } from "./assistant-text";
 import { CoachVisuals } from "./coach-visuals";
+import { CoachOpening, CoachPreferences } from "./coach-opening";
 type Turn = {
   id: string;
   question: string;
@@ -399,12 +402,28 @@ export function TrainingAgent({
       );
     }
   };
+  const opening =
+    connection?.enabled &&
+    journal.status === "synced" &&
+    !pending &&
+    !initialPhotoId &&
+    !initialSleepLog &&
+    !initialCardioLog ? (
+      <CoachOpening
+        key={`${accountId}:${today()}`}
+        journal={journal}
+        date={today()}
+        compact={turns.length > 0}
+        disabled={busy || Boolean(acting) || uploading}
+        onDiscuss={ask}
+      />
+    ) : null;
   return (
     <div className="agent-page">
       <header className="coach-header">
         <div className="coach-title">
           <span className="coach-avatar" aria-hidden="true">
-            <Sparkles size={22} />
+            <Sparkles size={25} weight="duotone" />
           </span>
           <div>
             <h1>Coach</h1>
@@ -506,6 +525,7 @@ export function TrainingAgent({
                 </Button>
               </div>
             )}
+            {turns.length > 0 && opening}
             {(turns.length > 1 || reviewCount > 0) && (
               <div className="coach-thread-tools">
                 {reviewCount > 0 ? (
@@ -579,28 +599,28 @@ export function TrainingAgent({
               <div className="conversation-content" ref={content}>
                 {!turns.length && (
                   <div className="coach-start">
-                    <span className="coach-start-icon" aria-hidden="true">
-                      <Sparkles size={26} />
-                    </span>
                     <h2>What’s on your mind today?</h2>
                     <p>
-                      Log a meal or a run, make sense of your sleep, or plan
-                      your next session. Ask for a table, chart or diagram when
-                      a visual helps.
+                      We can think it through together, or simply record what
+                      you want to remember.
                     </p>
+                    {opening}
                     <div className="agent-prompts">
                       {[
-                        "What should I focus on today?",
-                        "How is my recovery looking?",
-                        "Show my week in a table",
-                      ].map((text) => (
+                        {
+                          text: "Help me think through my week",
+                          icon: CalendarDays,
+                        },
+                        { text: "Show my week in a table", icon: Table2 },
+                      ].map(({ text, icon: Icon }) => (
                         <button
                           key={text}
                           disabled={busy}
                           onClick={() => ask(text)}
                         >
-                          {text}
-                          <ArrowRight size={16} />
+                          <Icon size={24} weight="duotone" aria-hidden="true" />
+                          <span>{text}</span>
+                          <ArrowRight size={16} aria-hidden="true" />
                         </button>
                       ))}
                     </div>
@@ -651,7 +671,10 @@ export function TrainingAgent({
                         </span>
                         {t.reply && <AssistantText text={t.reply} />}
                         {Boolean(t.visuals?.length) && (
-                          <CoachVisuals visuals={t.visuals!} />
+                          <CoachVisuals
+                            visuals={t.visuals!}
+                            accountId={accountId}
+                          />
                         )}
                       </div>
                     )}
@@ -846,7 +869,9 @@ export function TrainingAgent({
                 void send();
               }}
             >
-              <label htmlFor="training-message">Message your coach</label>
+              <label className="sr-only" htmlFor="training-message">
+                Message your coach
+              </label>
               <textarea
                 id="training-message"
                 ref={input}
@@ -854,7 +879,7 @@ export function TrainingAgent({
                 maxLength={6000}
                 rows={2}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Tell me what you ate, how you slept, or what you need…"
+                placeholder="Ask anything, or tell me about your day…"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();
@@ -1035,6 +1060,13 @@ export function TrainingAgent({
         title="Coach options"
       >
         <div className="coach-options">
+          <CoachPreferences
+            key={`${accountId}:${optionsOpen}`}
+            journal={journal}
+            disabled={
+              busy || Boolean(acting) || Boolean(journal.record?.conflict)
+            }
+          />
           <Button variant="secondary" onClick={() => go("cardio")}>
             Cardio & movement <ArrowRight size={17} />
           </Button>
@@ -1054,7 +1086,9 @@ export function TrainingAgent({
             Coach can make mistakes. Your chat, attached images and relevant
             journal entries are sent to{" "}
             {connection?.provider ?? "your assistant provider"} when you ask for
-            help. <a href="/privacy">Read our privacy policy</a>.
+            help. Saved images are also shared when you ask Coach to read or
+            analyse them; simply showing a gallery does not share their pixels.{" "}
+            <a href="/privacy">Read our privacy policy</a>.
           </p>
           {turns.length > 0 && (
             <Button

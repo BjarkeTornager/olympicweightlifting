@@ -156,7 +156,11 @@ export const actionToolSchema = z
     dayId: z.string().max(160).optional(),
     date: date.optional(),
     name: z.string().max(120).optional(),
-    meal: mealInputSchema.optional(),
+    meal: mealInputSchema
+      .describe(
+        "New meals and new items require classification with foodGroups and ingredients [{name,evidence}]. Empty arrays mean unknown, not a complete ingredient list. On corrections, keep original ingredient evidence unless the user corrects it.",
+      )
+      .optional(),
     mealId: z.string().uuid().optional(),
     targets: dietTargetsSchema.optional(),
     checkin: checkinPatchSchema.optional(),

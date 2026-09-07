@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Copy, UserPlus } from "lucide-react";
+import { Copy, UserPlus } from "@/components/ui/icons";
 import { privateFetch } from "@/lib/private-fetch";
 import { Button } from "./ui/button";
 

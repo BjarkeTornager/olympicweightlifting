@@ -1,6 +1,7 @@
 "use client";
 import { memo, useId } from "react";
-import { ArrowRight, BarChart3, GitBranch, Table2 } from "lucide-react";
+import { ArrowRight, BarChart3, GitBranch, Table2, Images } from "@/components/ui/icons";
+import { CoachPhotoGallery } from "./coach-photo-gallery";
 import {
   savedVisualSchema,
   type CoachVisual,
@@ -157,8 +158,10 @@ function Diagram({
 
 export const CoachVisuals = memo(function CoachVisuals({
   visuals,
+  accountId,
 }: {
   visuals: SavedVisual[];
+  accountId: string;
 }) {
   return (
     <div className="coach-visuals">
@@ -172,7 +175,9 @@ export const CoachVisuals = memo(function CoachVisuals({
             ? Table2
             : visual.kind === "diagram"
               ? GitBranch
-              : BarChart3;
+              : visual.kind === "photo_gallery"
+                ? Images
+                : BarChart3;
         return (
           <figure
             className={`coach-visual coach-visual-${visual.kind}`}
@@ -185,7 +190,9 @@ export const CoachVisuals = memo(function CoachVisuals({
                   ? "Comparison"
                   : visual.kind === "diagram"
                     ? "Step by step"
-                    : "At a glance"}
+                    : visual.kind === "photo_gallery"
+                      ? "Your photos"
+                      : "At a glance"}
               </span>
               <h3>{visual.title}</h3>
               {visual.caption && <p>{visual.caption}</p>}
@@ -248,6 +255,12 @@ export const CoachVisuals = memo(function CoachVisuals({
               </ol>
             )}
             {visual.kind === "diagram" && <Diagram visual={visual} />}
+            {visual.kind === "photo_gallery" && (
+              <CoachPhotoGallery
+                imageIds={visual.imageIds}
+                accountId={accountId}
+              />
+            )}
           </figure>
         );
       })}

@@ -19,6 +19,7 @@ import {
   retainFoodClassifications,
 } from "../lib/nutrition";
 import { actionToolSchema, prepareAction } from "../lib/agent/actions";
+import { prepareFoodTags } from "../lib/agent/food-tags";
 const meal = (date = "2026-09-06", type = "dinner") =>
   mealSchema.parse({
     id: crypto.randomUUID(),
@@ -59,6 +60,81 @@ const meal = (date = "2026-09-06", type = "dinner") =>
       },
     ],
   });
+test("new Coach foods require explicit tags, normalize names, and cannot claim unseen visual evidence", () => {
+  const item = meal().items[0];
+  const legacy = { ...item, classification: undefined };
+  assert.throws(
+    () => prepareFoodTags([legacy], { newMeal: true, viewedImages: false }),
+    /Include foodGroups and ingredient tags/,
+  );
+  assert.doesNotThrow(
+    () =>
+      prepareFoodTags(
+        [{ ...item, classification: { foodGroups: [], ingredients: [] } }],
+        { newMeal: true, viewedImages: false },
+      ),
+    "unknown food must not force invented ingredients",
+  );
+  assert.deepEqual(
+    prepareFoodTags([legacy], {
+      previous: [legacy],
+      newMeal: false,
+      viewedImages: false,
+    }),
+    [legacy],
+  );
+  assert.throws(
+    () =>
+      prepareFoodTags([{ ...legacy, name: "New food" }], {
+        previous: [legacy],
+        newMeal: false,
+        viewedImages: false,
+      }),
+    /Include foodGroups/,
+  );
+  for (const evidence of ["visible", "label"] as const) {
+    const tagged = {
+      ...item,
+      classification: {
+        foodGroups: item.classification!.foodGroups,
+        ingredients: [{ name: " Olive   Oil ", evidence }],
+      },
+    };
+    assert.throws(
+      () => prepareFoodTags([tagged], { newMeal: true, viewedImages: false }),
+      /without an image/,
+    );
+    assert.throws(
+      () =>
+        prepareFoodTags([tagged], {
+          previous: [item],
+          newMeal: false,
+          viewedImages: false,
+        }),
+      /without an image/,
+      "an old assumption cannot be promoted to visual evidence",
+    );
+    const result = prepareFoodTags([tagged], {
+      newMeal: true,
+      viewedImages: true,
+    });
+    assert.equal(result[0].classification!.ingredients[0].name, "olive oil");
+    assert.equal(
+      tagged.classification.ingredients[0].name,
+      " Olive   Oil ",
+      "source is never mutated",
+    );
+    assert.deepEqual(
+      prepareFoodTags(result, {
+        previous: result,
+        newMeal: false,
+        viewedImages: false,
+      }),
+      result,
+      "portion corrections retain previously observed evidence",
+    );
+  }
+});
 test("food taxonomy validates evidence and bounds, normalizes names, exports/imports without invented legacy tags", () => {
   const dinner = meal();
   assert.equal(dinner.items[0].classification!.ingredients[0].name, "chicken");

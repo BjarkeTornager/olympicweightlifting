@@ -9,7 +9,7 @@ import {
   Plus,
   Sparkles,
   Trash2,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { today } from "@/lib/domain";
 import { offsetDate } from "@/lib/health";
 import {

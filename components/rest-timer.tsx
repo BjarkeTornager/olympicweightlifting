@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Pause, Play, RotateCcw, Timer } from "lucide-react";
+import { Pause, Play, RotateCcw, Timer } from "@/components/ui/icons";
 import { Button } from "./ui/button";
 type Clock = { endsAt: number | null; remaining: number };
 export function RestTimer({

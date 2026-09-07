@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   foodGroups,
   ingredientEvidenceLabels,
@@ -15,7 +15,11 @@ export function FoodTags({ value }: { value?: FoodClassification }) {
         </span>
       ))}
       {value?.ingredients.map((ingredient) => (
-        <span key={ingredient.name} className="food-ingredient-tag">
+        <span
+          key={ingredient.name}
+          className="food-ingredient-tag"
+          title={ingredientEvidenceLabels[ingredient.evidence]}
+        >
           {ingredient.name}
           {ingredient.evidence !== "reported" && (
             <small> · {ingredientEvidenceLabels[ingredient.evidence]}</small>
@@ -37,6 +41,16 @@ export function FoodTagEditor({
 }) {
   const [text, setText] = useState(
     value.ingredients.map((i) => i.name).join(", "),
+  );
+  // Editing the comma-separated text may temporarily remove a tag. Keep its
+  // evidence within this editor so clearing/retyping never promotes an assumption.
+  const known = useRef(
+    new Map(
+      value.ingredients.map((ingredient) => [
+        normalizeFoodTag(ingredient.name),
+        ingredient.evidence,
+      ]),
+    ),
   );
   return (
     <details className="food-tag-editor">
@@ -74,6 +88,11 @@ export function FoodTagEditor({
           maxLength={3240}
           placeholder="chicken, rice, olive oil"
           onChange={(e) => {
+            for (const ingredient of value.ingredients)
+              known.current.set(
+                normalizeFoodTag(ingredient.name),
+                ingredient.evidence,
+              );
             setText(e.target.value);
             const names = [
               ...new Set(
@@ -82,54 +101,54 @@ export function FoodTagEditor({
             ];
             onChange({
               ...value,
-              ingredients: names.map(
-                (name) =>
-                  value.ingredients.find(
-                    (i) => normalizeFoodTag(i.name) === name,
-                  ) ?? { name, evidence: "reported" },
-              ),
+              ingredients: names.map((name) => ({
+                name,
+                evidence: known.current.get(name) ?? "reported",
+              })),
             });
           }}
         />
       </label>
       <p className="fine-print">
         Separate ingredients with commas. New tags are recorded as reported by
-        you.
+        you. Existing tags keep their evidence when you edit this list.
       </p>
-      {value.ingredients.some((i) => i.evidence !== "reported") && (
+      {value.ingredients.length > 0 && (
         <div className="food-evidence-list">
-          {value.ingredients
-            .filter((i) => i.evidence !== "reported")
-            .map((i) => (
-              <label key={i.name}>
-                {i.name}
-                <select
-                  aria-label={`Evidence for ${i.name}`}
-                  value={i.evidence}
-                  onChange={(e) =>
-                    onChange({
-                      ...value,
-                      ingredients: value.ingredients.map((v) =>
-                        v.name === i.name
-                          ? {
-                              ...v,
-                              evidence: e.target.value as typeof i.evidence,
-                            }
-                          : v,
-                      ),
-                    })
-                  }
-                >
-                  {Object.entries(ingredientEvidenceLabels).map(
-                    ([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
+          {value.ingredients.map((i) => (
+            <label key={i.name}>
+              {i.name}
+              <select
+                aria-label={`Evidence for ${i.name}`}
+                value={i.evidence}
+                onChange={(e) => {
+                  known.current.set(
+                    normalizeFoodTag(i.name),
+                    e.target.value as typeof i.evidence,
+                  );
+                  onChange({
+                    ...value,
+                    ingredients: value.ingredients.map((v) =>
+                      v.name === i.name
+                        ? {
+                            ...v,
+                            evidence: e.target.value as typeof i.evidence,
+                          }
+                        : v,
                     ),
-                  )}
-                </select>
-              </label>
-            ))}
+                  });
+                }}
+              >
+                {Object.entries(ingredientEvidenceLabels).map(
+                  ([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          ))}
         </div>
       )}
     </details>

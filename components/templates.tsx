@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "@/components/ui/icons";
 import { EXERCISES, exerciseName, uid } from "@/lib/domain";
 import {
   templateSchema,

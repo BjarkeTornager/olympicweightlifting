@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import "./journal-design.css";
 const inter = localFont({
   src: "./fonts/InterVariable.woff2",
   variable: "--font-journal",

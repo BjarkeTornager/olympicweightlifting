@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, MessageCircle, Utensils } from "lucide-react";
+import { Plus, MessageCircle, Utensils } from "@/components/ui/icons";
 import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
@@ -293,6 +293,7 @@ export function FoodView({
                     id={id}
                     accountId={accountId}
                     label={meal.name}
+                    description={`${meal.type} · ${meal.date}`}
                   />
                 ))}
             </div>

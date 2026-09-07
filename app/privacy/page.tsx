@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 6 September 2026.</p>
+        <p className="lead">Last updated 7 September 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -95,6 +95,16 @@ export default function PrivacyPage() {
           chat; use your browser to copy any conversation you want to keep.
         </p>
         <p>
+          Your optional coaching focus and preference for suggestions are saved
+          in your private profile, synchronized and included in journal exports.
+          Coach receives that context and up to eight recent completed exchanges
+          when you send a message. Clear or change your focus in Coach options;
+          clearing conversation keeps this saved preference. Opening suggestions
+          are generated on your device from journal records, without a model
+          request. Hiding one stores only today’s date under your account on
+          this browser until you sign out or clear site data.
+        </p>
+        <p>
           The assistant can read only your journal through limited tools. It
           prepares changes for review; you confirm a proposal before it is
           saved. Provider failures do not remove your existing training. See{" "}
@@ -110,6 +120,17 @@ export default function PrivacyPage() {
       </section>
       <section className="space-y-3">
         <h2>Food journal and private images</h2>
+        <p>
+          Coach can find saved images and display them in private chat
+          galleries. Showing a gallery does not send image pixels to the AI
+          provider. If you ask Coach to read, compare or analyse a saved image,
+          the selected pixels and relevant labels are sent to your configured
+          provider for that request. Gallery references are kept with the
+          conversation; image access is checked again when displayed. Deleted or
+          inaccessible images cannot be loaded from an old gallery. Retrieved
+          pixels are not copied into conversation storage, and viewing an image
+          does not log a meal or measurement.
+        </p>
         <p>
           Meals, portions, nutrition estimates and diet targets are saved to
           your account alongside your training, and included in journal backups.

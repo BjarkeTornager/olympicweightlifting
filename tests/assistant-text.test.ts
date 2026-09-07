@@ -38,6 +38,7 @@ test("Coach renders Markdown comparison tables with escaped pipes, safe inline f
 test("generated visuals render only controlled table, bar and graph elements, including hostile labels", () => {
   const html = renderToStaticMarkup(
     createElement(CoachVisuals, {
+      accountId: "synthetic-visual-test",
       visuals: [
         {
           id: crypto.randomUUID(),

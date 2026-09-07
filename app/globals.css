@@ -2758,6 +2758,32 @@ summary {
 .coach-options > .button { justify-content: space-between; font-size: 14px; }
 .coach-options .fine-print { font-size: 13px; }
 .coach-options a { text-decoration: underline; }
+.coach-opening { text-align: left; margin: 20px 0 0; padding: 16px; border: 1px solid #d4e3dc; border-radius: 14px; background: #f0f6f2; color: #28493d; }
+.coach-opening-toggle { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; min-height: 44px; }
+.coach-opening-toggle > span { flex: 1; min-width: 0; }
+.coach-opening-toggle small { display: block; font-size: 9px; letter-spacing: 1.2px; color: #4a6b5d; margin-bottom: 3px; }
+.coach-opening-toggle strong { display: block; font-size: 15px; font-weight: 600; line-height: 1.5; }
+.coach-opening-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+.coach-opening p { font-size: 13px; line-height: 1.65; margin: 12px 0 0; overflow-wrap: anywhere; }
+.coach-opening .coach-opening-invitation { color: #52665c; margin-top: 6px; }
+.coach-opening-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; }
+.coach-opening-actions .button { font-size: 12px; min-height: 44px; padding: 9px 12px; border-color: #bfcec4; background: #fff; }
+.coach-opening-actions > button:not(.button) { font-size: 11px; min-height: 44px; color: #4d685a; text-decoration: underline; text-underline-offset: 3px; }
+.coach-opening-source { display: block; font-size: 10px; color: #526b5c; margin-top: 8px; }
+.coach-opening.compact { flex-shrink: 0; max-height: 35%; overflow-y: auto; margin: 10px 14px 0; padding: 8px 12px; }
+.coach-opening.compact .coach-opening-toggle strong { font-size: 12px; }
+.coach-preferences { padding-bottom: 18px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.coach-preferences h3 { font-size: 17px; }
+.coach-preferences :is(select, textarea) { font-size: 16px; font-weight: 400; line-height: 1.5; padding: 10px 12px; border-radius: 8px; min-height: 46px; }
+.coach-preferences textarea { min-height: 100px; resize: vertical; }
+.coach-preferences label small { color: var(--muted); font-weight: 400; }
+.coach-preferences .fine-print { margin: 0; }
+.coach-photo-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; list-style: none; margin: 0; padding: 14px; }
+.coach-photo-card { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.coach-photo-card > strong { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.coach-photo-card > small { font-size: 10px; color: #536a5d; }
+.coach-photo-unavailable { padding: 14px; border: 1px dashed #cbd8d0; border-radius: 12px; font-size: 12px; line-height: 1.6; color: #536a5d; }
+html[data-keyboard-open] .coach-opening.compact { display: none; }
 .large-text .assistant-response { font-size: 18px; }
 @media (max-width: 768px) {
   .coach-mode .sidebar { display: none; }

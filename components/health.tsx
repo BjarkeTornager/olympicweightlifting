@@ -15,7 +15,7 @@ import {
   Scale,
   Sparkles,
   Utensils,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import type { JournalController } from "./journal";
 import { today } from "@/lib/domain";
 import {

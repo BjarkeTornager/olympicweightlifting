@@ -15,7 +15,7 @@ import {
   Search,
   Trash2,
   TrendingUp,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import {
   backup,
   EXERCISES,

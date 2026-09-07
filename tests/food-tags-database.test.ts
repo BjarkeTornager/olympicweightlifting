@@ -66,6 +66,65 @@ test(
       content: "Ready for your review.",
     };
     try {
+      // A new model proposal must explicitly tag food, and cannot claim to have
+      // seen an ingredient from text or library metadata alone.
+      const { id: _newId, createdAt: _newDate, ...newMeal } = meal;
+      void _newId;
+      void _newDate;
+      let taggingRound = 0;
+      const tagging = await runTurn(
+        a,
+        {
+          ...input(0),
+          message: "Log dinner: rice. The oil is only an assumption.",
+        },
+        async (messages) => {
+          taggingRound++;
+          if (taggingRound === 1)
+            return tool("prepare_change", {
+              kind: "record_meal",
+              meal: newMeal,
+            });
+          if (taggingRound === 2)
+            assert.match(
+              messages.at(-1)!.content,
+              /Include foodGroups and ingredient tags/,
+            );
+          if (taggingRound === 3)
+            assert.match(messages.at(-1)!.content, /without an image/);
+          return tool("prepare_change", {
+            kind: "record_meal",
+            meal: {
+              ...newMeal,
+              items: [
+                {
+                  ...newMeal.items[0],
+                  classification: {
+                    foodGroups: ["grains"],
+                    ingredients: [
+                      {
+                        name: " RICE ",
+                        evidence: taggingRound === 2 ? "visible" : "reported",
+                      },
+                      { name: "Olive   Oil", evidence: "estimated" },
+                    ],
+                  },
+                },
+              ],
+            },
+          });
+        },
+      );
+      assert.equal(taggingRound, 3);
+      assert.equal(tagging.proposals.length, 1);
+      assert.deepEqual(
+        tagging.proposals[0].meal!.items[0].classification!.ingredients,
+        [
+          { name: "rice", evidence: "reported" },
+          { name: "olive oil", evidence: "estimated" },
+        ],
+      );
+      assert.equal((await readJournal(a)).state.nutrition.meals.length, 0);
       const initial = await readJournal(a);
       initial.state.nutrition.meals = [meal];
       const originalInput = { ...initial, mutationId: crypto.randomUUID() };

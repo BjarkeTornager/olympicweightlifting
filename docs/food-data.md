@@ -17,9 +17,15 @@ Groups cover meat/poultry, seafood, eggs, dairy/alternatives, grains/potatoes, v
 
 Evidence records why an ingredient was included: `reported` by the user, read from a `label`, `visible` in a photo, or `estimated` as an assumption. It is separate from whether nutrition is estimated. Estimated ingredients remain visibly marked in Coach review, web Food and native meal details. A tag is not a verified complete recipe or an allergy guarantee.
 
+New Coach meal proposals must explicitly include groups and ingredient tags for every food item. The same applies to new items added during a correction. The server asks Coach to repair incomplete proposals before presenting them for review. Unknown ingredients may be an explicit empty list; Coach should explain uncertainty instead of inventing a recipe. New proposal tags normalize case and repeated whitespace. Existing saved records and pending proposals are not rewritten.
+
+Coach is instructed to tag each identifiable ingredient, including reported sauces and oils, respect exclusions, and use short reusable names. A readable ingredient list can provide `label` evidence; product names, nutrition panels and “may contain” warnings cannot. Text supplied by the user remains `reported`, even when it describes a label. New visual evidence requires actual image context in the model request, or unchanged evidence retained from the original meal or preceding unsaved proposal. Catalog metadata alone does not count. A new meal with visual ingredient tags from an attached food image must retain its source photo link. These checks establish provenance requirements; the user's review is still needed to correct recognition mistakes.
+
 ## Using the journal
 
 In Food, use **Edit meal → Food groups & ingredients** to add tags or correct assumptions. Search food names or ingredient tags, select a meal type/group, and enable **Search all logged dates** for history. History loads 20 meals at a time; the selected date’s daily totals stay separate from filtered history.
+
+Every ingredient has an editable evidence selector. Clearing and retyping an existing tag within the editor preserves its evidence; it does not silently promote an assumption to a reported ingredient. New manually entered tags start as reported.
 
 In the iPhone app, add tags when logging Food. In **Journal → Food**, search ingredients or filter meal type/group; open a meal and choose **Edit food tags** to change its occasion, groups or ingredients without changing nutrition.
 
@@ -41,3 +47,9 @@ The current web and native clients identify food-tag support with `X-Food-Tags-V
 Export/import, account revision checks and private image ownership apply to tagged meals exactly as before. Query tools use only the signed-in account’s snapshot. No Apple Health connection, public meal endpoint, food database or automatic historical relabeling is introduced.
 
 After tagged records have been saved, the pre-tag server image’s strict food parser is not a compatible rollback. Roll forward with the optional classification schema retained. A UI rollback must also retain response adaptation and tag preservation. No destructive data downgrade should be used.
+
+## Verification of ingredient reliability
+
+The local production checks pass: type checking, lint, 23 progression tests and 68 domain/database tests. The 21 Food/Coach browser checks pass across Chromium, WebKit and Firefox, including editing evidence, clearing/retyping tags, persistence after reload, ingredient filtering, mobile layout and accessibility. The final image-link guard also passes the three nutrition, image and food-tag database suites and a production build.
+
+`scripts/nutrition-smoke.ts` exercises the real configured model with synthetic content in a disposable test account: a reported breakfast with explicit ingredient exclusions and a generated label with an ingredient list plus a “may contain” warning. It checks ingredient evidence, photo linkage, review before save, saving and undo. In the verified run, the artificial label needed explicit category review before meal logging; the script used the normal manual Food-category correction and reported `imageCategoryReviewed: true`. Automatic category uncertainty is not silently overridden in the product. No production journal was read or changed.

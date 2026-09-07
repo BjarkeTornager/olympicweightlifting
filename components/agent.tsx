@@ -1030,15 +1030,25 @@ export function TrainingAgent({
                 value={message}
                 maxLength={6000}
                 rows={2}
+                enterKeyHint="send"
+                aria-describedby="coach-message-keyboard-hint"
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Ask anything, or tell me about your day…"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing &&
+                    e.nativeEvent.keyCode !== 229
+                  ) {
                     e.preventDefault();
-                    void send();
+                    if (!e.repeat) void send();
                   }
                 }}
               />
+              <span id="coach-message-keyboard-hint" className="sr-only">
+                Press Enter to send. Use Shift+Enter for a new line.
+              </span>
               <div className="composer-actions">
                 <div className="composer-quick-actions">
                   <Button

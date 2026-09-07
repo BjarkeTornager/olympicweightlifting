@@ -165,7 +165,22 @@ test("AG-UI streams rich Coach responses on a phone, preserves reading position 
   const question =
     "Show my week in a table, a sleep chart and a simple check-in diagram";
   await composer.fill(question);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(composer).toHaveAttribute("enterkeyhint", "send");
+  await composer.press("Shift+Enter");
+  await expect(composer).toHaveValue(`${question}\n`);
+  await composer.press("Backspace");
+  // Enter confirms text composition without accidentally submitting it.
+  await composer.dispatchEvent("keydown", { key: "Enter", isComposing: true });
+  // Safari can clear isComposing before the IME's final Enter keydown.
+  await composer.dispatchEvent("keydown", { key: "Enter", keyCode: 229 });
+  await composer.dispatchEvent("keydown", { key: "Enter", repeat: true });
+  expect(
+    await page.evaluate(
+      () => (window as unknown as StreamWindow).coachRequests,
+    ),
+  ).toHaveLength(0);
+  await expect(composer).toHaveValue(question);
+  await composer.press("Enter");
   await expect(
     page.getByText("Checking your sleep and recovery", { exact: true }),
   ).toBeVisible();

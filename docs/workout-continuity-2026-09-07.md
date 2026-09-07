@@ -1,0 +1,13 @@
+# Workout continuity and training navigation
+
+Coach previously treated each performed-exercise report as a new completed session. A partial report could consequently appear as completed history, followed by another history entry when the athlete reported the next exercise.
+
+`log_workout_progress` accepts newly reported sets across multiple exercises in one proposal. It creates or extends one ongoing workout, preserves existing logged sets and pending prescriptions, and finishes only when the requested completion status is explicit. An owned `sessionId` appends to an existing completed workout or reopens it. Both current workout and unfiltered same-date history reads are required. A new completed session cannot bypass an active workout or silently create another same-date workout. Explicitly separate workouts remain possible. Bundles cannot split same-date exercises into separate strength entries.
+
+`merge_sessions` and History's Combine sessions screen preserve every set, exercise block, cue, prescription and note. Matching values are never automatically deduplicated. The review shows source entries, the combined result, and ongoing/completed status. Different dates, unknown IDs, duplicate selection and conflicting active edits are rejected. Existing revision checks, atomic writes, idempotent retries and undo protect both Coach and manual changes. No bulk automatic migration is performed.
+
+Train exposes Ongoing, Programs, History and Cardio tabs, with Train selected in mobile navigation while viewing history. Programs exposes a prominent resume card. Saved workout proposals retain a Continue workout or View training history button outside the collapsed review. Completion status is explicit; a fully logged but unfinished draft still opens Ongoing.
+
+The Coach review capability header is now `X-Training-Programs-Version: 2`. Old clients must refresh before using Coach actions, so a merge cannot be approved by an interface that hides its source entries. Account authorization still runs before capability checks.
+
+Validation includes domain and database regressions for multi-message continuity, pending prescriptions, repeated identical sets, completed-session append/reopen, explicit separate workouts, bundles, merge ownership, retry, undo and stale revisions. Browser regressions cover mobile navigation, saved-card destinations, accessible merge review, undo and reload across Chromium, WebKit and Firefox. `scripts/workout-continuity-smoke.ts` provides an opt-in real-provider test using only a synthetic account in an explicitly disposable test database; it requires an already configured provider key.

@@ -229,7 +229,7 @@ test("old Coach clients must refresh before saving review cards they cannot rend
       new Request("https://example.test/api/agent/action", {
         headers: {
           "X-Coach-Journal-Version": "1",
-          "X-Training-Programs-Version": "1",
+          "X-Training-Programs-Version": "2",
         },
       }),
     ),

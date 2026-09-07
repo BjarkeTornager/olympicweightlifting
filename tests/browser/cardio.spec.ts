@@ -23,8 +23,8 @@ test("Cardio on a phone: add, correct, filter, reload and delete while preservin
   });
   await page.goto("/#workout");
   await page
-    .getByRole("navigation", { name: "Training type" })
-    .getByRole("link", { name: "Cardio & movement" })
+    .getByRole("navigation", { name: "Training navigation" })
+    .getByRole("link", { name: "Cardio", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Cardio & movement", exact: true }),

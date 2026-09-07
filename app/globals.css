@@ -3127,3 +3127,28 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
     padding: 0 0.8rem 0.8rem;
   }
 }
+
+/* Clear destinations for ongoing training and completed history. */
+.training-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 24px; }
+.training-tabs a { justify-content: center; padding: 12px 4px; font-size: 14px; white-space: nowrap; }
+.ongoing-workout-card { margin-bottom: 24px; }
+.ongoing-workout-card strong, .ongoing-workout-card .eyebrow { display: block; }
+.history-tools { margin-bottom: 16px; }
+.combine-session-picker { max-height: 260px; overflow-y: auto; margin: 16px 0; border-block: 1px solid var(--line); }
+.combine-session-picker label { display: flex; align-items: center; gap: 12px; padding: 14px 4px; cursor: pointer; }
+.combine-session-picker input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--blue); }
+.combine-session-picker small { display: block; margin-top: 4px; }
+.combined-workout-preview { margin: 20px 0; padding: 16px; border: 1px solid var(--line); border-radius: 16px; }
+.combined-workout-preview > div { margin: 16px 0; }
+.preserved-workout-notes { white-space: pre-wrap; }
+.workout-review-status { margin-block: 12px; }
+.workout-merge-sources { padding: 14px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; }
+
+.history-toolbar { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 12px; margin-bottom: 24px; }
+.history-toolbar > .button { width: 100%; white-space: normal; }
+.history-filters { border: 1px solid var(--line); border-radius: 14px; }
+.history-filters > summary { padding: 13px 16px; cursor: pointer; font-weight: 600; }
+.history-filters[open] { grid-column: 1 / -1; padding-bottom: 16px; }
+.history-filters > .picker-bar, .history-filters > .button-row { margin: 12px 16px 0; }
+.history-resume { margin-bottom: 16px; }
+.saved-workout-link { margin: 0 12px 12px; }

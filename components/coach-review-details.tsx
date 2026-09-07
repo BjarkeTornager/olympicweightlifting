@@ -38,6 +38,15 @@ export function CoachEntryDetails({ entry }: { entry: PreviewEntry }) {
           <p>
             <strong>{entry.workout.title}</strong> · {entry.workout.date}
           </p>
+          {entry.workoutReview && (
+            <p>
+              <strong>
+                {entry.workoutReview.status === "ongoing"
+                  ? "Ongoing · continue in Train"
+                  : "Completed · training history"}
+              </strong>
+            </p>
+          )}
           {entry.workout.exercises.map((e) => (
             <div key={e.id}>
               <h3>{exerciseName(e.exerciseId)}</h3>

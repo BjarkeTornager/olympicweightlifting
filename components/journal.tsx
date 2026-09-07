@@ -34,7 +34,6 @@ import { FoodView } from "./views/food";
 import { CardioView } from "./cardio";
 import { HealthView } from "./health";
 import { ImageLibrary } from "./image-library";
-import { RestTimer } from "./rest-timer";
 import {
   HistoryView,
   ProgressView,
@@ -451,35 +450,52 @@ export function Journal(props: PrivateSessionProps) {
                 go={go}
               />
             )}
-            {section === "workout" && state.activeWorkout && (
-              <RestTimer
-                key={identity?.id ?? "guest"}
-                accountId={identity?.id ?? "guest"}
-                duration={state.preferences.restSeconds ?? 90}
-              />
-            )}
             {section === "dashboard" && (
               <Dashboard state={state} onStart={start} go={go} />
             )}
-            {(section === "workout" || section === "cardio") && (
-              <nav className="activity-switch" aria-label="Training type">
+            {["workout", "history", "cardio"].includes(section) && (
+              <nav
+                className="activity-switch training-tabs"
+                aria-label="Training navigation"
+              >
                 <a
                   href="#workout"
-                  aria-current={section === "workout" ? "page" : undefined}
+                  aria-current={
+                    section === "workout" && route === "workout"
+                      ? "page"
+                      : undefined
+                  }
                 >
-                  Strength
+                  Ongoing{state.activeWorkout ? " •" : ""}
+                </a>
+                <a
+                  href="#workout/choose"
+                  aria-current={
+                    section === "workout" && route !== "workout"
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  Programs
+                </a>
+                <a
+                  href="#history"
+                  aria-current={section === "history" ? "page" : undefined}
+                >
+                  History
                 </a>
                 <a
                   href="#cardio"
                   aria-current={section === "cardio" ? "page" : undefined}
                 >
-                  Cardio & movement
+                  Cardio
                 </a>
               </nav>
             )}
             {section === "cardio" && <CardioView journal={journal} go={go} />}
             {section === "workout" && (
               <Workouts
+                accountId={identity?.id ?? "guest"}
                 state={state}
                 update={journal.update}
                 route={route}
@@ -550,12 +566,14 @@ export function Journal(props: PrivateSessionProps) {
             key={id}
             href={`#${id}`}
             className={
-              section === id || (section === "cardio" && id === "workout")
+              section === id ||
+              (["cardio", "history"].includes(section) && id === "workout")
                 ? "active"
                 : ""
             }
             aria-current={
-              section === id || (section === "cardio" && id === "workout")
+              section === id ||
+              (["cardio", "history"].includes(section) && id === "workout")
                 ? "page"
                 : undefined
             }
@@ -563,7 +581,8 @@ export function Journal(props: PrivateSessionProps) {
             <Icon
               size={25}
               weight={
-                section === id || (section === "cardio" && id === "workout")
+                section === id ||
+                (["cardio", "history"].includes(section) && id === "workout")
                   ? "fill"
                   : "regular"
               }
@@ -575,7 +594,8 @@ export function Journal(props: PrivateSessionProps) {
         <button
           className={
             journalNavigation.some(
-              (item) => item.id === section && section !== "cardio",
+              (item) =>
+                item.id === section && !["cardio", "history"].includes(section),
             )
               ? "active"
               : ""

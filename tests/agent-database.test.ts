@@ -44,10 +44,22 @@ test(
         ],
       },
     };
-    const proposalModel = async (): Promise<ModelMessage> => ({
+    const proposalModel = async (
+      messages: ModelMessage[],
+    ): Promise<ModelMessage> => ({
       role: "assistant",
       content: "",
-      tool_calls: [{ function: { name: "prepare_change", arguments: action } }],
+      tool_calls: messages.some((m) => m.role === "tool")
+        ? [{ function: { name: "prepare_change", arguments: action } }]
+        : [
+            { function: { name: "current_workout", arguments: {} } },
+            {
+              function: {
+                name: "find_sessions",
+                arguments: { from: "2026-09-05", to: "2026-09-05" },
+              },
+            },
+          ],
     });
     try {
       const firstInput = makeInput(),

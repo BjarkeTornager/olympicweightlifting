@@ -1,4 +1,5 @@
 "use client";
+import { CombineSessions } from "../combine-sessions";
 import { CardioProgress } from "../cardio";
 import { Invitations } from "../invitations";
 import { privateFetch } from "@/lib/private-fetch";
@@ -75,51 +76,76 @@ export function HistoryView({
       <div className="page-heading compact">
         <div>
           <div className="eyebrow">YOUR TRAINING STORY</div>
-          <h1>Work you can build on.</h1>
+          <h1>Training history</h1>
           <p className="lead">
             {state.sessions.length} saved strength sessions. Every one counts.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => downloadBackup(backup(state))}
-        >
-          <Download size={17} />
-          Export journal
-        </Button>
       </div>
-      <a className="text-link cardio-history-link" href="#cardio">
-        Cardio activity history <ArrowRight size={16} />
-      </a>
-      <div className="picker-bar">
-        <label>
-          Exercise
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="all">All exercises</option>
-            {EXERCISES.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Training date
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </label>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setDate("");
-            setFilter("all");
-          }}
-        >
-          Clear filters
-        </Button>
+      {state.activeWorkout && (
+        <div className="history-resume">
+          <Button onClick={() => go("workout")}>
+            Resume ongoing workout <ArrowRight size={17} />
+          </Button>
+        </div>
+      )}
+      <div className="history-toolbar">
+        <CombineSessions
+          state={state}
+          update={update}
+          go={go}
+          notify={notify}
+        />
+        <details className="history-filters">
+          <summary>
+            Filter history{date || filter !== "all" ? " •" : ""}
+          </summary>
+          <div className="picker-bar">
+            <label>
+              Exercise
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <option value="all">All exercises</option>
+                {EXERCISES.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Training date
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </label>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setDate("");
+                setFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+          <div className="button-row">
+            <Button
+              variant="ghost"
+              onClick={() => downloadBackup(backup(state))}
+            >
+              <Download size={17} />
+              Export journal
+            </Button>
+            <a className="text-link" href="#cardio">
+              Cardio activity history <ArrowRight size={16} />
+            </a>
+          </div>
+        </details>
       </div>
       {sessions.length ? (
         <div className="history-list">

@@ -189,7 +189,7 @@ const specifications = {
   prepare_change: {
     schema: actionToolSchema,
     description:
-      "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing performed weights/reps/date. For a NEW reusable routine use create_routine with routine; no sessionId/date/result. For a multi-day or detailed plan use create_training_program with trainingProgram; sets is a count per exercise, weight may be null, and targets are planned. For edits read training_library by ID then use update_routine or update_training_program (programChanges); preserve unaffected entries. save_routine only copies a completed session. record_session is completed history; plan_workout is an unlogged draft. update_session replaces every exercise and set. log_sets fills unlogged draft sets before appending.",
+      "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing performed weights/reps/date. For a NEW reusable routine use create_routine with routine; no sessionId/date/result. For a multi-day or detailed plan use create_training_program with trainingProgram; sets is a count per exercise, weight may be null, and targets are planned. For edits read training_library by ID then use update_routine or update_training_program (programChanges); preserve unaffected entries. save_routine only copies a completed session. For performed strength training FIRST read current_workout and find_sessions for its date without an exercise filter. log_workout_progress takes workout with ONLY NEW reported sets across all exercises and completion=ongoing unless the person explicitly finished the whole workout. It creates or extends ONE active workout; sessionId appends to an owned full-read history session (ongoing reopens it). finish_workout finishes an active workout without adding sets. record_session is only a new, fully completed workout; it cannot bypass an active workout. An existing same-date session requires appending/correcting it, or explicit confirmation of a separate workout (separateSession=true). update_session replaces every exercise and set, so retain unaffected data. For split history read every source and current_workout, then merge_sessions with sessionIds, name and completion. Keep ALL sets, including equal weights/reps. Never guess which workouts to merge. plan_workout is an unlogged draft; log_sets updates one active exercise. One workout is ONE entry, including inside record_bundle.",
   },
 };
 export const toolDefinitions: ToolDefinition[] = Object.entries(
@@ -381,6 +381,7 @@ export async function runTurn(
   const readRoutines = new Set<string>();
   const readPrograms = new Set<string>();
   const readCardio = new Set<string>();
+  const readTrainingRanges: { from: string; to: string }[] = [];
   const readCardioRanges: { from: string; to: string }[] = [];
   const readHealthDates = new Set<string>();
   let readFood = false;
@@ -664,6 +665,11 @@ export async function runTurn(
             );
           } else if (key === "find_sessions") {
             const a = specifications.find_sessions.schema.parse(args);
+            if (!a.exerciseId)
+              readTrainingRanges.push({
+                from: a.from ?? "0000-01-01",
+                to: a.to ?? currentDate,
+              });
             const found = snapshot.state.sessions
               .filter(
                 (w) =>
@@ -938,12 +944,36 @@ export async function runTurn(
                   : "text";
               }
               if (
-                action.kind === "update_session" &&
+                (action.kind === "update_session" ||
+                  action.kind === "log_workout_progress") &&
+                action.sessionId &&
                 !readSessions.has(action.sessionId)
               )
                 throw Error("Read the full original session first.");
               if (
-                (action.kind === "log_sets" ||
+                action.kind === "merge_sessions" &&
+                action.sessionIds.some((id) => !readSessions.has(id))
+              )
+                throw Error(
+                  "Read every full source session before combining them. Preserve all reported sets and notes; never deduplicate equal weights/reps.",
+                );
+              if (
+                (action.kind === "record_session" ||
+                  action.kind === "log_workout_progress") &&
+                !readTrainingRanges.some(
+                  (r) =>
+                    r.from <= action.workout.date &&
+                    r.to >= action.workout.date,
+                )
+              )
+                throw Error(
+                  "Read find_sessions for this workout date without an exercise filter first, so an existing workout is not split or duplicated.",
+                );
+              if (
+                (action.kind === "record_session" ||
+                  action.kind === "log_workout_progress" ||
+                  action.kind === "merge_sessions" ||
+                  action.kind === "log_sets" ||
                   action.kind === "finish_workout") &&
                 !readDraft
               )
@@ -974,6 +1004,9 @@ export async function runTurn(
               ...(prepared.memory ? { memory: prepared.memory } : {}),
               ...(prepared.plan ? { plan: prepared.plan } : {}),
               ...(prepared.training ? { training: prepared.training } : {}),
+              ...(prepared.workoutReview
+                ? { workoutReview: prepared.workoutReview }
+                : {}),
               expiresAt: expiresAt.toISOString(),
             };
             signal.throwIfAborted();

@@ -1,4 +1,9 @@
 import {
+  appendWorkoutSets,
+  mergeWorkoutSessions,
+  type WorkoutStatus,
+} from "../workout-continuity";
+import {
   memoryInputSchema,
   planInputSchema,
   coachSettings,
@@ -87,16 +92,52 @@ const recordMealSchema = z
   .object({ kind: z.literal("record_meal"), meal: mealInputSchema })
   .strict();
 const recordSessionSchema = z
-  .object({ kind: z.literal("record_session"), workout: training })
+  .object({
+    kind: z.literal("record_session"),
+    workout: training,
+    separateSession: z.boolean().optional(),
+  })
+  .strict();
+const progressSchema = z
+  .object({
+    kind: z.literal("log_workout_progress"),
+    workout: training.describe(
+      "Only NEW performed sets from this message, not all previously saved sets or future targets.",
+    ),
+    completion: z
+      .enum(["ongoing", "completed"])
+      .describe(
+        "Ongoing unless the person explicitly says the whole workout is finished.",
+      ),
+    sessionId: z
+      .string()
+      .min(1)
+      .max(160)
+      .optional()
+      .describe(
+        "Read an existing history session first to append to it or reopen it. Omit for the current draft or a new ongoing workout.",
+      ),
+    separateSession: z.boolean().optional(),
+  })
   .strict();
 const bundleEntrySchema = z.discriminatedUnion("kind", [
   recordCardioSchema,
   recordCheckinSchema,
   recordMealSchema,
   recordSessionSchema,
+  progressSchema,
   repeatMealActionSchema,
 ]);
 const singleActionSchema = z.discriminatedUnion("kind", [
+  progressSchema,
+  z
+    .object({
+      kind: z.literal("merge_sessions"),
+      sessionIds: z.array(z.string().min(1).max(160)).min(2).max(10),
+      name: z.string().trim().min(1).max(120),
+      completion: z.enum(["ongoing", "completed"]),
+    })
+    .strict(),
   z
     .object({ kind: z.literal("create_routine"), routine: routineInputSchema })
     .strict(),
@@ -198,7 +239,13 @@ const singleActionSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("set_diet_targets"), targets: dietTargetsSchema })
     .strict(),
-  z.object({ kind: z.literal("record_session"), workout: training }).strict(),
+  z
+    .object({
+      kind: z.literal("record_session"),
+      workout: training,
+      separateSession: z.boolean().optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal("plan_workout"), workout: training }).strict(),
   z
     .object({
@@ -273,6 +320,8 @@ export const actionToolSchema = z
       "update_meal",
       "set_diet_targets",
       "record_session",
+      "log_workout_progress",
+      "merge_sessions",
       "plan_workout",
       "update_session",
       "log_sets",
@@ -322,6 +371,14 @@ export const actionToolSchema = z
     cardioId: z.string().uuid().optional(),
     changes: cardioPatchSchema.optional(),
     workout: training.optional(),
+    completion: z.enum(["ongoing", "completed"]).optional(),
+    sessionIds: z.array(z.string().min(1).max(160)).min(2).max(10).optional(),
+    separateSession: z
+      .boolean()
+      .describe(
+        "True ONLY if the person explicitly confirms a separate workout despite an existing workout on this date. Never infer from a new exercise or message.",
+      )
+      .optional(),
     sessionId: z.string().max(160).optional(),
     exerciseId: exerciseId.optional(),
     sets: z.array(set).min(1).max(30).optional(),
@@ -358,6 +415,10 @@ export type ActionPreview = {
   memory?: CoachMemory;
   plan?: CoachPlan;
   training?: TrainingReview;
+  workoutReview?: {
+    status: WorkoutStatus;
+    sources?: { id: string; title: string; date: string; sets: number }[];
+  };
   entries?: PreviewEntry[];
   expiresAt: string;
   status?: "saved" | "undone";
@@ -374,6 +435,7 @@ export type PreviewEntry = Pick<
   | "memory"
   | "plan"
   | "training"
+  | "workoutReview"
 >;
 type PreparedAction = PreviewEntry & {
   state: JournalState;
@@ -425,6 +487,15 @@ export function prepareAction(
     );
     if (new Set(checkinDates).size !== checkinDates.length)
       throw Error("Combine fields for the same check-in date into one entry.");
+    const workoutDates = parsed.entries.flatMap((e) =>
+      e.kind === "record_session" || e.kind === "log_workout_progress"
+        ? [e.workout.date]
+        : [],
+    );
+    if (new Set(workoutDates).size !== workoutDates.length)
+      throw Error(
+        "Combine all exercises from one workout into one training entry. Log separate same-date workouts in separate reviews.",
+      );
     let combined = structuredClone(state);
     const entries: PreviewEntry[] = [];
     for (const entry of parsed.entries) {
@@ -434,6 +505,9 @@ export function prepareAction(
         title: prepared.title,
         detail: prepared.detail,
         workout: prepared.workout,
+        ...(prepared.workoutReview
+          ? { workoutReview: prepared.workoutReview }
+          : {}),
         ...(prepared.meal ? { meal: prepared.meal } : {}),
         ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
         ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
@@ -460,6 +534,7 @@ export function prepareAction(
   let memory: CoachMemory | undefined;
   let plan: CoachPlan | undefined;
   let training: TrainingReview | undefined;
+  let workoutReview: ActionPreview["workoutReview"];
   const owned = (id: string) => {
     const w = next.sessions.find((s) => s.id === id);
     if (!w) throw Error("That session is not in your journal.");
@@ -664,6 +739,74 @@ export function prepareAction(
     title = "Repeat a meal";
     detail =
       "Copies the saved portions, nutrition and ingredient tags. Photos from the earlier meal are not attached to this new entry. Review whether the portions were the same.";
+  } else if (action.kind === "merge_sessions") {
+    const merged = mergeWorkoutSessions(
+      next,
+      action.sessionIds,
+      action.name,
+      action.completion,
+    );
+    Object.assign(next, merged.state);
+    workout = merged.workout;
+    workoutReview = { status: action.completion, sources: merged.sources };
+    title = "Combine split workout entries";
+    detail = `Replaces ${merged.sources.length} history entries with one ${action.completion === "ongoing" ? "ongoing workout in Train" : "completed workout in Train → History"}. Every set and note is kept, including repeated sets. Review the entries and result below. You can undo this change.`;
+  } else if (action.kind === "log_workout_progress") {
+    if (action.workout.date > currentDate)
+      throw Error("Performed training cannot be dated in the future.");
+    const existing = action.sessionId ? owned(action.sessionId) : null;
+    if (existing && existing.date !== action.workout.date)
+      throw Error("Use the original workout date when adding sets.");
+    if (existing && next.activeWorkout)
+      throw Error(
+        "An ongoing workout already exists. Resolve it in Train before changing a history session.",
+      );
+    if (
+      !existing &&
+      next.activeWorkout &&
+      next.activeWorkout.date !== action.workout.date
+    )
+      throw Error(
+        "The ongoing workout is on another date. Resolve it in Train before logging this workout.",
+      );
+    if (
+      !existing &&
+      !next.activeWorkout &&
+      next.sessions.some((s) => s.date === action.workout.date) &&
+      !action.separateSession
+    )
+      throw Error(
+        "Training already exists on this date. Read the matching session and supply sessionId to add to it. Ask which workout if ambiguous; separateSession requires an explicitly separate workout.",
+      );
+    const draft = existing
+      ? structuredClone(existing)
+      : (next.activeWorkout ??
+        buildWorkout({ ...action.workout, exercises: [] }, false));
+    appendWorkoutSets(draft, action.workout.exercises);
+    if (action.workout.notes && action.workout.notes !== draft.athleteNotes)
+      draft.athleteNotes = [draft.athleteNotes, action.workout.notes]
+        .filter(Boolean)
+        .join("\n");
+    if (existing)
+      next.sessions = next.sessions.filter((s) => s.id !== existing.id);
+    delete draft.finishedAt;
+    next.activeWorkout = draft;
+    workout = draft;
+    if (action.completion === "completed") {
+      Object.assign(next, finishWorkout(next));
+      workout = next.sessions.find(
+        (s) => s.id === (draft.editingSessionId ?? draft.id),
+      )!;
+    }
+    workoutReview = { status: action.completion };
+    title =
+      action.completion === "ongoing"
+        ? "Update your ongoing workout"
+        : "Save this completed workout";
+    detail =
+      action.completion === "ongoing"
+        ? "Adds only the newly reported sets to one ongoing workout. Earlier sets and planned exercises stay in place. Keep logging here or in Train; finish when your whole workout is done."
+        : "Adds the newly reported sets to this workout and saves one completed history entry. Earlier sets are preserved; unlogged targets are left out.";
   } else if (
     action.kind === "record_session" ||
     action.kind === "plan_workout" ||
@@ -675,6 +818,19 @@ export function prepareAction(
         "Completed sessions cannot be dated in the future. Prepare a workout draft instead.",
       );
     if (planned) requireNoDraft();
+    if (action.kind === "record_session") {
+      if (next.activeWorkout)
+        throw Error(
+          "An ongoing workout exists. Read current_workout and use log_workout_progress or finish_workout; do not split it into another history entry.",
+        );
+      if (
+        next.sessions.some((s) => s.date === action.workout.date) &&
+        !action.separateSession
+      )
+        throw Error(
+          "Training already exists on this date. Read it and use log_workout_progress with sessionId to append, or update_session to correct it. Only an explicitly separate workout permits separateSession=true.",
+        );
+    }
     workout = buildWorkout(action.workout, !planned);
     if (action.kind === "update_session") {
       const existing = owned(action.sessionId);
@@ -720,41 +876,19 @@ export function prepareAction(
     }
   } else if (action.kind === "log_sets") {
     const draft = next.activeWorkout;
-    if (!draft) throw Error("Start a workout before logging sets.");
-    if (draft.date > currentDate)
+    if (!draft)
       throw Error(
-        "This workout is dated in the future. Check the training date first.",
+        "Read current_workout and use log_workout_progress to start one ongoing workout with the reported sets.",
       );
-    let entry = draft.exercises.find((e) => e.exerciseId === action.exerciseId);
-    if (!entry) {
-      entry = {
-        id: uid(),
-        exerciseId: action.exerciseId,
-        loggingVersion: 1,
-        completed: false,
-        athleteNotes: "",
-        coachCue: "",
-        prescribed: {},
-        sets: [],
-      };
-      draft.exercises.push(entry);
-    }
-    for (const s of action.sets) {
-      const pending = entry.sets.findIndex((s) => !s.logged && !s.result);
-      const value = {
-        id: pending >= 0 ? entry.sets[pending].id : uid(),
-        ...s,
-        logged: true,
-        touched: true,
-      };
-      if (pending >= 0) entry.sets[pending] = value;
-      else entry.sets.push(value);
-    }
-    entry.completed = entry.sets.every((s) => Boolean(s.logged || s.result));
+    if (draft.date > currentDate)
+      throw Error("Check this workout’s future training date first.");
+    appendWorkoutSets(draft, [
+      { exerciseId: action.exerciseId, sets: action.sets },
+    ]);
     workout = draft;
     title = `Log ${action.sets.length} ${exerciseName(action.exerciseId)} sets`;
     detail =
-      "Fills the next unlogged sets, then adds extra sets if needed. Previously logged sets are preserved.";
+      "Fills the next unlogged sets, then adds extra sets if needed. Previously logged sets are preserved. The workout stays ongoing until you finish it.";
   } else if (action.kind === "finish_workout") {
     if (!next.activeWorkout) throw Error("There is no unfinished workout.");
     if (next.activeWorkout.date > currentDate)
@@ -860,6 +994,10 @@ export function prepareAction(
     detail = `“${template.name}” will be available in Train → Your routines.`;
     training = { kind: "routine", after: template };
   }
+  if (workout && !workoutReview)
+    workoutReview = {
+      status: next.activeWorkout?.id === workout.id ? "ongoing" : "completed",
+    };
   next.updatedAt = new Date().toISOString();
   return {
     state: journalSchema.parse(next),
@@ -873,6 +1011,7 @@ export function prepareAction(
     memory,
     plan,
     training,
+    workoutReview,
     action,
   };
 }

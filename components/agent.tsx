@@ -847,6 +847,32 @@ export function TrainingAgent({
                                   <strong>{p.workout.title}</strong>
                                   <span>{p.workout.date}</span>
                                 </div>
+                                {p.workoutReview && (
+                                  <p className="workout-review-status">
+                                    <strong>
+                                      {p.workoutReview.status === "ongoing"
+                                        ? "Ongoing · continue in Train"
+                                        : "Completed · training history"}
+                                    </strong>
+                                  </p>
+                                )}
+                                {p.workoutReview?.sources && (
+                                  <div className="workout-merge-sources">
+                                    <strong>Entries being combined</strong>
+                                    <ul>
+                                      {p.workoutReview.sources.map((source) => (
+                                        <li key={source.id}>
+                                          {source.title} · {source.date} ·{" "}
+                                          {source.sets} sets
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    <p>
+                                      All sets and notes are retained. These
+                                      entries become one workout.
+                                    </p>
+                                  </div>
+                                )}
                                 {p.workout.exercises.map((e) => (
                                   <div className="proposal-exercise" key={e.id}>
                                     <h3>{exerciseName(e.exerciseId)}</h3>
@@ -919,19 +945,30 @@ export function TrainingAgent({
                                                 ? "health"
                                                 : p.meal || p.targets
                                                   ? "food"
-                                                  : p.workout &&
-                                                      p.workout.exercises.some(
-                                                        (e) =>
-                                                          e.sets.some(
-                                                            (s) => !s.result,
-                                                          ),
-                                                      )
-                                                    ? "workout"
-                                                    : "history",
+                                                  : p.workoutReview
+                                                    ? p.workoutReview.status ===
+                                                      "ongoing"
+                                                      ? "workout"
+                                                      : "history"
+                                                    : p.workout &&
+                                                        p.workout.exercises.some(
+                                                          (e) =>
+                                                            e.sets.some(
+                                                              (s) => !s.result,
+                                                            ),
+                                                        )
+                                                      ? "workout"
+                                                      : "history",
                                         )
                                 }
                               >
-                                {p.training ? "Open Train" : "Open journal"}{" "}
+                                {p.training
+                                  ? "Open Train"
+                                  : p.workoutReview?.status === "ongoing"
+                                    ? "Open ongoing workout"
+                                    : p.workoutReview
+                                      ? "Open training history"
+                                      : "Open journal"}{" "}
                                 <ArrowRight size={17} />
                               </Button>
                             </div>
@@ -942,6 +979,24 @@ export function TrainingAgent({
                             </p>
                           </div>
                         </details>
+                        {p.status === "saved" && p.workoutReview && (
+                          <Button
+                            className="saved-workout-link"
+                            variant="ghost"
+                            onClick={() =>
+                              go(
+                                p.workoutReview!.status === "ongoing"
+                                  ? "workout"
+                                  : "history",
+                              )
+                            }
+                          >
+                            {p.workoutReview.status === "ongoing"
+                              ? "Continue workout"
+                              : "View training history"}{" "}
+                            <ArrowRight size={17} />
+                          </Button>
+                        )}
                       </section>
                     ))}
                   </article>

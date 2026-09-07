@@ -64,7 +64,7 @@ test(
         headers: {
           cookie: users[index]?.cookie ?? "",
           "X-Coach-Journal-Version": "1",
-          "X-Training-Programs-Version": "1",
+          "X-Training-Programs-Version": "2",
           "X-Journal-Account": account ?? users[index]?.id ?? "",
           origin,
           "Content-Type": "application/json",

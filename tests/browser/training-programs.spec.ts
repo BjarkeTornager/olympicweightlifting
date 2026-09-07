@@ -50,7 +50,7 @@ async function fixture(
       }),
     );
     await context.route("**/api/agent/action", (r) => {
-      expect(r.request().headers()["x-training-programs-version"]).toBe("1");
+      expect(r.request().headers()["x-training-programs-version"]).toBe("2");
       const undo = r.request().postDataJSON().undo;
       state = structuredClone(undo ? initial : prepared!.state);
       revision++;

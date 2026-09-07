@@ -35,6 +35,7 @@ import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Templates } from "../templates";
+import { RestTimer } from "../rest-timer";
 import { TrainingPrograms } from "../training-programs";
 import { ExercisePicker } from "../exercise-picker";
 import { exerciseLoggingNotes } from "@/lib/exercises";
@@ -43,6 +44,7 @@ type Update = (
   fn: (state: JournalState) => JournalState | void,
 ) => Promise<void>;
 type Props = {
+  accountId: string;
   state: JournalState;
   update: Update;
   route: string;
@@ -299,6 +301,40 @@ export function Workouts(props: Props) {
           </Button>
         </div>
       </div>
+      {state.activeWorkout ? (
+        <div className="notice ongoing-workout-card">
+          <div>
+            <span className="eyebrow">ONGOING WORKOUT</span>
+            <strong>{state.activeWorkout.title}</strong>
+            <p>
+              {state.activeWorkout.date} ·{" "}
+              {state.activeWorkout.exercises.reduce(
+                (n, e) => n + e.sets.filter((s) => s.logged || s.result).length,
+                0,
+              )}{" "}
+              sets logged
+            </p>
+          </div>
+          <Button onClick={() => go("workout")}>
+            Resume workout <ArrowRight size={17} />
+          </Button>
+        </div>
+      ) : (
+        !parameter && (
+          <div className="notice ongoing-workout-card">
+            <div>
+              <strong>No workout in progress</strong>
+              <p>
+                Start a session below or tell Coach what you are doing. Your
+                ongoing workout will stay here until you finish.
+              </p>
+            </div>
+            <a className="text-link" href="#history">
+              View training history <ArrowRight size={17} />
+            </a>
+          </div>
+        )
+      )}
       <Templates
         state={state}
         update={props.update}
@@ -313,14 +349,7 @@ export function Workouts(props: Props) {
         go={go}
         notify={props.notify}
       />
-      {state.activeWorkout && (
-        <div className="notice">
-          <span>
-            Saved workout: <strong>{state.activeWorkout.title}</strong>
-          </span>
-          <Button onClick={() => go("workout")}>Resume workout</Button>
-        </div>
-      )}
+
       <div className="picker-bar">
         <label>
           Training date
@@ -418,7 +447,7 @@ export function Workouts(props: Props) {
     </>
   );
 }
-function ActiveWorkout({ state, update, go, notify }: Props) {
+function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
   const draft = state.activeWorkout!;
   const [expanded, setExpanded] = useState(
       draft.activeExerciseId ?? draft.exercises[0]?.id ?? "",
@@ -486,7 +515,7 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
     <>
       <div className="page-heading compact workout-heading">
         <div>
-          <div className="eyebrow">ON THE PLATFORM</div>
+          <div className="eyebrow">ONGOING WORKOUT</div>
           <h1>{draft.title}</h1>
           <p className="lead">
             {logged} of {total} sets logged · {draft.date}
@@ -499,6 +528,11 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
       <div className="session-progress">
         <span style={{ width: `${total ? (logged / total) * 100 : 0}%` }} />
       </div>
+      <RestTimer
+        key={accountId}
+        accountId={accountId}
+        duration={state.preferences.restSeconds ?? 90}
+      />
       <details className="panel session-details">
         <summary>
           Session details & programmes <ChevronDown size={17} />

@@ -8,6 +8,7 @@ import {
   apiFailure,
   readJson,
   requireAthlete,
+  requireCurrentCoach,
 } from "@/lib/agent/http";
 import { history, runTurn } from "@/lib/agent/engine";
 import { providerConfig } from "@/lib/agent/provider";
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireAthlete(request, true);
+    requireCurrentCoach(request);
     if (!providerConfig())
       throw new ApiError(
         "The training assistant is not connected yet. You can keep logging in Train.",

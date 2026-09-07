@@ -5,6 +5,8 @@ import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
   mealSchema,
+  favouriteFromMeal,
+  repeatMeal,
   dietTargetsSchema,
   totalNutrients,
   nutritionSummary,
@@ -85,12 +87,12 @@ export function FoodView({
   const [remove, setRemove] = useState<{ kind: "meal"; id: string } | null>(
     null,
   );
-  const run = async (work: () => Promise<unknown>, message: string) => {
+  const run = async (work: () => Promise<unknown>, message?: string) => {
     setError("");
     setNotice("");
     try {
       await work();
-      setNotice(message);
+      if (message !== undefined) setNotice(message);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Could not save. Please try again.",
@@ -187,6 +189,85 @@ export function FoodView({
           <Plus size={17} /> Add meal manually
         </Button>
       </div>
+      <section className="food-completeness">
+        <div>
+          <strong>
+            {nutrition.completeDays?.includes(date)
+              ? "Food log marked complete"
+              : "Is everything logged for this day?"}
+          </strong>
+          <p className="fine-print">
+            Only days you mark complete enter weekly intake averages. Editing
+            food reopens the day. Portions can still be estimates.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          disabled={date > today() || Boolean(journal.record?.conflict)}
+          onClick={() =>
+            void run(async () => {
+              const complete = nutrition.completeDays?.includes(date);
+              await journal.update((s) => {
+                s.nutrition.completeDays = complete
+                  ? (s.nutrition.completeDays ?? []).filter((d) => d !== date)
+                  : [...(s.nutrition.completeDays ?? []), date];
+              });
+              setNotice(
+                complete ? "Day marked partial." : "Food day marked complete.",
+              );
+            })
+          }
+        >
+          {nutrition.completeDays?.includes(date)
+            ? "Mark as partial"
+            : "Mark day complete"}
+        </Button>
+      </section>
+      <details className="food-favourites">
+        <summary>Favourite meals · {nutrition.favourites?.length ?? 0}</summary>
+        <p className="fine-print">
+          Save a logged meal as a favourite, then reuse its portions and
+          ingredient tags. Review before logging; old photos are not copied.
+        </p>
+        {(nutrition.favourites ?? []).map((meal) => (
+          <article className="food-favourite" key={meal.id}>
+            <div>
+              <strong>{meal.name}</strong>
+              <small>
+                {meal.type} · {totalNutrients(meal.items).calories} kcal
+                {meal.estimated ? " · estimated" : ""}
+              </small>
+            </div>
+            <div className="button-row">
+              <Button
+                variant="secondary"
+                onClick={() => setEditor(repeatMeal(meal, date))}
+              >
+                Review & log
+              </Button>
+              <Button
+                variant="ghost"
+                aria-label={`Remove favourite ${meal.name}`}
+                onClick={() =>
+                  void run(async () => {
+                    await journal.update((s) => {
+                      s.nutrition.favourites = (
+                        s.nutrition.favourites ?? []
+                      ).filter((m) => m.id !== meal.id);
+                    });
+                    setNotice("Favourite removed. Logged meals are kept.");
+                  })
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          </article>
+        ))}
+        {!nutrition.favourites?.length && (
+          <p className="muted">Your go-to meals will appear here.</p>
+        )}
+      </details>
       <div className="food-totals">
         {keys.map((key) => (
           <section className="panel" key={key}>
@@ -285,6 +366,24 @@ export function FoodView({
         {filteredMeals.slice(0, mealLimit).map((meal) => (
           <article className="food-meal" key={meal.id}>
             <MealDetails meal={meal} />
+            <Button
+              variant="ghost"
+              disabled={(nutrition.favourites?.length ?? 0) >= 50}
+              onClick={() =>
+                void run(async () => {
+                  const favourite = favouriteFromMeal(meal);
+                  await journal.update((s) => {
+                    s.nutrition.favourites = [
+                      ...(s.nutrition.favourites ?? []),
+                      favourite,
+                    ];
+                  });
+                  setNotice(`${meal.name} saved to Favourite meals.`);
+                })
+              }
+            >
+              Save as favourite
+            </Button>
             <div className="food-photo-strip">
               {accountId &&
                 meal.photoIds.map((id) => (
@@ -378,6 +477,13 @@ export function FoodView({
                 if (meal.date > today())
                   throw Error("Choose today or a past meal date.");
                 await journal.update((s) => {
+                  const previousDate = s.nutrition.meals.find(
+                    (m) => m.id === meal.id,
+                  )?.date;
+                  if (s.nutrition.completeDays)
+                    s.nutrition.completeDays = s.nutrition.completeDays.filter(
+                      (d) => d !== meal.date && d !== previousDate,
+                    );
                   s.nutrition.meals = [
                     ...s.nutrition.meals.filter((m) => m.id !== meal.id),
                     meal,
@@ -658,6 +764,12 @@ export function FoodView({
               if (!remove) return;
               if (remove.kind === "meal")
                 await journal.update((s) => {
+                  if (s.nutrition.completeDays)
+                    s.nutrition.completeDays = s.nutrition.completeDays.filter(
+                      (d) =>
+                        d !==
+                        s.nutrition.meals.find((m) => m.id === remove.id)?.date,
+                    );
                   s.nutrition.meals = s.nutrition.meals.filter(
                     (m) => m.id !== remove.id,
                   );

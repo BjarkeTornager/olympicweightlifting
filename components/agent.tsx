@@ -41,6 +41,9 @@ import { CardioDetails } from "./cardio";
 import { DailyOverview, CheckinDialog, CheckinDetails } from "./health";
 import { AssistantText } from "./assistant-text";
 import { CoachVisuals } from "./coach-visuals";
+import { CoachMemoryBook } from "./coach-memory";
+import { WeeklyReview } from "./weekly-review";
+import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
 type Turn = {
   id: string;
@@ -88,9 +91,12 @@ export function TrainingAgent({
   const input = useRef<HTMLTextAreaElement>(null);
   const activeRun = useRef<AbortController | null>(null);
   useEffect(() => () => activeRun.current?.abort(), []);
-  const [view, setView] = useState<"conversation" | "today">("conversation");
+  const [view, setView] = useState<"conversation" | "today" | "week">(
+    "conversation",
+  );
   const [toolsOpen, setToolsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(6);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -451,6 +457,12 @@ export function TrainingAgent({
             >
               Today
             </button>
+            <button
+              aria-pressed={view === "week"}
+              onClick={() => setView("week")}
+            >
+              Week
+            </button>
           </nav>
           <span className={`coach-connection ${ready ? "connected" : ""}`}>
             {ready
@@ -462,13 +474,25 @@ export function TrainingAgent({
         </div>
       </header>
       <div className="coach-today" hidden={view !== "today"}>
-        <DailyOverview
-          journal={journal}
-          onCheckin={() => setCheckinDate(today())}
-          onAsk={ask}
-          go={go}
-          busy={busy || Boolean(acting) || uploading}
-        />
+        {view === "today" && (
+          <DailyOverview
+            journal={journal}
+            onMemories={() => setMemoriesOpen(true)}
+            onCheckin={() => setCheckinDate(today())}
+            onAsk={ask}
+            go={go}
+            busy={busy || Boolean(acting) || uploading}
+          />
+        )}
+      </div>
+      <div className="coach-week" hidden={view !== "week"}>
+        {view === "week" && (
+          <WeeklyReview
+            journal={journal}
+            onAsk={ask}
+            busy={busy || Boolean(acting) || uploading}
+          />
+        )}
       </div>
       <CheckinDialog
         journal={journal}
@@ -728,6 +752,55 @@ export function TrainingAgent({
                           </summary>
                           <div className="proposal-body">
                             <p>{p.detail}</p>
+                            {p.entries && (
+                              <div className="coach-bundle">
+                                {p.entries.map((entry, i) => (
+                                  <details
+                                    key={i}
+                                    className="coach-bundle-entry"
+                                  >
+                                    <summary>
+                                      <span>
+                                        {String(i + 1).padStart(2, "0")}
+                                      </span>
+                                      <div>
+                                        <strong>
+                                          {entry.meal
+                                            ? `${entry.meal.name} · ${entry.meal.type}`
+                                            : entry.checkin
+                                              ? `${entry.title} · ${entry.checkin.date}`
+                                              : entry.cardio
+                                                ? entry.title
+                                                : (entry.workout?.title ??
+                                                  entry.title)}
+                                        </strong>
+                                        <small>
+                                          {coachEntrySummary(entry)}
+                                        </small>
+                                      </div>
+                                      <ChevronDown size={16} />
+                                    </summary>
+                                    <div>
+                                      <p className="fine-print">
+                                        {entry.detail}
+                                      </p>
+                                      <CoachEntryDetails entry={entry} />
+                                    </div>
+                                  </details>
+                                ))}
+                              </div>
+                            )}
+                            {(p.memory || p.plan) && (
+                              <CoachEntryDetails
+                                entry={{
+                                  title: p.title,
+                                  detail: p.detail,
+                                  workout: null,
+                                  memory: p.memory,
+                                  plan: p.plan,
+                                }}
+                              />
+                            )}
                             {p.cardio && <CardioDetails entry={p.cardio} />}
                             {p.checkin && (
                               <>
@@ -803,7 +876,9 @@ export function TrainingAgent({
                                   <Check size={17} />
                                   {acting === p.id
                                     ? "Saving…"
-                                    : "Save this change"}
+                                    : p.entries
+                                      ? `Save all ${p.entries.length} entries`
+                                      : "Save this change"}
                                 </Button>
                               )}
                               {p.status === "saved" && (
@@ -813,26 +888,35 @@ export function TrainingAgent({
                                   onClick={() => void apply(p, true)}
                                 >
                                   <Undo2 size={17} />
-                                  Undo this change
+                                  {p.entries
+                                    ? "Undo all entries"
+                                    : "Undo this change"}
                                 </Button>
                               )}
                               <Button
                                 variant="ghost"
                                 onClick={() =>
-                                  go(
-                                    p.cardio
-                                      ? "cardio"
-                                      : p.checkin
-                                        ? "health"
-                                        : p.meal || p.targets
-                                          ? "food"
-                                          : p.workout &&
-                                              p.workout.exercises.some((e) =>
-                                                e.sets.some((s) => !s.result),
-                                              )
-                                            ? "workout"
-                                            : "history",
-                                  )
+                                  p.memory || p.plan
+                                    ? setMemoriesOpen(true)
+                                    : p.entries
+                                      ? setView("today")
+                                      : go(
+                                          p.cardio
+                                            ? "cardio"
+                                            : p.checkin
+                                              ? "health"
+                                              : p.meal || p.targets
+                                                ? "food"
+                                                : p.workout &&
+                                                    p.workout.exercises.some(
+                                                      (e) =>
+                                                        e.sets.some(
+                                                          (s) => !s.result,
+                                                        ),
+                                                    )
+                                                  ? "workout"
+                                                  : "history",
+                                        )
                                 }
                               >
                                 Open journal <ArrowRight size={17} />
@@ -1055,11 +1139,32 @@ export function TrainingAgent({
         )}
       </section>
       <Dialog
+        open={memoriesOpen}
+        onOpenChange={setMemoriesOpen}
+        title="What Coach remembers"
+      >
+        <CoachMemoryBook
+          journal={journal}
+          disabled={
+            busy || Boolean(acting) || Boolean(journal.record?.conflict)
+          }
+        />
+      </Dialog>
+      <Dialog
         open={optionsOpen}
         onOpenChange={setOptionsOpen}
         title="Coach options"
       >
         <div className="coach-options">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setOptionsOpen(false);
+              setMemoriesOpen(true);
+            }}
+          >
+            What Coach remembers & agreed plans <ArrowRight size={17} />
+          </Button>
           <CoachPreferences
             key={`${accountId}:${optionsOpen}`}
             journal={journal}

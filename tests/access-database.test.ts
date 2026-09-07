@@ -63,6 +63,7 @@ test(
         method,
         headers: {
           cookie: users[index]?.cookie ?? "",
+          "X-Coach-Journal-Version": "1",
           "X-Journal-Account": account ?? users[index]?.id ?? "",
           origin,
           "Content-Type": "application/json",
@@ -228,6 +229,9 @@ test(
           },
         });
 
+      const staleCoach = request(0, "/api/agent/action", "POST", {id: proposalId});
+      staleCoach.headers.delete("X-Coach-Journal-Version");
+      assert.equal((await action(staleCoach)).status, 426);
       for (const index of [0, 1]) {
         const ownJournal = await (
           await journalGet(

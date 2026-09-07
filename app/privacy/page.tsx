@@ -95,14 +95,19 @@ export default function PrivacyPage() {
           chat; use your browser to copy any conversation you want to keep.
         </p>
         <p>
-          Your optional coaching focus and preference for suggestions are saved
-          in your private profile, synchronized and included in journal exports.
-          Coach receives that context and up to eight recent completed exchanges
-          when you send a message. Clear or change your focus in Coach options;
-          clearing conversation keeps this saved preference. Opening suggestions
-          are generated on your device from journal records, without a model
-          request. Hiding one stores only today’s date under your account on
-          this browser until you sign out or clear site data.
+          Your optional coaching focus, approved memories, agreed plans,
+          favourite meals and complete food days are saved in your private
+          profile, synchronized and included in journal exports. Coach receives
+          that context and up to eight recent completed exchanges when you send
+          a message. Edit or delete saved memories and plans in Coach options.
+          They are only saved after your approval and are included in journal
+          exports. Deleting them does not delete earlier chat messages.
+          Follow-up happens on a visit, without scheduled notifications. Clear
+          or change your focus in Coach options; clearing conversation keeps
+          this saved preference. Opening suggestions are generated on your
+          device from journal records, without a model request. Hiding one
+          stores only today’s date under your account on this browser until you
+          sign out or clear site data.
         </p>
         <p>
           The assistant can read only your journal through limited tools. It

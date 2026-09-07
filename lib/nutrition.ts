@@ -111,12 +111,52 @@ export const dietTargetsSchema = z
     fat: z.number().finite().min(0).max(1000).nullable().default(null),
   })
   .strict();
+export const favouriteMealSchema = mealInputSchema
+  .omit({ date: true, photoIds: true, source: true })
+  .extend({
+    id: z.string().uuid(),
+    createdAt: z.string().datetime(),
+  });
+export type FavouriteMeal = z.infer<typeof favouriteMealSchema>;
+export function favouriteFromMeal(meal: Meal): FavouriteMeal {
+  return favouriteMealSchema.parse({
+    name: meal.name,
+    type: meal.type,
+    items: meal.items,
+    estimated: meal.estimated,
+    notes: meal.notes,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  });
+}
+export function repeatMeal(meal: Meal | FavouriteMeal, date: string): Meal {
+  return mealSchema.parse({
+    ...meal,
+    id: crypto.randomUUID(),
+    date,
+    photoIds: [],
+    source: "manual",
+    createdAt: new Date().toISOString(),
+  });
+}
 export const nutritionSchema = z
   .object({
     meals: z.array(mealSchema).max(10000).default([]),
+    favourites: z.array(favouriteMealSchema).max(50).optional(),
+    completeDays: z.array(foodDate).max(10000).optional(),
     targets: dietTargetsSchema.default(() => dietTargetsSchema.parse({})),
   })
   .superRefine((value, ctx) => {
+    if (
+      new Set(value.completeDays ?? []).size !==
+      (value.completeDays ?? []).length
+    )
+      ctx.addIssue({ code: "custom", message: "Duplicate complete food days" });
+    if (
+      new Set((value.favourites ?? []).map((m) => m.id)).size !==
+      (value.favourites ?? []).length
+    )
+      ctx.addIssue({ code: "custom", message: "Duplicate favourite meal IDs" });
     if (new Set(value.meals.map((m) => m.id)).size !== value.meals.length)
       ctx.addIssue({ code: "custom", message: "Duplicate meal IDs" });
   });
@@ -260,6 +300,9 @@ export function queryFoodJournal(
     targets: nutrition.targets,
     totalMeals: meals.length,
     loggedDays: new Set(meals.map((m) => m.date)).size,
+    explicitlyCompleteDates: (nutrition.completeDays ?? []).filter(
+      (date) => date >= from && date <= to,
+    ),
     // Keep full-meal and matched-item nutrients explicit; ingredient calories are not measured.
     totals: totalNutrients(meals.flatMap((m) => m.items)),
     matchingItemTotals: totalNutrients(items),
@@ -291,7 +334,7 @@ export function queryFoodJournal(
         .filter((i) => i.classification?.foodGroups.length).length,
     },
     interpretation:
-      "Totals cover complete matching meals; matchingItemTotals cover matching foods, never isolated ingredients. Ingredient frequency counts distinct matching meals and may include estimates. Missing tags or days are unknown, not absence. Frequency is capped at 40 ingredients; totalMeals and totals include every match, not just this page.",
+      "Totals cover matching meal records, not necessarily full days of intake; matchingItemTotals cover matching foods, never isolated ingredients. explicitlyCompleteDates means the user marked those full food days complete, but filters here may select only part of those days. Use weekly_review for full-day intake averages. Ingredient frequency counts distinct matching meals and may include estimates. Missing tags or days are unknown, not absence. Frequency is capped at 40 ingredients; totalMeals and totals include every match, not just this page.",
     meals: meals.slice(offset, offset + 20),
     nextOffset: offset + 20 < meals.length ? offset + 20 : null,
   };

@@ -6,12 +6,14 @@ import {
   ApiError,
   readJson,
   requireAthlete,
+  requireCurrentCoach,
 } from "@/lib/agent/http";
 import { allowRequest } from "@/lib/server";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const user = await requireAthlete(request, true);
+    requireCurrentCoach(request);
     if (!(await allowRequest(user.id, "agent-action", 30)))
       throw new ApiError("Please wait before retrying.", 429);
     const input = z

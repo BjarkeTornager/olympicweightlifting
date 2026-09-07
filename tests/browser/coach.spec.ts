@@ -196,7 +196,7 @@ test.describe("focused Coach conversation", () => {
     await composer.fill("I slept 7 hours 47 minutes last night.");
     await page.getByRole("button", { name: "Today", exact: true }).click();
     await expect(
-      page.getByRole("heading", { name: "Your day, in focus." }),
+      page.getByRole("heading", { name: "A little direction for today." }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Plan my day" }).click();
     await expect(
@@ -205,7 +205,7 @@ test.describe("focused Coach conversation", () => {
     await expect(composer).toHaveValue(
       /^I slept 7 hours 47 minutes last night\./,
     );
-    await expect(composer).toHaveValue(/First read my health overview/);
+    await expect(composer).toHaveValue(/from my health overview/);
     expect(requests).toBe(0);
     await page.getByRole("button", { name: "Log sleep", exact: true }).click();
     await expect(composer).toHaveValue(

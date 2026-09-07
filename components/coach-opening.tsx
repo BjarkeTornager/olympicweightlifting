@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useId } from "react";
 import { ArrowRight, ChevronDown, Sparkles } from "@/components/ui/icons";
 import { coachSuggestion, coachingSchema } from "@/lib/coaching";
 import type { JournalController } from "./journal";
@@ -18,6 +18,7 @@ export function CoachOpening({
   disabled: boolean;
   onDiscuss: (prompt: string) => void;
 }) {
+  const detailId = useId();
   const account = journal.identity?.id;
   const key = `lift-coach:${account}`;
   const [hiddenDate, setHiddenDate] = useState(() => {
@@ -45,7 +46,7 @@ export function CoachOpening({
       <button
         className="coach-opening-toggle"
         aria-expanded={open}
-        aria-controls="coach-opening-detail"
+        aria-controls={detailId}
         onClick={() => setOpen(!open)}
       >
         <Sparkles size={17} aria-hidden="true" />
@@ -55,7 +56,7 @@ export function CoachOpening({
         </span>
         <ChevronDown size={17} aria-hidden="true" />
       </button>
-      <div id="coach-opening-detail" hidden={!open}>
+      <div id={detailId} hidden={!open}>
         <p>{suggestion.observation}</p>
         <p className="coach-opening-invitation">{suggestion.invitation}</p>
         <div className="coach-opening-actions">
@@ -117,7 +118,7 @@ export function CoachPreferences({
             focus: data.get("focus"),
           });
           await journal.update((state) => {
-            state.profile.coaching = coaching;
+            state.profile.coaching = { ...state.profile.coaching, ...coaching };
           });
           setNotice("Coaching preferences saved with your journal.");
         } catch {

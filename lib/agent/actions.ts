@@ -1,3 +1,11 @@
+import {
+  memoryInputSchema,
+  planInputSchema,
+  coachSettings,
+  type CoachMemory,
+  type CoachPlan,
+} from "../coaching";
+import { repeatMeal } from "../nutrition";
 import { z } from "zod";
 import {
   cardioInputSchema,
@@ -59,7 +67,53 @@ const training = z
       .max(30),
   })
   .strict();
-export const actionSchema = z.discriminatedUnion("kind", [
+const repeatMealActionSchema = z
+  .object({ kind: z.literal("repeat_meal"), mealId: z.string().uuid(), date })
+  .strict();
+const recordCardioSchema = z
+  .object({ kind: z.literal("record_cardio"), cardio: cardioInputSchema })
+  .strict();
+const recordCheckinSchema = z
+  .object({ kind: z.literal("record_checkin"), checkin: checkinPatchSchema })
+  .strict();
+const recordMealSchema = z
+  .object({ kind: z.literal("record_meal"), meal: mealInputSchema })
+  .strict();
+const recordSessionSchema = z
+  .object({ kind: z.literal("record_session"), workout: training })
+  .strict();
+const bundleEntrySchema = z.discriminatedUnion("kind", [
+  recordCardioSchema,
+  recordCheckinSchema,
+  recordMealSchema,
+  recordSessionSchema,
+  repeatMealActionSchema,
+]);
+const singleActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("dismiss_plan"), planId: z.string().uuid() })
+    .strict(),
+  repeatMealActionSchema,
+  z
+    .object({
+      kind: z.literal("save_memory"),
+      memoryId: z.string().uuid().optional(),
+      memory: memoryInputSchema,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("forget_memory"), memoryId: z.string().uuid() })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("save_plan"),
+      planId: z.string().uuid().optional(),
+      plan: planInputSchema,
+    })
+    .strict(),
+  z
+    .object({ kind: z.literal("delete_plan"), planId: z.string().uuid() })
+    .strict(),
   z
     .object({ kind: z.literal("record_cardio"), cardio: cardioInputSchema })
     .strict(),
@@ -126,10 +180,26 @@ export const actionSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+export const actionSchema = z.discriminatedUnion("kind", [
+  ...singleActionSchema.options,
+  z
+    .object({
+      kind: z.literal("record_bundle"),
+      entries: z.array(bundleEntrySchema).min(2).max(6),
+    })
+    .strict(),
+]);
 // Provider-facing schema stays an object; the discriminated union above validates each action on the server.
 export const actionToolSchema = z
   .object({
     kind: z.enum([
+      "record_bundle",
+      "repeat_meal",
+      "save_memory",
+      "forget_memory",
+      "save_plan",
+      "delete_plan",
+      "dismiss_plan",
       "record_cardio",
       "update_cardio",
       "delete_cardio",
@@ -146,6 +216,26 @@ export const actionToolSchema = z
       "repeat_session",
       "save_routine",
     ]),
+    entries: z
+      .array(bundleEntrySchema)
+      .min(2)
+      .max(6)
+      .describe(
+        "For record_bundle only: 2–6 reported entries reviewed and saved atomically. Combine same-date check-in fields into ONE record_checkin, including only explicitly reported fields; omitted values are preserved. No nested bundles.",
+      )
+      .optional(),
+    memory: memoryInputSchema
+      .describe(
+        "Only a stable preference the person explicitly wants remembered. Saving requires their review; never infer sensitive facts.",
+      )
+      .optional(),
+    memoryId: z.string().uuid().optional(),
+    plan: planInputSchema
+      .describe(
+        "Only a concrete plan the person explicitly agreed to. Include a visible follow-up date; follow-up occurs on a visit, not a notification. Do not invent outcomes or treat advice as agreement.",
+      )
+      .optional(),
+    planId: z.string().uuid().optional(),
     cardio: cardioInputSchema.optional(),
     cardioId: z.string().uuid().optional(),
     changes: cardioPatchSchema.optional(),
@@ -180,8 +270,28 @@ export type ActionPreview = {
   targets?: DietTargets;
   checkin?: Checkin;
   cardio?: CardioEntry;
+  memory?: CoachMemory;
+  plan?: CoachPlan;
+  entries?: PreviewEntry[];
   expiresAt: string;
   status?: "saved" | "undone";
+};
+export type PreviewEntry = Pick<
+  ActionPreview,
+  | "title"
+  | "detail"
+  | "workout"
+  | "meal"
+  | "targets"
+  | "checkin"
+  | "cardio"
+  | "memory"
+  | "plan"
+>;
+type PreparedAction = PreviewEntry & {
+  state: JournalState;
+  action: AgentAction;
+  entries?: PreviewEntry[];
 };
 function buildWorkout(
   input: z.infer<typeof training>,
@@ -220,8 +330,39 @@ export function prepareAction(
   state: JournalState,
   raw: unknown,
   currentDate: string,
-) {
-  const action = actionSchema.parse(raw),
+): PreparedAction {
+  const parsed = actionSchema.parse(raw);
+  if (parsed.kind === "record_bundle") {
+    const checkinDates = parsed.entries.flatMap((e) =>
+      e.kind === "record_checkin" ? [e.checkin.date] : [],
+    );
+    if (new Set(checkinDates).size !== checkinDates.length)
+      throw Error("Combine fields for the same check-in date into one entry.");
+    let combined = structuredClone(state);
+    const entries: PreviewEntry[] = [];
+    for (const entry of parsed.entries) {
+      const prepared = prepareAction(combined, entry, currentDate);
+      combined = prepared.state;
+      entries.push({
+        title: prepared.title,
+        detail: prepared.detail,
+        workout: prepared.workout,
+        ...(prepared.meal ? { meal: prepared.meal } : {}),
+        ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
+        ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
+      });
+    }
+    return {
+      state: combined,
+      action: parsed,
+      title: `Review ${entries.length} entries`,
+      detail:
+        "Check each entry below. Save all together, or ask Coach to correct anything first. Nothing is saved until you confirm.",
+      workout: null,
+      entries,
+    };
+  }
+  const action = parsed,
     next = structuredClone(state);
   let title = "",
     detail = "",
@@ -229,6 +370,8 @@ export function prepareAction(
   let meal: Meal | undefined, targets: DietTargets | undefined;
   let checkin: Checkin | undefined;
   let cardio: CardioEntry | undefined;
+  let memory: CoachMemory | undefined;
+  let plan: CoachPlan | undefined;
   const owned = (id: string) => {
     const w = next.sessions.find((s) => s.id === id);
     if (!w) throw Error("That session is not in your journal.");
@@ -240,7 +383,109 @@ export function prepareAction(
         "An unfinished workout already exists. Resume or finish it first.",
       );
   };
-  if (
+  if (action.kind === "save_memory" || action.kind === "forget_memory") {
+    const coaching = coachSettings(next);
+    const original = coaching.memories?.find((m) => m.id === action.memoryId);
+    if (action.memoryId && !original)
+      throw Error("That memory is not in your journal.");
+    if (action.kind === "forget_memory") {
+      memory = original;
+      coaching.memories = (coaching.memories ?? []).filter(
+        (m) => m.id !== action.memoryId,
+      );
+      title = "Forget this preference";
+      detail =
+        "Removes this saved memory. Existing chat messages remain until you clear the conversation.";
+    } else {
+      const now = new Date().toISOString();
+      memory = {
+        ...action.memory,
+        id: original?.id ?? uid(),
+        createdAt: original?.createdAt ?? now,
+        updatedAt: now,
+      };
+      coaching.memories = [
+        ...(coaching.memories ?? []).filter((m) => m.id !== memory!.id),
+        memory,
+      ];
+      title = original
+        ? "Update what Coach remembers"
+        : "Remember this for future conversations";
+      detail =
+        "Save only if you want Coach to use this preference in future chats. You can edit or delete it in What Coach remembers.";
+    }
+  } else if (
+    action.kind === "save_plan" ||
+    action.kind === "delete_plan" ||
+    action.kind === "dismiss_plan"
+  ) {
+    const coaching = coachSettings(next);
+    const original = coaching.plans?.find((p) => p.id === action.planId);
+    if (action.planId && !original)
+      throw Error("That plan is not in your journal.");
+    if (action.kind === "dismiss_plan") {
+      plan = {
+        ...original!,
+        status: "dismissed",
+        updatedAt: new Date().toISOString(),
+      };
+      coaching.plans = (coaching.plans ?? []).map((p) =>
+        p.id === plan!.id ? plan! : p,
+      );
+      title = "Dismiss this plan";
+      detail =
+        "Stops follow-up and keeps the plan in your history as dismissed. It does not imply you tried or completed it.";
+    } else if (action.kind === "delete_plan") {
+      plan = original;
+      coaching.plans = (coaching.plans ?? []).filter(
+        (p) => p.id !== action.planId,
+      );
+      title = "Delete this agreed plan";
+      detail =
+        "Removes the saved plan and its follow-up. Existing chat messages remain.";
+    } else {
+      if (!original && action.plan.status !== "active")
+        throw Error("A new agreed plan must start active.");
+      if (
+        action.plan.status === "active" &&
+        action.plan.followUpDate < currentDate
+      )
+        throw Error(
+          "Choose today or a future follow-up date for an active plan.",
+        );
+      const now = new Date().toISOString();
+      plan = {
+        ...action.plan,
+        id: original?.id ?? uid(),
+        createdAt: original?.createdAt ?? now,
+        updatedAt: now,
+      };
+      coaching.plans = [
+        ...(coaching.plans ?? []).filter((p) => p.id !== plan!.id),
+        plan,
+      ];
+      title = original ? "Update your agreed plan" : "Agree on one small plan";
+      detail =
+        "Confirm this is something you want to try. Coach can ask about it when you visit from the follow-up date. You can revise or dismiss it at any time.";
+    }
+  } else if (action.kind === "repeat_meal") {
+    const original =
+      next.nutrition.meals.find((m) => m.id === action.mealId) ??
+      next.nutrition.favourites?.find((m) => m.id === action.mealId);
+    if (!original)
+      throw Error("That meal or favourite is not in your journal.");
+    if (action.date > currentDate)
+      throw Error("Meals eaten cannot be dated in the future.");
+    meal = repeatMeal(original, action.date);
+    next.nutrition.meals.push(meal);
+    if (next.nutrition.completeDays)
+      next.nutrition.completeDays = next.nutrition.completeDays.filter(
+        (d) => d !== action.date,
+      );
+    title = "Repeat a meal";
+    detail =
+      "Copies the saved portions, nutrition and ingredient tags. Photos from the earlier meal are not attached to this new entry. Review whether the portions were the same.";
+  } else if (
     action.kind === "record_session" ||
     action.kind === "plan_workout" ||
     action.kind === "update_session"
@@ -416,6 +661,10 @@ export function prepareAction(
       ...next.nutrition.meals.filter((m) => m.id !== meal!.id),
       meal,
     ];
+    if (next.nutrition.completeDays)
+      next.nutrition.completeDays = next.nutrition.completeDays.filter(
+        (d) => d !== meal!.date && d !== existing?.date,
+      );
     const totals = totalNutrients(meal.items);
     title = existing ? "Update your meal" : "Log your meal";
     detail = `${totals.calories} kcal · ${totals.protein} g protein. ${meal.estimated ? "Estimated portions and nutrition. Check the assumptions below." : "Using the nutrition values you supplied."} You can correct this proposal in chat or edit the meal in Food after saving.`;
@@ -442,6 +691,8 @@ export function prepareAction(
     targets,
     checkin,
     cardio,
+    memory,
+    plan,
     action,
   };
 }

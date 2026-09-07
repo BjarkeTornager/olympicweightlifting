@@ -8,9 +8,11 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
   await page.goto("/#coach");
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Your day, in focus." }),
+    page.getByRole("heading", { name: "A little direction for today." }),
   ).toBeVisible();
-  await page.locator(".hero-checkin").click();
+  await page
+    .getByRole("button", { name: /^(Daily check-in|Update check-in)$/ })
+    .click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Sleep last night", { exact: true }).fill("6.5");
   await dialog.getByLabel("Water today", { exact: true }).fill("500");
@@ -37,14 +39,17 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
     .getByRole("button", { name: "Save check-in", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Make room for recovery", exact: true }),
-  ).toBeVisible();
-  await expect(page.locator(".daily-metric.lilac")).toContainText("6.5");
+  await expect(page.locator(".today-focus .coach-opening")).toContainText(
+    "energy at 2/5 and muscle soreness at 4/5 today",
+  );
+  await expect(page.locator(".today-summaries")).toContainText("6 h 30 min");
   await page.reload();
   await page.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.locator(".daily-metric.sky")).toContainText("0.5");
-  await page.locator(".hero-checkin").click();
+  await page.getByText("More from your journal", { exact: true }).click();
+  await expect(page.locator(".today-more")).toContainText("500 ml water");
+  await page
+    .getByRole("button", { name: /^(Daily check-in|Update check-in)$/ })
+    .click();
   await dialog.getByLabel("Water today", { exact: true }).fill("750");
   await dialog
     .getByRole("button", { name: "Save check-in", exact: true })
@@ -172,7 +177,7 @@ test.describe("daily coach with a personal journal", () => {
         });
       requests++;
       expect(r.request().postDataJSON().message).toContain(
-        "First read my health overview",
+        "from my health overview",
       );
       return r.fulfill({
         json: {
@@ -188,7 +193,7 @@ test.describe("daily coach with a personal journal", () => {
     await expect(
       page.getByText("Ready to help", { exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".daily-metric.lilac")).toContainText("7.5");
+    await expect(page.locator(".today-summaries")).toContainText("7 h 30 min");
     await page.screenshot({
       path: testInfo.outputPath("coach-desktop.png"),
       fullPage: true,

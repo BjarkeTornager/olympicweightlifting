@@ -250,6 +250,10 @@ export function mergeImport(
     !current.cardio.sessions.length &&
     !current.nutrition.meals.length &&
     !current.health.checkins.length &&
+    !current.profile.coaching?.memories?.length &&
+    !current.profile.coaching?.plans?.length &&
+    !current.nutrition.favourites?.length &&
+    !current.nutrition.completeDays?.length &&
     current.nutrition.targets.goal === "maintain" &&
     ["calories", "protein", "carbs", "fat"].every(
       (key) =>
@@ -293,6 +297,64 @@ export function mergeImport(
       );
     templates.set(template.id, template);
   }
+  const mergeRecords = <T extends { id: string }>(
+    a: T[] | undefined,
+    b: T[] | undefined,
+    label: string,
+  ): T[] | undefined => {
+    if (!a && !b) return undefined;
+    const records = new Map((a ?? []).map((r) => [r.id, r]));
+    for (const record of b ?? []) {
+      const old = records.get(record.id);
+      if (old && canonicalJson(old) !== canonicalJson(record))
+        throw Error(
+          `A different ${label} already exists. Review both backups before importing.`,
+        );
+      records.set(record.id, record);
+    }
+    return [...records.values()];
+  };
+  const memories = mergeRecords(
+    current.profile.coaching?.memories,
+    incoming.profile.coaching?.memories,
+    "Coach memory",
+  );
+  const plans = mergeRecords(
+    current.profile.coaching?.plans,
+    incoming.profile.coaching?.plans,
+    "agreed plan",
+  );
+  const favourites = mergeRecords(
+    current.nutrition.favourites,
+    incoming.nutrition.favourites,
+    "favourite meal",
+  );
+  const profile = fresh ? incoming.profile : current.profile;
+  const coaching = profile.coaching ?? incoming.profile.coaching;
+  const completeDays =
+    current.nutrition.completeDays || incoming.nutrition.completeDays
+      ? [
+          ...new Set([
+            ...(current.nutrition.completeDays ?? []),
+            ...(incoming.nutrition.completeDays ?? []),
+          ]),
+        ].filter((date) => {
+          const mergedIds = [...meals.values()]
+            .filter((m) => m.date === date)
+            .map((m) => m.id)
+            .sort()
+            .join(",");
+          return [current, incoming].some(
+            (source) =>
+              source.nutrition.completeDays?.includes(date) &&
+              source.nutrition.meals
+                .filter((m) => m.date === date)
+                .map((m) => m.id)
+                .sort()
+                .join(",") === mergedIds,
+          );
+        })
+      : undefined;
   return journalSchema.parse({
     ...current,
     ...(fresh
@@ -303,11 +365,25 @@ export function mergeImport(
           preferences: incoming.preferences,
         }
       : {}),
+    profile: {
+      ...profile,
+      ...(coaching
+        ? {
+            coaching: {
+              ...coaching,
+              ...(memories ? { memories } : {}),
+              ...(plans ? { plans } : {}),
+            },
+          }
+        : {}),
+    },
     sessions: [...sessions.values()],
     templates: [...templates.values()],
     health: { checkins: [...checkins.values()] },
     cardio: { sessions: [...cardio.values()] },
     nutrition: {
+      ...(favourites ? { favourites } : {}),
+      ...(completeDays ? { completeDays } : {}),
       meals: [...meals.values()],
       targets: fresh ? incoming.nutrition.targets : current.nutrition.targets,
     },

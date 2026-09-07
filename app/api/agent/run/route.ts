@@ -1,5 +1,6 @@
 import {
   requireAthlete,
+  requireCurrentCoach,
   readJson,
   apiFailure,
   ApiError,
@@ -16,6 +17,7 @@ export const maxDuration = 120;
 export async function POST(request: Request) {
   try {
     const user = await requireAthlete(request, true);
+    requireCurrentCoach(request);
     const { threadId, input } = parseCoachRun(await readJson(request, 32000));
     if (!providerConfig())
       throw new ApiError(

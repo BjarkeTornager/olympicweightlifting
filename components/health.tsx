@@ -1,4 +1,6 @@
 "use client";
+import { CoachOpening } from "./coach-opening";
+import { AgreedPlans } from "./coach-memory";
 import { CardioProgress } from "./cardio";
 import { ImageLibrary } from "./image-library";
 import { useState } from "react";
@@ -6,7 +8,6 @@ import {
   ArrowRight,
   Activity,
   Check,
-  ChevronRight,
   Droplets,
   Dumbbell,
   HeartPulse,
@@ -235,239 +236,122 @@ export function DailyOverview({
   onAsk,
   go,
   busy,
+  onMemories,
 }: {
   journal: JournalController;
   onCheckin: () => void;
   onAsk: (question: string) => void;
   go: (route: string) => void;
   busy: boolean;
+  onMemories: () => void;
 }) {
   const state = journal.state!,
     current = today(),
     view = dailyHealth(state, current);
-  const weekStart = offsetDate(
-    current,
-    -((new Date(`${current}T12:00:00`).getDay() + 6) % 7),
-  );
-  const subtitle = view.recoveryFocus
-    ? "You’ve reported low energy or high soreness. Let’s put recovery into today’s plan."
-    : view.checkin
-      ? "Your check-in is saved. Bring your training, nutrition and recovery together."
-      : "A few small entries. A clearer picture of your training, nutrition and recovery.";
-  const metrics = [
-    {
-      title: "Sleep",
-      icon: Moon,
-      value:
-        view.checkin?.sleepHours == null
-          ? "—"
-          : Math.round(view.checkin.sleepHours * 100) / 100,
-      unit: "hours",
-      detail:
-        view.checkin?.sleepHours != null
-          ? `${formatSleepDuration(view.checkin.sleepHours)} logged for last night`
-          : "Add last night’s sleep",
-      route: "coach/sleep",
-      color: "lilac",
-    },
-    {
-      title: "Nutrition",
-      icon: Utensils,
-      value: view.mealCount ? view.nutrients.calories : "—",
-      unit: "kcal",
-      detail: view.mealCount
-        ? `${view.nutrients.protein} g protein · ${view.mealCount} ${view.mealCount === 1 ? "meal" : "meals"}`
-        : "Your food journal starts here",
-      route: "food",
-      color: "peach",
-    },
-    {
-      title: "Water",
-      icon: Droplets,
-      value: view.checkin?.waterMl == null ? "—" : view.checkin.waterMl / 1000,
-      unit: "litres",
-      detail:
-        view.checkin?.waterMl != null
-          ? "Total you’ve logged today"
-          : "Add what you’ve had today",
-      route: "checkin",
-      color: "sky",
-    },
-    {
-      title: "Training",
-      icon: Dumbbell,
-      value: view.sessionsThisWeek,
-      unit: view.sessionsThisWeek === 1 ? "session" : "sessions",
-      detail: `${view.strengthSessionsThisWeek} strength · ${view.cardio.sessions} cardio in the last 7 days`,
-      route: "history",
-      color: "sage",
-    },
-  ];
+  const training =
+    state.sessions.filter((s) => s.date === current).length +
+    state.cardio.sessions.filter((s) => s.date === current).length;
   return (
-    <section className="daily-overview" aria-label="Your daily health overview">
-      <div className="daily-heading">
+    <section className="today-focus" aria-label="Your daily health overview">
+      <div className="coach-section-title">
         <div>
-          <div className="eyebrow">
-            <span className="coach-dot" /> YOUR DAILY COACH
-          </div>
-          <h1>Your day, in focus.</h1>
-          <p>{subtitle}</p>
-        </div>
-        <div className="daily-heading-actions">
-          <button className="health-history-link" onClick={() => go("images")}>
-            Images & screenshots <ArrowRight size={16} />
-          </button>
-          <button className="health-history-link" onClick={() => go("cardio")}>
-            Cardio & movement <ArrowRight size={16} />
-          </button>
-          <button className="health-history-link" onClick={() => go("health")}>
-            Health history <ArrowRight size={16} />
-          </button>
+          <span className="eyebrow">YOUR DAILY COACH</span>
+          <h2>A little direction for today.</h2>
+          <p className="muted">Your next step, with room to live your day.</p>
         </div>
       </div>
-      <div className="daily-hero">
-        <div className="daily-hero-copy">
-          <span className="hero-kicker">
-            <Sparkles size={15} /> TRAIN · EAT · RECOVER
+      <CoachOpening
+        journal={journal}
+        date={current}
+        compact={false}
+        disabled={busy}
+        onDiscuss={onAsk}
+      />
+      <div className="today-main-actions">
+        <Button
+          disabled={busy}
+          onClick={() =>
+            onAsk(
+              "Help me choose one useful next step for today from my health overview, approved preferences and agreed plans. Explain the logged observation behind it; ask what matters if the journal is empty. Keep it manageable and don’t save a plan unless I agree.",
+            )
+          }
+        >
+          <Sparkles size={17} /> Plan my day
+        </Button>
+        <Button variant="secondary" onClick={onCheckin}>
+          {view.checkin ? "Update check-in" : "Daily check-in"}
+        </Button>
+      </div>
+      {state.activeWorkout && (
+        <button className="today-workout" onClick={() => go("workout")}>
+          <Dumbbell size={22} />
+          <span>
+            <small>YOUR WORKOUT</small>
+            <strong>{state.activeWorkout.title}</strong>
+            <span>{state.activeWorkout.date} · Continue your draft</span>
           </span>
-          <h2>
-            {view.recoveryFocus
-              ? "Give recovery a place in your day."
-              : "Let’s make a plan for today."}
-          </h2>
-          <p>
-            Coach can connect your recent entries, explain what matters and help
-            you choose your next step.
-          </p>
-          <div className="button-row">
-            <Button
-              disabled={busy}
-              onClick={() =>
-                onAsk(
-                  "Build my plan for today. First read my health overview, recent training and nutrition. Give me up to three practical priorities with the logged evidence behind each. Separate facts from suggestions, mention missing information, and tell me one useful next step. Do not change my journal or invent targets.",
-                )
-              }
-            >
-              <Sparkles size={16} />
-              {busy ? "Coach is thinking…" : "Plan my day"}
-              <ArrowRight size={16} />
-            </Button>
-            <button className="hero-checkin" onClick={onCheckin}>
-              {view.checkin ? <Check size={16} /> : <Plus size={16} />}
-              {view.checkin ? "Update check-in" : "Daily check-in"}
-            </button>
-          </div>
+          <ArrowRight size={18} />
+        </button>
+      )}
+      <div className="today-summaries" aria-label="Today’s logged entries">
+        <button onClick={() => go("history")}>
+          <Dumbbell size={21} />
+          <span>Training</span>
+          <strong>
+            {training ? `${training} logged` : "No entries today"}
+          </strong>
+          <small>Strength & cardio</small>
+        </button>
+        <button onClick={() => go("food")}>
+          <Utensils size={21} />
+          <span>Food</span>
+          <strong>
+            {view.mealCount
+              ? `${view.nutrients.calories} kcal`
+              : "No entries today"}
+          </strong>
+          <small>
+            {view.mealCount} {view.mealCount === 1 ? "meal" : "meals"} ·{" "}
+            {state.nutrition.completeDays?.includes(current)
+              ? "complete"
+              : "partial / unknown"}
+          </small>
+        </button>
+        <button onClick={() => go("coach/sleep")}>
+          <Moon size={21} />
+          <span>Sleep</span>
+          <strong>
+            {view.checkin?.sleepHours == null
+              ? "Not recorded"
+              : formatSleepDuration(view.checkin.sleepHours)}
+          </strong>
+          <small>Last night</small>
+        </button>
+      </div>
+      <AgreedPlans
+        journal={journal}
+        onAsk={onAsk}
+        disabled={busy || Boolean(journal.record?.conflict)}
+        onManage={onMemories}
+      />
+      <details className="today-more">
+        <summary>More from your journal</summary>
+        {view.checkin && <CheckinDetails checkin={view.checkin} />}
+        <div className="button-row">
+          <Button variant="secondary" onClick={() => go("cardio")}>
+            Cardio & movement
+          </Button>
+          <Button variant="secondary" onClick={() => go("health")}>
+            Health history
+          </Button>
+          <Button variant="secondary" onClick={() => go("images")}>
+            Images & screenshots
+          </Button>
         </div>
-        <div className="daily-week">
-          <div>
-            <span>YOUR WEEK</span>
-            <span>Entries, one day at a time</span>
-          </div>
-          <div className="daily-week-days">
-            {Array.from({ length: 7 }, (_, i) => {
-              const date = offsetDate(weekStart, i),
-                hasCheckin = state.health.checkins.some((c) => c.date === date),
-                hasFood = state.nutrition.meals.some((m) => m.date === date),
-                hasTraining =
-                  state.sessions.some((s) => s.date === date) ||
-                  state.cardio.sessions.some((s) => s.date === date);
-              return (
-                <div
-                  role="group"
-                  className={date === current ? "current" : ""}
-                  key={date}
-                  aria-label={`${date}: ${hasCheckin ? "check-in logged" : "no check-in"}, ${hasFood ? "food logged" : "no food"}, ${hasTraining ? "training logged" : "no training"}`}
-                >
-                  <small>{["M", "T", "W", "T", "F", "S", "S"][i]}</small>
-                  <strong>{Number(date.slice(-2))}</strong>
-                  <span className="daily-week-dots" aria-hidden="true">
-                    <i className={hasCheckin ? "has-checkin" : ""} />
-                    <i className={hasFood ? "has-food" : ""} />
-                    <i className={hasTraining ? "has-training" : ""} />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="week-legend">
-            <span>
-              <i className="has-checkin" />
-              Check-in
-            </span>
-            <span>
-              <i className="has-food" />
-              Food
-            </span>
-            <span>
-              <i className="has-training" />
-              Training
-            </span>
-          </div>
-        </div>
-      </div>
-      <div className="daily-metrics">
-        {metrics.map(
-          ({ title, icon: Icon, value, unit, detail, route, color }) => (
-            <button
-              key={title}
-              className={`daily-metric ${color}`}
-              onClick={() => (route === "checkin" ? onCheckin() : go(route))}
-            >
-              <span className="metric-top">
-                <span>{title}</span>
-                <span className="metric-icon">
-                  <Icon size={18} />
-                </span>
-              </span>
-              <span className="metric-reading">
-                <strong>{value}</strong>
-                <span>{unit}</span>
-              </span>
-              <span className="metric-detail">
-                {detail}
-                <ChevronRight size={14} />
-              </span>
-            </button>
-          ),
-        )}
-      </div>
-      <div className="daily-section-heading">
-        <div>
-          <h2>A good next step</h2>
-          <p>
-            Useful starting points from your entries. Ask Coach to personalise
-            the plan.
-          </p>
-        </div>
-        <span className="source-label">FROM YOUR JOURNAL</span>
-      </div>
-      <div className="daily-priorities">
-        {view.priorities.map((priority, index) => (
-          <article className="priority-card" key={priority.id}>
-            <div className="priority-top">
-              <span>{priority.category}</span>
-              <span>0{index + 1}</span>
-            </div>
-            <h3>{priority.title}</h3>
-            <p>{priority.reason}</p>
-            <button
-              onClick={() =>
-                priority.route === "checkin"
-                  ? onCheckin()
-                  : priority.route === "discuss-recovery"
-                    ? onAsk(
-                        "Read my health overview and help me decide how to adjust today around my reported energy and soreness. Explain what you know, what is uncertain, and a practical next step. Don’t change my workout without a proposal.",
-                      )
-                    : go(priority.route)
-              }
-              disabled={priority.route === "discuss-recovery" && busy}
-            >
-              {priority.action}
-              <ArrowRight size={16} />
-            </button>
-          </article>
-        ))}
-      </div>
+      </details>
+      <button className="text-link" onClick={onMemories}>
+        What Coach remembers →
+      </button>
     </section>
   );
 }

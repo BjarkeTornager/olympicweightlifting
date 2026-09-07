@@ -1,15 +1,75 @@
 import { z } from "zod";
 import type { JournalState } from "./model";
 import { formatSleepDuration, offsetDate } from "./health";
+import { foodDate } from "./nutrition";
 import { cardioTitle } from "./cardio";
+
+export const memoryInputSchema = z
+  .object({
+    category: z.enum([
+      "preference",
+      "routine",
+      "food",
+      "equipment",
+      "boundary",
+      "other",
+    ]),
+    text: z.string().trim().min(1).max(500),
+  })
+  .strict();
+export const memorySchema = memoryInputSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export const planInputSchema = z
+  .object({
+    title: z.string().trim().min(1).max(180),
+    notes: z.string().max(500),
+    followUpDate: foodDate,
+    status: z.enum(["active", "completed", "dismissed"]),
+    outcome: z.string().max(500),
+  })
+  .strict();
+export const coachPlanSchema = planInputSchema.extend({
+  id: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type CoachMemory = z.infer<typeof memorySchema>;
+export type CoachPlan = z.infer<typeof coachPlanSchema>;
 
 // Optional at the profile boundary: older journals retain their exact shape.
 export const coachingSchema = z
   .object({
     initiative: z.enum(["gentle", "on-request"]),
     focus: z.string().trim().max(300),
+    memories: z.array(memorySchema).max(40).optional(),
+    plans: z.array(coachPlanSchema).max(100).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    for (const key of ["memories", "plans"] as const) {
+      const records = value[key] ?? [];
+      if (new Set(records.map((r) => r.id)).size !== records.length)
+        ctx.addIssue({ code: "custom", message: `Duplicate ${key} IDs` });
+    }
+    if ((value.plans ?? []).filter((p) => p.status === "active").length > 10)
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Keep at most ten active plans. Complete or dismiss an older plan first.",
+      });
+  });
+
+export function coachSettings(state: JournalState) {
+  return (state.profile.coaching ??= { initiative: "gentle", focus: "" });
+}
+export function duePlans(state: JournalState, date: string) {
+  return (state.profile.coaching?.plans ?? [])
+    .filter((p) => p.status === "active" && p.followUpDate <= date)
+    .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+}
 
 export type CoachSuggestion = {
   id: string;
@@ -25,6 +85,16 @@ export function coachSuggestion(
   state: JournalState,
   date: string,
 ): CoachSuggestion {
+  const plan = duePlans(state, date)[0];
+  if (plan && state.profile.coaching?.initiative !== "on-request")
+    return {
+      id: `plan-${plan.id}-${plan.updatedAt}`,
+      title: "How did your plan feel?",
+      observation: `You agreed to try: ${plan.title}`,
+      invitation:
+        "We can keep it, change it, or leave it here. There’s no need to catch up.",
+      prompt: `Let’s check in on my agreed plan “${plan.title}”. Ask how it went before assuming an outcome.`,
+    };
   const checkin = state.health.checkins.find((c) => c.date === date);
   const recovery = [
     checkin?.energy != null && checkin.energy <= 2
@@ -127,7 +197,12 @@ export function coachingContext(state: JournalState, date: string) {
   };
   const suggestion = coachSuggestion(state, date);
   return {
-    preferences,
+    preferences: {
+      initiative: preferences.initiative,
+      focus: preferences.focus,
+    },
+    approvedMemories: preferences.memories ?? [],
+    agreedPlans: (preferences.plans ?? []).filter((p) => p.status === "active"),
     // Keep user-supplied focus separate from instructions, and keep this small.
     startingPoint:
       preferences.initiative === "gentle"

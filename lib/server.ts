@@ -46,6 +46,7 @@ export async function writeJournal(
     revision: number;
     mutationId: string;
     preserveMissingFoodTags?: boolean;
+    preserveMissingCoachData?: boolean;
   },
   transaction?: JournalTransaction,
 ): Promise<Snapshot> {
@@ -97,6 +98,44 @@ export async function writeJournal(
     // Keep its current value; an explicit empty collection still means deletion.
     if (input.state.cardio === undefined)
       state.cardio = journalSchema.parse(row.state).cardio;
+    if (input.preserveMissingCoachData) {
+      const previous = journalSchema.parse(row.state);
+      if (previous.profile.coaching) {
+        state.profile.coaching ??= { initiative: "gentle", focus: "" };
+        for (const key of ["memories", "plans"] as const) {
+          if (key === "memories")
+            state.profile.coaching.memories =
+              previous.profile.coaching.memories;
+          else state.profile.coaching.plans = previous.profile.coaching.plans;
+        }
+      }
+      state.nutrition.favourites = previous.nutrition.favourites;
+      state.nutrition.completeDays = previous.nutrition.completeDays?.filter(
+        (date) =>
+          canonicalJson(
+            previous.nutrition.meals
+              .filter((m) => m.date === date)
+              .map(({ items, ...meal }) => ({
+                ...meal,
+                items: items.map(({ classification, ...item }) => {
+                  void classification;
+                  return item;
+                }),
+              })),
+          ) ===
+          canonicalJson(
+            state.nutrition.meals
+              .filter((m) => m.date === date)
+              .map(({ items, ...meal }) => ({
+                ...meal,
+                items: items.map(({ classification, ...item }) => {
+                  void classification;
+                  return item;
+                }),
+              })),
+          ),
+      );
+    }
     const previousMeals = new Map(
       journalSchema.parse(row.state).nutrition.meals.map((m) => [m.id, m]),
     );

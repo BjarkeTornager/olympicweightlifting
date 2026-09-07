@@ -54,7 +54,11 @@ test(
     let currentAccount = "";
     const request = (cookie: string) =>
       new Request("http://localhost:3000/api/session", {
-        headers: { cookie, "X-Journal-Account": currentAccount },
+        headers: {
+          cookie,
+          "X-Coach-Journal-Version": "1",
+          "X-Journal-Account": currentAccount,
+        },
       });
 
     try {
@@ -134,6 +138,7 @@ test(
           headers: {
             cookie,
             origin,
+            "X-Coach-Journal-Version": "1",
             "X-Journal-Account": account,
             "Content-Type": "application/json",
           },

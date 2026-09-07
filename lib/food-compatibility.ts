@@ -5,6 +5,21 @@ export function foodSnapshotForClient<T extends Snapshot>(
   request: Request,
   snapshot: T,
 ): T {
+  if (
+    request.headers.get("x-coach-journal-version") !== "1" &&
+    (snapshot.state.profile.coaching?.memories !== undefined ||
+      snapshot.state.profile.coaching?.plans !== undefined ||
+      snapshot.state.nutrition.favourites !== undefined ||
+      snapshot.state.nutrition.completeDays !== undefined)
+  ) {
+    snapshot = structuredClone(snapshot);
+    if (snapshot.state.profile.coaching) {
+      delete snapshot.state.profile.coaching.memories;
+      delete snapshot.state.profile.coaching.plans;
+    }
+    delete snapshot.state.nutrition.favourites;
+    delete snapshot.state.nutrition.completeDays;
+  }
   if (request.headers.get("x-food-tags-version") === "1") return snapshot;
   return {
     ...snapshot,

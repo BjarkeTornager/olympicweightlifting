@@ -143,6 +143,8 @@ test("coaching preferences survive backups without changing legacy journals and 
   assert.deepEqual(restored.profile.coaching, state.profile.coaching);
   assert.deepEqual(coachingContext(restored, date), {
     preferences: state.profile.coaching,
+    approvedMemories: [],
+    agreedPlans: [],
     startingPoint: null,
   });
   state.profile.coaching = {

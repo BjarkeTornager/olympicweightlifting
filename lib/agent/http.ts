@@ -11,6 +11,13 @@ export class ApiError extends Error {
     super(message);
   }
 }
+export function requireCurrentCoach(request: Request) {
+  if (request.headers.get("x-coach-journal-version") !== "1")
+    throw new ApiError(
+      "Refresh the website to use the updated Coach and review every entry. Your journal is safe.",
+      426,
+    );
+}
 export async function requireAthlete(request: Request, mutation = false) {
   if (mutation) {
     const origin = new URL(process.env.BETTER_AUTH_URL ?? request.url).origin;

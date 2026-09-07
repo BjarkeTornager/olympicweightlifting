@@ -114,6 +114,8 @@ export async function PUT(request: Request) {
         await writeJournal(user.id, {
           ...input,
           preserveMissingFoodTags: true,
+          preserveMissingCoachData:
+            request.headers.get("x-coach-journal-version") !== "1",
           state: {
             ...input.state,
             // Preserve omission until the transaction can retain this additive

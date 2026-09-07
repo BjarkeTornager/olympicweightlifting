@@ -1,6 +1,62 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { modelRequest, parseModelResponse } from "../lib/agent/provider";
+test("Luna uses Azure's supported completion limit without excluding private tool routes", () => {
+  const config = {
+    kind: "openrouter" as const,
+    label: "OpenRouter",
+    base: "https://openrouter.ai/api/v1",
+    model: "openai/gpt-5.6-luna",
+    key: "server-only",
+  };
+  for (const visual of [false, true]) {
+    const tools = visual
+      ? [
+          {
+            type: "function" as const,
+            function: {
+              name: "show_visual",
+              description: "Show a visual",
+              parameters: {},
+            },
+          },
+        ]
+      : [];
+    const body = modelRequest([], tools, config).body;
+    assert.equal("max_tokens" in body, false);
+    assert.equal(
+      "max_completion_tokens" in body && body.max_completion_tokens,
+      visual ? 3200 : 1800,
+    );
+    assert.deepEqual("provider" in body && body.provider, {
+      require_parameters: true,
+      data_collection: "deny",
+      zdr: true,
+    });
+    if (visual) {
+      const functions = JSON.parse(JSON.stringify(body)).tools;
+      assert.equal(functions[0].function.strict, false);
+      assert.deepEqual(
+        functions[0].function.parameters,
+        tools[0].function.parameters,
+      );
+      assert.equal(
+        "strict" in tools[0].function,
+        false,
+        "shared tool definitions stay unchanged",
+      );
+    }
+    const previous = modelRequest([], tools, {
+      ...config,
+      model: "google/gemini-3.8-flash",
+    }).body;
+    assert.equal("max_completion_tokens" in previous, false);
+    assert.equal(
+      "max_tokens" in previous && previous.max_tokens,
+      visual ? 3200 : 1800,
+    );
+  }
+});
 test("private photo content is adapted to OpenRouter and Ollama without public URLs", () => {
   const messages = [
     { role: "user" as const, content: "What did I eat?", images: ["YWJj"] },

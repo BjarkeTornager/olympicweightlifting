@@ -86,6 +86,9 @@ export function modelRequest(
   tools: ToolDefinition[],
   config: NonNullable<ReturnType<typeof providerConfig>>,
 ) {
+  const outputLimit = tools.some((t) => t.function.name === "show_visual")
+    ? 3200
+    : 1800;
   if (config.kind === "openrouter")
     return {
       url: `${config.base}/chat/completions`,
@@ -116,11 +119,22 @@ export function modelRequest(
               }
             : {}),
         })),
-        tools,
+        // Our tools intentionally contain optional fields and are validated by
+        // Zod on the server. Prevent OpenAI routes from normalizing them into
+        // required strict-schema properties (e.g. an unreported set RPE).
+        tools:
+          config.model === "openai/gpt-5.6-luna"
+            ? tools.map((tool) => ({
+                ...tool,
+                function: { ...tool.function, strict: false },
+              }))
+            : tools,
         stream: false,
-        max_tokens: tools.some((t) => t.function.name === "show_visual")
-          ? 3200
-          : 1800,
+        // Azure's Luna endpoints advertise only max_completion_tokens. Sending
+        // max_tokens excludes them when require_parameters and ZDR are enabled.
+        ...(config.model === "openai/gpt-5.6-luna"
+          ? { max_completion_tokens: outputLimit }
+          : { max_tokens: outputLimit }),
         provider: {
           require_parameters: true,
           data_collection: "deny",
@@ -138,9 +152,7 @@ export function modelRequest(
       think: false,
       options: {
         temperature: 0.2,
-        num_predict: tools.some((t) => t.function.name === "show_visual")
-          ? 3200
-          : 1800,
+        num_predict: outputLimit,
       },
     },
   };

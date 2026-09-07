@@ -163,7 +163,11 @@ export const actionToolSchema = z
       .optional(),
     mealId: z.string().uuid().optional(),
     targets: dietTargetsSchema.optional(),
-    checkin: checkinPatchSchema.optional(),
+    checkin: checkinPatchSchema
+      .describe(
+        "Partial update: include date and ONLY the fields the user explicitly reports or corrects. Omit every unchanged field. For a sleep-only report send {date,sleepHours}; do not fill energy, soreness, waterMl, bodyweight or notes. A null value DELETES a saved measurement and an empty notes string DELETES the note: use either only when explicitly asked to clear it.",
+      )
+      .optional(),
   })
   .strict();
 export type AgentAction = z.infer<typeof actionSchema>;

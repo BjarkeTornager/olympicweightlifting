@@ -9,7 +9,8 @@ Lift Journal's default screen is Coach. The model runs behind authenticated serv
 The owner selected **OpenRouter**, with a **$5 monthly API-key usage cap** and no automatic top-up. A dedicated `Lift Journal production` key is provisioned in Railway. The initially generated, unused default key was revoked. Model choice is configuration, not client input.
 
 - `AGENT_PROVIDER=openrouter`
-- `AGENT_MODEL=google/gemini-3.8-flash` (verified in OpenRouter's tool-capable catalogue on 6 September 2026; evaluate with the synthetic smoke test before changing)
+- `AGENT_MODEL=openai/gpt-5.6-luna` (selected by the owner on 7 September 2026; run synthetic provider checks before switching a deployment)
+- Luna requests use `max_completion_tokens` and explicitly non-strict provider tool schemas. Azure excludes the older `max_tokens` parameter under required-parameter routing; optional tool fields must remain optional. All tool arguments still undergo the same server-side Zod validation, ownership checks and save review. Other models retain their existing adapter behavior.
 - `OPENROUTER_API_KEY` is a Railway secret; never add it to a `NEXT_PUBLIC_*` variable or Git.
 - Requests require tool-parameter support, `data_collection: "deny"`, and `zdr: true`. An unavailable eligible provider causes a visible failure; privacy filters are never relaxed as a fallback.
 - Account controls also disallow training/publication and enforce ZDR. This is not an EU-residency guarantee. Do not enable prompt logging, the data discount, or general web/search plugins for this private journal.
@@ -24,7 +25,7 @@ Agent messages are saved in `agent_turns`. `agent_proposals` holds a 24-hour sna
 
 Completed sessions need exact dates, weights and whole reps; accessory training retains its category. Repeated routines start unlogged. Programme targets come from the existing deterministic progression engine. Agent-created historical sessions do not invent start/finish times. Personal-best settings require a separate explicit edit.
 
-A conversation stores up to 40 visible turns; the model receives the last four completed turns plus bounded tool results. Each request allows at most five model rounds, ten tool calls and one proposed change, with a 90-second overall deadline and per-account request limits. Conversation older than 90 days and expired proposals are purged on subsequent assistant use. Clear conversation deletes messages and proposals immediately without deleting training. Journal exports do not include chat.
+A conversation stores up to 40 visible turns; the model receives the last eight completed turns plus bounded tool results. Each request allows at most five model rounds, ten tool calls and one proposed change, with a 90-second overall deadline and per-account request limits. Conversation older than 90 days and expired proposals are purged on subsequent assistant use. Clear conversation deletes messages and proposals immediately without deleting training. Journal exports do not include chat.
 
 ## Verification
 
@@ -33,7 +34,7 @@ A conversation stores up to 40 visible turns; the model receives the last four c
 Run a real provider smoke test against **synthetic accounts in the disposable test database**:
 
 ```sh
-AGENT_PROVIDER=openrouter AGENT_MODEL=google/gemini-3.8-flash node --import tsx scripts/agent-smoke.ts
+AGENT_PROVIDER=openrouter AGENT_MODEL=openai/gpt-5.6-luna node --import tsx scripts/agent-smoke.ts
 ```
 
 The opt-in script reads the key from the private operator configuration if absent from the environment. It prepares a known accessory workout, verifies no write before confirmation, saves, retrieves the exact history and undoes it, then deletes the synthetic account. Never set `TEST_DATABASE_URL` to production. Production verification should read the real account only; do not add test workouts to it.

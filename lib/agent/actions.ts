@@ -17,7 +17,6 @@ import {
 import {
   createWorkout,
   days,
-  EXERCISES,
   exerciseName,
   finishWorkout,
   uid,
@@ -27,7 +26,20 @@ import {
   workoutSchema,
   type JournalState,
   type Workout,
+  type WorkoutTemplate,
 } from "../model";
+import {
+  routineInputSchema,
+  trainingProgramInputSchema,
+  trainingProgramPatchSchema,
+  trainingExerciseId,
+  type TrainingProgram,
+} from "../training-program-schema";
+import {
+  ownedProgram,
+  saveTrainingProgram,
+  startTrainingDay,
+} from "../training-programs";
 import { startTemplate, templateFromWorkout } from "../training";
 import { checkinPatchSchema, saveCheckin, type Checkin } from "../health";
 import {
@@ -39,12 +51,7 @@ import {
   type DietTargets,
 } from "../nutrition";
 const date = workoutSchema.shape.date;
-const exerciseId = z
-  .string()
-  .refine(
-    (id) => EXERCISES.some((e) => e.id === id),
-    "Use an exercise from the catalogue",
-  );
+const exerciseId = trainingExerciseId;
 const set = z
   .object({
     weight: z.number().finite().min(0).max(1000),
@@ -90,6 +97,56 @@ const bundleEntrySchema = z.discriminatedUnion("kind", [
   repeatMealActionSchema,
 ]);
 const singleActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("create_routine"), routine: routineInputSchema })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("update_routine"),
+      routineId: z.string().min(1).max(160),
+      routine: routineInputSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("delete_routine"),
+      routineId: z.string().min(1).max(160),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("start_routine"),
+      routineId: z.string().min(1).max(160),
+      date,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("create_training_program"),
+      trainingProgram: trainingProgramInputSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("update_training_program"),
+      trainingProgramId: z.string().uuid(),
+      programChanges: trainingProgramPatchSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("delete_training_program"),
+      trainingProgramId: z.string().uuid(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("start_training_day"),
+      trainingProgramId: z.string().uuid(),
+      dayId: z.string().uuid(),
+      date,
+    })
+    .strict(),
   z
     .object({ kind: z.literal("dismiss_plan"), planId: z.string().uuid() })
     .strict(),
@@ -193,6 +250,14 @@ export const actionSchema = z.discriminatedUnion("kind", [
 export const actionToolSchema = z
   .object({
     kind: z.enum([
+      "create_routine",
+      "update_routine",
+      "delete_routine",
+      "start_routine",
+      "create_training_program",
+      "update_training_program",
+      "delete_training_program",
+      "start_training_day",
       "record_bundle",
       "repeat_meal",
       "save_memory",
@@ -216,6 +281,23 @@ export const actionToolSchema = z
       "repeat_session",
       "save_routine",
     ]),
+    routine: routineInputSchema
+      .describe(
+        "For create_routine or update_routine: a reusable strength session from scratch, with name and complete ordered exercise/sets list. No completed session or date is needed. Weight null leaves the starting load blank. update_routine replaces this one routine; preserve unaffected exercises and sets.",
+      )
+      .optional(),
+    routineId: z.string().min(1).max(160).optional(),
+    trainingProgram: trainingProgramInputSchema
+      .describe(
+        "For create_training_program: a reusable one-day or multi-day plan, including rep ranges, rest, RPE, notes, cardio or recovery days. Omit day IDs for new days. It does not record completed exercise or start a workout.",
+      )
+      .optional(),
+    trainingProgramId: z.string().uuid().optional(),
+    programChanges: trainingProgramPatchSchema
+      .describe(
+        "For update_training_program only. Omitted top-level fields stay unchanged. If days is provided it replaces ALL days: read the full original and preserve unaffected days and existing day IDs. Do not include kind/version/program ID inside this object.",
+      )
+      .optional(),
     entries: z
       .array(bundleEntrySchema)
       .min(2)
@@ -261,6 +343,9 @@ export const actionToolSchema = z
   })
   .strict();
 export type AgentAction = z.infer<typeof actionSchema>;
+export type TrainingReview =
+  | { kind: "routine"; after: WorkoutTemplate; before?: WorkoutTemplate }
+  | { kind: "program"; after: TrainingProgram; before?: TrainingProgram };
 export type ActionPreview = {
   id: string;
   title: string;
@@ -272,6 +357,7 @@ export type ActionPreview = {
   cardio?: CardioEntry;
   memory?: CoachMemory;
   plan?: CoachPlan;
+  training?: TrainingReview;
   entries?: PreviewEntry[];
   expiresAt: string;
   status?: "saved" | "undone";
@@ -287,6 +373,7 @@ export type PreviewEntry = Pick<
   | "cardio"
   | "memory"
   | "plan"
+  | "training"
 >;
 type PreparedAction = PreviewEntry & {
   state: JournalState;
@@ -372,6 +459,7 @@ export function prepareAction(
   let cardio: CardioEntry | undefined;
   let memory: CoachMemory | undefined;
   let plan: CoachPlan | undefined;
+  let training: TrainingReview | undefined;
   const owned = (id: string) => {
     const w = next.sessions.find((s) => s.id === id);
     if (!w) throw Error("That session is not in your journal.");
@@ -383,7 +471,98 @@ export function prepareAction(
         "An unfinished workout already exists. Resume or finish it first.",
       );
   };
-  if (action.kind === "save_memory" || action.kind === "forget_memory") {
+  if (
+    action.kind === "create_routine" ||
+    action.kind === "update_routine" ||
+    action.kind === "delete_routine" ||
+    action.kind === "start_routine"
+  ) {
+    const original =
+      "routineId" in action
+        ? next.templates.find((t) => t.id === action.routineId)
+        : undefined;
+    if ("routineId" in action && !original)
+      throw Error(
+        "That routine is not in your journal. Read training_library for the correct ID.",
+      );
+    if (action.kind === "start_routine") {
+      requireNoDraft();
+      workout = startTemplate(original!, action.date);
+      next.activeWorkout = workout;
+      title = "Start your routine";
+      detail = "Creates an unfinished workout with every set unlogged.";
+    } else if (action.kind === "delete_routine") {
+      next.templates = next.templates.filter((t) => t.id !== original!.id);
+      training = { kind: "routine", after: original! };
+      title = "Delete this routine";
+      detail =
+        "Removes this reusable routine. Completed sessions and your unfinished workout are kept.";
+    } else {
+      const routine: WorkoutTemplate = {
+        id: original?.id ?? uid(),
+        name: action.routine.name,
+        exercises: action.routine.exercises.map((e) => ({
+          exerciseId: e.exerciseId,
+          sets: e.sets.map((s) => ({ weight: s.weight ?? "", reps: s.reps })),
+        })),
+      };
+      if (original)
+        next.templates = next.templates.map((t) =>
+          t.id === original.id ? routine : t,
+        );
+      else next.templates.push(routine);
+      training = {
+        kind: "routine",
+        after: routine,
+        ...(original ? { before: original } : {}),
+      };
+      title = original ? "Update your routine" : "Create your routine";
+      detail = `“${routine.name}” will be available in Train → Your routines. Completed sessions and your unfinished workout are kept.`;
+    }
+  } else if (
+    action.kind === "create_training_program" ||
+    action.kind === "update_training_program" ||
+    action.kind === "delete_training_program" ||
+    action.kind === "start_training_day"
+  ) {
+    const original =
+      "trainingProgramId" in action
+        ? ownedProgram(next, action.trainingProgramId)
+        : undefined;
+    if (action.kind === "start_training_day") {
+      requireNoDraft();
+      workout = startTrainingDay(original!, action.dayId, action.date);
+      next.activeWorkout = workout;
+      title = "Start your training day";
+      detail =
+        "Starts the prescribed strength sets as an unlogged workout. Cardio instructions remain a plan; log activities after completing them.";
+    } else if (action.kind === "delete_training_program") {
+      next.program.customPrograms = next.program.customPrograms.filter(
+        (p) => p !== original,
+      );
+      training = { kind: "program", after: original! };
+      title = "Delete this training program";
+      detail =
+        "Removes this reusable program. Completed sessions and your unfinished workout are kept.";
+    } else {
+      const program = saveTrainingProgram(
+        next,
+        action.kind === "create_training_program"
+          ? action.trainingProgram
+          : { ...original!, ...action.programChanges },
+        original,
+      );
+      training = {
+        kind: "program",
+        after: program,
+        ...(original ? { before: original } : {}),
+      };
+      title = original
+        ? "Update your training program"
+        : "Create your training program";
+      detail = `“${program.name}” will be available in Train → Your programs. These are planned targets. Completed sessions and your unfinished workout are kept.`;
+    }
+  } else if (action.kind === "save_memory" || action.kind === "forget_memory") {
     const coaching = coachSettings(next);
     const original = coaching.memories?.find((m) => m.id === action.memoryId);
     if (action.memoryId && !original)
@@ -679,7 +858,7 @@ export function prepareAction(
     next.templates = [...(next.templates ?? []), template];
     title = "Save a routine";
     detail = `“${template.name}” will be available in Train → Your routines.`;
-    workout = startTemplate(template, currentDate);
+    training = { kind: "routine", after: template };
   }
   next.updatedAt = new Date().toISOString();
   return {
@@ -693,6 +872,7 @@ export function prepareAction(
     cardio,
     memory,
     plan,
+    training,
     action,
   };
 }

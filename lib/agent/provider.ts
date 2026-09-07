@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { readModelStream } from "./model-stream";
+import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -78,7 +79,7 @@ const messageSchema = z.object({
         }),
       }),
     )
-    .max(8)
+    .max(MAX_PROVIDER_TOOL_CALLS)
     .optional(),
 });
 export function modelRequest(
@@ -185,7 +186,7 @@ export function parseModelResponse(
                     }),
                   }),
                 )
-                .max(8)
+                .max(MAX_PROVIDER_TOOL_CALLS)
                 .optional(),
             }),
           }),

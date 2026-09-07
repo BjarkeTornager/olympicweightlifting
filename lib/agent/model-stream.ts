@@ -1,5 +1,6 @@
 import { createParser } from "eventsource-parser";
 import { z } from "zod";
+import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
 
 const routerChunk = z.object({
   error: z.unknown().optional(),
@@ -13,7 +14,11 @@ const routerChunk = z.object({
             tool_calls: z
               .array(
                 z.object({
-                  index: z.number().int().min(0).max(7),
+                  index: z
+                    .number()
+                    .int()
+                    .min(0)
+                    .max(MAX_PROVIDER_TOOL_CALLS - 1),
                   id: z.string().max(200).optional(),
                   function: z
                     .object({
@@ -23,7 +28,7 @@ const routerChunk = z.object({
                     .optional(),
                 }),
               )
-              .max(8)
+              .max(MAX_PROVIDER_TOOL_CALLS)
               .optional(),
           })
           .optional(),
@@ -49,7 +54,7 @@ const ollamaChunk = z.object({
             }),
           }),
         )
-        .max(8)
+        .max(MAX_PROVIDER_TOOL_CALLS)
         .optional(),
     })
     .optional(),
@@ -130,7 +135,8 @@ export async function readModelStream(
         throw Error("The assistant could not complete its response.");
       text(chunk.message?.content);
       ollamaCalls.push(...(chunk.message?.tool_calls ?? []));
-      if (ollamaCalls.length > 8) throw Error("Too many assistant tool calls.");
+      if (ollamaCalls.length > MAX_PROVIDER_TOOL_CALLS)
+        throw Error("Too many assistant tool calls.");
       if (chunk.done) {
         terminal = true;
         finished = true;

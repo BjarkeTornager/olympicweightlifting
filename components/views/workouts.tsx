@@ -35,6 +35,7 @@ import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Templates } from "../templates";
+import { TrainingPrograms } from "../training-programs";
 import { ExercisePicker } from "../exercise-picker";
 import { exerciseLoggingNotes } from "@/lib/exercises";
 import { formatSet } from "@/lib/training";
@@ -299,6 +300,13 @@ export function Workouts(props: Props) {
         </div>
       </div>
       <Templates
+        state={state}
+        update={props.update}
+        date={date}
+        go={go}
+        notify={props.notify}
+      />
+      <TrainingPrograms
         state={state}
         update={props.update}
         date={date}

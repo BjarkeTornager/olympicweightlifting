@@ -64,6 +64,7 @@ test(
         headers: {
           cookie: users[index]?.cookie ?? "",
           "X-Coach-Journal-Version": "1",
+          "X-Training-Programs-Version": "1",
           "X-Journal-Account": account ?? users[index]?.id ?? "",
           origin,
           "Content-Type": "application/json",
@@ -282,6 +283,15 @@ test(
       });
       staleCoach.headers.delete("X-Coach-Journal-Version");
       assert.equal((await action(staleCoach)).status, 426);
+      const oldTrainingReview = request(0, "/api/agent/action", "POST", {
+        id: proposalId,
+      });
+      oldTrainingReview.headers.delete("X-Training-Programs-Version");
+      assert.equal(
+        (await action(oldTrainingReview)).status,
+        426,
+        "A cached Coach cannot approve a program preview it cannot render",
+      );
       for (const index of [0, 1]) {
         const ownJournal = await (
           await journalGet(

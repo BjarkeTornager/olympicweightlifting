@@ -12,6 +12,8 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { getDb } from "../db";
 import { agentProposals, agentTurns } from "../db/schema";
 import { days, exerciseName, program, uid } from "../domain";
+import { trainingPrograms, ownedProgram } from "../training-programs";
+import { MAX_EXECUTED_TOOLS } from "./limits";
 import { searchExercises } from "../exercises";
 import { planProgramDay } from "../../js/progression.js";
 import { readJournal, writeJournal } from "../server";
@@ -147,15 +149,37 @@ const specifications = {
     description:
       "Read the current unfinished workout and logged/planned sets. Required before logging sets or finishing.",
   },
+  training_library: {
+    schema: z
+      .object({
+        routineId: z.string().min(1).max(160).optional(),
+        programId: z.string().uuid().optional(),
+        query: z.string().max(120).optional(),
+        offset: z.number().int().min(0).max(200).optional(),
+      })
+      .strict()
+      .refine(
+        (v) => !(v.routineId && v.programId),
+        "Read one routine or program at a time",
+      ),
+    description:
+      "List/search this athlete's reusable routines and custom training programs, 20 summaries per page. No date or completed workout is needed. Pass a routineId or programId from the list to read its COMPLETE ordered prescription before editing, deleting or starting. Never substitute a completed session ID. Built-in plans are in programmes; create an editable custom copy to change one.",
+  },
   programmes: {
     schema: z.object({ date: date }).strict(),
     description:
-      "Current programme days, exercise targets and progression reasons calculated by the site's rules, plus personal routine summaries.",
+      "Built-in programme days, exercise targets and progression reasons calculated by the site's rules, plus saved personal training summaries. Use training_library for complete editable routines/programs.",
   },
   exercises: {
-    schema: z.object({ query: z.string().max(100).optional() }).strict(),
+    schema: z
+      .object({
+        query: z.string().max(100).optional(),
+        queries: z.array(z.string().min(1).max(100)).min(1).max(30).optional(),
+      })
+      .strict()
+      .refine((a) => !(a.query && a.queries), "Use query OR queries, not both"),
     description:
-      "Find gym and Olympic exercises by name, alias, muscle or equipment. Returns supported IDs, technique videos and loggingNotes. Use these IDs in changes and follow loggingNotes. Clarify whether dumbbell weights are per dumbbell or combined, and whether unilateral reps are per side or total, before preparing ambiguous logs. Machine assistance is not added weight.",
+      "Find gym and Olympic exercises by name, alias, muscle or equipment. For designing a program call ONCE with queries:[name1,name2,...] to look up up to 30 movements in a compact catalogue. Do not make one tool call per exercise. Single query returns detailed technique information. Returns supported IDs, names, technique videos and loggingNotes. Use these IDs in changes and follow loggingNotes. Clarify whether dumbbell weights are per dumbbell or combined, and whether unilateral reps are per side or total, before preparing ambiguous logs. Machine assistance is not added weight.",
   },
   site_help: {
     schema: z.object({}).strict(),
@@ -165,7 +189,7 @@ const specifications = {
   prepare_change: {
     schema: actionToolSchema,
     description:
-      "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing weights/reps/date. record_session is completed history; plan_workout is an unlogged draft. update_session replaces every exercise and set. log_sets fills unlogged draft sets before appending.",
+      "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing performed weights/reps/date. For a NEW reusable routine use create_routine with routine; no sessionId/date/result. For a multi-day or detailed plan use create_training_program with trainingProgram; sets is a count per exercise, weight may be null, and targets are planned. For edits read training_library by ID then use update_routine or update_training_program (programChanges); preserve unaffected entries. save_routine only copies a completed session. record_session is completed history; plan_workout is an unlogged draft. update_session replaces every exercise and set. log_sets fills unlogged draft sets before appending.",
   },
 };
 export const toolDefinitions: ToolDefinition[] = Object.entries(
@@ -229,6 +253,7 @@ function toolStep(name: string) {
     read_session: "Reading your session",
     current_workout: "Checking your current workout",
     programmes: "Checking your programme",
+    training_library: "Reading your saved routines and programs",
     exercises: "Looking up exercises",
     image_library: "Checking your image library",
     food_photos: "Checking your food photos",
@@ -353,6 +378,8 @@ export async function runTurn(
   let readDraft = false,
     calls = 0;
   const readMeals = new Set<string>();
+  const readRoutines = new Set<string>();
+  const readPrograms = new Set<string>();
   const readCardio = new Set<string>();
   const readCardioRanges: { from: string; to: string }[] = [];
   const readHealthDates = new Set<string>();
@@ -420,9 +447,23 @@ export async function runTurn(
         reply = result.content.trim() || reply;
         break;
       }
+      if (result.tool_calls.length > MAX_EXECUTED_TOOLS - calls) {
+        // Keep every provider call ID paired with a result. Execute none of an
+        // oversized batch, leaving budget for a corrected batched lookup.
+        for (const call of result.tool_calls)
+          messages.push({
+            role: "tool",
+            tool_name: call.function.name,
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              error: `Too many tool calls in one batch; none were executed. ${MAX_EXECUTED_TOOLS - calls} tool calls remain. Use ONE exercises call with queries:[...] for multiple exercise lookups, then prepare the program.`,
+            }),
+          });
+        continue;
+      }
       const retrievedImages: ModelMessage[] = [];
       for (const call of result.tool_calls) {
-        if (++calls > 10)
+        if (++calls > MAX_EXECUTED_TOOLS)
           throw new ApiError(
             "That request needs too many steps. Try asking about one session at a time.",
             422,
@@ -660,6 +701,50 @@ export async function runTurn(
                 "This draft is too large for the assistant. Open it in Train.",
               );
             readDraft = true;
+          } else if (key === "training_library") {
+            const a = specifications.training_library.schema.parse(args);
+            if (a.routineId) {
+              const routine = snapshot.state.templates.find(
+                (t) => t.id === a.routineId,
+              );
+              if (!routine) throw Error("That routine is not in your journal.");
+              output = { routine };
+              if (JSON.stringify(output).length > 40000)
+                throw Error(
+                  "This routine is too large for Coach to edit safely. Open it in Train.",
+                );
+              readRoutines.add(routine.id);
+            } else if (a.programId) {
+              const customProgram = ownedProgram(snapshot.state, a.programId);
+              output = { program: customProgram };
+              if (JSON.stringify(output).length > 40000)
+                throw Error(
+                  "This program is too large for Coach to edit in one reply. Open it in Train.",
+                );
+              readPrograms.add(customProgram.id);
+            } else {
+              const query = a.query?.trim().toLocaleLowerCase() ?? "";
+              const records = [
+                ...snapshot.state.templates.map((t) => ({
+                  kind: "routine",
+                  id: t.id,
+                  name: t.name,
+                  exercises: t.exercises.length,
+                })),
+                ...trainingPrograms(snapshot.state).map((p) => ({
+                  kind: "program",
+                  id: p.id,
+                  name: p.name,
+                  days: p.days.length,
+                })),
+              ].filter((r) => r.name.toLocaleLowerCase().includes(query));
+              const offset = a.offset ?? 0;
+              output = {
+                total: records.length,
+                records: records.slice(offset, offset + 20),
+                nextOffset: offset + 20 < records.length ? offset + 20 : null,
+              };
+            }
           } else if (key === "programmes") {
             const a = specifications.programmes.schema.parse(args);
             output = {
@@ -675,12 +760,38 @@ export async function runTurn(
                   date: a.date,
                 }),
               })),
-              routines: snapshot.state.templates,
+              routines: snapshot.state.templates.map((t) => ({
+                id: t.id,
+                name: t.name,
+                exercises: t.exercises.length,
+              })),
+              customPrograms: trainingPrograms(snapshot.state).map((p) => ({
+                id: p.id,
+                name: p.name,
+                days: p.days.map((d) => ({ id: d.id, name: d.name })),
+              })),
             };
           } else if (key === "exercises") {
             const a = specifications.exercises.schema.parse(args);
-            output = searchExercises(a.query).map((exercise) => ({
-              ...exercise,
+            const found = a.queries
+              ? [
+                  ...new Map(
+                    a.queries
+                      .flatMap((q) => searchExercises(q))
+                      .map((e) => [e.id, e]),
+                  ).values(),
+                ]
+              : searchExercises(a.query);
+            output = found.map((exercise) => ({
+              ...(a.queries
+                ? {
+                    id: exercise.id,
+                    name: exercise.name,
+                    category: exercise.category,
+                    loggingNotes: exercise.loggingNotes,
+                    sourceName: exercise.sourceName,
+                  }
+                : exercise),
               videoUrl: exercise.videoId
                 ? `https://www.youtube.com/watch?v=${exercise.videoId}`
                 : null,
@@ -693,6 +804,25 @@ export async function runTurn(
             for (const action of requested.kind === "record_bundle"
               ? requested.entries
               : [requested]) {
+              if ("routineId" in action && !readRoutines.has(action.routineId))
+                throw Error(
+                  "Read the full original routine using training_library with routineId before editing, deleting or starting it.",
+                );
+              if (
+                "trainingProgramId" in action &&
+                !readPrograms.has(action.trainingProgramId)
+              )
+                throw Error(
+                  "Read the full original program using training_library with programId before editing, deleting or starting it.",
+                );
+              if (
+                (action.kind === "start_routine" ||
+                  action.kind === "start_training_day") &&
+                !readDraft
+              )
+                throw Error(
+                  "Read current_workout before starting a routine or program day.",
+                );
               if (
                 [
                   "save_memory",
@@ -843,6 +973,7 @@ export async function runTurn(
               ...(prepared.entries ? { entries: prepared.entries } : {}),
               ...(prepared.memory ? { memory: prepared.memory } : {}),
               ...(prepared.plan ? { plan: prepared.plan } : {}),
+              ...(prepared.training ? { training: prepared.training } : {}),
               expiresAt: expiresAt.toISOString(),
             };
             signal.throwIfAborted();
@@ -871,7 +1002,14 @@ export async function runTurn(
                         (issue) => `${issue.path.join(".")}: ${issue.message}`,
                       )
                       .join("; ")}`
-                  : "Invalid tool arguments. Use the schema, supported exercise IDs and complete training details."
+                  : `Invalid tool arguments. ${e.issues
+                      .slice(0, 4)
+                      .map(
+                        (issue) => `${issue.path.join(".")}: ${issue.message}`,
+                      )
+                      .join(
+                        "; ",
+                      )}. Correct these fields and retry the tool. For a NEW reusable routine use create_routine with routine (no sessionId). For a multi-day plan use create_training_program with trainingProgram.`
                 : e instanceof Error
                   ? e.message
                   : "Could not complete this tool.",

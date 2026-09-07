@@ -11,7 +11,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     createHash("sha256")
       .update(prompt.replace(coachStyle, "<COACH_STYLE>"))
       .digest("hex"),
-    "e57485d5041e8eb412b67de7876da48b506ebf42a48a2daef489fe573918c4c3",
+    "a5ce9a107e6da3f008edd6db308e7535ce88e596b0bc2fca8c62ae4fafd5bd4a",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

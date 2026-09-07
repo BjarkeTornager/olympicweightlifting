@@ -227,7 +227,10 @@ test("old Coach clients must refresh before saving review cards they cannot rend
   assert.doesNotThrow(() =>
     requireCurrentCoach(
       new Request("https://example.test/api/agent/action", {
-        headers: { "X-Coach-Journal-Version": "1" },
+        headers: {
+          "X-Coach-Journal-Version": "1",
+          "X-Training-Programs-Version": "1",
+        },
       }),
     ),
   );

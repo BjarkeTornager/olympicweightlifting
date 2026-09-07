@@ -91,6 +91,31 @@ function chunks(text: string, length = 7) {
   );
 }
 const sse = (value: unknown) => `data: ${JSON.stringify(value)}\r\n\r\n`;
+test("streamed exercise lookup batches reach the bounded engine recovery path", async () => {
+  const tool_calls = Array.from({ length: 12 }, (_, index) => ({
+    index,
+    id: `lookup-${index}`,
+    function: { name: "exercises", arguments: '{"query":"squat"}' },
+  }));
+  const stream = `data: ${JSON.stringify({ choices: [{ delta: { tool_calls }, finish_reason: "tool_calls" }] })}\n\ndata: [DONE]\n\n`;
+  const raw = await readModelStream(
+    chunks(stream),
+    "openrouter",
+    () => {},
+    AbortSignal.timeout(1000),
+  );
+  assert.equal(parseModelResponse(raw, "openrouter").tool_calls?.length, 12);
+  const invalid = `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ ...tool_calls[0], index: 32 }] }, finish_reason: "tool_calls" }] })}\n\ndata: [DONE]\n\n`;
+  await assert.rejects(() =>
+    readModelStream(
+      chunks(invalid),
+      "openrouter",
+      () => {},
+      AbortSignal.timeout(1000),
+    ),
+  );
+});
+
 test("provider streams reassemble split UTF-8, tool arguments and SSE frames without exposing reasoning", async () => {
   const stream =
     ": processing\r\n\r\n" +

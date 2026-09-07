@@ -36,7 +36,8 @@ export const today = () => {
 };
 export const uid = () => crypto.randomUUID();
 export const exerciseName = (id: string) =>
-  EXERCISES.find((e) => e.id === id)?.name ?? id.replaceAll("_", " ");
+  EXERCISES.find((e) => e.id === id)?.name ??
+  (id.startsWith("custom:") ? id.slice(7) : id.replaceAll("_", " "));
 export function emptyJournal(): JournalState {
   const now = new Date().toISOString();
   return {
@@ -246,6 +247,8 @@ export function mergeImport(
       "Both accounts have an unfinished workout. Finish or export the current one before importing.",
     );
   const fresh =
+    !current.templates.length &&
+    !current.program.customPrograms.length &&
     !current.sessions.length &&
     !current.cardio.sessions.length &&
     !current.nutrition.meals.length &&
@@ -330,6 +333,20 @@ export function mergeImport(
     "favourite meal",
   );
   const profile = fresh ? incoming.profile : current.profile;
+  const customPrograms = [...current.program.customPrograms];
+  for (const value of incoming.program.customPrograms) {
+    const getId = (v: unknown) =>
+      v && typeof v === "object" && "id" in v ? v.id : undefined;
+    const old = customPrograms.find(
+      (p) => getId(value) != null && getId(p) === getId(value),
+    );
+    if (old && canonicalJson(old) !== canonicalJson(value))
+      throw Error(
+        "A different version of a training program already exists. Review both backups before importing.",
+      );
+    if (!customPrograms.some((p) => canonicalJson(p) === canonicalJson(value)))
+      customPrograms.push(value);
+  }
   const coaching = profile.coaching ?? incoming.profile.coaching;
   const completeDays =
     current.nutrition.completeDays || incoming.nutrition.completeDays
@@ -378,6 +395,10 @@ export function mergeImport(
         : {}),
     },
     sessions: [...sessions.values()],
+    program: {
+      ...(fresh ? incoming.program : current.program),
+      customPrograms,
+    },
     templates: [...templates.values()],
     health: { checkins: [...checkins.values()] },
     cardio: { sessions: [...cardio.values()] },

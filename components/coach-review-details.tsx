@@ -7,8 +7,10 @@ import { exerciseName } from "@/lib/domain";
 import { MealDetails } from "./views/food";
 import { CheckinDetails } from "./health";
 import { CardioDetails } from "./cardio";
+import { TrainingReviewDetails } from "./training-programs";
 
 export function coachEntrySummary(entry: PreviewEntry) {
+  if (entry.training) return entry.training.after.name;
   if (entry.meal)
     return `${entry.meal.date} · ${totalNutrients(entry.meal.items).calories} kcal${entry.meal.estimated ? " · estimated" : ""}`;
   if (entry.checkin)
@@ -22,6 +24,7 @@ export function coachEntrySummary(entry: PreviewEntry) {
 export function CoachEntryDetails({ entry }: { entry: PreviewEntry }) {
   return (
     <>
+      {entry.training && <TrainingReviewDetails review={entry.training} />}
       {entry.meal && <MealDetails meal={entry.meal} />}
       {entry.checkin && (
         <>

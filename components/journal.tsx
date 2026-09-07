@@ -24,6 +24,7 @@ import {
 import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
 import { backup, days, today, createWorkout } from "@/lib/domain";
+import { trainingPrograms } from "@/lib/training-programs";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { Dashboard } from "./views/dashboard";
@@ -425,6 +426,13 @@ export function Journal(props: PrivateSessionProps) {
             {section === "coach" && (
               <TrainingAgent
                 key={`${identity?.id ?? "guest"}:${route}`}
+                initialTrainingPrompt={
+                  route === "coach/training/new"
+                    ? "Help me build a reusable training program in Train. My goal is "
+                    : route.startsWith("coach/training/")
+                      ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === route.split("/")[2])?.name ?? "my program"}”: `
+                      : undefined
+                }
                 initialCardioLog={
                   route === "coach/cardio" ||
                   /^coach\/photo\/[^/]+\/cardio$/.test(route)

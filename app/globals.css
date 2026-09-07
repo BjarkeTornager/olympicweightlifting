@@ -3027,3 +3027,103 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .food-evidence-list { display: grid; gap: 8px; }
 @media (max-width: 600px) { .food-search-controls { grid-template-columns: 1fr 1fr; } .food-search-controls label:first-child { grid-column: 1 / -1; } }
 @media (max-width: 360px) { .food-form .food-group-options { grid-template-columns: 1fr; } }
+
+.training-programs-panel {
+  margin-block: 1rem;
+}
+.training-program-list {
+  display: grid;
+  gap: 1rem;
+}
+.training-program-card {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  min-width: 0;
+}
+.training-program-card h3,
+.training-review h3 {
+  overflow-wrap: anywhere;
+}
+.training-program-details {
+  min-width: 0;
+}
+.training-instructions {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.training-day {
+  margin-block: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.training-day > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+.training-day > summary::-webkit-details-marker {
+  display: none;
+}
+.training-day > summary > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.training-day > summary small {
+  display: block;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+.training-day > summary svg {
+  flex-shrink: 0;
+}
+.training-day[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.training-day-number {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.training-day-content {
+  padding: 0 1rem 1rem;
+}
+.training-prescriptions {
+  display: grid;
+  gap: 0.65rem;
+  margin-block: 0.75rem;
+}
+.training-prescriptions > div {
+  padding-block: 0.45rem;
+  border-bottom: 1px solid var(--line);
+}
+.training-prescriptions p {
+  margin-block: 0.3rem;
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+.training-before {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+.training-before > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+@media (max-width: 480px) {
+  .training-programs-panel > .section-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .training-day > summary {
+    padding: 0.8rem;
+    gap: 0.55rem;
+  }
+  .training-day-content {
+    padding: 0 0.8rem 0.8rem;
+  }
+}

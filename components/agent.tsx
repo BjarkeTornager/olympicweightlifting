@@ -62,6 +62,7 @@ export function TrainingAgent({
   initialPhotoId,
   initialSleepLog = false,
   initialCardioLog = false,
+  initialTrainingPrompt,
 }: {
   journal: JournalController;
   onLogin: () => void;
@@ -69,6 +70,7 @@ export function TrainingAgent({
   initialPhotoId?: string;
   initialSleepLog?: boolean;
   initialCardioLog?: boolean;
+  initialTrainingPrompt?: string;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(
@@ -76,7 +78,7 @@ export function TrainingAgent({
         ? sleepLoggingPrompt(Boolean(initialPhotoId))
         : initialCardioLog
           ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then prepare it for my review."
-          : "",
+          : (initialTrainingPrompt ?? ""),
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -795,7 +797,7 @@ export function TrainingAgent({
                                 ))}
                               </div>
                             )}
-                            {(p.memory || p.plan) && (
+                            {(p.memory || p.plan || p.training) && (
                               <CoachEntryDetails
                                 entry={{
                                   title: p.title,
@@ -803,6 +805,7 @@ export function TrainingAgent({
                                   workout: null,
                                   memory: p.memory,
                                   plan: p.plan,
+                                  training: p.training,
                                 }}
                               />
                             )}
@@ -908,25 +911,28 @@ export function TrainingAgent({
                                     : p.entries
                                       ? setView("today")
                                       : go(
-                                          p.cardio
-                                            ? "cardio"
-                                            : p.checkin
-                                              ? "health"
-                                              : p.meal || p.targets
-                                                ? "food"
-                                                : p.workout &&
-                                                    p.workout.exercises.some(
-                                                      (e) =>
-                                                        e.sets.some(
-                                                          (s) => !s.result,
-                                                        ),
-                                                    )
-                                                  ? "workout"
-                                                  : "history",
+                                          p.training
+                                            ? "workout/choose"
+                                            : p.cardio
+                                              ? "cardio"
+                                              : p.checkin
+                                                ? "health"
+                                                : p.meal || p.targets
+                                                  ? "food"
+                                                  : p.workout &&
+                                                      p.workout.exercises.some(
+                                                        (e) =>
+                                                          e.sets.some(
+                                                            (s) => !s.result,
+                                                          ),
+                                                      )
+                                                    ? "workout"
+                                                    : "history",
                                         )
                                 }
                               >
-                                Open journal <ArrowRight size={17} />
+                                {p.training ? "Open Train" : "Open journal"}{" "}
+                                <ArrowRight size={17} />
                               </Button>
                             </div>
                             <p className="fine-print">

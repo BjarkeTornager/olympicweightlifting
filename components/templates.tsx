@@ -108,7 +108,7 @@ export function Templates({
           if (!open) setDraft(null);
         }}
         title="Your routine"
-        description="Choose exercises, order and starting sets. Repeated sessions begin with every set unlogged."
+        description="Choose exercises, order and starting sets. Leave kg blank to choose a load when training; 0 means bodyweight. Repeated sessions begin with every set unlogged."
       >
         {draft && (
           <form
@@ -207,7 +207,7 @@ export function Templates({
                         min="0"
                         max="100000"
                         step="any"
-                        required
+                        placeholder="Choose later"
                         value={set.weight}
                         onChange={(e) =>
                           edit((t) => {

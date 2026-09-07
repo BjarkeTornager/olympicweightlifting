@@ -1,6 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { modelRequest, parseModelResponse } from "../lib/agent/provider";
+test("provider accepts a bounded large lookup batch for engine recovery, but rejects unbounded tool envelopes", () => {
+  const response = (count: number) => ({
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: null,
+          tool_calls: Array.from({ length: count }, (_, i) => ({
+            id: `lookup-${i}`,
+            function: { name: "exercises", arguments: '{"query":"squat"}' },
+          })),
+        },
+      },
+    ],
+  });
+  assert.equal(
+    parseModelResponse(response(12), "openrouter").tool_calls?.length,
+    12,
+  );
+  assert.throws(() => parseModelResponse(response(33), "openrouter"));
+});
 test("Luna uses Azure's supported completion limit without excluding private tool routes", () => {
   const config = {
     kind: "openrouter" as const,

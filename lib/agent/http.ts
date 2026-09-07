@@ -12,7 +12,10 @@ export class ApiError extends Error {
   }
 }
 export function requireCurrentCoach(request: Request) {
-  if (request.headers.get("x-coach-journal-version") !== "1")
+  if (
+    request.headers.get("x-coach-journal-version") !== "1" ||
+    request.headers.get("x-training-programs-version") !== "1"
+  )
     throw new ApiError(
       "Refresh the website to use the updated Coach and review every entry. Your journal is safe.",
       426,

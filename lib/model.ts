@@ -3,6 +3,10 @@ import { nutritionSchema } from "./nutrition";
 import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 import { coachingSchema } from "./coaching";
+import {
+  storedCustomProgramSchema,
+  isTrainingProgram,
+} from "./training-program-schema";
 
 const id = z.string().min(1).max(160);
 const text = z.string().max(10000);
@@ -145,7 +149,7 @@ export const journalSchema = z
       .object({
         activeProgramId: z.string(),
         programRevision: z.string(),
-        customPrograms: z.array(z.unknown()).max(100),
+        customPrograms: z.array(storedCustomProgramSchema).max(100),
       })
       .passthrough(),
     preferences: z
@@ -158,6 +162,14 @@ export const journalSchema = z
   })
   .passthrough()
   .superRefine((v, ctx) => {
+    const programs = v.program.customPrograms.filter(isTrainingProgram);
+    if (new Set(programs.map((p) => p.id)).size !== programs.length)
+      ctx.addIssue({
+        code: "custom",
+        message: "Duplicate training program IDs",
+      });
+    if (new Set(v.templates.map((t) => t.id)).size !== v.templates.length)
+      ctx.addIssue({ code: "custom", message: "Duplicate routine IDs" });
     if (new Set(v.sessions.map((s) => s.id)).size !== v.sessions.length)
       ctx.addIssue({ code: "custom", message: "Duplicate workout IDs" });
     for (const w of [

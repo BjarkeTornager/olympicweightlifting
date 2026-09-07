@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "@/components/ui/icons";
-import { EXERCISES, exerciseName, uid } from "@/lib/domain";
+import { exerciseName, uid } from "@/lib/domain";
 import {
   templateSchema,
   type JournalState,
@@ -11,6 +11,8 @@ import { startTemplate } from "@/lib/training";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
+import { ExercisePicker } from "./exercise-picker";
+import { exerciseLoggingNotes } from "@/lib/exercises";
 export function Templates({
   state,
   update,
@@ -192,6 +194,9 @@ export function Templates({
                     <Trash2 size={17} />
                   </Button>
                 </div>
+                <p className="exercise-logging-note">
+                  {exerciseLoggingNotes(entry.exerciseId)}
+                </p>
                 {entry.sets.map((set, i) => (
                   <div className="routine-set" key={i}>
                     <label>
@@ -258,28 +263,20 @@ export function Templates({
                 </Button>
               </fieldset>
             ))}
-            <label>
-              Add exercise
-              <select
-                value=""
-                onChange={(e) => {
-                  if (e.target.value)
-                    edit((t) => {
-                      t.exercises.push({
-                        exerciseId: e.target.value,
-                        sets: [{ weight: 0, reps: 8 }],
-                      });
+            <ExercisePicker
+              label="Add exercise"
+              value=""
+              addImmediately
+              onChange={(id) => {
+                if (id)
+                  edit((t) => {
+                    t.exercises.push({
+                      exerciseId: id,
+                      sets: [{ weight: 0, reps: 8 }],
                     });
-                }}
-              >
-                <option value="">Choose exercise</option>
-                {EXERCISES.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  });
+              }}
+            />
             {error && <p role="alert">{error}</p>}
             <div className="button-row">
               <Button type="submit">Save routine</Button>

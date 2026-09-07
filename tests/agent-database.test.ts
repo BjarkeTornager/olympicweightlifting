@@ -119,6 +119,50 @@ test(
         messages[1].find((m) => m.role === "tool")!.content,
       );
       assert.equal(result.total, 0, "athlete B never sees A's records");
+      let exerciseRound = 0;
+      await runTurn(
+        b,
+        {
+          ...makeInput(),
+          message: "Show me DB bench press technique and how to log it.",
+        },
+        async (input) => {
+          if (++exerciseRound === 1)
+            return {
+              role: "assistant",
+              content: "",
+              tool_calls: [
+                {
+                  function: {
+                    name: "exercises",
+                    arguments: { query: "DB bench" },
+                  },
+                },
+              ],
+            };
+          const catalogue = JSON.parse(
+            input.find((m) => m.role === "tool")!.content,
+          );
+          const bench = catalogue.find(
+            (e: { id: string }) => e.id === "dumbbell_bench_press",
+          );
+          assert.ok(
+            bench,
+            "Coach resolves a familiar gym alias through its actual tool",
+          );
+          assert.equal(
+            bench.videoUrl,
+            "https://www.youtube.com/watch?v=AduT4Eq-iP0",
+          );
+          assert.equal(bench.sourceName, "PureGym");
+          assert.match(bench.loggingNotes, /two 20 kg dumbbells = 40 kg/);
+          return {
+            role: "assistant",
+            content:
+              "Use the combined dumbbell weight. The technique guide is from PureGym.",
+          };
+        },
+      );
       const events: unknown[] = [];
       let visualRound = 0;
       const visual = {

@@ -37,6 +37,7 @@ async function verify(exercise) {
     const validMetadata =
       oembedResponse.ok &&
       metadata?.provider_name === "YouTube" &&
+      (!exercise.videoAuthor || metadata?.author_name === exercise.videoAuthor) &&
       typeof metadata?.html === "string" &&
       metadata.html.includes(exercise.videoId);
     const passed = validMetadata && embedResponse.ok && !explicitlyBlocked;
@@ -65,7 +66,11 @@ async function verify(exercise) {
   }
 }
 
-const results = await Promise.all(videos.map(verify));
+// Limit concurrent requests as the catalogue grows.
+const results = [];
+for (let offset = 0; offset < videos.length; offset += 4) {
+  results.push(...await Promise.all(videos.slice(offset, offset + 4).map(verify)));
+}
 
 for (const result of results) {
   const status = result.passed ? "PASS" : "FAIL";

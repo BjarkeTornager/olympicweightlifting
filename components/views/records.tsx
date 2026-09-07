@@ -31,6 +31,11 @@ import type { JournalController } from "../journal";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Technique } from "./workouts";
+import {
+  searchExercises,
+  exerciseMuscles,
+  exerciseEquipment,
+} from "@/lib/exercises";
 import { formatSet, startTemplate, templateFromWorkout } from "@/lib/training";
 import { TrainingInsights } from "../training-insights";
 type Props = {
@@ -83,7 +88,9 @@ export function HistoryView({
           Export journal
         </Button>
       </div>
-      <a className="text-link cardio-history-link" href="#cardio">Cardio activity history <ArrowRight size={16} /></a>
+      <a className="text-link cardio-history-link" href="#cardio">
+        Cardio activity history <ArrowRight size={16} />
+      </a>
       <div className="picker-bar">
         <label>
           Exercise
@@ -525,13 +532,19 @@ export function ProgressView({ state, update, notify }: Props) {
   );
 }
 export function LibraryView() {
-  const [query, setQuery] = useState(""),
-    [category, setCategory] = useState("all");
-  const items = EXERCISES.filter(
-    (e) =>
-      (category === "all" || e.category === category) &&
-      `${e.name} ${e.purpose}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const [query, setQuery] = useState("");
+  const [discipline, setDiscipline] = useState("all");
+  const [muscle, setMuscle] = useState("all");
+  const [equipment, setEquipment] = useState("all");
+  const items = searchExercises(query, { discipline, muscle, equipment });
+  const filtered =
+    query || discipline !== "all" || muscle !== "all" || equipment !== "all";
+  const clear = () => {
+    setQuery("");
+    setDiscipline("all");
+    setMuscle("all");
+    setEquipment("all");
+  };
   return (
     <>
       <div className="page-heading compact">
@@ -539,32 +552,69 @@ export function LibraryView() {
           <div className="eyebrow">MOVE WITH INTENT</div>
           <h1>Your technique library.</h1>
           <p className="lead">
-            Demonstrations and cues for every part of your training.
+            Gym essentials and Olympic lifts. Find your movement, learn the
+            technique and make it part of your routine.
           </p>
         </div>
       </div>
-      <div className="picker-bar">
+      <div className="segmented" role="group" aria-label="Training style">
+        {[
+          ["all", "All exercises"],
+          ["gym", "Gym training"],
+          ["olympic", "Olympic lifting"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            aria-pressed={discipline === id}
+            className={discipline === id ? "active" : ""}
+            onClick={() => setDiscipline(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="picker-bar library-filters">
         <label className="search-field">
           <Search size={19} />
           <input
+            type="search"
             aria-label="Search exercises"
-            placeholder="Find an exercise…"
+            placeholder="Name, muscle or equipment…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <label>
-          Category
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="all">All exercises</option>
-            {[...new Set(EXERCISES.map((e) => e.category))].map((c) => (
-              <option key={c}>{c}</option>
+          Muscle group
+          <select value={muscle} onChange={(e) => setMuscle(e.target.value)}>
+            <option value="all">All muscles</option>
+            {exerciseMuscles.map((m) => (
+              <option key={m}>{m}</option>
             ))}
           </select>
         </label>
+        <label>
+          Equipment
+          <select
+            value={equipment}
+            onChange={(e) => setEquipment(e.target.value)}
+          >
+            <option value="all">All equipment</option>
+            {exerciseEquipment.map((e) => (
+              <option key={e}>{e}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="section-top library-results">
+        <p className="muted" role="status">
+          {items.length} of {EXERCISES.length} exercises
+        </p>
+        {filtered && (
+          <Button variant="ghost" onClick={clear}>
+            Clear filters
+          </Button>
+        )}
       </div>
       <div className="library-grid">
         {items.map((e, i) => (
@@ -576,6 +626,9 @@ export function LibraryView() {
               <span className="pill">{e.category}</span>
             </div>
             <h2>{e.name}</h2>
+            <p className="fine-print">
+              {e.equipment.join(" · ") || "Choose a variation"}
+            </p>
             <p className="muted">{e.purpose}</p>
             <ul className="cues">
               {e.cues.map((c) => (
@@ -591,7 +644,7 @@ export function LibraryView() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Source <ArrowUpRight size={16} />
+                  {e.sourceName} <ArrowUpRight size={16} />
                 </a>
               )}
             </div>
@@ -601,14 +654,9 @@ export function LibraryView() {
       {!items.length && (
         <div className="empty">
           <h2>No exercises found.</h2>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setQuery("");
-              setCategory("all");
-            }}
-          >
-            Clear search
+          <p>Try a different name or clear a filter to see more movements.</p>
+          <Button variant="secondary" onClick={clear}>
+            Show all exercises
           </Button>
         </div>
       )}
@@ -646,7 +694,9 @@ export function SettingsView({
         <div>
           <div className="eyebrow">YOUR JOURNAL, YOURS TO KEEP</div>
           <h1>Make yourself at home.</h1>
-          <p className="lead">Your profile, account and health journal backups.</p>
+          <p className="lead">
+            Your profile, account and health journal backups.
+          </p>
         </div>
       </div>
       <div className="settings-grid">

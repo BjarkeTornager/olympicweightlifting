@@ -123,7 +123,7 @@ for (const id of requiredExerciseIds) {
 
 for (const exercise of EXERCISES.filter((item) => item.videoId)) {
   check(/^[\w-]{11}$/.test(exercise.videoId), `Invalid YouTube ID for ${exercise.id}: ${exercise.videoId}`);
-  check(/^https:\/\/(www\.catalystathletics\.com|e3rehab\.com)\//.test(exercise.sourceUrl ?? ""), `Missing exercise source for ${exercise.id}`);
+  check(/^https:\/\/(www\.catalystathletics\.com|e3rehab\.com|www\.puregym\.com|www\.nasm\.org)\//.test(exercise.sourceUrl ?? ""), `Missing exercise source for ${exercise.id}`);
   if (exercise.sourceUrl?.startsWith("https://e3rehab.com/")) check(exercise.sourceName === "E3 Rehab", `Incorrect source attribution for ${exercise.id}`);
 }
 

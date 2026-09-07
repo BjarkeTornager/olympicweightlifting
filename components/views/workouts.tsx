@@ -35,6 +35,8 @@ import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Templates } from "../templates";
+import { ExercisePicker } from "../exercise-picker";
+import { exerciseLoggingNotes } from "@/lib/exercises";
 import { formatSet } from "@/lib/training";
 type Update = (
   fn: (state: JournalState) => JournalState | void,
@@ -105,21 +107,29 @@ export function Technique({ exerciseId }: { exerciseId: string }) {
         title={ex.name}
         description={ex.purpose}
       >
+        <p className="fine-print">
+          Instruction by {ex.sourceName}
+          {ex.videoTitle ? ` · ${ex.videoTitle}` : ""}
+        </p>
         <div className="video-frame">
           {open && (
             <iframe
               title={`${ex.name} technique demonstration`}
-              src={`https://www.youtube-nocookie.com/embed/${ex.videoId}`}
+              src={`https://www.youtube-nocookie.com/embed/${ex.videoId}?rel=0&playsinline=1`}
               allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
           )}
         </div>
+        {ex.videoNote && <p className="fine-print">{ex.videoNote}</p>}
         <ul className="cues">
           {ex.cues.map((c) => (
             <li key={c}>{c}</li>
           ))}
         </ul>
+        <p className="exercise-logging-note">
+          <strong>How to log</strong> {ex.loggingNotes}
+        </p>
         <div className="button-row">
           <Button asChild variant="secondary">
             <a
@@ -137,7 +147,7 @@ export function Technique({ exerciseId }: { exerciseId: string }) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Exercise notes <ArrowUpRight size={16} />
+              {ex.sourceName} guide <ArrowUpRight size={16} />
             </a>
           )}
         </div>
@@ -271,13 +281,22 @@ export function Workouts(props: Props) {
           <div className="eyebrow">YOUR TRAINING</div>
           <h1>Choose your session.</h1>
           <p className="lead">
-            Your programme fits your day. Train any session on any date.
+            Build a gym routine, start an open workout or follow your programme.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => void onStart("open", date)}>
-          <Plus size={18} />
-          Open workout
-        </Button>
+        <div className="button-row">
+          <Button asChild variant="ghost">
+            <a href="#library">
+              Exercise library <ArrowUpRight size={18} />
+            </a>
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void onStart("open", date)}
+          >
+            <Plus size={18} /> Open workout
+          </Button>
+        </div>
       </div>
       <Templates
         state={state}
@@ -398,7 +417,7 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
     ),
     [finish, setFinish] = useState(false),
     [discard, setDiscard] = useState(false),
-    [add, setAdd] = useState(EXERCISES[0].id),
+    [add, setAdd] = useState(""),
     [candidates, setCandidates] = useState<[string, number][]>([]);
   const save = (fn: (s: JournalState) => void) =>
     void update(fn).catch((e) => notify(e.message));
@@ -612,6 +631,9 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
                         .join(" · ") || "No logged sets"}
                     </p>
                   )}
+                  <p className="exercise-logging-note">
+                    {exerciseLoggingNotes(entry.exerciseId)}
+                  </p>
                   <div className="set-labels">
                     <span>SET</span>
                     <span>WEIGHT · KG</span>
@@ -863,18 +885,10 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
         })}
       </div>
       <div className="panel add-exercise">
-        <label>
-          Add an exercise
-          <select value={add} onChange={(e) => setAdd(e.target.value)}>
-            {EXERCISES.map((e) => (
-              <option value={e.id} key={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ExercisePicker label="Add an exercise" value={add} onChange={setAdd} />
         <Button
           variant="secondary"
+          disabled={!add}
           onClick={() =>
             save((s) => {
               const ex: ProgramExercise = {

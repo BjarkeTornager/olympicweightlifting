@@ -10,7 +10,8 @@ import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { getDb } from "../db";
 import { agentProposals, agentTurns } from "../db/schema";
-import { days, EXERCISES, exerciseName, program, uid } from "../domain";
+import { days, exerciseName, program, uid } from "../domain";
+import { searchExercises } from "../exercises";
 import { planProgramDay } from "../../js/progression.js";
 import { readJournal, writeJournal } from "../server";
 import { trainingSummary, workoutTotals } from "../training";
@@ -138,7 +139,7 @@ const specifications = {
   exercises: {
     schema: z.object({ query: z.string().max(100).optional() }).strict(),
     description:
-      "Look up supported exercise IDs and technique information. Use these IDs in changes.",
+      "Find gym and Olympic exercises by name, alias, muscle or equipment. Returns supported IDs, technique videos and loggingNotes. Use these IDs in changes and follow loggingNotes. Clarify whether dumbbell weights are per dumbbell or combined, and whether unilateral reps are per side or total, before preparing ambiguous logs. Machine assistance is not added weight.",
   },
   site_help: {
     schema: z.object({}).strict(),
@@ -610,13 +611,12 @@ export async function runTurn(
             };
           } else if (key === "exercises") {
             const a = specifications.exercises.schema.parse(args);
-            output = EXERCISES.filter(
-              (e) =>
-                !a.query ||
-                `${e.id} ${e.name}`
-                  .toLowerCase()
-                  .includes(a.query.toLowerCase()),
-            );
+            output = searchExercises(a.query).map((exercise) => ({
+              ...exercise,
+              videoUrl: exercise.videoId
+                ? `https://www.youtube.com/watch?v=${exercise.videoId}`
+                : null,
+            }));
           } else if (key === "site_help") output = siteHelp;
           else if (key === "prepare_change") {
             if (proposals.length)

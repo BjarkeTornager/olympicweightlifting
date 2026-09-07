@@ -16,11 +16,13 @@ import { Dialog } from "./ui/dialog";
 export function CoachMemoryBook({
   journal,
   disabled = false,
+  initialTab = "memories",
 }: {
   journal: JournalController;
   disabled?: boolean;
+  initialTab?: "memories" | "plans";
 }) {
-  const [tab, setTab] = useState<"memories" | "plans">("memories");
+  const [tab, setTab] = useState<"memories" | "plans">(initialTab);
   const [editor, setEditor] = useState<CoachMemory | CoachPlan | "new" | null>(
     null,
   );

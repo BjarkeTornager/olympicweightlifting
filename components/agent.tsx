@@ -97,6 +97,11 @@ export function TrainingAgent({
   const [toolsOpen, setToolsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [memoryTab, setMemoryTab] = useState<"memories" | "plans">("memories");
+  function openMemories(tab: "memories" | "plans" = "memories") {
+    setMemoryTab(tab);
+    setMemoriesOpen(true);
+  }
   const [visibleCount, setVisibleCount] = useState(6);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -477,7 +482,7 @@ export function TrainingAgent({
         {view === "today" && (
           <DailyOverview
             journal={journal}
-            onMemories={() => setMemoriesOpen(true)}
+            onMemories={(plans) => openMemories(plans ? "plans" : "memories")}
             onCheckin={() => setCheckinDate(today())}
             onAsk={ask}
             go={go}
@@ -897,7 +902,9 @@ export function TrainingAgent({
                                 variant="ghost"
                                 onClick={() =>
                                   p.memory || p.plan
-                                    ? setMemoriesOpen(true)
+                                    ? openMemories(
+                                        p.plan ? "plans" : "memories",
+                                      )
                                     : p.entries
                                       ? setView("today")
                                       : go(
@@ -1141,9 +1148,13 @@ export function TrainingAgent({
       <Dialog
         open={memoriesOpen}
         onOpenChange={setMemoriesOpen}
-        title="What Coach remembers"
+        title={
+          memoryTab === "plans" ? "Your agreed plans" : "What Coach remembers"
+        }
       >
         <CoachMemoryBook
+          key={memoryTab}
+          initialTab={memoryTab}
           journal={journal}
           disabled={
             busy || Boolean(acting) || Boolean(journal.record?.conflict)
@@ -1160,7 +1171,7 @@ export function TrainingAgent({
             variant="secondary"
             onClick={() => {
               setOptionsOpen(false);
-              setMemoriesOpen(true);
+              openMemories();
             }}
           >
             What Coach remembers & agreed plans <ArrowRight size={17} />

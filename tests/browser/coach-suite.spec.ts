@@ -301,6 +301,16 @@ test("an agreed plan follows up on visits and dismissal survives reload", async 
   );
   await page
     .locator(".today-plans")
+    .getByRole("button", { name: "Manage", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Your agreed plans", exact: true })
+      .getByRole("button", { name: "Agreed plans", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await page
+    .locator(".today-plans")
     .getByRole("button", { name: "Dismiss", exact: true })
     .click();
   await expect(page.locator(".today-plans")).toContainText(

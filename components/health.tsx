@@ -243,7 +243,7 @@ export function DailyOverview({
   onAsk: (question: string) => void;
   go: (route: string) => void;
   busy: boolean;
-  onMemories: () => void;
+  onMemories: (plans?: boolean) => void;
 }) {
   const state = journal.state!,
     current = today(),
@@ -332,7 +332,7 @@ export function DailyOverview({
         journal={journal}
         onAsk={onAsk}
         disabled={busy || Boolean(journal.record?.conflict)}
-        onManage={onMemories}
+        onManage={() => onMemories(true)}
       />
       <details className="today-more">
         <summary>More from your journal</summary>
@@ -349,7 +349,7 @@ export function DailyOverview({
           </Button>
         </div>
       </details>
-      <button className="text-link" onClick={onMemories}>
+      <button className="text-link" onClick={() => onMemories()}>
         What Coach remembers →
       </button>
     </section>

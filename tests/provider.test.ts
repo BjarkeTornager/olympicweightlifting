@@ -32,6 +32,7 @@ test("Luna uses Azure's supported completion limit without excluding private too
       require_parameters: true,
       data_collection: "deny",
       zdr: true,
+      order: ["azure/eu"],
     });
     if (visual) {
       const functions = JSON.parse(JSON.stringify(body)).tools;

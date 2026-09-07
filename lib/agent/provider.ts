@@ -139,6 +139,10 @@ export function modelRequest(
           require_parameters: true,
           data_collection: "deny",
           zdr: true,
+          // Prefer the EU endpoint tested for this model; fallbacks retain ZDR.
+          ...(config.model === "openai/gpt-5.6-luna"
+            ? { order: ["azure/eu"] }
+            : {}),
         },
       },
     };

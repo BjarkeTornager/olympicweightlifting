@@ -10,6 +10,7 @@ The owner selected **OpenRouter**, with a **$5 monthly API-key usage cap** and n
 
 - `AGENT_PROVIDER=openrouter`
 - `AGENT_MODEL=openai/gpt-5.6-luna` (selected by the owner on 7 September 2026; run synthetic provider checks before switching a deployment)
+- Luna prefers `azure/eu`; any fallback must still meet the same ZDR and no-data-collection filters. This preference is not a service-wide EU-residency guarantee.
 - Luna requests use `max_completion_tokens` and explicitly non-strict provider tool schemas. Azure excludes the older `max_tokens` parameter under required-parameter routing; optional tool fields must remain optional. All tool arguments still undergo the same server-side Zod validation, ownership checks and save review. Other models retain their existing adapter behavior.
 - `OPENROUTER_API_KEY` is a Railway secret; never add it to a `NEXT_PUBLIC_*` variable or Git.
 - Requests require tool-parameter support, `data_collection: "deny"`, and `zdr: true`. An unavailable eligible provider causes a visible failure; privacy filters are never relaxed as a fallback.

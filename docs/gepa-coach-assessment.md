@@ -1,6 +1,6 @@
 # GEPA assessment for Coach
 
-Research date: 7 September 2026. Based on the current local Coach implementation, including the pending coaching, photo and ingredient changes. This is an assessment and proposed experiment; GEPA has not been installed, run or deployed, and no user conversations or photos were sent to an optimizer.
+Research date: 7 September 2026. Based on the Coach implementation subsequently published in the [7 September release](coach-design-deployment-2026-09-07.md), including the coaching, photo and ingredient changes. This is an assessment and proposed experiment; GEPA has not been installed, run or deployed, and no user conversations or photos were sent to an optimizer.
 
 ## Recommendation
 
@@ -78,4 +78,4 @@ GEPA's documented reflection-cost tracking does not account for our external Typ
 
 Optimization runs would not add an optimizer call to every chat message. The selected prompt can still increase inference cost and latency if it becomes longer or causes additional tool rounds, so measure those alongside quality. Keep the model fixed for the first comparison; investigate cheaper models only after establishing a reliable evaluation baseline.
 
-The next implementation should produce the evaluation fixtures and rubric, a Node runner plus Python GEPA bridge, and a baseline report before generating candidate prompts. The decision to adopt an optimized prompt depends on that measured comparison. This research does not change the live Coach, add schedules, connect Apple Health or alter the pending release.
+The next implementation should produce the evaluation fixtures and rubric, a Node runner plus Python GEPA bridge, and a baseline report before generating candidate prompts. The decision to adopt an optimized prompt depends on that measured comparison. This research does not change the live Coach, add schedules or connect Apple Health.

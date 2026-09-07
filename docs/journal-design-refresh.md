@@ -1,6 +1,6 @@
 # Journal design refresh
 
-Implemented locally on 7 September 2026. Publication is pending approval; this document is not a deployment record.
+Implemented and published on 7 September 2026. See the [verified Railway release](coach-design-deployment-2026-09-07.md) for the deployed source and checks.
 
 ## Direction
 

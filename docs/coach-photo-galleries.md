@@ -31,9 +31,9 @@ AGENT_PROVIDER=openrouter AGENT_MODEL=google/gemini-3.8-flash node --import tsx 
 
 On 7 September 2026 it displayed the photo linked to a meal logged today despite an earlier assistant denial and the image having yesterday's library date, excluded the sleep screenshot from the food gallery, and sent no pixels for the display request. A separate request read **7 h 45 min** from the saved synthetic sleep screenshot. No health or meal records were changed.
 
-Final local release checks on 7 September 2026 passed: type checking, lint, 23 progression tests, all 67 domain/database/authentication tests (none skipped), the production build and all 114 browser checks. This includes the earlier gentle-coaching changes still in the same unpublished working tree.
+Initial photo-gallery checks on 7 September 2026 passed: type checking, lint, 23 progression tests, all 67 domain/database/authentication tests (none skipped), the production build and all 114 browser checks. This included the earlier gentle-coaching changes before publication.
 
-This website/backend change is local pending the public-source publication approval requested earlier. It has not been committed, pushed or deployed to Railway.
+Published with the coaching, design and ingredient changes on 7 September 2026. See the [verified Railway release](coach-design-deployment-2026-09-07.md) for the deployed source and final combined checks.
 
 ## Shared enlarged photo viewer
 

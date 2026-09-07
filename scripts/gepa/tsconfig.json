@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["./runner.ts"],
+  "exclude": ["../../node_modules", "../../artifacts"]
+}

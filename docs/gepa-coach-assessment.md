@@ -1,6 +1,6 @@
 # GEPA assessment for Coach
 
-Research date: 7 September 2026. Based on the Coach implementation subsequently published in the [7 September release](coach-design-deployment-2026-09-07.md), including the coaching, photo and ingredient changes. This is an assessment and proposed experiment; GEPA has not been installed, run or deployed, and no user conversations or photos were sent to an optimizer.
+Research date: 7 September 2026. Based on the Coach implementation subsequently published in the [7 September release](coach-design-deployment-2026-09-07.md), including the coaching, photo and ingredient changes. This records the original assessment and proposed experiment. **The [first GEPA experiment has now run](gepa-coach-experiment-2026-09-07.md): it retained the original prompt.** No production user conversations or photos were sent to the optimizer, and no optimizer runs in production.
 
 ## Recommendation
 

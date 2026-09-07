@@ -101,16 +101,12 @@ export async function writeJournal(
     if (input.preserveMissingCoachData) {
       const previous = journalSchema.parse(row.state);
       if (previous.profile.coaching) {
-        state.profile.coaching ??= { initiative: "gentle", focus: "" };
-        for (const key of ["memories", "plans"] as const) {
-          if (key === "memories")
-            state.profile.coaching.memories =
-              previous.profile.coaching.memories;
-          else state.profile.coaching.plans = previous.profile.coaching.plans;
-        }
+        state.profile.coaching ??= { ...previous.profile.coaching };
+        state.profile.coaching.memories ??= previous.profile.coaching.memories;
+        state.profile.coaching.plans ??= previous.profile.coaching.plans;
       }
-      state.nutrition.favourites = previous.nutrition.favourites;
-      state.nutrition.completeDays = previous.nutrition.completeDays?.filter(
+      state.nutrition.favourites ??= previous.nutrition.favourites;
+      state.nutrition.completeDays ??= previous.nutrition.completeDays?.filter(
         (date) =>
           canonicalJson(
             previous.nutrition.meals

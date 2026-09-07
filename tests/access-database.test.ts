@@ -117,6 +117,54 @@ test(
             response: { reply: "Synthetic private response", proposals: [] },
           });
       }
+      // A new frontend may replay an old pending snapshot after an update.
+      const upgradeBase = await readJournal(users[0].id);
+      upgradeBase.state.profile.coaching = {
+        initiative: "gentle",
+        focus: "",
+        memories: [
+          {
+            id: crypto.randomUUID(),
+            category: "preference",
+            text: "PRIVATE-0-APPROVED-MEMORY",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      const upgradeSaved = await writeJournal(users[0].id, {
+        ...upgradeBase,
+        mutationId: crypto.randomUUID(),
+      });
+      const oldPending = structuredClone(upgradeSaved.state);
+      delete oldPending.profile.coaching!.memories;
+      const upgradedRequest = request(0, "/api/journal", "PUT", {
+        state: oldPending,
+        revision: upgradeSaved.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      upgradedRequest.headers.set("X-Coach-Journal-Version", "1");
+      const upgradedResponse = await journalPut(upgradedRequest);
+      assert.equal(upgradedResponse.status, 200);
+      const preserved = await upgradedResponse.json();
+      assert.equal(
+        preserved.state.profile.coaching.memories[0].text,
+        "PRIVATE-0-APPROVED-MEMORY",
+      );
+      const clear = structuredClone(preserved.state);
+      clear.profile.coaching.memories = [];
+      const clearedResponse = await journalPut(
+        request(0, "/api/journal", "PUT", {
+          state: clear,
+          revision: preserved.revision,
+          mutationId: crypto.randomUUID(),
+        }),
+      );
+      assert.equal(clearedResponse.status, 200);
+      assert.deepEqual(
+        (await readJournal(users[0].id)).state.profile.coaching!.memories,
+        [],
+      );
       const pixels = await sharp({
         create: { width: 32, height: 32, channels: 3, background: "#347f62" },
       })
@@ -229,7 +277,9 @@ test(
           },
         });
 
-      const staleCoach = request(0, "/api/agent/action", "POST", {id: proposalId});
+      const staleCoach = request(0, "/api/agent/action", "POST", {
+        id: proposalId,
+      });
       staleCoach.headers.delete("X-Coach-Journal-Version");
       assert.equal((await action(staleCoach)).status, 426);
       for (const index of [0, 1]) {

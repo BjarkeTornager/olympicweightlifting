@@ -7,7 +7,11 @@ import {
   type LocalRecord,
 } from "./local";
 import type { Identity, JournalState, Snapshot } from "./model";
-import { foodStateForUndo } from "./food-compatibility";
+import {
+  foodStateForUndo,
+  coachStateForUndo,
+  hasCoachData,
+} from "./food-compatibility";
 import { privateFetch } from "./private-fetch";
 export type SyncStatus =
   | "loading"
@@ -82,10 +86,14 @@ export function useJournal(
             ...current,
             state: server.state,
             foodTagsVersion: 1,
+            coachJournalVersion: 1,
             revision: server.revision,
             lastSyncedAt: new Date().toISOString(),
             undo:
-              server.revision === current.revision ? current.undo : undefined,
+              server.revision === current.revision &&
+              (current.coachJournalVersion === 1 || !hasCoachData(server.state))
+                ? current.undo
+                : undefined,
           };
         });
         publish(local);
@@ -158,7 +166,12 @@ export function useJournal(
           undo:
             server.revision === pending.revision + 1 ? current.undo : undefined,
           ...(current.seq === pending.seq
-            ? { state: server.state, dirty: false, foodTagsVersion: 1 }
+            ? {
+                state: server.state,
+                dirty: false,
+                foodTagsVersion: 1,
+                coachJournalVersion: 1,
+              }
             : { dirty: true }),
         };
       });
@@ -249,6 +262,7 @@ export function useJournal(
             state: before,
             seq: current.seq,
             foodTagsVersion: current.foodTagsVersion,
+            coachJournalVersion: current.coachJournalVersion,
           };
           return current;
         });
@@ -328,12 +342,16 @@ export function useJournal(
     const next = await changeLocal(account.current, (current) => {
       if (!current.undo || current.undo.seq !== current.seq || current.conflict)
         throw Error("This change can no longer be undone safely.");
+      const restored =
+        current.undo.coachJournalVersion === 1
+          ? coachStateForUndo(current.undo.state)
+          : current.undo.state;
       return {
         ...current,
         state: {
           ...(current.undo.foodTagsVersion === 1
-            ? foodStateForUndo(current.undo.state)
-            : current.undo.state),
+            ? foodStateForUndo(restored)
+            : restored),
           updatedAt: new Date().toISOString(),
         },
         seq: current.seq + 1,

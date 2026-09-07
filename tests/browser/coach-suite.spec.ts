@@ -325,3 +325,29 @@ test("an agreed plan follows up on visits and dismissal survives reload", async 
     "You agreed to try",
   );
 });
+
+test("manual undo can clear a newly approved memory after a full sync", async ({
+  page,
+  context,
+}) => {
+  const current = await seed(context, example());
+  await page.goto("/#coach");
+  await expect(page.getByText("Ready to help", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Coach options", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /What Coach remembers & agreed plans/ })
+    .click();
+  await page.getByRole("button", { name: "Add a memory", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Remember this", exact: true })
+    .fill("I prefer short workouts.");
+  await page.getByRole("button", { name: "Approve and save memory" }).click();
+  await expect.poll(() => current().profile.coaching?.memories?.length).toBe(1);
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Undo last change", exact: true })
+    .click();
+  await expect.poll(() => current().profile.coaching?.memories).toEqual([]);
+});

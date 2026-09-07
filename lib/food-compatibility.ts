@@ -60,3 +60,23 @@ export function foodStateForUndo(state: JournalState): JournalState {
     },
   };
 }
+
+/** New manual undo snapshots can explicitly clear fields that did not exist.
+ * Cached undo snapshots without a known Coach version cannot make that assertion. */
+export function coachStateForUndo(state: JournalState): JournalState {
+  const restored = structuredClone(state);
+  restored.profile.coaching ??= { initiative: "gentle", focus: "" };
+  restored.profile.coaching.memories ??= [];
+  restored.profile.coaching.plans ??= [];
+  restored.nutrition.favourites ??= [];
+  restored.nutrition.completeDays ??= [];
+  return restored;
+}
+export function hasCoachData(state: JournalState): boolean {
+  return Boolean(
+    state.profile.coaching?.memories?.length ||
+    state.profile.coaching?.plans?.length ||
+    state.nutrition.favourites?.length ||
+    state.nutrition.completeDays?.length,
+  );
+}

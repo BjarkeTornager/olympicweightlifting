@@ -165,6 +165,7 @@ test(
       );
       const editedLegacy = structuredClone(legacySaved.state);
       editedLegacy.nutrition.meals[0].items[0].calories = 210;
+      delete editedLegacy.nutrition.completeDays;
       const edited = await writeJournal(a, {
         state: editedLegacy,
         revision: legacySaved.revision,

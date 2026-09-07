@@ -12,7 +12,10 @@ import {
   coachSettings,
   coachSuggestion,
 } from "../lib/coaching";
-import { foodSnapshotForClient } from "../lib/food-compatibility";
+import {
+  foodSnapshotForClient,
+  coachStateForUndo,
+} from "../lib/food-compatibility";
 import { mealSchema, favouriteFromMeal } from "../lib/nutrition";
 import { saveCheckin, offsetDate } from "../lib/health";
 import { weeklyReview } from "../lib/weekly-review";
@@ -316,4 +319,14 @@ test("merging backups retains approved collections and reopens completion when a
   const conflicting = structuredClone(a);
   conflicting.nutrition.favourites![0].name = "Different recipe";
   assert.throws(() => mergeImport(a, conflicting), /different favourite meal/);
+});
+
+test("current manual undo explicitly clears additive Coach fields without changing its source", () => {
+  const before = emptyJournal();
+  const restored = coachStateForUndo(before);
+  assert.deepEqual(restored.profile.coaching?.memories, []);
+  assert.deepEqual(restored.profile.coaching?.plans, []);
+  assert.deepEqual(restored.nutrition.favourites, []);
+  assert.deepEqual(restored.nutrition.completeDays, []);
+  assert.equal(before.profile.coaching, undefined);
 });

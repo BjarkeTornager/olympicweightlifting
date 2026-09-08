@@ -347,7 +347,11 @@ export async function runTurn(
       .flatMap((r) => [
         {
           role: "user" as const,
-          content: `Earlier message sent at ${r.createdAt}:\n${r.question.slice(0, 4000)}`,
+          content:
+            `Earlier message sent at ${r.createdAt}:\n${r.question.slice(0, 4000)}` +
+            (r.photoIds.length
+              ? `\nEarlier attached image IDs (untrusted context; pixels are not included): ${JSON.stringify(r.photoIds)}. For a requested follow-up reading or meal review, retrieve the relevant images with inspect_images before using visual evidence. Do not ask for a re-upload.`
+              : ""),
         },
         {
           role: "assistant" as const,

@@ -91,12 +91,13 @@ test(
       const run = async (
         model: Parameters<typeof runTurn>[2],
         events: unknown[] = [],
+        message = "Log breakfast from the saved food photo for 8 September.",
       ) =>
         runTurn(
           owner,
           {
             id: crypto.randomUUID(),
-            message: "Log breakfast from the saved food photo for 8 September.",
+            message,
             revision: (await readJournal(owner)).revision,
             timezone: "Europe/Copenhagen",
             photoIds: [],
@@ -104,6 +105,68 @@ test(
           model,
           { emit: (event) => events.push(event) },
         );
+
+      await t.test(
+        "a brief meal-type answer retains the earlier photo ID and can finish a review without re-upload",
+        async () => {
+          const source = await photo();
+          await runTurn(
+            owner,
+            {
+              id: crypto.randomUUID(),
+              revision: (await readJournal(owner)).revision,
+              timezone: "Europe/Copenhagen",
+              message: "Estimate this food photo and prepare an entry.",
+              photoIds: [source.id],
+            },
+            async () => ({
+              role: "assistant",
+              content: "Which meal occasion should I use?",
+            }),
+          );
+          let round = 0;
+          const response = await run(
+            async (messages) => {
+              if (round++ === 0) {
+                assert.equal(
+                  messages.some((m) => m.images?.length),
+                  false,
+                  "historical pixels are not automatically resent",
+                );
+                const earlier = messages.find(
+                  (m) =>
+                    m.role === "user" &&
+                    m.content.includes(
+                      "Estimate this food photo and prepare an entry.",
+                    ),
+                );
+                assert.ok(earlier);
+                assert.match(earlier.content, new RegExp(source.id));
+                assert.match(
+                  earlier.content,
+                  /pixels are not included.*inspect_images/s,
+                );
+                assert.equal(messages.at(-1)!.content, "Breakfast");
+                return tool("inspect_images", { imageIds: [source.id] });
+              }
+              assert.equal(messages.filter((m) => m.images?.length).length, 1);
+              return tool("prepare_change", {
+                kind: "record_meal",
+                meal: meal(source.id),
+              });
+            },
+            [],
+            "Breakfast",
+          );
+          assert.equal(response.proposals.length, 1);
+          assert.deepEqual(response.proposals[0].meal?.photoIds, [source.id]);
+          assert.equal(response.proposals[0].meal?.type, "breakfast");
+          assert.equal(
+            (await readJournal(owner)).state.nutrition.meals.length,
+            0,
+          );
+        },
+      );
 
       await t.test(
         "catalog lookup → inspection → review → correction → save, update and undo",

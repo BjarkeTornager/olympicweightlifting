@@ -13,7 +13,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
       .digest("hex"),
     // Catalog-photo logging policy reviewed with the deterministic baseline in
     // coach-catalog-meals-database.test.ts; see docs/catalog-photo-meals-2026-09-08.md.
-    "4f1e42768da3aac3a753c47229084269b7be1f3add9da0e230bae71984fdc6d1",
+    "42462420db539ed33a169feaf4444729c5a344fac1a437e30999687d71f1b091",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

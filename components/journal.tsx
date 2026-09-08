@@ -88,12 +88,18 @@ export function Journal(props: PrivateSessionProps) {
     [login, setLogin] = useState(false),
     [message, setMessage] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
+  // Navigation changes the Coach view, never the lifetime of its active run.
+  // Keep entry intents stable while using other sections, including photo loads.
+  const [coachEntry, setCoachEntry] = useState({ route: "coach", id: 0 });
   const moreButton = useRef<HTMLButtonElement>(null);
   const [updateReady, setUpdateReady] = useState(false),
     [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   useEffect(() => {
     const changed = () => {
-      setRoute(location.hash.slice(1) || "coach");
+      const next = location.hash.slice(1) || "coach";
+      setRoute(next);
+      if (next.split("/")[0] === "coach")
+        setCoachEntry((entry) => ({ route: next, id: entry.id + 1 }));
       window.scrollTo({ top: 0, behavior: "instant" });
     };
     const activated = () => setUpdateReady(false);
@@ -422,34 +428,34 @@ export function Journal(props: PrivateSessionProps) {
           </div>
         ) : (
           <>
-            {section === "coach" && (
-              <TrainingAgent
-                key={`${identity?.id ?? "guest"}:${route}`}
-                initialTrainingPrompt={
-                  route === "coach/training/new"
-                    ? "Help me build a reusable training program in Train. My goal is "
-                    : route.startsWith("coach/training/")
-                      ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === route.split("/")[2])?.name ?? "my program"}”: `
-                      : undefined
-                }
-                initialCardioLog={
-                  route === "coach/cardio" ||
-                  /^coach\/photo\/[^/]+\/cardio$/.test(route)
-                }
-                initialSleepLog={
-                  route === "coach/sleep" ||
-                  /^coach\/photo\/[^/]+\/sleep$/.test(route)
-                }
-                initialPhotoId={
-                  route.startsWith("coach/photo/")
-                    ? route.split("/")[2]
+            <TrainingAgent
+              key={identity?.id ?? "guest"}
+              visible={section === "coach"}
+              entryId={coachEntry.id}
+              initialTrainingPrompt={
+                coachEntry.route === "coach/training/new"
+                  ? "Help me build a reusable training program in Train. My goal is "
+                  : coachEntry.route.startsWith("coach/training/")
+                    ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
                     : undefined
-                }
-                journal={journal}
-                onLogin={() => setLogin(true)}
-                go={go}
-              />
-            )}
+              }
+              initialCardioLog={
+                coachEntry.route === "coach/cardio" ||
+                /^coach\/photo\/[^/]+\/cardio$/.test(coachEntry.route)
+              }
+              initialSleepLog={
+                coachEntry.route === "coach/sleep" ||
+                /^coach\/photo\/[^/]+\/sleep$/.test(coachEntry.route)
+              }
+              initialPhotoId={
+                coachEntry.route.startsWith("coach/photo/")
+                  ? coachEntry.route.split("/")[2]
+                  : undefined
+              }
+              journal={journal}
+              onLogin={() => setLogin(true)}
+              go={go}
+            />
             {section === "dashboard" && (
               <Dashboard state={state} onStart={start} go={go} />
             )}

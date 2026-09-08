@@ -1,89 +1,14 @@
 import { test, expect, browserUser } from "./fixtures";
-import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type { CoachResponse, SavedVisual } from "../../lib/coach-visuals";
 
-type StreamWindow = Window & {
-  coachEvents: (event: Record<string, unknown>) => void;
-  closeCoachStream: () => void;
-  coachRequests: {
-    body: { runId: string; messages: { content: string }[] };
-    account: string | null;
-    cache?: RequestCache;
-  }[];
-  coachAborted: boolean;
-};
+import {
+  streamingFixture,
+  emit,
+  startReply,
+  type StreamWindow,
+} from "./coach-stream";
 
-// A controllable network stream using the real browser fetch/ReadableStream
-// boundary and shipped AG-UI client. No provider or production records are used.
-async function streamingFixture(page: Page) {
-  await page.addInitScript(() => {
-    const state = window as unknown as StreamWindow;
-    const original = window.fetch.bind(window);
-    state.coachRequests = [];
-    window.fetch = async (input, init) => {
-      if (new URL(String(input), location.href).pathname !== "/api/agent/run")
-        return original(input, init);
-      const body = JSON.parse(String(init?.body));
-      state.coachRequests.push({
-        body,
-        account: new Headers(init?.headers).get("X-Journal-Account"),
-        cache: init?.cache,
-      });
-      const encoder = new TextEncoder();
-      let ended = false;
-      return new Response(
-        new ReadableStream({
-          start(controller) {
-            state.coachEvents = (event) => {
-              if (!ended)
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
-                );
-            };
-            state.closeCoachStream = () => {
-              if (!ended) {
-                ended = true;
-                controller.close();
-              }
-            };
-            init?.signal?.addEventListener("abort", () => {
-              state.coachAborted = true;
-              if (!ended) {
-                ended = true;
-                controller.error(new DOMException("Aborted", "AbortError"));
-              }
-            });
-            state.coachEvents({
-              type: "RUN_STARTED",
-              threadId: body.threadId,
-              runId: body.runId,
-            });
-            state.coachEvents({
-              type: "STEP_STARTED",
-              stepName: "Checking your sleep and recovery",
-            });
-          },
-        }),
-        {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "private, no-store",
-          },
-        },
-      );
-    };
-  });
-}
-const emit = (page: Page, events: Record<string, unknown>[]) =>
-  page.evaluate((events) => {
-    for (const event of events)
-      (window as unknown as StreamWindow).coachEvents(event);
-  }, events);
-const startReply = [
-  { type: "STEP_FINISHED", stepName: "Checking your sleep and recovery" },
-  { type: "TEXT_MESSAGE_START", messageId: "answer", role: "assistant" },
-];
 const visuals: SavedVisual[] = [
   {
     id: "b419d58a-9408-46a1-81b6-21b42a147599",
@@ -225,6 +150,15 @@ test("AG-UI streams rich Coach responses on a phone, preserves reading position 
       delta: "logged sleep and a practical routine.",
     },
   ]);
+  await expect
+    .poll(() => page.locator(".conversation").evaluate((el) => el.scrollTop))
+    .toBe(0);
+  // Returning through ordinary navigation preserves a deliberate history read.
+  const navigation = page.getByRole("navigation", {
+    name: "Mobile navigation",
+  });
+  await navigation.getByRole("link", { name: "Food", exact: true }).click();
+  await navigation.getByRole("link", { name: "Coach", exact: true }).click();
   await expect
     .poll(() => page.locator(".conversation").evaluate((el) => el.scrollTop))
     .toBe(0);

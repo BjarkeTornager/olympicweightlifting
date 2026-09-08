@@ -14,6 +14,7 @@ export function useConversationScroll(
   const readingTop = useRef(0);
   const concealed = useRef(false);
   const frame = useRef(0);
+  const lastNewestId = useRef<string | undefined>(undefined);
   const restore = useCallback(() => {
     const scroller = conversation.current;
     if (!scroller) return;
@@ -61,9 +62,14 @@ export function useConversationScroll(
       readingTop.current = conversation.current.scrollTop;
   }, []);
   useLayoutEffect(() => {
-    if (active && newestId) showLatest();
-  }, [active, newestId, showLatest]);
+    if (newestId && newestId !== lastNewestId.current) {
+      lastNewestId.current = newestId;
+      following.current = true;
+    }
+    if (active) schedule();
+  }, [active, newestId, schedule]);
   useLayoutEffect(() => {
+    if (!active) return;
     const scroller = conversation.current,
       messages = content.current;
     if (!scroller || !messages) return;
@@ -78,11 +84,12 @@ export function useConversationScroll(
     viewport?.addEventListener("resize", schedule);
     viewport?.addEventListener("scroll", schedule);
     return () => {
+      concealed.current = true;
       observer.disconnect();
       viewport?.removeEventListener("resize", schedule);
       viewport?.removeEventListener("scroll", schedule);
       cancelAnimationFrame(frame.current);
     };
-  }, [schedule]);
+  }, [active, schedule]);
   return { conversation, content, showLatest, readHistory, remember };
 }

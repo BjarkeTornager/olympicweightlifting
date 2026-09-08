@@ -59,6 +59,8 @@ export function TrainingAgent({
   journal,
   onLogin,
   go,
+  visible,
+  entryId,
   initialPhotoId,
   initialSleepLog = false,
   initialCardioLog = false,
@@ -67,19 +69,20 @@ export function TrainingAgent({
   journal: JournalController;
   onLogin: () => void;
   go: (r: string) => void;
+  visible: boolean;
+  entryId: number;
   initialPhotoId?: string;
   initialSleepLog?: boolean;
   initialCardioLog?: boolean;
   initialTrainingPrompt?: string;
 }) {
+  const entryPrompt = initialSleepLog
+    ? sleepLoggingPrompt(Boolean(initialPhotoId))
+    : initialCardioLog
+      ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then prepare it for my review."
+      : (initialTrainingPrompt ?? "");
   const [turns, setTurns] = useState<Turn[]>([]),
-    [message, setMessage] = useState(
-      initialSleepLog
-        ? sleepLoggingPrompt(Boolean(initialPhotoId))
-        : initialCardioLog
-          ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then prepare it for my review."
-          : (initialTrainingPrompt ?? ""),
-    ),
+    [message, setMessage] = useState(entryPrompt),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [connection, setConnection] = useState<{
@@ -92,7 +95,12 @@ export function TrainingAgent({
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const activeRun = useRef<AbortController | null>(null);
+  // Account changes/sign-out still unmount this controller and cancel the run.
+  // Internal navigation only removes the view below, preserving work and drafts.
   useEffect(() => () => activeRun.current?.abort(), []);
+  const [backgroundResult, setBackgroundResult] = useState<
+    "ready" | "failed" | null
+  >(null);
   const [view, setView] = useState<"conversation" | "today" | "week">(
     "conversation",
   );
@@ -112,7 +120,7 @@ export function TrainingAgent({
   }, []);
   const newestId = turns.at(-1)?.id;
   const { conversation, content, showLatest, readHistory, remember } =
-    useConversationScroll(newestId, view === "conversation");
+    useConversationScroll(newestId, visible && view === "conversation");
   const needsReview = (proposal: ActionPreview) =>
     !proposal.status && new Date(proposal.expiresAt).getTime() > now;
   const reviewCount = turns.reduce(
@@ -132,6 +140,31 @@ export function TrainingAgent({
   const [autoTag, setAutoTag] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
+  const [handledEntry, setHandledEntry] = useState(entryId);
+  const [wasVisible, setWasVisible] = useState(visible);
+  // Apply a navigation intent once without discarding an existing draft or run.
+  if (handledEntry !== entryId) {
+    setHandledEntry(entryId);
+    setLoadingImage(Boolean(initialPhotoId));
+    if (entryPrompt) {
+      setView("conversation");
+      setMessage((current) =>
+        current.trim() && current !== entryPrompt
+          ? `${current}\n\n${entryPrompt}`
+          : entryPrompt,
+      );
+    } else if (initialPhotoId) setView("conversation");
+  }
+  if (wasVisible !== visible) {
+    setWasVisible(visible);
+    if (!visible) {
+      setOptionsOpen(false);
+      setMemoriesOpen(false);
+      setClear(false);
+      setCheckinDate(null);
+    }
+  }
+  if (visible && backgroundResult) setBackgroundResult(null);
   const accountId = journal.identity?.id;
   useEffect(() => {
     if (!initialPhotoId || !accountId) return;
@@ -148,8 +181,8 @@ export function TrainingAgent({
         const image: UserImage & { error?: string } = await r.json();
         if (!r.ok) throw Error(image.error ?? "Image unavailable.");
         if (!abort.signal.aborted) {
-          setPhotoIds([image.id]);
-          setImageDetails({ [image.id]: image });
+          setPhotoIds((ids) => [...new Set([...ids, image.id])]);
+          setImageDetails((details) => ({ ...details, [image.id]: image }));
           setMessage((current) => current || imageCoachPrompt(image.category));
         }
       })
@@ -160,7 +193,7 @@ export function TrainingAgent({
         if (!abort.signal.aborted) setLoadingImage(false);
       });
     return () => abort.abort();
-  }, [initialPhotoId, accountId]);
+  }, [entryId, initialPhotoId, accountId]);
   const headers = useCallback(
     () => ({
       "Content-Type": "application/json",
@@ -255,14 +288,20 @@ export function TrainingAgent({
                 : "unclassified",
           )
         : "");
-    if (!question || busy || uploading || !ready) return;
+    if (!question || busy || uploading || !ready || photoIds.length > 4) return;
     const attachments = [...photoIds];
+    const attachmentDetails = imageDetails;
     const id = crypto.randomUUID();
     const abort = new AbortController();
     activeRun.current = abort;
     setBusy(true);
+    setBackgroundResult(null);
     setError("");
     setMessage("");
+    // A new draft/photo can arrive from another section while this turn runs.
+    // The submitted attachments belong to this turn, not to that next draft.
+    setPhotoIds([]);
+    setImageDetails({});
     setTurns((old) => [
       ...old,
       { id, question, photoIds: attachments, status: "running" },
@@ -337,8 +376,7 @@ export function TrainingAgent({
             : t,
         ),
       );
-      setPhotoIds([]);
-      setImageDetails({});
+      setBackgroundResult("ready");
     } catch (e) {
       setError(
         abort.signal.aborted
@@ -348,6 +386,9 @@ export function TrainingAgent({
             : "The request failed. Your journal is safe.",
       );
       setMessage((current) => current || question);
+      setPhotoIds((ids) => [...new Set([...ids, ...attachments])]);
+      setImageDetails((details) => ({ ...attachmentDetails, ...details }));
+      setBackgroundResult("failed");
       setTurns((old) =>
         old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
       );
@@ -415,6 +456,40 @@ export function TrainingAgent({
       );
     }
   };
+  if (!visible) {
+    const status = busy
+      ? "Coach is working…"
+      : acting
+        ? "Coach is saving your change…"
+        : uploading || loadingImage
+          ? "Coach is preparing your photo…"
+          : backgroundResult === "ready"
+            ? "Your Coach reply is ready"
+            : backgroundResult === "failed"
+              ? "Coach needs your attention"
+              : null;
+    return status ? (
+      <div className="coach-background-status">
+        <span role="status">
+          {busy || acting || uploading || loadingImage ? (
+            <LoaderCircle size={18} className="spin" aria-hidden="true" />
+          ) : (
+            <Sparkles size={18} aria-hidden="true" />
+          )}
+          {status}
+        </span>
+        <a
+          href="#coach"
+          onClick={() => {
+            setView("conversation");
+            showLatest();
+          }}
+        >
+          Open Coach <ArrowRight size={16} aria-hidden="true" />
+        </a>
+      </div>
+    ) : null;
+  }
   const opening =
     connection?.enabled &&
     journal.status === "synced" &&
@@ -1094,6 +1169,7 @@ export function TrainingAgent({
                     !ready ||
                     busy ||
                     uploading ||
+                    photoIds.length > 4 ||
                     (!message.trim() && !photoIds.length)
                   }
                 >
@@ -1168,6 +1244,12 @@ export function TrainingAgent({
               </div>
               {photoIds.length > 0 && accountId && (
                 <>
+                  {photoIds.length > 4 && (
+                    <p className="error-text" role="alert">
+                      Choose up to four photos for this message. Remove an
+                      attachment to send.
+                    </p>
+                  )}
                   <div className="coach-attachment-strip">
                     {photoIds.map((id) => (
                       <div key={id}>

@@ -92,7 +92,7 @@ const specifications = {
       .object({ imageIds: z.array(z.string().uuid()).min(1).max(4) })
       .strict(),
     description:
-      "Retrieve saved library image pixels for this turn when the person asks you to read, compare, explain or analyse the image contents. First find the relevant IDs with the journal/catalog tools. Up to four distinct images total including current attachments. This sends the selected images to the model provider, so don't use it merely to show a gallery. It doesn't display photos or save measurements; use show_images for display and normal reviewed proposals for requested logging. Unreadable/mixed images require clarification; metadata is only a hint.",
+      "Retrieve saved library image pixels for this turn when the person asks you to read, compare, explain, analyse or log from the image contents. First find the relevant IDs with the journal/catalog tools. Up to four distinct images total including current attachments. This sends the selected images to the model provider, so don't use it merely to show a gallery. After reading the returned pixels, Food-category images can be linked in meal.photoIds in a requested record_meal or update_meal review, without re-uploading. It doesn't display photos or save measurements; use show_images for display and normal reviewed proposals for requested logging. Unreadable/mixed images require clarification; metadata is only a hint.",
   },
   image_library: {
     schema: z
@@ -375,6 +375,9 @@ export async function runTurn(
     readSessions = new Set<string>();
   const visuals: SavedVisual[] = [];
   const inspectedIds = new Set(photoIds);
+  // Only pixels delivered to a model call can support a meal proposal. An
+  // inspection queued in the same tool batch has not been seen by the model.
+  const viewedImageIds = new Set(photoIds);
   let readDraft = false,
     calls = 0;
   const readMeals = new Set<string>();
@@ -463,6 +466,7 @@ export async function runTurn(
         continue;
       }
       const retrievedImages: ModelMessage[] = [];
+      const retrievedImageIds: string[] = [];
       for (const call of result.tool_calls) {
         if (++calls > MAX_EXECUTED_TOOLS)
           throw new ApiError(
@@ -532,6 +536,7 @@ export async function runTurn(
                 images: selected.map((p) => p.data.toString("base64")),
               });
             ids.forEach((id) => inspectedIds.add(id));
+            retrievedImageIds.push(...ids);
             output = {
               inspected: true,
               imageIds: [...new Set(a.imageIds)],
@@ -879,7 +884,8 @@ export async function runTurn(
                 action.kind === "record_meal" ||
                 action.kind === "update_meal"
               ) {
-                // New photos must be attached by the user, or already linked to the owned original meal.
+                // Sources may be attached, inspected in this turn, or retained
+                // from an owned meal/pending review. Catalog metadata is not pixels.
                 const previous =
                   recent
                     .filter((r) => r.status === "done")
@@ -902,13 +908,13 @@ export async function runTurn(
                       )
                     : undefined;
                 const allowed = new Set([
-                  ...photoIds,
+                  ...viewedImageIds,
                   ...previous.flatMap((meal) => meal.photoIds),
                   ...(original?.photoIds ?? []),
                 ]);
                 if (action.meal.photoIds.some((id) => !allowed.has(id)))
                   throw Error(
-                    "Use only the photos attached to this message or already linked to this meal.",
+                    "Use Food photos attached to this message, read with inspect_images in this turn, or already linked to this meal or pending review. For a saved catalog photo, call inspect_images and read its returned pixels before preparing the meal; no re-upload is needed.",
                   );
                 await Promise.all(
                   action.meal.photoIds.map((id) => readFoodPhoto(userId, id)),
@@ -917,7 +923,7 @@ export async function runTurn(
                   !action.meal.photoIds.length &&
                   (action.meal.source === "photo" ||
                     (action.kind === "record_meal" &&
-                      photos.length > 0 &&
+                      viewedImageIds.size > 0 &&
                       action.meal.items.some((item) =>
                         item.classification?.ingredients.some(
                           (tag) =>
@@ -927,12 +933,12 @@ export async function runTurn(
                       )))
                 )
                   throw Error(
-                    "A meal based on an attached food image must link its source photo in meal.photoIds, including when ingredients were read from a label. Use the relevant attached food photo ID.",
+                    "A meal based on a food image must link its source photo in meal.photoIds, including when ingredients were read from a label. Use the relevant attached or inspected Food photo ID.",
                   );
                 action.meal.items = prepareFoodTags(action.meal.items, {
                   newMeal: action.kind === "record_meal",
-                  viewedImages: messages.some((message) =>
-                    Boolean(message.images?.length),
+                  viewedImages: action.meal.photoIds.some((id) =>
+                    viewedImageIds.has(id),
                   ),
                   previous:
                     original?.items ?? previous.flatMap((meal) => meal.items),
@@ -1067,6 +1073,7 @@ export async function runTurn(
       // Keep all tool results together before adding provider-compatible user
       // image content. Tool-role multimodal messages are not portable.
       messages.push(...retrievedImages);
+      retrievedImageIds.forEach((id) => viewedImageIds.add(id));
       if (proposals.length) {
         reply =
           "Ready for your review. Check the details below, then save when they look right. Tell me any corrections before saving.";

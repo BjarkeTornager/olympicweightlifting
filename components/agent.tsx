@@ -201,48 +201,67 @@ export function TrainingAgent({
     }),
     [accountId],
   );
+  const [connectionLoading, setConnectionLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState("");
+  const connectionRequest = useRef<AbortController | null>(null);
+  const connectionReady = useRef(false);
   const refresh = useCallback(async () => {
-    if (!accountId) return;
-    const r = await privateFetch("/api/agent", {
-      headers: headers(),
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
-    const data = await r.json();
-    if (!r.ok) throw Error(data.error ?? "The assistant is unavailable.");
-    setConnection({
-      enabled: data.enabled,
-      provider: data.provider,
-      protocol: data.protocol,
-    });
-    setTurns(data.turns);
+    if (!accountId || connectionRequest.current) return;
+    const controller = new AbortController();
+    connectionRequest.current = controller;
+    setConnectionLoading(true);
+    setConnectionError("");
+    try {
+      const r = await privateFetch("/api/agent", {
+        headers: headers(),
+        cache: "no-store",
+        signal: AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(10000),
+        ]),
+      });
+      const data = await r.json();
+      if (!r.ok) throw Error("Coach couldn’t connect. Please try again.");
+      controller.signal.throwIfAborted();
+      connectionReady.current = Boolean(data.enabled);
+      setConnection({
+        enabled: data.enabled,
+        provider: data.provider,
+        protocol: data.protocol,
+      });
+      setTurns(data.turns);
+    } catch {
+      if (!controller.signal.aborted) {
+        connectionReady.current = false;
+        setConnectionError("Coach couldn’t connect. Your draft is still here.");
+      }
+    } finally {
+      if (connectionRequest.current === controller) {
+        connectionRequest.current = null;
+        if (!controller.signal.aborted) setConnectionLoading(false);
+      }
+    }
   }, [accountId, headers]);
   useEffect(() => {
-    if (!accountId) return;
-    const controller = new AbortController();
-    privateFetch("/api/agent", {
-      headers: headers(),
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw Error(data.error ?? "The assistant is unavailable.");
-        return data;
-      })
-      .then((data) => {
-        setConnection({
-          enabled: data.enabled,
-          provider: data.provider,
-          protocol: data.protocol,
-        });
-        setTurns(data.turns);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [accountId, headers]);
+    const retry = () => {
+      if (!connectionReady.current && document.visibilityState === "visible")
+        void refresh();
+    };
+    const initial = setTimeout(() => void refresh(), 0);
+    const interval = setInterval(retry, 15000);
+    window.addEventListener("online", retry);
+    window.addEventListener("pageshow", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      connectionRequest.current?.abort();
+      connectionRequest.current = null;
+      clearTimeout(initial);
+      clearInterval(interval);
+      window.removeEventListener("online", retry);
+      window.removeEventListener("pageshow", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [refresh]);
   const pending = Boolean(
     journal.record?.dirty ||
     journal.record?.pending ||
@@ -255,6 +274,30 @@ export function TrainingAgent({
     !loadingImage &&
     journal.status === "synced",
   );
+  const reconnecting = connectionLoading || journal.status === "syncing";
+  const connectionHint = journal.record?.conflict
+    ? "Choose which journal version to keep before messaging Coach."
+    : pending
+      ? "Sync your pending changes before messaging Coach. Your draft is still here."
+      : journal.status === "offline"
+        ? "You’re offline. Reconnect to send your message. Your draft is still here."
+        : journal.status !== "synced"
+          ? "Your journal hasn’t connected yet. Reconnect to send your message."
+          : connectionError
+            ? connectionError
+            : connectionLoading
+              ? "Connecting to Coach… Your draft is still here."
+              : !connection?.enabled
+                ? "Coach is temporarily unavailable. Try reconnecting in a moment."
+                : loadingImage
+                  ? "Loading your attached image…"
+                  : "";
+  const reconnect = () => {
+    // Recheck independently: neither failure should prevent the other recovery.
+    // Never submit the draft or save a proposal as a side effect of reconnecting.
+    void journal.sync();
+    if (!connectionReady.current) void refresh();
+  };
   const attach = async (file?: File) => {
     if (!file || !accountId || photoIds.length >= 4) return;
     setUploading(true);
@@ -549,9 +592,15 @@ export function TrainingAgent({
           <span className={`coach-connection ${ready ? "connected" : ""}`}>
             {ready
               ? "Ready to help"
-              : accountId
-                ? "Connecting…"
-                : "Personal to you"}
+              : journal.record?.conflict
+                ? "Sync needs attention"
+                : pending
+                  ? "Changes waiting to sync"
+                  : loadingImage
+                    ? "Loading image…"
+                    : reconnecting
+                      ? "Connecting…"
+                      : "Connection interrupted"}
           </span>
         </div>
       </header>
@@ -601,36 +650,6 @@ export function TrainingAgent({
           </section>
         ) : (
           <>
-            {connection && !connection.enabled && (
-              <div className="notice">
-                <div>
-                  <strong>Your assistant is being connected.</strong>
-                  <p>
-                    Your journal is ready. Keep logging in Train while the
-                    assistant connection is configured.
-                  </p>
-                </div>
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    void refresh().catch((e) => setError(e.message))
-                  }
-                >
-                  Check connection
-                </Button>
-              </div>
-            )}
-            {pending && (
-              <div className="notice">
-                <span>
-                  Sync your pending changes so the assistant has your latest
-                  training.
-                </span>
-                <Button variant="secondary" onClick={() => void journal.sync()}>
-                  Sync now
-                </Button>
-              </div>
-            )}
             {turns.length > 0 && opening}
             {(turns.length > 1 || reviewCount > 0) && (
               <div className="coach-thread-tools">
@@ -1283,10 +1302,23 @@ export function TrainingAgent({
                   </p>
                 </>
               )}
-              {!ready && connection?.enabled && !pending && (
-                <p className="fine-print">
-                  Sign in and connect to the internet to use the assistant.
-                </p>
+              {!ready && (
+                <div className="coach-reconnect" role="status">
+                  <p className="fine-print">{connectionHint}</p>
+                  {journal.error && (
+                    <p className="fine-print">{journal.error}</p>
+                  )}
+                  {!loadingImage && !journal.record?.conflict && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={reconnecting}
+                      onClick={reconnect}
+                    >
+                      {reconnecting ? "Reconnecting…" : "Reconnect Coach"}
+                    </Button>
+                  )}
+                </div>
               )}
             </form>
             <p className="coach-composer-note">

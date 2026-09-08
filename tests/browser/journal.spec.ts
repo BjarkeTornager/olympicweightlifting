@@ -132,6 +132,20 @@ test.describe("authenticated offline shell", () => {
         );
         return;
       }
+      if (incoming.url === "/api/agent") {
+        outgoing.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-store",
+        });
+        outgoing.end(
+          JSON.stringify({
+            enabled: true,
+            provider: "Test provider",
+            turns: [],
+          }),
+        );
+        return;
+      }
       if (incoming.url === "/api/journal") {
         if (incoming.method === "PUT") {
           const chunks = [];
@@ -177,9 +191,13 @@ test.describe("authenticated offline shell", () => {
     try {
       await page.goto(`${origin}/#workout/monday`);
       await page.getByRole("button", { name: "Start this programme" }).click();
-      await page.getByLabel("Set 1 weight in kilograms", { exact: true }).fill("45");
+      await page
+        .getByLabel("Set 1 weight in kilograms", { exact: true })
+        .fill("45");
       await page.getByLabel("Set 1 made", { exact: true }).click();
-      await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        page.getByLabel("Set 1 made", { exact: true }),
+      ).toHaveAttribute("aria-pressed", "true");
       await page.evaluate(async () => {
         await navigator.serviceWorker.ready;
         if (!navigator.serviceWorker.controller)
@@ -242,6 +260,13 @@ test("sync client retries an interrupted acknowledgement and protects conflictin
   ]);
   try {
     for (const [index, context] of contexts.entries()) {
+      await context.route("**/api/agent", (r) => {
+        expect(r.request().method()).toBe("GET");
+        expect(r.request().headers()["x-journal-account"]).toBe(user.id);
+        return r.fulfill({
+          json: { enabled: true, provider: "Test provider", turns: [] },
+        });
+      });
       await context.route("**/api/session", (route) =>
         route.fulfill({
           json: { user, configured: true, google: true, localPassword: false },

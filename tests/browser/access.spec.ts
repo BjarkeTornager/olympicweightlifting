@@ -1,5 +1,5 @@
 // Intentionally no authenticated fixture: these tests exercise the access gate.
-import { test, expect } from "@playwright/test";
+import { test, expect, type BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal } from "../../lib/domain";
 import { saveCheckin } from "../../lib/health";
@@ -29,6 +29,23 @@ const stateFor = (marker: string) => {
   );
   return state;
 };
+// Coach now stays mounted for the account even away from chat. These isolated
+// sessions must stub its read too: the real API correctly rejects fake users.
+async function mockCoach(
+  context: BrowserContext,
+  account: () => string | null,
+) {
+  await context.route("**/api/agent", (r) => {
+    expect(r.request().method()).toBe("GET");
+    const id = account();
+    if (!id)
+      return r.fulfill({ status: 401, json: { error: "Session revoked" } });
+    expect(r.request().headers()["x-journal-account"]).toBe(id);
+    return r.fulfill({
+      json: { enabled: true, provider: "Test provider", turns: [] },
+    });
+  });
+}
 test.describe("private access boundaries", () => {
   test.use({ serviceWorkers: "block" });
   test("signed-out deep links and a forged cached identity never reveal records or request private APIs", async ({
@@ -136,6 +153,7 @@ test.describe("private access boundaries", () => {
     context,
   }) => {
     let active = userA;
+    await mockCoach(context, () => active.id);
     const records = {
       [userA.id]: stateFor("PRIVATE-A-ONLY"),
       [userB.id]: stateFor("PRIVATE-B-ONLY"),
@@ -187,6 +205,7 @@ test.describe("private access boundaries", () => {
     context,
   }) => {
     let signedIn = true;
+    await mockCoach(context, () => (signedIn ? userA.id : null));
     await context.route("**/api/session", (r) =>
       r.fulfill({ json: session(signedIn ? userA : null) }),
     );
@@ -268,6 +287,7 @@ test.describe("private access boundaries", () => {
     context,
   }) => {
     let expired = false;
+    await mockCoach(context, () => (expired ? null : userA.id));
     await context.route("**/api/session", (r) =>
       r.fulfill({
         json: {

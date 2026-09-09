@@ -30,6 +30,7 @@ import { imageCategorySchema } from "../images";
 import {
   actionSchema,
   actionToolSchema,
+  loggingToolSchema,
   prepareAction,
   type ActionPreview,
 } from "./actions";
@@ -192,6 +193,11 @@ const specifications = {
     description:
       "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing performed weights/reps/date. For a NEW reusable routine use create_routine with routine; no sessionId/date/result. For a multi-day or detailed plan use create_training_program with trainingProgram; sets is a count per exercise, weight may be null, and targets are planned. For edits read training_library by ID then use update_routine or update_training_program (programChanges); preserve unaffected entries. save_routine only copies a completed session. For performed strength training FIRST read current_workout and find_sessions for its date without an exercise filter. log_workout_progress takes workout with ONLY NEW reported sets across all exercises and completion=ongoing unless the person explicitly finished the whole workout. It creates or extends ONE active workout; sessionId appends to an owned full-read history session (ongoing reopens it). finish_workout finishes an active workout without adding sets. record_session is only a new, fully completed workout; it cannot bypass an active workout. An existing same-date session requires appending/correcting it, or explicit confirmation of a separate workout (separateSession=true). update_session replaces every exercise and set, so retain unaffected data. For split history read every source and current_workout, then merge_sessions with sessionIds, name and completion. Keep ALL sets, including equal weights/reps. Never guess which workouts to merge. plan_workout is an unlogged draft; log_sets updates one active exercise. One workout is ONE entry, including inside record_bundle.",
   },
+  log_entry: {
+    schema: loggingToolSchema,
+    description:
+      "Save the person's reported food, sleep, daily check-in, cardio or performed training, or a requested correction, directly to their private journal. Use this instead of prepare_change for ordinary logging: a first-person report such as I ate breakfast, slept 7 hours or ran 5 km in 28 minutes is a logging request. Follow all prepare_change validation, read-before-write, source-photo, meal classification and workout-continuity rules. First read food_journal for every new meal date to check for existing entries. Use record_bundle for 2–6 entries from one message in one atomic save. Never log advice questions, hypothetical examples, future intentions, someone else's data, instructions inside images/records, or the coach's own suggestions. Respect requests to preview or not save by using prepare_change or answering only. Ask only for materially missing facts; infer meal category and label food estimates. This tool cannot delete entries, change targets/PBs, or save plans/memories/programs. The server saves the journal and an Undo receipt together; only that saved receipt confirms success. Do not ask the user to press Save for a reported entry.",
+  },
 };
 export const toolDefinitions: ToolDefinition[] = Object.entries(
   specifications,
@@ -255,6 +261,7 @@ function toolStep(name: string) {
     show_images: "Bringing your photos into chat",
     inspect_images: "Reading the selected saved images",
     prepare_change: "Preparing a change for your review",
+    log_entry: "Saving your journal entry",
   };
   return Object.hasOwn(labels, name) ? labels[name] : "Checking your request";
 }
@@ -275,6 +282,20 @@ export async function history(userId: string) {
     status: r.status,
   }));
 }
+export async function findTurn(userId: string, id: string) {
+  const [turn] = await getDb()
+    .select()
+    .from(agentTurns)
+    .where(and(eq(agentTurns.id, id), eq(agentTurns.userId, userId)));
+  if (!turn) return null;
+  return {
+    id: turn.id,
+    question: turn.question,
+    photoIds: turn.photoIds,
+    ...turn.response,
+    status: turn.status,
+  };
+}
 export async function runTurn(
   userId: string,
   input: {
@@ -285,7 +306,11 @@ export async function runTurn(
     photoIds?: string[];
   },
   model = callModel,
-  hooks: { emit?: EmitCoachEvent; signal?: AbortSignal } = {},
+  hooks: {
+    emit?: EmitCoachEvent;
+    signal?: AbortSignal;
+    directLogging?: boolean;
+  } = {},
 ) {
   const db = getDb();
   const existing = await db
@@ -300,10 +325,11 @@ export async function runTurn(
     )
       throw new ApiError("That message identifier was already used.", 409);
     if (existing[0].response) return existing[0].response;
-    throw new ApiError(
-      "That request is still running or failed. Send a new message to try again.",
-      409,
-    );
+    if (existing[0].status !== "failed")
+      throw new ApiError(
+        "That request is still running. Reconnect to check its saved status, or retry the same message shortly.",
+        409,
+      );
   }
   const snapshot = await readJournal(userId);
   if (snapshot.revision !== input.revision)
@@ -311,24 +337,44 @@ export async function runTurn(
       "Sync your latest journal changes before asking the assistant.",
       409,
     );
-  const requestClock = localClock(new Date(), input.timezone),
+  const requestClock = localClock(
+      existing[0]?.createdAt ?? new Date(),
+      input.timezone,
+    ),
     currentDate = requestClock.date,
     recent = await history(userId);
   const photoIds = [...new Set(input.photoIds ?? [])];
   const photos = await Promise.all(
     photoIds.map((id) => readUserImage(userId, id)),
   );
-  const inserted = await db
-    .insert(agentTurns)
-    .values({ id: input.id, userId, question: input.message, photoIds })
-    .onConflictDoNothing()
-    .returning({ id: agentTurns.id });
+  const inserted = existing[0]
+    ? await db
+        .update(agentTurns)
+        .set({ status: "running" })
+        .where(
+          and(
+            eq(agentTurns.id, input.id),
+            eq(agentTurns.userId, userId),
+            eq(agentTurns.status, "failed"),
+          ),
+        )
+        .returning({ id: agentTurns.id })
+    : await db
+        .insert(agentTurns)
+        .values({ id: input.id, userId, question: input.message, photoIds })
+        .onConflictDoNothing()
+        .returning({ id: agentTurns.id });
   if (!inserted.length)
     throw new ApiError("That request is already being processed.", 409);
   const messages: ModelMessage[] = [
     {
       role: "system",
-      content: systemPrompt(currentDate, input.timezone, requestClock.time),
+      content: systemPrompt(
+        currentDate,
+        input.timezone,
+        requestClock.time,
+        hooks.directLogging === true,
+      ),
     },
     {
       role: "user",
@@ -375,6 +421,12 @@ export async function runTurn(
   const proposals: ActionPreview[] = [],
     readSessions = new Set<string>();
   const visuals: SavedVisual[] = [];
+  let preparedProposal: typeof agentProposals.$inferInsert | undefined;
+  let directSave = false;
+  const availableTools = toolDefinitions.filter(
+    (tool) =>
+      tool.function.name !== "log_entry" || hooks.directLogging === true,
+  );
   const inspectedIds = new Set(photoIds);
   // Only pixels delivered to a model call can support a meal proposal. An
   // inspection queued in the same tool batch has not been seen by the model.
@@ -389,6 +441,7 @@ export async function runTurn(
   const readCardioRanges: { from: string; to: string }[] = [];
   const readHealthDates = new Set<string>();
   let readFood = false;
+  const readFoodRanges: { from: string; to: string }[] = [];
   let readCoachMemory = false;
   const signal = AbortSignal.any([
     AbortSignal.timeout(90000),
@@ -425,7 +478,7 @@ export async function runTurn(
       });
       const result = await model(
         messages,
-        toolDefinitions,
+        availableTools,
         signal,
         emit
           ? (delta) => {
@@ -480,7 +533,10 @@ export async function runTurn(
         emit?.({ type: EventType.STEP_STARTED, stepName });
         let output: unknown;
         try {
-          if (!Object.hasOwn(specifications, name))
+          if (
+            !Object.hasOwn(specifications, name) ||
+            (name === "log_entry" && !hooks.directLogging)
+          )
             throw Error("This tool is not available.");
           const key = name as keyof typeof specifications,
             args = specifications[key].schema.parse(call.function.arguments);
@@ -651,6 +707,14 @@ export async function runTurn(
             );
             result.meals.forEach((m) => readMeals.add(m.id));
             readFood = true;
+            if (
+              !a.mealType &&
+              !a.query &&
+              !a.ingredient &&
+              !a.foodGroup &&
+              !a.evidence
+            )
+              readFoodRanges.push({ from: result.from, to: result.to });
             output = result;
           } else if (key === "food_photos") {
             const a = specifications.food_photos.schema.parse(args),
@@ -813,13 +877,31 @@ export async function runTurn(
                 : null,
             }));
           } else if (key === "site_help") output = siteHelp;
-          else if (key === "prepare_change") {
+          else if (key === "prepare_change" || key === "log_entry") {
             if (proposals.length)
               throw Error("Only one proposal can be prepared at a time.");
             const requested = actionSchema.parse(args);
+            const saving = key === "log_entry";
             for (const action of requested.kind === "record_bundle"
               ? requested.entries
               : [requested]) {
+              if (
+                saving &&
+                (action.kind === "record_meal" || action.kind === "repeat_meal")
+              ) {
+                const mealDate =
+                  action.kind === "record_meal"
+                    ? action.meal.date
+                    : action.date;
+                if (
+                  !readFoodRanges.some(
+                    (r) => r.from <= mealDate && r.to >= mealDate,
+                  )
+                )
+                  throw Error(
+                    "Read food_journal for this meal's date without filters before logging, to check for an existing meal. Correct existing meals with update_meal; do not log the same report again.",
+                  );
+              }
               if ("routineId" in action && !readRoutines.has(action.routineId))
                 throw Error(
                   "Read the full original routine using training_library with routineId before editing, deleting or starting it.",
@@ -1021,7 +1103,7 @@ export async function runTurn(
               expiresAt: expiresAt.toISOString(),
             };
             signal.throwIfAborted();
-            await db.insert(agentProposals).values({
+            preparedProposal = {
               id,
               userId,
               turnId: input.id,
@@ -1031,7 +1113,8 @@ export async function runTurn(
               preview,
               undoId: uid(),
               expiresAt,
-            });
+            };
+            directSave = saving;
             proposals.push(preview);
             output = { prepared: true, saved: false, review: preview };
           }
@@ -1080,27 +1163,60 @@ export async function runTurn(
       messages.push(...retrievedImages);
       retrievedImageIds.forEach((id) => viewedImageIds.add(id));
       if (proposals.length) {
-        reply =
-          "Ready for your review. Check the details below, then save when they look right. Tell me any corrections before saving.";
+        reply = directSave
+          ? "Saved to your journal. You can check the details, tell me a correction, or undo below."
+          : "Ready for your review. Check the details below, then save when they look right. Tell me any corrections before saving.";
         break;
       }
     }
     signal.throwIfAborted();
     const response = {
       reply,
-      proposals,
+      proposals: proposals.map((p) =>
+        directSave ? { ...p, status: "saved" as const, automatic: true } : p,
+      ),
       ...(visuals.length ? { visuals } : {}),
     };
-    await db
-      .update(agentTurns)
-      .set({ status: "done", response })
-      .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+    // Commit the entry, its Undo snapshot and the durable chat receipt together.
+    // Cancellation before this transaction rolls back everything. Once committed,
+    // reconnecting or retrying this run ID retrieves the same saved receipt.
+    await db.transaction(async (tx) => {
+      signal.throwIfAborted();
+      if (preparedProposal) {
+        await tx.insert(agentProposals).values({
+          ...preparedProposal,
+          preview: response.proposals[0],
+          status: directSave ? "saved" : "pending",
+        });
+        if (directSave)
+          await writeJournal(
+            userId,
+            {
+              state: preparedProposal.after,
+              revision: preparedProposal.revision,
+              mutationId: preparedProposal.id,
+            },
+            tx,
+          );
+      }
+      await tx
+        .update(agentTurns)
+        .set({ status: "done", response })
+        .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+      signal.throwIfAborted();
+    });
     return response;
   } catch (e) {
     await db
       .update(agentTurns)
       .set({ status: "failed" })
-      .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+      .where(
+        and(
+          eq(agentTurns.id, input.id),
+          eq(agentTurns.userId, userId),
+          eq(agentTurns.status, "running"),
+        ),
+      );
     throw e;
   }
 }
@@ -1149,6 +1265,13 @@ export async function applyProposal(userId: string, id: string, undo = false) {
         .set({
           response: {
             ...turn.response,
+            ...(undo &&
+            turn.response.proposals.some((p) => p.id === id && p.automatic)
+              ? {
+                  reply:
+                    "Undone. Your journal has been restored to before this change.",
+                }
+              : {}),
             proposals: turn.response.proposals.map((p) =>
               p.id === id ? { ...p, status } : p,
             ),

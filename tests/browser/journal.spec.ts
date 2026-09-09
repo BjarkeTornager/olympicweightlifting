@@ -12,6 +12,11 @@ test("log, reload, finish and edit a workout", async ({ page }) => {
   await expect(
     page.getByLabel("Set 2 weight in kilograms", { exact: true }),
   ).toHaveValue("47.5");
+  // The suggested next weight can already match before Made finishes saving.
+  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await page.reload();
   await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
     "aria-pressed",

@@ -39,6 +39,7 @@ export function useJournal(
   const account = useRef(identity.id),
     channel = useRef<BroadcastChannel | null>(null),
     syncing = useRef<AbortController | null>(null),
+    syncFinished = useRef<Promise<void> | null>(null),
     retry = useRef<ReturnType<typeof setTimeout> | null>(null),
     alive = useRef(true);
   const publish = useCallback((value: LocalRecord) => {
@@ -47,200 +48,216 @@ export function useJournal(
       channel.current?.postMessage(value.accountId);
     }
   }, []);
-  const sync = useCallback(async () => {
-    const accountId = account.current;
-    if (
-      !alive.current ||
-      accountId === "guest" ||
-      (syncing.current && !syncing.current.signal.aborted)
-    )
-      return;
-    if (!navigator.onLine) {
-      setStatus("offline");
-      return;
-    }
-    const controller = new AbortController();
-    syncing.current = controller;
-    const requestSignal = () =>
-      AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]);
-    const checkActive = () => controller.signal.throwIfAborted();
-    try {
-      let local = await getLocal(accountId);
-      checkActive();
-      if (local.conflict) {
-        publish(local);
-        setStatus("conflict");
+  const sync = useCallback(
+    async (fresh = false) => {
+      const accountId = account.current;
+      // A Coach save can finish while a background GET is still returning an
+      // older snapshot. Explicit refreshes must read again after that request.
+      while (fresh && syncing.current && !syncing.current.signal.aborted)
+        await syncFinished.current;
+      if (
+        !alive.current ||
+        account.current !== accountId ||
+        accountId === "guest" ||
+        (syncing.current && !syncing.current.signal.aborted)
+      )
+        return;
+      if (!navigator.onLine) {
+        setStatus("offline");
         return;
       }
-      // A background read must not disable Coach every 15 seconds. A failed
-      // refresh still marks the connection unavailable; pending edits stay gated.
-      setStatus((current) =>
-        !local.dirty && !local.pending && current === "synced"
-          ? current
-          : "syncing",
-      );
-      if (!local.dirty && !local.pending) {
-        const requestedRevision = local.revision;
-        // Reads need no cross-tab write lock. An old/suspended tab can hold
-        // that lock indefinitely, which used to strand a clean journal here.
-        const response = await privateFetch("/api/journal", {
-          headers: { "X-Journal-Account": accountId },
-          cache: "no-store",
-          signal: requestSignal(),
-        });
-        if (response.status === 401) {
-          onSessionInvalid();
-          return;
-        }
-        if (!response.ok) throw Error("Sync is temporarily unavailable.");
-        const server = (await response.json()) as Snapshot;
+      const controller = new AbortController();
+      syncing.current = controller;
+      let finishSync!: () => void;
+      syncFinished.current = new Promise<void>((resolve) => {
+        finishSync = resolve;
+      });
+      const requestSignal = () =>
+        AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]);
+      const checkActive = () => controller.signal.throwIfAborted();
+      try {
+        let local = await getLocal(accountId);
         checkActive();
-        local = await changeLocal(accountId, (current) => {
-          checkActive();
-          if (current.dirty || current.pending) return current;
-          // Another tab may have confirmed a newer revision during this read.
-          if (
-            server.revision < current.revision &&
-            current.revision !== requestedRevision
-          )
-            return current;
-          // A restored database can be older than an already-confirmed device
-          // copy. Preserve that copy for recovery instead of silently replacing it.
-          if (server.revision < current.revision)
-            return { ...current, conflict: server };
-          return {
-            ...current,
-            state: server.state,
-            foodTagsVersion: 1,
-            coachJournalVersion: 1,
-            revision: server.revision,
-            lastSyncedAt: new Date().toISOString(),
-            undo:
-              server.revision === current.revision &&
-              (current.coachJournalVersion === 1 || !hasCoachData(server.state))
-                ? current.undo
-                : undefined,
-          };
-        });
-        publish(local);
-        setStatus(
-          local.conflict ? "conflict" : local.dirty ? "saved" : "synced",
-        );
-        setError("");
-        if (local.conflict || (!local.dirty && !local.pending)) return;
-      }
-      const write = async () => {
-        checkActive();
-        // Re-read under the write lock: another tab may have already synced it.
-        local = await getLocal(accountId);
-        checkActive();
-        if (local.conflict || (!local.dirty && !local.pending)) {
+        if (local.conflict) {
           publish(local);
-          setStatus(local.conflict ? "conflict" : "synced");
-          setError("");
-          return;
-        }
-        local = await changeLocal(accountId, (current) => ({
-          ...current,
-          pending: current.pending ?? {
-            mutationId: crypto.randomUUID(),
-            revision: current.revision,
-            state: structuredClone(current.state),
-            seq: current.seq,
-          },
-        }));
-        const pending = local.pending!;
-        const response = await privateFetch("/api/journal", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Journal-Account": accountId,
-          },
-          body: JSON.stringify(pending),
-          signal: requestSignal(),
-        });
-        if (response.status === 401) {
-          onSessionInvalid();
-          return;
-        }
-        const server = await response.json();
-        checkActive();
-        if (response.status === 409) {
-          publish(
-            await changeLocal(accountId, (current) => ({
-              ...current,
-              conflict: { state: server.state, revision: server.revision },
-            })),
-          );
           setStatus("conflict");
           return;
         }
-        if (!response.ok) {
-          // A validation rejection did not commit. Allow a corrected local edit to
-          // create a fresh pending mutation instead of retrying bad input forever.
-          if ([400, 413, 422].includes(response.status)) {
-            await changeLocal(accountId, (current) => ({
-              ...current,
-              pending: undefined,
-            }));
+        // A background read must not disable Coach every 15 seconds. A failed
+        // refresh still marks the connection unavailable; pending edits stay gated.
+        setStatus((current) =>
+          !local.dirty && !local.pending && current === "synced"
+            ? current
+            : "syncing",
+        );
+        if (!local.dirty && !local.pending) {
+          const requestedRevision = local.revision;
+          // Reads need no cross-tab write lock. An old/suspended tab can hold
+          // that lock indefinitely, which used to strand a clean journal here.
+          const response = await privateFetch("/api/journal", {
+            headers: { "X-Journal-Account": accountId },
+            cache: "no-store",
+            signal: requestSignal(),
+          });
+          if (response.status === 401) {
+            onSessionInvalid();
+            return;
           }
-          throw Error(server.error ?? "Sync is temporarily unavailable.");
-        }
-        const next = await changeLocal(accountId, (current) => {
+          if (!response.ok) throw Error("Sync is temporarily unavailable.");
+          const server = (await response.json()) as Snapshot;
           checkActive();
-          if (
-            server.revision !== pending.revision + 1 &&
-            current.seq !== pending.seq
-          )
+          local = await changeLocal(accountId, (current) => {
+            checkActive();
+            if (current.dirty || current.pending) return current;
+            // Another tab may have confirmed a newer revision during this read.
+            if (
+              server.revision < current.revision &&
+              current.revision !== requestedRevision
+            )
+              return current;
+            // A restored database can be older than an already-confirmed device
+            // copy. Preserve that copy for recovery instead of silently replacing it.
+            if (server.revision < current.revision)
+              return { ...current, conflict: server };
             return {
               ...current,
-              conflict: { state: server.state, revision: server.revision },
-              pending: undefined,
+              state: server.state,
+              foodTagsVersion: 1,
+              coachJournalVersion: 1,
+              revision: server.revision,
+              lastSyncedAt: new Date().toISOString(),
+              undo:
+                server.revision === current.revision &&
+                (current.coachJournalVersion === 1 ||
+                  !hasCoachData(server.state))
+                  ? current.undo
+                  : undefined,
             };
-          return {
+          });
+          publish(local);
+          setStatus(
+            local.conflict ? "conflict" : local.dirty ? "saved" : "synced",
+          );
+          setError("");
+          if (local.conflict || (!local.dirty && !local.pending)) return;
+        }
+        const write = async () => {
+          checkActive();
+          // Re-read under the write lock: another tab may have already synced it.
+          local = await getLocal(accountId);
+          checkActive();
+          if (local.conflict || (!local.dirty && !local.pending)) {
+            publish(local);
+            setStatus(local.conflict ? "conflict" : "synced");
+            setError("");
+            return;
+          }
+          local = await changeLocal(accountId, (current) => ({
             ...current,
-            revision: server.revision,
-            pending: undefined,
-            lastSyncedAt: new Date().toISOString(),
-            undo:
-              server.revision === pending.revision + 1
-                ? current.undo
-                : undefined,
-            ...(current.seq === pending.seq
-              ? {
-                  state: server.state,
-                  dirty: false,
-                  foodTagsVersion: 1,
-                  coachJournalVersion: 1,
-                }
-              : { dirty: true }),
-          };
-        });
-        publish(next);
-        setStatus(next.conflict ? "conflict" : next.dirty ? "saved" : "synced");
-        setError("");
-      };
-      if (navigator.locks)
-        await navigator.locks.request(
-          `lift-sync:${accountId}`,
-          { ifAvailable: true },
-          async (lock) => {
-            if (!lock)
-              throw Error(
-                "Another tab is syncing. If this continues, close other Lift Journal tabs and reconnect. Your unsynced edits are kept on this device.",
-              );
-            await write();
-          },
-        );
-      else await write();
-    } catch (e) {
-      if (controller.signal.aborted || !alive.current) return;
-      setStatus(navigator.onLine ? "saved" : "offline");
-      setError(e instanceof Error ? e.message : "Sync is unavailable.");
-    } finally {
-      if (syncing.current === controller) syncing.current = null;
-    }
-  }, [publish, onSessionInvalid]);
+            pending: current.pending ?? {
+              mutationId: crypto.randomUUID(),
+              revision: current.revision,
+              state: structuredClone(current.state),
+              seq: current.seq,
+            },
+          }));
+          const pending = local.pending!;
+          const response = await privateFetch("/api/journal", {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Journal-Account": accountId,
+            },
+            body: JSON.stringify(pending),
+            signal: requestSignal(),
+          });
+          if (response.status === 401) {
+            onSessionInvalid();
+            return;
+          }
+          const server = await response.json();
+          checkActive();
+          if (response.status === 409) {
+            publish(
+              await changeLocal(accountId, (current) => ({
+                ...current,
+                conflict: { state: server.state, revision: server.revision },
+              })),
+            );
+            setStatus("conflict");
+            return;
+          }
+          if (!response.ok) {
+            // A validation rejection did not commit. Allow a corrected local edit to
+            // create a fresh pending mutation instead of retrying bad input forever.
+            if ([400, 413, 422].includes(response.status)) {
+              await changeLocal(accountId, (current) => ({
+                ...current,
+                pending: undefined,
+              }));
+            }
+            throw Error(server.error ?? "Sync is temporarily unavailable.");
+          }
+          const next = await changeLocal(accountId, (current) => {
+            checkActive();
+            if (
+              server.revision !== pending.revision + 1 &&
+              current.seq !== pending.seq
+            )
+              return {
+                ...current,
+                conflict: { state: server.state, revision: server.revision },
+                pending: undefined,
+              };
+            return {
+              ...current,
+              revision: server.revision,
+              pending: undefined,
+              lastSyncedAt: new Date().toISOString(),
+              undo:
+                server.revision === pending.revision + 1
+                  ? current.undo
+                  : undefined,
+              ...(current.seq === pending.seq
+                ? {
+                    state: server.state,
+                    dirty: false,
+                    foodTagsVersion: 1,
+                    coachJournalVersion: 1,
+                  }
+                : { dirty: true }),
+            };
+          });
+          publish(next);
+          setStatus(
+            next.conflict ? "conflict" : next.dirty ? "saved" : "synced",
+          );
+          setError("");
+        };
+        if (navigator.locks)
+          await navigator.locks.request(
+            `lift-sync:${accountId}`,
+            { ifAvailable: true },
+            async (lock) => {
+              if (!lock)
+                throw Error(
+                  "Another tab is syncing. If this continues, close other Lift Journal tabs and reconnect. Your unsynced edits are kept on this device.",
+                );
+              await write();
+            },
+          );
+        else await write();
+      } catch (e) {
+        if (controller.signal.aborted || !alive.current) return;
+        setStatus(navigator.onLine ? "saved" : "offline");
+        setError(e instanceof Error ? e.message : "Sync is unavailable.");
+      } finally {
+        if (syncing.current === controller) syncing.current = null;
+        finishSync();
+      }
+    },
+    [publish, onSessionInvalid],
+  );
   useEffect(() => {
     alive.current = true;
     channel.current = new BroadcastChannel("lift-journal-sync");
@@ -278,7 +295,8 @@ export function useJournal(
     };
     const offline = () =>
       setStatus(account.current === "guest" ? "local" : "offline");
-    window.addEventListener("online", sync);
+    const online = () => void sync();
+    window.addEventListener("online", online);
     window.addEventListener("offline", offline);
     document.addEventListener("visibilitychange", refresh);
     const interval = setInterval(() => void sync(), 15000);
@@ -295,7 +313,7 @@ export function useJournal(
       channel.current?.close();
       clearInterval(interval);
       if (retry.current) clearTimeout(retry.current);
-      window.removeEventListener("online", sync);
+      window.removeEventListener("online", online);
       window.removeEventListener("offline", offline);
       document.removeEventListener("visibilitychange", refresh);
     };

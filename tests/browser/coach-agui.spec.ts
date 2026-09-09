@@ -276,7 +276,7 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
     .toBe(true);
   await expect(
     page.getByText(
-      "Response stopped. Your message is ready to edit or send again.",
+      "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice.",
     ),
   ).toBeVisible();
   await expect(

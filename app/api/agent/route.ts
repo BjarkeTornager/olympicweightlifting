@@ -1,4 +1,5 @@
 import { turnInputSchema } from "@/lib/agent/input";
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agentTurns } from "@/lib/db/schema";
@@ -10,7 +11,7 @@ import {
   requireAthlete,
   requireCurrentCoach,
 } from "@/lib/agent/http";
-import { history, runTurn } from "@/lib/agent/engine";
+import { history, runTurn, findTurn } from "@/lib/agent/engine";
 import { providerConfig } from "@/lib/agent/provider";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -18,6 +19,12 @@ export async function GET(request: Request) {
   try {
     const user = await requireAthlete(request),
       config = providerConfig();
+    const turnId = new URL(request.url).searchParams.get("turnId");
+    if (turnId)
+      return Response.json(
+        { turn: await findTurn(user.id, z.string().uuid().parse(turnId)) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     return Response.json(
       {
         enabled: Boolean(config),
@@ -46,9 +53,14 @@ export async function POST(request: Request) {
         429,
       );
     const input = turnInputSchema.parse(await readJson(request));
-    return Response.json(await runTurn(user.id, input), {
-      headers: { "Cache-Control": "no-store" },
-    });
+    return Response.json(
+      await runTurn(user.id, input, undefined, {
+        directLogging: request.headers.get("x-coach-logging-version") === "1",
+      }),
+      {
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   } catch (e) {
     return apiFailure(e);
   }

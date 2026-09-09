@@ -30,7 +30,11 @@ export async function POST(request: Request) {
         429,
       );
     return coachStream(request, threadId, input.id, (emit, signal) =>
-      runTurn(user.id, input, undefined, { emit, signal }),
+      runTurn(user.id, input, undefined, {
+        emit,
+        signal,
+        directLogging: request.headers.get("x-coach-logging-version") === "1",
+      }),
     );
   } catch (error) {
     return apiFailure(error);

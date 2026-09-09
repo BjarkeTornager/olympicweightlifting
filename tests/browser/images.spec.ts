@@ -134,7 +134,7 @@ test.describe("private image collections", () => {
       page.getByRole("img", { name: "Last night sleep" }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Estimate meal", exact: true }),
+      page.getByRole("button", { name: "Log meal", exact: true }),
     ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Open image library", exact: true })

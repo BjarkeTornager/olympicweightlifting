@@ -8,6 +8,7 @@ export async function privateFetch(
     init?.headers ?? (input instanceof Request ? input.headers : undefined),
   );
   headers.set("X-Coach-Journal-Version", "1");
+  headers.set("X-Coach-Logging-Version", "1");
   headers.set("X-Training-Programs-Version", "2");
   headers.set("X-Food-Tags-Version", "1");
   const response = await fetch(input, { ...init, headers, cache: "no-store" });

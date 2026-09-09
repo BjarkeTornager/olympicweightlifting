@@ -3155,3 +3155,4 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .history-filters > .picker-bar, .history-filters > .button-row { margin: 12px 16px 0; }
 .history-resume { margin-bottom: 16px; }
 .saved-workout-link { margin: 0 12px 12px; }
+.coach-saved-actions { justify-content: space-between; padding: 0 16px 12px; gap: 8px; }

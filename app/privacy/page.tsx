@@ -111,8 +111,13 @@ export default function PrivacyPage() {
         </p>
         <p>
           The assistant can read only your journal through limited tools. It
-          prepares changes for review; you confirm a proposal before it is
-          saved. Provider failures do not remove your existing training. See{" "}
+          saves meals, sleep, check-ins, cardio and training that you report or
+          ask it to log, including requested corrections. Each save has a
+          receipt and Undo, available for 24 hours if no later journal change
+          has been saved. You can ask for a preview instead. Deletions, targets,
+          personal bests, memories and plans still require review. Uploading or
+          categorising an image alone does not log an entry. Food estimates
+          remain labelled as estimates and can be corrected. See{" "}
           <a href="https://openrouter.ai/privacy" className="underline">
             OpenRouter’s privacy policy
           </a>{" "}

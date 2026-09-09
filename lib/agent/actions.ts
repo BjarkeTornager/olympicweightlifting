@@ -352,7 +352,7 @@ export const actionToolSchema = z
       .min(2)
       .max(6)
       .describe(
-        "For record_bundle only: 2–6 reported entries reviewed and saved atomically. Combine same-date check-in fields into ONE record_checkin, including only explicitly reported fields; omitted values are preserved. No nested bundles.",
+        "For record_bundle only: 2–6 reported entries validated and saved atomically. Combine same-date check-in fields into ONE record_checkin, including only explicitly reported fields; omitted values are preserved. No nested bundles.",
       )
       .optional(),
     memory: memoryInputSchema
@@ -400,6 +400,43 @@ export const actionToolSchema = z
   })
   .strict();
 export type AgentAction = z.infer<typeof actionSchema>;
+// Only everyday records and their corrections can bypass the review step.
+// Deletions, targets, plans and durable memories still use prepare_change.
+export const loggingKinds = [
+  "record_meal",
+  "repeat_meal",
+  "update_meal",
+  "record_checkin",
+  "record_cardio",
+  "update_cardio",
+  "record_session",
+  "update_session",
+  "log_workout_progress",
+  "log_sets",
+  "finish_workout",
+  "record_bundle",
+] as const;
+export const loggingToolSchema = actionToolSchema
+  .pick({
+    kind: true,
+    entries: true,
+    cardio: true,
+    cardioId: true,
+    changes: true,
+    workout: true,
+    completion: true,
+    separateSession: true,
+    sessionId: true,
+    exerciseId: true,
+    sets: true,
+    date: true,
+    meal: true,
+    mealId: true,
+    checkin: true,
+  })
+  .extend({
+    kind: z.enum(loggingKinds),
+  });
 export type TrainingReview =
   | { kind: "routine"; after: WorkoutTemplate; before?: WorkoutTemplate }
   | { kind: "program"; after: TrainingProgram; before?: TrainingProgram };
@@ -422,6 +459,7 @@ export type ActionPreview = {
   entries?: PreviewEntry[];
   expiresAt: string;
   status?: "saved" | "undone";
+  automatic?: boolean;
 };
 export type PreviewEntry = Pick<
   ActionPreview,

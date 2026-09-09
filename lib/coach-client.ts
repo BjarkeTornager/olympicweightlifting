@@ -107,14 +107,14 @@ export async function runCoach(
     throw Error(
       failure ??
         connectionFailure ??
-        "Coach lost its connection before finishing. Your message is ready to try again.",
+        "Coach lost its connection. Reconnect to check the saved result, or retry the same message safely.",
     );
   }
   signal.throwIfAborted();
   if (failure || !result)
     throw Error(
       failure ??
-        "The connection ended before Coach finished. Your message is ready to try again.",
+        "The connection ended before Coach finished. Reconnect to check the saved result, or retry the same message safely.",
     );
   return result;
 }

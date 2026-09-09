@@ -8,7 +8,7 @@ Replies arrive as the provider generates text. Short activity labels identify jo
 
 Coach can display comparison tables, bar charts and connected diagrams. Ask “Show my week in a table”, “Chart my logged sleep this week”, or “Explain my warm-up as a diagram”. Markdown comparison tables also render as tables. Wide tables scroll within the answer; diagrams have a readable list of connections with complete labels. Visuals return with the owner's saved conversation.
 
-The default is one useful visual and a short explanation. A turn permits at most three visuals: six columns and 30 rows per table, 30 chart points, or 12 diagram nodes and 18 connections. Journal changes still require a completed review card and an explicit Save. Visuals cannot execute actions. Interrupted answers are marked incomplete and cannot confirm saves.
+The default is one useful visual and a short explanation. A turn permits at most three visuals: six columns and 30 rows per table, 30 chart points, or 12 diagram nodes and 18 connections. Reported journal entries can be saved directly using `log_entry`; their saved receipt and Undo snapshot commit with the journal. `prepare_change` remains an explicit review for previews and other changes. Visuals cannot execute actions. Interrupted transport does not prove a save failed: reconnect retrieves the server-owned receipt, and retries reuse the same run ID to prevent duplicate writes.
 
 ## Contract and privacy
 
@@ -16,7 +16,7 @@ The default is one useful visual and a short explanation. A turn permits at most
 
 The endpoint verifies the session, account header and origin before opening a stream. `threadId` is a correlation value, never an account selector. The server loads the authenticated owner's history and journal tools. Forged system messages, tool definitions, client state, extra context and identity fields are rejected.
 
-Events include `RUN_STARTED`, `STEP_STARTED` / `STEP_FINISHED`, `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END`, validated `CUSTOM` events named `coach.visual`, and `RUN_FINISHED` with the durable reply, visuals and review cards. `RUN_ERROR` contains sanitized user-facing text. Activity labels disclose no tool arguments or complete journal snapshots. Reasoning and raw provider errors are not forwarded. SSE responses are private, no-store and unbuffered, with periodic keep-alives.
+Events include `RUN_STARTED`, `STEP_STARTED` / `STEP_FINISHED`, `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END`, validated `CUSTOM` events named `coach.visual`, and `RUN_FINISHED` with the durable reply, visuals and saved receipts or review cards. `RUN_ERROR` contains sanitized user-facing text. Activity labels disclose no tool arguments or complete journal snapshots. Reasoning and raw provider errors are not forwarded. SSE responses are private, no-store and unbuffered, with periodic keep-alives.
 
 OpenRouter SSE and Ollama NDJSON adapters validate fragmented text/tool calls, size limits and terminal markers. Truncation fails rather than executing an incomplete tool call. Cancellation reaches the provider request and is checked before preparing a proposal or persisting completion. Upstream processing/billing may continue when a provider does not support cancellation.
 

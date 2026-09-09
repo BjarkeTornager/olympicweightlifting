@@ -342,7 +342,7 @@ export function ImageLibrary({
                   onClick={() => go(`coach/photo/${image.id}`)}
                 >
                   {image.category === "food"
-                    ? "Estimate meal"
+                    ? "Log meal"
                     : image.category === "sleep"
                       ? "Read sleep image"
                       : "Discuss with Coach"}

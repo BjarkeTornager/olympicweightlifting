@@ -290,7 +290,7 @@ test.describe("authenticated photo UI", () => {
     ).toBeVisible();
     await expect(page.getByRole("img", { name: "Lunch plate" })).toBeVisible();
     await page
-      .getByRole("button", { name: "Estimate meal", exact: true })
+      .getByRole("button", { name: "Log meal", exact: true })
       .click();
     await expect(
       page.getByRole("img", { name: "Image ready to send" }),

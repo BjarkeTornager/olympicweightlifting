@@ -79,7 +79,7 @@ export function TrainingAgent({
   const entryPrompt = initialSleepLog
     ? sleepLoggingPrompt(Boolean(initialPhotoId))
     : initialCardioLog
-      ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then prepare it for my review."
+      ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then save the entry."
       : (initialTrainingPrompt ?? "");
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(entryPrompt),
@@ -95,9 +95,20 @@ export function TrainingAgent({
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const activeRun = useRef<AbortController | null>(null);
+  const retryTurn = useRef<{
+    id: string;
+    question: string;
+    photoIds: string[];
+  } | null>(null);
   // Account changes/sign-out still unmount this controller and cancel the run.
   // Internal navigation only removes the view below, preserving work and drafts.
-  useEffect(() => () => activeRun.current?.abort(), []);
+  useEffect(
+    () => () => {
+      activeRun.current?.abort();
+      activeRun.current = null;
+    },
+    [],
+  );
   const [backgroundResult, setBackgroundResult] = useState<
     "ready" | "failed" | null
   >(null);
@@ -334,7 +345,12 @@ export function TrainingAgent({
     if (!question || busy || uploading || !ready || photoIds.length > 4) return;
     const attachments = [...photoIds];
     const attachmentDetails = imageDetails;
-    const id = crypto.randomUUID();
+    const retry = retryTurn.current;
+    const id =
+      retry?.question === question &&
+      JSON.stringify(retry.photoIds) === JSON.stringify(attachments)
+        ? retry.id
+        : crypto.randomUUID();
     const abort = new AbortController();
     activeRun.current = abort;
     setBusy(true);
@@ -346,7 +362,7 @@ export function TrainingAgent({
     setPhotoIds([]);
     setImageDetails({});
     setTurns((old) => [
-      ...old,
+      ...old.filter((t) => t.id !== id),
       { id, question, photoIds: attachments, status: "running" },
     ]);
     setView("conversation");
@@ -420,10 +436,36 @@ export function TrainingAgent({
         ),
       );
       setBackgroundResult("ready");
+      retryTurn.current = null;
+      if (result.proposals.some((p: ActionPreview) => p.status === "saved"))
+        await journal.sync(true);
     } catch (e) {
+      // A dropped stream can occur after the save committed. Read the durable
+      // receipt before offering a retry, and reuse this run ID if still unknown.
+      if (activeRun.current !== abort) return;
+      try {
+        const recovered = await privateFetch(
+          `/api/agent?turnId=${encodeURIComponent(id)}`,
+          {
+            headers: headers(),
+            signal: AbortSignal.timeout(10000),
+          },
+        );
+        const data = await recovered.json();
+        if (recovered.ok && data.turn?.status === "done" && data.turn.reply) {
+          setTurns((old) => old.map((t) => (t.id === id ? data.turn : t)));
+          retryTurn.current = null;
+          setBackgroundResult("ready");
+          await journal.sync(true);
+          return;
+        }
+      } catch {
+        /* Offline: keep the same run ID to prevent duplicate saves. */
+      }
+      retryTurn.current = { id, question, photoIds: attachments };
       setError(
         abort.signal.aborted
-          ? "Response stopped. Your message is ready to edit or send again."
+          ? "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice."
           : e instanceof Error
             ? e.message
             : "The request failed. Your journal is safe.",
@@ -435,6 +477,7 @@ export function TrainingAgent({
       setTurns((old) =>
         old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
       );
+      void journal.sync();
     } finally {
       if (activeRun.current === abort) activeRun.current = null;
       setBusy(false);
@@ -457,12 +500,18 @@ export function TrainingAgent({
       setTurns((old) =>
         old.map((t) => ({
           ...t,
+          ...(undo && t.proposals?.some((v) => v.id === p.id && v.automatic)
+            ? {
+                reply:
+                  "Undone. Your journal has been restored to before this change.",
+              }
+            : {}),
           proposals: t.proposals?.map((v) =>
             v.id === p.id ? { ...v, status: data.status } : v,
           ),
         })),
       );
-      await journal.sync();
+      await journal.sync(true);
       setNotice(
         undo
           ? "Change undone and saved to your account."
@@ -641,7 +690,7 @@ export function TrainingAgent({
             <h3>Your next step starts here.</h3>
             <p>
               Sign in to connect your health, food and training history with
-              Coach. Review suggested entries before saving.
+              Coach. Reported entries are saved with Undo.
             </p>
             <Button onClick={onLogin}>Sign in to talk with Coach</Button>
             <p className="fine-print">
@@ -826,14 +875,19 @@ export function TrainingAgent({
                     )}
                     {t.status === "failed" && (
                       <p className="fine-print">
-                        This request didn’t finish. No change was confirmed.
+                        This reply was interrupted. Reconnect to check its saved
+                        status.
                       </p>
                     )}
                     {t.proposals?.map((p) => (
                       <section
                         key={p.id}
                         className={`agent-proposal ${p.status ?? "pending"}`}
-                        aria-label="Review journal change"
+                        aria-label={
+                          p.status === "saved" && p.automatic
+                            ? "Saved journal entry"
+                            : "Review journal change"
+                        }
                         data-needs-review={needsReview(p)}
                       >
                         <details
@@ -1009,7 +1063,7 @@ export function TrainingAgent({
                                       : "Save this change"}
                                 </Button>
                               )}
-                              {p.status === "saved" && (
+                              {p.status === "saved" && !p.automatic && (
                                 <Button
                                   variant="secondary"
                                   disabled={pending || Boolean(acting) || busy}
@@ -1073,6 +1127,30 @@ export function TrainingAgent({
                             </p>
                           </div>
                         </details>
+                        {p.status === "saved" && p.automatic && (
+                          <div className="button-row coach-saved-actions">
+                            <span className="fine-print">
+                              Saved to your account
+                            </span>
+                            <Button
+                              variant="ghost"
+                              disabled={
+                                pending ||
+                                Boolean(acting) ||
+                                busy ||
+                                new Date(p.expiresAt).getTime() < now
+                              }
+                              onClick={() => void apply(p, true)}
+                            >
+                              <Undo2 size={17} />
+                              {acting === p.id
+                                ? "Undoing…"
+                                : p.entries
+                                  ? "Undo all entries"
+                                  : "Undo"}
+                            </Button>
+                          </div>
+                        )}
                         {p.status === "saved" && p.workoutReview && (
                           <Button
                             className="saved-workout-link"
@@ -1161,7 +1239,7 @@ export function TrainingAgent({
                     disabled={busy || uploading || loadingImage}
                     onClick={() =>
                       draft(
-                        "Help me log what I ate. Ask for any missing meal details and prepare it for review.",
+                        "Help me log what I ate. Ask for materially missing details, then save the entry.",
                       )
                     }
                   >
@@ -1174,7 +1252,7 @@ export function TrainingAgent({
                     onClick={() =>
                       draft(
                         message.trim()
-                          ? "Please use this to log my sleep. Ask about any unclear date or time asleep and prepare the entry for review."
+                          ? "Please use this to log my sleep. Ask about any unclear date or time asleep and save the entry."
                           : sleepLoggingPrompt(photoIds.length > 0),
                       )
                     }
@@ -1322,7 +1400,7 @@ export function TrainingAgent({
               )}
             </form>
             <p className="coach-composer-note">
-              Review suggested entries before saving.{" "}
+              Reported entries are saved with Undo.{" "}
               <button onClick={() => setOptionsOpen(true)}>
                 Privacy & details
               </button>

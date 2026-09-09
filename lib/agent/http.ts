@@ -72,7 +72,7 @@ export function apiFailure(error: unknown) {
     return Response.json(
       {
         error:
-          "Your journal changed after this proposal was prepared. Sync and ask for an updated proposal. Your existing training is safe.",
+          "Your journal changed while Coach was preparing this entry. Sync and retry your request so Coach can use the latest records. No changes were overwritten.",
       },
       { status: 409 },
     );

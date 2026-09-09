@@ -215,11 +215,13 @@ test("an unknown save result retries with the same run ID instead of risking a d
   await page.evaluate(() =>
     (window as unknown as StreamWindow).closeCoachStream(),
   );
-  await expect(composer).toHaveValue("I slept 7.5 hours last night");
+  await expect(composer).toHaveValue("");
   await expect(
-    page.getByRole("button", { name: "Send", exact: true }),
+    page.getByRole("button", { name: "Retry message", exact: true }),
   ).toBeEnabled();
-  await composer.press("Enter");
+  await page
+    .getByRole("button", { name: "Retry message", exact: true })
+    .click();
   await expect.poll(async () => (await requests(page)).length).toBe(2);
   const sent = await requests(page);
   expect(sent[1].body.runId).toBe(sent[0].body.runId);

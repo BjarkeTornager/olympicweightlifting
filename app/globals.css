@@ -2941,6 +2941,15 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-diagram-details li svg { flex-shrink: 0; }
 .coach-diagram-details li strong { width: 100%; font-size: 11px; }
 .coach-run-activity { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coach-queue { border: 1px solid var(--line, #e7e5e4); border-radius: 16px; padding: 12px 16px; background: #faf9f7; font-size: 13px; }
+.coach-queue details > p { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.coach-queue details > p span { color: #646464; }
+.coach-queue ol { margin: 8px 0 0; padding: 0; list-style: none; max-height: 144px; overflow: auto; }
+.coach-queue li { display: flex; align-items: center; gap: 8px; border-top: 1px solid #e7e5e4; }
+.coach-queue li > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.coach-queue li button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.coach-queue-failed > p { overflow-wrap: anywhere; max-height: 72px; overflow: auto; margin: 10px 0; }
+.coach-queue-failed > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .coach-run-activity p { display: flex; align-items: center; gap: 8px; color: #546d60; font-size: 12px; margin: 8px 0; }
 .coach-run-activity p svg { flex-shrink: 0; animation: coach-working 1.5s linear infinite; }
 .coach-run-activity button { display: flex; align-items: center; gap: 5px; color: #496051; border: 1px solid #d6e1da; border-radius: 8px; padding: 8px 10px; min-height: 36px; font-size: 11px; }
@@ -3156,3 +3165,10 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .history-resume { margin-bottom: 16px; }
 .saved-workout-link { margin: 0 12px 12px; }
 .coach-saved-actions { justify-content: space-between; padding: 0 16px 12px; gap: 8px; }
+
+.coach-queue { flex-shrink: 0; margin: 0 18px; max-height: 32%; overflow-y: auto; }
+.coach-queue summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; min-height: 24px; }
+.coach-queue summary > span { display: flex; align-items: center; gap: 6px; }
+.coach-queue details[open] > p { margin-top: 8px; }
+
+@media (max-width: 700px) { .coach-queue { margin-inline: 9px; } }

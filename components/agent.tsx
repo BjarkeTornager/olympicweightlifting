@@ -1,8 +1,15 @@
 "use client";
 import { privateFetch } from "@/lib/private-fetch";
+import { getLocal } from "@/lib/local";
 import { useConversationScroll } from "@/lib/use-conversation-scroll";
 import type { SavedVisual } from "@/lib/coach-visuals";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowRight,
   Check,
@@ -55,6 +62,14 @@ type Turn = {
   visuals?: SavedVisual[];
   activity?: string;
 };
+type QueuedMessage = {
+  id: string;
+  question: string;
+  photoIds: string[];
+  timezone: string;
+  submittedAt: string;
+};
+const MAX_QUEUED_MESSAGES = 20;
 export function TrainingAgent({
   journal,
   onLogin,
@@ -95,11 +110,13 @@ export function TrainingAgent({
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const activeRun = useRef<AbortController | null>(null);
-  const retryTurn = useRef<{
-    id: string;
-    question: string;
-    photoIds: string[];
-  } | null>(null);
+  const [queue, setQueue] = useState<QueuedMessage[]>([]);
+  const [failedMessage, setFailedMessage] = useState<QueuedMessage | null>(
+    null,
+  );
+  const [activeId, setActiveId] = useState<string | null>(null);
+  // A submitted draft cannot be accepted twice before React clears the composer.
+  const submittedDraft = useRef<string | null>(null);
   // Account changes/sign-out still unmount this controller and cancel the run.
   // Internal navigation only removes the view below, preserving work and drafts.
   useEffect(
@@ -139,6 +156,7 @@ export function TrainingAgent({
     0,
   );
   const draft = (text: string) => {
+    submittedDraft.current = null;
     setView("conversation");
     setMessage((current) => (current.trim() ? `${current}\n\n${text}` : text));
     requestAnimationFrame(() => input.current?.focus({ preventScroll: true }));
@@ -192,6 +210,7 @@ export function TrainingAgent({
         const image: UserImage & { error?: string } = await r.json();
         if (!r.ok) throw Error(image.error ?? "Image unavailable.");
         if (!abort.signal.aborted) {
+          submittedDraft.current = null;
           setPhotoIds((ids) => [...new Set([...ids, image.id])]);
           setImageDetails((details) => ({ ...details, [image.id]: image }));
           setMessage((current) => current || imageCoachPrompt(image.category));
@@ -240,7 +259,10 @@ export function TrainingAgent({
         provider: data.provider,
         protocol: data.protocol,
       });
-      setTurns(data.turns);
+      setTurns((current) => [
+        ...data.turns.filter((t: Turn) => !current.some((v) => v.id === t.id)),
+        ...current,
+      ]);
     } catch {
       if (!controller.signal.aborted) {
         connectionReady.current = false;
@@ -311,6 +333,7 @@ export function TrainingAgent({
   };
   const attach = async (file?: File) => {
     if (!file || !accountId || photoIds.length >= 4) return;
+    submittedDraft.current = null;
     setUploading(true);
     setError("");
     try {
@@ -329,7 +352,7 @@ export function TrainingAgent({
       setUploading(false);
     }
   };
-  const send = async (provided?: string) => {
+  const send = (provided?: string) => {
     const question =
       provided?.trim() ||
       message.trim() ||
@@ -342,39 +365,59 @@ export function TrainingAgent({
                 : "unclassified",
           )
         : "");
-    if (!question || busy || uploading || !ready || photoIds.length > 4) return;
-    const attachments = [...photoIds];
-    const attachmentDetails = imageDetails;
-    const retry = retryTurn.current;
-    const id =
-      retry?.question === question &&
-      JSON.stringify(retry.photoIds) === JSON.stringify(attachments)
-        ? retry.id
-        : crypto.randomUUID();
+    if (!question || uploading || !ready || photoIds.length > 4) return;
+    if (queue.length >= MAX_QUEUED_MESSAGES) {
+      setError(
+        "Your queue is full. Let Coach finish a message or remove a queued message.",
+      );
+      return;
+    }
+    const signature = JSON.stringify([question, photoIds]);
+    if (submittedDraft.current === signature) return;
+    submittedDraft.current = signature;
+    const job: QueuedMessage = {
+      id: crypto.randomUUID(),
+      question,
+      photoIds: [...photoIds],
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      submittedAt: new Date().toISOString(),
+    };
+    setQueue((waiting) => [...waiting, job]);
+    setMessage("");
+    setPhotoIds([]);
+    setImageDetails({});
+    setView("conversation");
+    setToolsOpen(false);
+    if (!failedMessage) setError("");
+    // Keep keyboard focus so another message can follow immediately.
+    input.current?.focus({ preventScroll: true });
+  };
+  const execute = async (job: QueuedMessage) => {
+    const { id, question, photoIds: attachments } = job;
     const abort = new AbortController();
     activeRun.current = abort;
+    setActiveId(id);
     setBusy(true);
     setBackgroundResult(null);
     setError("");
-    setMessage("");
-    // A new draft/photo can arrive from another section while this turn runs.
-    // The submitted attachments belong to this turn, not to that next draft.
-    setPhotoIds([]);
-    setImageDetails({});
     setTurns((old) => [
       ...old.filter((t) => t.id !== id),
       { id, question, photoIds: attachments, status: "running" },
     ]);
-    setView("conversation");
-    setToolsOpen(false);
-    input.current?.blur();
     try {
       const { runCoach } = await import("@/lib/coach-client");
+      // Read the committed local snapshot after the preceding run's fresh sync.
+      // A render captured before that sync can still contain an older revision.
+      const record = await getLocal(accountId!);
+      abort.signal.throwIfAborted();
+      if (record.dirty || record.pending || record.conflict)
+        throw Error("Sync your journal changes, then retry this message.");
       const payload = {
         id,
         message: question,
-        revision: journal.record!.revision,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        revision: record.revision,
+        timezone: job.timezone,
+        submittedAt: job.submittedAt,
         photoIds: attachments,
       };
       const signal = AbortSignal.any([
@@ -436,7 +479,7 @@ export function TrainingAgent({
         ),
       );
       setBackgroundResult("ready");
-      retryTurn.current = null;
+      setFailedMessage(null);
       if (result.proposals.some((p: ActionPreview) => p.status === "saved"))
         await journal.sync(true);
     } catch (e) {
@@ -454,7 +497,7 @@ export function TrainingAgent({
         const data = await recovered.json();
         if (recovered.ok && data.turn?.status === "done" && data.turn.reply) {
           setTurns((old) => old.map((t) => (t.id === id ? data.turn : t)));
-          retryTurn.current = null;
+          setFailedMessage(null);
           setBackgroundResult("ready");
           await journal.sync(true);
           return;
@@ -462,7 +505,7 @@ export function TrainingAgent({
       } catch {
         /* Offline: keep the same run ID to prevent duplicate saves. */
       }
-      retryTurn.current = { id, question, photoIds: attachments };
+      setFailedMessage(job);
       setError(
         abort.signal.aborted
           ? "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice."
@@ -470,21 +513,60 @@ export function TrainingAgent({
             ? e.message
             : "The request failed. Your journal is safe.",
       );
-      setMessage((current) => current || question);
-      setPhotoIds((ids) => [...new Set([...ids, ...attachments])]);
-      setImageDetails((details) => ({ ...attachmentDetails, ...details }));
       setBackgroundResult("failed");
       setTurns((old) =>
         old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
       );
       void journal.sync();
     } finally {
-      if (activeRun.current === abort) activeRun.current = null;
-      setBusy(false);
+      if (activeRun.current === abort) {
+        activeRun.current = null;
+        setActiveId(null);
+        setBusy(false);
+      }
     }
   };
+  // The effect event sees the latest account, connection and journal controller.
+  // Only this drain starts requests; accepting messages never starts a parallel run.
+  const drain = useEffectEvent(() => {
+    if (activeRun.current || failedMessage || !ready || acting || !queue.length)
+      return;
+    const next = queue[0];
+    setQueue((waiting) => waiting.filter((job) => job.id !== next.id));
+    void execute(next);
+  });
+  useEffect(() => {
+    const timer = setTimeout(() => drain(), 0);
+    return () => clearTimeout(timer);
+  }, [queue, busy, failedMessage, ready, acting]);
+  useEffect(() => {
+    if (!busy && !queue.length && !failedMessage) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy, queue.length, failedMessage]);
+  const retryFailed = () => {
+    if (!failedMessage || busy || !ready) return;
+    setQueue((waiting) => [failedMessage, ...waiting]);
+    setFailedMessage(null);
+    setError("");
+  };
+  const skipFailed = async () => {
+    if (busy || !failedMessage) return;
+    setActing("queue-sync");
+    await journal.sync(true);
+    setFailedMessage(null);
+    setActing(null);
+    setError("");
+    setNotice(
+      "Retry skipped. Check your journal for any entry that was already saved.",
+    );
+  };
   const apply = async (p: ActionPreview, undo = false) => {
-    if (pending || acting) return;
+    if (pending || acting || activeRun.current) return;
     setActing(p.id);
     setError("");
     setNotice("");
@@ -537,6 +619,7 @@ export function TrainingAgent({
       draft(question);
       return;
     }
+    submittedDraft.current = null;
     setMessage(question);
     if (ready) void send(question);
     else {
@@ -549,17 +632,23 @@ export function TrainingAgent({
     }
   };
   if (!visible) {
-    const status = busy
-      ? "Coach is working…"
-      : acting
-        ? "Coach is saving your change…"
-        : uploading || loadingImage
-          ? "Coach is preparing your photo…"
-          : backgroundResult === "ready"
-            ? "Your Coach reply is ready"
-            : backgroundResult === "failed"
-              ? "Coach needs your attention"
-              : null;
+    const status = failedMessage
+      ? "Coach needs your attention"
+      : busy
+        ? queue.length
+          ? `Coach is working… ${queue.length} queued`
+          : "Coach is working…"
+        : queue.length
+          ? `${queue.length} messages waiting for Coach`
+          : acting
+            ? "Coach is saving your change…"
+            : uploading || loadingImage
+              ? "Coach is preparing your photo…"
+              : backgroundResult === "ready"
+                ? "Your Coach reply is ready"
+                : backgroundResult === "failed"
+                  ? "Coach needs your attention"
+                  : null;
     return status ? (
       <div className="coach-background-status">
         <span role="status">
@@ -855,14 +944,14 @@ export function TrainingAgent({
                     {t.status === "running" && (
                       <div className="coach-run-activity">
                         <p role="status">
-                          {busy && t.id === newestId && (
+                          {busy && t.id === activeId && (
                             <LoaderCircle size={15} aria-hidden="true" />
                           )}
-                          {busy && t.id === newestId
+                          {busy && t.id === activeId
                             ? (t.activity ?? "Looking through your journal…")
                             : "This request has not completed. You can ask again."}
                         </p>
-                        {busy && t.id === newestId && (
+                        {busy && t.id === activeId && (
                           <button
                             onClick={() => activeRun.current?.abort()}
                             aria-label="Stop response"
@@ -1176,6 +1265,81 @@ export function TrainingAgent({
               </div>
             </div>
 
+            {(queue.length > 0 || failedMessage) && (
+              <section className="coach-queue" aria-label="Message queue">
+                <details open={failedMessage ? true : undefined}>
+                  <summary>
+                    <span role="status">
+                      {failedMessage
+                        ? "Queue paused"
+                        : `${queue.length} queued`}
+                    </span>
+                    <span>
+                      View messages <ChevronDown size={14} />
+                    </span>
+                  </summary>
+                  <p>
+                    <span>
+                      {failedMessage
+                        ? "Retry the interrupted message or skip it to continue."
+                        : queue.length >= MAX_QUEUED_MESSAGES
+                          ? "Your queue is full. Remove a message or let Coach catch up."
+                          : "Coach will reply in order. Keep this tab open; you can explore the site."}
+                    </span>
+                  </p>
+                  {failedMessage && (
+                    <div className="coach-queue-failed">
+                      <p>{failedMessage.question}</p>
+                      <div>
+                        <Button
+                          variant="secondary"
+                          disabled={busy || !ready || Boolean(acting)}
+                          onClick={retryFailed}
+                        >
+                          Retry message
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={busy || !ready || Boolean(acting)}
+                          onClick={() => void skipFailed()}
+                        >
+                          Skip and continue
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {queue.length > 0 && (
+                    <ol>
+                      {queue.map((job, index) => (
+                        <li key={job.id}>
+                          <span>
+                            <strong>{index + 1}.</strong> {job.question}
+                            {job.photoIds.length > 0 && (
+                              <small>
+                                {" "}
+                                · {job.photoIds.length} attached{" "}
+                                {job.photoIds.length === 1 ? "image" : "images"}
+                              </small>
+                            )}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            aria-label={`Remove queued message ${index + 1}`}
+                            onClick={() =>
+                              setQueue((waiting) =>
+                                waiting.filter((item) => item.id !== job.id),
+                              )
+                            }
+                          >
+                            <X size={16} />
+                          </Button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </details>
+              </section>
+            )}
             {error && (
               <div className="notice warning" role="alert">
                 {error}
@@ -1204,7 +1368,10 @@ export function TrainingAgent({
                 rows={2}
                 enterKeyHint="send"
                 aria-describedby="coach-message-keyboard-hint"
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => {
+                  submittedDraft.current = null;
+                  setMessage(e.target.value);
+                }}
                 placeholder="Ask anything, or tell me about your day…"
                 onKeyDown={(e) => {
                   if (
@@ -1236,7 +1403,7 @@ export function TrainingAgent({
                   <Button
                     type="button"
                     variant="ghost"
-                    disabled={busy || uploading || loadingImage}
+                    disabled={uploading || loadingImage}
                     onClick={() =>
                       draft(
                         "Help me log what I ate. Ask for materially missing details, then save the entry.",
@@ -1248,7 +1415,7 @@ export function TrainingAgent({
                   <Button
                     type="button"
                     variant="ghost"
-                    disabled={busy || uploading || loadingImage}
+                    disabled={uploading || loadingImage}
                     onClick={() =>
                       draft(
                         message.trim()
@@ -1264,14 +1431,14 @@ export function TrainingAgent({
                   type="submit"
                   disabled={
                     !ready ||
-                    busy ||
                     uploading ||
+                    queue.length >= MAX_QUEUED_MESSAGES ||
                     photoIds.length > 4 ||
                     (!message.trim() && !photoIds.length)
                   }
                 >
                   <Send size={17} />
-                  {busy ? "Thinking…" : "Send"}
+                  Send
                 </Button>
               </div>
               <div
@@ -1289,7 +1456,6 @@ export function TrainingAgent({
                       accept="image/*"
                       capture="environment"
                       disabled={
-                        busy ||
                         uploading ||
                         loadingImage ||
                         !accountId ||
@@ -1308,7 +1474,6 @@ export function TrainingAgent({
                       aria-label="Attach image"
                       accept="image/*"
                       disabled={
-                        busy ||
                         uploading ||
                         loadingImage ||
                         !accountId ||
@@ -1326,7 +1491,7 @@ export function TrainingAgent({
                   <input
                     type="checkbox"
                     checked={autoTag}
-                    disabled={busy || uploading}
+                    disabled={uploading}
                     onChange={(e) => setAutoTag(e.target.checked)}
                   />{" "}
                   Tag uploads automatically
@@ -1361,7 +1526,6 @@ export function TrainingAgent({
                         <Button
                           type="button"
                           variant="ghost"
-                          disabled={busy}
                           aria-label="Remove attachment"
                           onClick={() =>
                             setPhotoIds((ids) => ids.filter((v) => v !== id))
@@ -1472,7 +1636,12 @@ export function TrainingAgent({
           {turns.length > 0 && (
             <Button
               variant="ghost"
-              disabled={busy || Boolean(acting)}
+              disabled={
+                busy ||
+                Boolean(acting) ||
+                queue.length > 0 ||
+                Boolean(failedMessage)
+              }
               onClick={() => {
                 setOptionsOpen(false);
                 setClear(true);

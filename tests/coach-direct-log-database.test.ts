@@ -93,6 +93,70 @@ test(
     const hooks = { directLogging: true };
     try {
       await t.test(
+        "queued messages keep submission clock through a failed run and retry",
+        async () => {
+          const a = await user();
+          const { localClock } = await import("../lib/agent/time-context");
+          // Simulate time spent waiting; UTC yesterday is a distinct day when possible.
+          const submittedAt = new Date(Date.now() - 23 * 3600000).toISOString();
+          const request = {
+            ...input("Log today's sleep"),
+            timezone: "UTC",
+            submittedAt,
+          };
+          const expected = localClock(submittedAt, request.timezone);
+          let calls = 0;
+          await assert.rejects(() =>
+            runTurn(
+              a,
+              request,
+              async (messages) => {
+                assert.ok(String(messages[0].content).includes(expected.date));
+                assert.ok(String(messages[0].content).includes(expected.time));
+                calls++;
+                throw Error("Synthetic provider interruption");
+              },
+              hooks,
+            ),
+          );
+          await runTurn(
+            a,
+            { ...request, submittedAt: new Date().toISOString() },
+            async (messages) => {
+              assert.ok(String(messages[0].content).includes(expected.date));
+              assert.ok(String(messages[0].content).includes(expected.time));
+              calls++;
+              return {
+                role: "assistant",
+                content: "How many hours did you sleep?",
+              };
+            },
+            hooks,
+          );
+          assert.equal(calls, 2);
+          assert.equal((await history(a))[0].createdAt, submittedAt);
+          assert.equal((await readJournal(a)).revision, 0);
+          for (const offset of [-25 * 3600000, 3600000]) {
+            await assert.rejects(
+              () =>
+                runTurn(
+                  a,
+                  {
+                    ...input(),
+                    submittedAt: new Date(Date.now() + offset).toISOString(),
+                  },
+                  async () => {
+                    assert.fail(
+                      "Invalid queue time must not reach the provider",
+                    );
+                  },
+                ),
+              /out of date/,
+            );
+          }
+        },
+      );
+      await t.test(
         "a multi-entry report saves once with an atomic receipt and Undo, including after reconnect",
         async () => {
           const a = await user(),

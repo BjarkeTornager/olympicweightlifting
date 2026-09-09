@@ -12,6 +12,7 @@ type RunInput = {
   revision: number;
   timezone: string;
   photoIds: string[];
+  submittedAt?: string;
 };
 export type CoachUpdate = {
   reply?: string;
@@ -61,6 +62,7 @@ export async function runCoach(
           revision: input.revision,
           timezone: input.timezone,
           photoIds: input.photoIds,
+          ...(input.submittedAt ? { submittedAt: input.submittedAt } : {}),
         },
       },
       {

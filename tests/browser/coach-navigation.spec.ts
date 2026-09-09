@@ -274,10 +274,16 @@ test("Photo and sleep entry links preserve a running turn and the next draft; le
   );
   expect(photos).toEqual([[imageIds[0]], [imageIds[1]]]);
   await page.getByRole("button", { name: "Stop response" }).click();
-  await expect(composer).toHaveValue(nextDraft);
+  await expect(
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
+  await expect(composer).toHaveValue("");
+  await expect(
+    page.getByRole("region", { name: "Message queue" }),
+  ).toContainText(nextDraft);
   await expect(
     page.getByRole("img", { name: "Image ready to send" }),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
 });
 
 for (const action of ["sign-out", "account-switch"] as const) {
@@ -389,7 +395,10 @@ test("Legacy Coach requests also finish away from chat, and interrupted replies 
     page.getByText("Coach needs your attention", { exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Open Coach", exact: true }).click();
-  await expect(composer).toHaveValue("Help with my week");
+  await expect(composer).toHaveValue("");
+  await expect(
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
   await expect(page.locator(".agent-page").getByRole("alert")).toContainText(
     "provider is temporarily unavailable",
   );

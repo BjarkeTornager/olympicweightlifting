@@ -2,6 +2,7 @@ import { z } from "zod";
 import { RunAgentInputSchema } from "@ag-ui/core";
 
 const contextFields = {
+  submittedAt: z.iso.datetime().optional(),
   photoIds: z.array(z.string().uuid()).max(4).default([]),
   revision: z.number().int().min(0),
   timezone: z

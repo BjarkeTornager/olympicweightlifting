@@ -268,7 +268,10 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
     },
   ]);
   await page.getByRole("button", { name: "Stop response" }).click();
-  await expect(composer).toHaveValue("Log seven hours of sleep for today");
+  await expect(composer).toHaveValue("");
+  await expect(
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => (window as unknown as StreamWindow).coachAborted),
@@ -282,7 +285,9 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
   await expect(
     page.getByRole("button", { name: "Save this change" }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Retry message", exact: true })
+    .click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -309,9 +314,12 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
   await page.evaluate(() =>
     (window as unknown as StreamWindow).closeCoachStream(),
   );
-  await expect(composer).toHaveValue("Log seven hours of sleep for today");
+  await expect(composer).toHaveValue("");
   await expect(
-    page.getByRole("button", { name: "Send", exact: true }),
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry message", exact: true }),
   ).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "Save this change" }),
@@ -326,7 +334,9 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
     saves++;
     return route.fulfill({ json: { status: "saved" } });
   });
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Retry message", exact: true })
+    .click();
   await expect
     .poll(() =>
       page.evaluate(

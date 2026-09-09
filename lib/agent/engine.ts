@@ -304,6 +304,7 @@ export async function runTurn(
     revision: number;
     timezone: string;
     photoIds?: string[];
+    submittedAt?: string;
   },
   model = callModel,
   hooks: {
@@ -337,10 +338,23 @@ export async function runTurn(
       "Sync your latest journal changes before asking the assistant.",
       409,
     );
-  const requestClock = localClock(
-      existing[0]?.createdAt ?? new Date(),
-      input.timezone,
-    ),
+  // Queuing across midnight must not silently change what "today" means.
+  // This is a bounded client time hint, never an authority for account access.
+  const submittedAt = input.submittedAt
+    ? new Date(input.submittedAt)
+    : new Date();
+  if (
+    !existing[0] &&
+    (!Number.isFinite(submittedAt.getTime()) ||
+      submittedAt.getTime() > Date.now() + 60000 ||
+      submittedAt.getTime() < Date.now() - 86400000)
+  )
+    throw new ApiError(
+      "This queued message is out of date. Skip it and send it again with the intended date.",
+      409,
+    );
+  const requestAt = existing[0]?.createdAt ?? submittedAt;
+  const requestClock = localClock(requestAt, input.timezone),
     currentDate = requestClock.date,
     recent = await history(userId);
   const photoIds = [...new Set(input.photoIds ?? [])];
@@ -361,7 +375,13 @@ export async function runTurn(
         .returning({ id: agentTurns.id })
     : await db
         .insert(agentTurns)
-        .values({ id: input.id, userId, question: input.message, photoIds })
+        .values({
+          id: input.id,
+          userId,
+          question: input.message,
+          photoIds,
+          createdAt: requestAt,
+        })
         .onConflictDoNothing()
         .returning({ id: agentTurns.id });
   if (!inserted.length)

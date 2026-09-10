@@ -4,6 +4,7 @@ import { ArrowRight, Dumbbell, Sparkles } from "./ui/icons";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { LiftingBriefDetails } from "./lifting-brief";
+import { LiftingResources } from "./lifting-resources";
 import { today } from "@/lib/domain";
 import {
   liftingReview,
@@ -342,6 +343,7 @@ export function LiftingCoach({
           ))}
         </section>
       </div>
+      <LiftingResources go={go} />
       <section
         className="panel lifting-evidence"
         aria-labelledby="lifting-evidence-title"
@@ -477,10 +479,9 @@ export function LiftingCoach({
           </li>
         </ol>
         <p className="fine-print">
-          Coach uses your reports and journal. Photos can show a position; full
-          lifting-video analysis isn’t available here. Technique questions that
-          need movement assessment are best reviewed with a qualified coach in
-          person.
+          Coach uses your reports, journal and visible image evidence. Video
+          reviews use sampled frames, which can miss fast movement. A qualified
+          coach in person can assess details this view cannot establish.
         </p>
       </section>
       <Dialog

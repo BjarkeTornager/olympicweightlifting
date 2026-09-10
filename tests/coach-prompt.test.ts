@@ -11,9 +11,9 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     createHash("sha256")
       .update(prompt.replace(coachStyle, "<COACH_STYLE>"))
       .digest("hex"),
-    // Lifting policy reviewed with lifting-coach and lifting-coach-database tests.
+    // Lifting/video/nutrition policy reviewed with lifting-coach and lifting-video tests.
     // Historical GEPA scores are not an evaluation of this policy revision.
-    "782ee719f8adb49d602b5d5841ceac4a5117579c25b917b600f978b64abad5c1",
+    "d8db31ff29b18dc67c2dbf5d507d4e0e7bf40f0d591d3ce7338276a8e40dc1ad",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

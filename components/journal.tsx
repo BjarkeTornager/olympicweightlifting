@@ -433,14 +433,17 @@ export function Journal(props: PrivateSessionProps) {
               key={identity?.id ?? "guest"}
               visible={section === "coach"}
               entryId={coachEntry.id}
+              initialVideoReview={coachEntry.route === "coach/lifting/video"}
               initialTrainingPrompt={
-                coachEntry.route.startsWith("coach/lifting/")
-                  ? liftingPrompt(coachEntry.route.split("/")[2])
-                  : coachEntry.route === "coach/training/new"
-                    ? "Help me build a reusable training program in Train. My goal is "
-                    : coachEntry.route.startsWith("coach/training/")
-                      ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
-                      : undefined
+                coachEntry.route === "coach/lifting/video"
+                  ? undefined
+                  : coachEntry.route.startsWith("coach/lifting/")
+                    ? liftingPrompt(coachEntry.route.split("/")[2])
+                    : coachEntry.route === "coach/training/new"
+                      ? "Help me build a reusable training program in Train. My goal is "
+                      : coachEntry.route.startsWith("coach/training/")
+                        ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
+                        : undefined
               }
               initialCardioLog={
                 coachEntry.route === "coach/cardio" ||

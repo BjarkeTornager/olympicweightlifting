@@ -23,13 +23,18 @@ export const imageUploadSchema = z
     date: foodDate,
     // Older clients did not disclose automatic provider processing.
     autoTag: z.boolean().default(false),
+    purpose: z.literal("lifting-video-frames").optional(),
     image: z
       .string()
       .min(1)
       .max(2800000)
       .regex(/^[A-Za-z0-9+/]+={0,2}$/),
   })
-  .strict();
+  .strict()
+  .refine(
+    (v) => !v.purpose || !v.autoTag,
+    "Video frames do not use automatic image classification.",
+  );
 const fields = {
   id: foodPhotos.id,
   label: foodPhotos.label,
@@ -40,7 +45,7 @@ const fields = {
   classification: foodPhotos.classification,
   version: foodPhotos.version,
 };
-export async function normalizeImage(input: Buffer) {
+export async function normalizeImage(input: Buffer, videoFrames = false) {
   if (input.length > 2 * 1024 * 1024)
     throw new ApiError("Choose a photo smaller than 2 MB.", 413);
   try {
@@ -58,8 +63,8 @@ export async function normalizeImage(input: Buffer) {
     const data = await decoder
       .rotate()
       .resize({
-        width: 1280,
-        height: 1280,
+        width: videoFrames ? 1920 : 1280,
+        height: videoFrames ? 1920 : 1280,
         fit: "inside",
         withoutEnlargement: true,
       })
@@ -100,7 +105,10 @@ export async function saveUserImage(
   model = callModel,
 ) {
   const input = imageUploadSchema.parse(raw);
-  const data = await normalizeImage(Buffer.from(input.image, "base64"));
+  const data = await normalizeImage(
+    Buffer.from(input.image, "base64"),
+    Boolean(input.purpose),
+  );
   const digest = createHash("sha256").update(data).digest("hex");
   await readJournal(userId);
   const saved = await getDb().transaction(async (tx) => {
@@ -163,9 +171,17 @@ export async function saveUserImage(
         bytes: data.length,
         digest,
         data,
-        classification: input.autoTag
-          ? { ...unclassifiedImage, source: "automatic", status: "pending" }
-          : unclassifiedImage,
+        category: input.purpose ? "activity" : "unclassified",
+        classification: input.purpose
+          ? {
+              tags: ["weightlifting", "video-frames"],
+              source: "manual",
+              status: "ready",
+              confidence: "high",
+            }
+          : input.autoTag
+            ? { ...unclassifiedImage, source: "automatic", status: "pending" }
+            : unclassifiedImage,
       })
       .returning(fields);
     return { fresh: true, photo };

@@ -1,6 +1,7 @@
 import { weeklyReview } from "../weekly-review";
 import { liftingReview } from "../lifting-coach";
 import { liftingGuide } from "./lifting-guide";
+import { liftingKnowledge } from "../lifting-resources";
 import { z } from "zod";
 import { EventType } from "@ag-ui/core";
 import {
@@ -49,6 +50,13 @@ const range = z
   })
   .strict();
 const specifications = {
+  lifting_knowledge: {
+    schema: z
+      .object({ topic: z.enum(["technique", "programming", "nutrition"]) })
+      .strict(),
+    description:
+      "Read curated Olympic weightlifting coaching or sports nutrition guidance with source links and review date. Required for lifting-video-frame feedback and lifting-specific diet/fuelling advice. These are educational sources, not a live web search or evidence about this person. Read lifting_review and the relevant journals separately for personal facts. This tool cannot authorize writes.",
+  },
   lifting_review: {
     schema: z
       .object({
@@ -256,6 +264,7 @@ function toolStep(name: string) {
     weekly_review: "Comparing your week with the recorded evidence",
     coach_memory: "Checking your approved preferences and plans",
     lifting_review: "Reviewing your lifting and training brief",
+    lifting_knowledge: "Reading lifting and nutrition guidance",
     meal_favourites: "Finding your favourite meals",
     health_overview: "Checking your sleep and recovery",
     cardio_journal: "Reviewing your cardio activities",
@@ -717,6 +726,10 @@ export async function runTurn(
               current: compact(report.current),
               previous: compact(report.previous),
             };
+          } else if (key === "lifting_knowledge") {
+            output = liftingKnowledge(
+              specifications.lifting_knowledge.schema.parse(args).topic,
+            );
           } else if (key === "lifting_review") {
             const a = specifications.lifting_review.schema.parse(args);
             if (a.endDate && a.endDate > currentDate)

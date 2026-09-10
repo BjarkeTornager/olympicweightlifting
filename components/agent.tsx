@@ -52,6 +52,7 @@ import { CoachMemoryBook } from "./coach-memory";
 import { WeeklyReview } from "./weekly-review";
 import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
+import { LiftingVideoDialog } from "./lifting-video";
 type Turn = {
   id: string;
   question: string;
@@ -80,6 +81,7 @@ export function TrainingAgent({
   initialSleepLog = false,
   initialCardioLog = false,
   initialTrainingPrompt,
+  initialVideoReview = false,
 }: {
   journal: JournalController;
   onLogin: () => void;
@@ -90,6 +92,7 @@ export function TrainingAgent({
   initialSleepLog?: boolean;
   initialCardioLog?: boolean;
   initialTrainingPrompt?: string;
+  initialVideoReview?: boolean;
 }) {
   const entryPrompt = initialSleepLog
     ? sleepLoggingPrompt(Boolean(initialPhotoId))
@@ -134,6 +137,7 @@ export function TrainingAgent({
   );
   const [toolsOpen, setToolsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(initialVideoReview);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [memoryTab, setMemoryTab] = useState<"memories" | "plans">("memories");
   function openMemories(tab: "memories" | "plans" = "memories") {
@@ -175,6 +179,7 @@ export function TrainingAgent({
   if (handledEntry !== entryId) {
     setHandledEntry(entryId);
     setLoadingImage(Boolean(initialPhotoId));
+    if (initialVideoReview) setVideoOpen(true);
     if (entryPrompt) {
       setView("conversation");
       setMessage((current) =>
@@ -187,6 +192,7 @@ export function TrainingAgent({
   if (wasVisible !== visible) {
     setWasVisible(visible);
     if (!visible) {
+      setVideoOpen(false);
       setOptionsOpen(false);
       setMemoriesOpen(false);
       setClear(false);
@@ -1495,6 +1501,14 @@ export function TrainingAgent({
                     />
                   </label>
                   <a href="#images">Image library & categories</a>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!accountId || uploading || loadingImage}
+                    onClick={() => setVideoOpen(true)}
+                  >
+                    Review lifting video
+                  </Button>
                 </div>
                 <label className="image-auto-tag">
                   <input
@@ -1581,6 +1595,24 @@ export function TrainingAgent({
           </>
         )}
       </section>
+      {videoOpen && accountId && (
+        <LiftingVideoDialog
+          accountId={accountId}
+          hasAttachments={photoIds.length > 0}
+          onClose={() => setVideoOpen(false)}
+          onPrepared={(photos, prompt) => {
+            setPhotoIds(photos.map((photo) => photo.id));
+            setImageDetails(
+              Object.fromEntries(photos.map((photo) => [photo.id, photo])),
+            );
+            draft(prompt);
+            setVideoOpen(false);
+            setNotice(
+              "Video frames saved in Activity and added to your draft. Send when you’re ready.",
+            );
+          }}
+        />
+      )}
       <Dialog
         open={memoriesOpen}
         onOpenChange={setMemoriesOpen}

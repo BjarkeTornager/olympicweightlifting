@@ -187,7 +187,7 @@ export function liftingReview(
       "Made/missed are explicit set outcomes, not an assessed technique score. Unrated means no made/miss outcome was supplied. A multi-rep set is one outcome, not several attempts.",
       "Best recorded sets are observations with their actual reps, date and source session, not tested or estimated 1RMs. Compare the same exercise, implement, reps and load convention.",
       "Sleep and RPE use reported samples only. Missing records are unmeasured, not inactivity or zero. Volume, missed sets and recovery observations do not diagnose a technical fault, injury or overtraining.",
-      "A photo can support a visible position observation, not a full movement, bar-speed or timing assessment. The app cannot upload or analyse a lifting video as continuous motion.",
+      "Video review uses sampled, timestamped frame sheets, not continuous motion. Photos and sampled frames cannot establish precise speed, timing, joint angles or a complete bar path. Read lifting_knowledge (technique) for review limits.",
       "These summaries do not replace full current_workout, read_session or training_library reads before editing records or programs.",
     ],
   };
@@ -195,6 +195,8 @@ export function liftingReview(
 
 export function liftingPrompt(intent: string) {
   const prompts: Record<string, string> = {
+    nutrition:
+      "Help me fuel my Olympic weightlifting training. Read the lifting nutrition guidance, my training brief, relevant food logs and preferences. Suggest a practical option before and after my next session, asking only for timing or preferences you still need. Do not assume I want to lose weight or change my diet targets.",
     plan: "Build me an Olympic weightlifting program around my saved goal, time and equipment. Review my training first, then prepare an editable plan with a clear priority and a way to check progress.",
     review:
       "Review my last four weeks of lifting. What does the recorded evidence show, what is still unknown, and what is one useful adjustment to discuss?",

@@ -433,9 +433,11 @@ export function Journal(props: PrivateSessionProps) {
               key={identity?.id ?? "guest"}
               visible={section === "coach"}
               entryId={coachEntry.id}
-              initialVideoReview={coachEntry.route === "coach/lifting/video"}
+              initialVideoReview={/^coach\/lifting\/(video|technique)$/.test(
+                coachEntry.route,
+              )}
               initialTrainingPrompt={
-                coachEntry.route === "coach/lifting/video"
+                /^coach\/lifting\/(video|technique)$/.test(coachEntry.route)
                   ? undefined
                   : coachEntry.route.startsWith("coach/lifting/")
                     ? liftingPrompt(coachEntry.route.split("/")[2])

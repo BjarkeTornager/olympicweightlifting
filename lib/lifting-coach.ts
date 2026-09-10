@@ -204,8 +204,6 @@ export function liftingPrompt(intent: string) {
       "Help me prepare for my next lifting session. Use my brief and program to suggest one focus, a practical warm-up and a clear check for how it is going.",
     debrief:
       "Help me debrief my latest lifting session against my current priority. Ask how it felt and whether the cue helped before suggesting what to keep or change.",
-    technique:
-      "Help me work on a lifting technique issue. Ask what lift and load, what happened and what I have tried. I can describe it or attach a photo of a position.",
   };
   return prompts[intent] ?? prompts.review;
 }

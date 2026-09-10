@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { videoSampleTimes, videoReviewPrompt } from "../lib/lifting-video";
+import {
+  videoSampleTimes,
+  videoReviewPrompt,
+  videoFeedbackLabel,
+} from "../lib/lifting-video";
 import { liftingKnowledge, liftingResources } from "../lib/lifting-resources";
 import { imageUploadSchema, normalizeImage } from "../lib/user-images";
 import sharp from "sharp";
@@ -25,17 +29,17 @@ test("video samples cover only the chosen interval, preserve order and avoid end
     assert.throws(() =>
       videoSampleTimes(...(args as [number, number, number])),
     );
-  const prompt = videoReviewPrompt(
-    "Clean",
-    "60 kg",
-    "My catch feels forward",
-    times,
-    "synthetic",
-  );
+  const prompt = videoReviewPrompt("Clean", "60 kg", times, "synthetic");
   assert.match(prompt, /4.00s to 6.00s/);
   assert.match(prompt, /60 kg/);
+  assert.match(prompt, /do not ask me to choose a question/);
+  assert.match(prompt, /What went well, Main improvement, Next attempt/);
+  assert.match(prompt, /Do not invent praise or a fault/);
   assert.match(prompt, /Original video and audio have not been uploaded/);
   assert.match(prompt, /advice only; do not log training/);
+  assert.equal(videoFeedbackLabel(prompt, 4), "Clean · Video feedback");
+  assert.equal(videoFeedbackLabel(prompt, 0), null);
+  assert.equal(videoFeedbackLabel("How can I improve my clean?", 4), null);
 });
 
 test("frame sheets retain usable resolution, strip metadata and cannot invoke classification", async () => {

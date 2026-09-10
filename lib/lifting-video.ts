@@ -10,6 +10,22 @@ export const videoLifts = [
 ] as const;
 export type VideoLift = (typeof videoLifts)[number];
 
+// A presentation label for generated reviews, never an authorization signal.
+export function videoFeedbackLabel(message: string, photoCount: number) {
+  if (photoCount !== VIDEO_SHEET_COUNT) return null;
+  const lift = videoLifts.find((name) =>
+    message.startsWith(
+      `Give me feedback on my ${name.toLowerCase()} from these 4 attached video-frame sheets (review `,
+    ),
+  );
+  return lift &&
+    message.includes(
+      "Review the lift proactively; do not ask me to choose a question",
+    )
+    ? `${lift} · Video feedback`
+    : null;
+}
+
 export function videoSampleTimes(start: number, end: number, duration: number) {
   if (
     ![start, end, duration].every(Number.isFinite) ||
@@ -33,7 +49,6 @@ export function videoSampleTimes(start: number, end: number, duration: number) {
 export function videoReviewPrompt(
   lift: VideoLift,
   load: string,
-  question: string,
   times: number[],
   group: string,
 ) {
@@ -43,7 +58,7 @@ export function videoReviewPrompt(
     times.some((t) => !Number.isFinite(t) || t < 0)
   )
     throw Error("Invalid video review.");
-  return `Review my ${lift.toLowerCase()} technique from these ${VIDEO_SHEET_COUNT} attached video-frame sheets (review ${group}). ${load.trim() ? `Reported load: ${load.trim().slice(0, 80)}.` : "Load not supplied."}
-${question.trim().slice(0, 600) || "Help me choose one useful improvement to try."}
-The ${VIDEO_FRAME_COUNT} sampled positions run from ${times[0].toFixed(2)}s to ${times.at(-1)!.toFixed(2)}s in the source clip. Read sheets 1–4 in order, each left-to-right then top-to-bottom. Labels are requested video seek times, not calibrated motion measurements. Original video and audio have not been uploaded. Read lifting_review and lifting_knowledge (technique); assess only what is visible, cite the supporting frame times and distinguish observations from possible explanations. Suggest one cue or suitable drill and a check for my next attempt if the evidence supports it. Say if the clip is unclear or misses the important phase. This is advice only; do not log training or change my program.`;
+  return `Give me feedback on my ${lift.toLowerCase()} from these ${VIDEO_SHEET_COUNT} attached video-frame sheets (review ${group}). ${load.trim() ? `Reported load: ${load.trim().slice(0, 80)}.` : "Load not supplied; assess visible technique without requiring it."}
+Review the lift proactively; do not ask me to choose a question or identify a fault first. Use a short, structured review: What went well, Main improvement, Next attempt. Ground both strengths and the single highest-priority improvement in visible evidence, with frame times. Give one practical cue or suitable drill and what to check on the next attempt. Do not invent praise or a fault to fill the structure; say when the evidence does not support a correction.
+The ${VIDEO_FRAME_COUNT} sampled positions run from ${times[0].toFixed(2)}s to ${times.at(-1)!.toFixed(2)}s in the source clip. Read sheets 1–4 in order, each left-to-right then top-to-bottom. Labels are requested video seek times, not calibrated motion measurements. Original video and audio have not been uploaded. Read lifting_review and lifting_knowledge (technique); assess only what is visible and distinguish observations from possible explanations. If the clip is unclear or misses the important phase, explain what cannot be assessed and how to film a more useful clip. This is advice only; do not log training or change my program.`;
 }

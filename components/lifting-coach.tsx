@@ -249,9 +249,9 @@ const conversations = [
     "What helped, what to keep, what to adjust.",
   ],
   [
-    "technique",
-    "Work on technique",
-    "Describe the lift, or discuss a visible position in a photo.",
+    "video",
+    "Get technique feedback",
+    "Show your lift. See what went well and what to try next.",
   ],
 ] as const;
 const shortDate = (date: string) =>

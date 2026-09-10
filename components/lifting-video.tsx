@@ -18,15 +18,19 @@ import {
 
 export function LiftingVideoDialog({
   accountId,
-  hasAttachments,
+  reviewBlockedReason,
   onClose,
-  onPrepared,
+  onReview,
 }: {
   accountId: string;
-  hasAttachments: boolean;
+  reviewBlockedReason?: string;
   onClose: () => void;
-  onPrepared: (photos: UserImage[], prompt: string) => void;
+  onReview: (photos: UserImage[], prompt: string) => void;
 }) {
+  const reviewCallback = useRef(onReview);
+  useEffect(() => {
+    reviewCallback.current = onReview;
+  }, [onReview]);
   const video = useRef<HTMLVideoElement>(null);
   const controller = useRef<AbortController | null>(null);
   const objectUrl = useRef<string | null>(null);
@@ -35,8 +39,7 @@ export function LiftingVideoDialog({
   const [start, setStart] = useState("0"),
     [end, setEnd] = useState("");
   const [lift, setLift] = useState<VideoLift>("Snatch");
-  const [load, setLoad] = useState(""),
-    [question, setQuestion] = useState("");
+  const [load, setLoad] = useState("");
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false),
     [status, setStatus] = useState("");
@@ -110,7 +113,7 @@ export function LiftingVideoDialog({
       signal.throwIfAborted();
       setPrepared({
         sheets: result.sheets,
-        prompt: videoReviewPrompt(lift, load, question, result.times, group),
+        prompt: videoReviewPrompt(lift, load, result.times, group),
       });
       setStatus("");
     } catch (e) {
@@ -128,7 +131,7 @@ export function LiftingVideoDialog({
     }
   }
   async function attach() {
-    if (!prepared || hasAttachments || busy) return;
+    if (!prepared || reviewBlockedReason || busy) return;
     const abort = new AbortController();
     controller.current = abort;
     setBusy(true);
@@ -143,7 +146,7 @@ export function LiftingVideoDialog({
         saved.current.push(photo);
         setSavedCount(saved.current.length);
       }
-      onPrepared([...saved.current], prepared.prompt);
+      reviewCallback.current([...saved.current], prepared.prompt);
     } catch (e) {
       if (!abort.signal.aborted)
         setError(
@@ -168,8 +171,8 @@ export function LiftingVideoDialog({
         className={`lifting-video-flow${busy && !prepared ? " lifting-video-preparing" : ""}`}
       >
         <p className="muted">
-          Choose a short section of one lift. Coach reviews 24 sampled frames
-          and helps you choose one improvement to try.
+          Show Coach your lift. Get feedback on what went well, the main
+          improvement and what to try next. No question needed.
         </p>
         <details>
           <summary>How to film a useful clip</summary>
@@ -191,12 +194,6 @@ export function LiftingVideoDialog({
             Filming advice · Catalyst Athletics
           </a>
         </details>
-        {hasAttachments && (
-          <p role="alert">
-            A video review uses all four image slots. Finish your current image
-            message, or remove its attachments, before adding a video review.
-          </p>
-        )}
         {!prepared && (
           <>
             <label>
@@ -205,7 +202,7 @@ export function LiftingVideoDialog({
                 type="file"
                 accept="video/*"
                 aria-label="Choose lifting video"
-                disabled={busy || hasAttachments}
+                disabled={busy}
                 onChange={(e) => {
                   select(e.target.files?.[0]);
                   e.target.value = "";
@@ -331,22 +328,8 @@ export function LiftingVideoDialog({
                 onChange={(e) => setDate(e.target.value)}
               />
             </label>
-            <label>
-              What did you notice?
-              <textarea
-                aria-label="Video question"
-                value={question}
-                maxLength={600}
-                rows={2}
-                placeholder="Optional: what felt difficult, or what you want checked"
-                disabled={busy}
-                onChange={(e) => setQuestion(e.target.value)}
-              />
-            </label>
             <Button
-              disabled={
-                busy || !duration || !date || !start || !end || hasAttachments
-              }
+              disabled={busy || !duration || !date || !start || !end}
               onClick={() => void prepare()}
             >
               Preview selected frames
@@ -357,7 +340,8 @@ export function LiftingVideoDialog({
           <>
             <p>
               Check that these frames cover the part you want reviewed. Each
-              sheet reads across, then down.
+              sheet reads across, then down. Get lift feedback sends them
+              directly to Coach for review.
             </p>
             <div className="lifting-video-sheets">
               {prepared.sheets.map((sheet, i) => (
@@ -404,10 +388,10 @@ export function LiftingVideoDialog({
             )}
             <div className="button-row">
               <Button
-                disabled={busy || hasAttachments}
+                disabled={busy || Boolean(reviewBlockedReason)}
                 onClick={() => void attach()}
               >
-                Save frames & add to message
+                Get lift feedback
               </Button>
               <Button
                 variant="ghost"
@@ -423,6 +407,9 @@ export function LiftingVideoDialog({
             </div>
           </>
         )}
+        {prepared && reviewBlockedReason && (
+          <p role="status">{reviewBlockedReason}</p>
+        )}
         {status && (
           <p role="status" className="lifting-video-progress">
             {status}
@@ -434,10 +421,10 @@ export function LiftingVideoDialog({
           </p>
         )}
         <p className="fine-print">
-          The original video and audio stay on this device. Saving stores four
-          frame sheets privately in Images → Activity. Sending the message
-          shares those frames with your configured Coach provider. Nothing is
-          logged as a workout.
+          The original video and audio stay on this device. Get lift feedback
+          saves four frame sheets privately in Images → Activity and sends them
+          to your configured Coach provider. Your separate chat draft stays
+          untouched. Nothing is logged as a workout.
         </p>
         <p className="fine-print">
           Experimental visual feedback: sampled frames can miss fast movement.

@@ -18,8 +18,8 @@ export function LiftingResources({ go }: { go: (route: string) => void }) {
           <span className="eyebrow">TECHNIQUE · EXPERIMENTAL</span>
           <h2>See what to work on next.</h2>
           <p>
-            Choose a short part of your lift. Review timestamped frames with
-            Coach and get one clear thing to try.
+            Show Coach a short part of your lift. Get feedback on what went well
+            and one clear thing to improve. No question needed.
           </p>
           <Button variant="secondary" onClick={() => go("coach/lifting/video")}>
             Review lifting video

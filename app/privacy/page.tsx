@@ -122,15 +122,17 @@ export default function PrivacyPage() {
         <p>
           Lifting video review prepares sampled frame sheets in your browser.
           Your original video and audio are not uploaded or retained by the
-          platform. Saving a review stores four images in your private Activity
-          library, under the same image quota and account access rules. Sending
-          the Coach message shares those frames with your configured assistant
-          provider. You can download or delete them in Images; removing an
-          attachment from a draft does not delete the saved image. A cancelled
-          or interrupted save may leave some sheets in the library. Chat text
-          remains until you clear the conversation. Keep your original clip if
-          you want to review it again. This is experimental visual feedback, not
-          calibrated movement measurement or a medical assessment.
+          platform. Get lift feedback stores four images in your private
+          Activity library, under the same image quota and account access rules,
+          and queues a dedicated review that shares those frames with your
+          configured assistant provider. No typed question or separate Send is
+          needed; unrelated chat drafts and attachments remain untouched. You
+          can download or delete them in Images; removing an attachment from a
+          draft does not delete the saved image. A cancelled or interrupted save
+          may leave some sheets in the library. Chat text remains until you
+          clear the conversation. Keep your original clip if you want to review
+          it again. This is experimental visual feedback, not calibrated
+          movement measurement or a medical assessment.
         </p>
         <p>
           The assistant can read only your journal through limited tools. It

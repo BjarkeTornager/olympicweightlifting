@@ -53,6 +53,7 @@ import { WeeklyReview } from "./weekly-review";
 import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
 import { LiftingVideoDialog } from "./lifting-video";
+import { videoFeedbackLabel } from "@/lib/lifting-video";
 type Turn = {
   id: string;
   question: string;
@@ -120,6 +121,7 @@ export function TrainingAgent({
   const [activeId, setActiveId] = useState<string | null>(null);
   // A submitted draft cannot be accepted twice before React clears the composer.
   const submittedDraft = useRef<string | null>(null);
+  const submittedVideoReviews = useRef(new Set<string>());
   // Account changes/sign-out still unmount this controller and cancel the run.
   // Internal navigation only removes the view below, preserving work and drafts.
   useEffect(
@@ -919,7 +921,10 @@ export function TrainingAgent({
                   <article className="conversation-turn" key={t.id}>
                     <div className="chat-user">
                       <span className="sr-only">You: </span>
-                      {t.question}
+                      {videoFeedbackLabel(
+                        t.question,
+                        t.photoIds?.length ?? 0,
+                      ) ?? t.question}
                       {accountId && (
                         <div className="food-photo-strip">
                           {t.photoIds?.map((id) => (
@@ -1304,7 +1309,12 @@ export function TrainingAgent({
                   </p>
                   {failedMessage && (
                     <div className="coach-queue-failed">
-                      <p>{failedMessage.question}</p>
+                      <p>
+                        {videoFeedbackLabel(
+                          failedMessage.question,
+                          failedMessage.photoIds.length,
+                        ) ?? failedMessage.question}
+                      </p>
                       <div>
                         <Button
                           variant="secondary"
@@ -1328,7 +1338,11 @@ export function TrainingAgent({
                       {queue.map((job, index) => (
                         <li key={job.id}>
                           <span>
-                            <strong>{index + 1}.</strong> {job.question}
+                            <strong>{index + 1}.</strong>{" "}
+                            {videoFeedbackLabel(
+                              job.question,
+                              job.photoIds.length,
+                            ) ?? job.question}
                             {job.photoIds.length > 0 && (
                               <small>
                                 {" "}
@@ -1598,18 +1612,40 @@ export function TrainingAgent({
       {videoOpen && accountId && (
         <LiftingVideoDialog
           accountId={accountId}
-          hasAttachments={photoIds.length > 0}
+          reviewBlockedReason={
+            !ready
+              ? connectionHint
+              : queue.length >= MAX_QUEUED_MESSAGES
+                ? "Your queue is full. Let Coach finish a message or remove a queued message."
+                : undefined
+          }
           onClose={() => setVideoOpen(false)}
-          onPrepared={(photos, prompt) => {
-            setPhotoIds(photos.map((photo) => photo.id));
-            setImageDetails(
-              Object.fromEntries(photos.map((photo) => [photo.id, photo])),
-            );
-            draft(prompt);
+          onReview={(photos, prompt) => {
+            // Use the stable first sheet ID across upload/submission retries.
+            // Video reviews are separate queue jobs, never the unsent draft.
+            const id = photos[0].id;
+            if (submittedVideoReviews.current.has(id)) return;
+            // A preceding run can start syncing during the uploads. Accept the
+            // authorized review; the shared drain waits for fresh synced data.
+            if (queue.length >= MAX_QUEUED_MESSAGES)
+              throw Error(
+                "Your queue is full. Let Coach finish a message first.",
+              );
+            submittedVideoReviews.current.add(id);
+            setQueue((waiting) => [
+              ...waiting,
+              {
+                id,
+                question: prompt,
+                photoIds: photos.map((photo) => photo.id),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                submittedAt: new Date().toISOString(),
+              },
+            ]);
+            setView("conversation");
+            setToolsOpen(false);
             setVideoOpen(false);
-            setNotice(
-              "Video frames saved in Activity and added to your draft. Send when you’re ready.",
-            );
+            setNotice("Video feedback queued. Your chat draft has been kept.");
           }}
         />
       )}

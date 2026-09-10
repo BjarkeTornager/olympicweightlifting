@@ -24,6 +24,7 @@ import {
 import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
 import { backup, days, today, createWorkout } from "@/lib/domain";
+import { liftingPrompt } from "@/lib/lifting-coach";
 import { trainingPrograms } from "@/lib/training-programs";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -433,11 +434,13 @@ export function Journal(props: PrivateSessionProps) {
               visible={section === "coach"}
               entryId={coachEntry.id}
               initialTrainingPrompt={
-                coachEntry.route === "coach/training/new"
-                  ? "Help me build a reusable training program in Train. My goal is "
-                  : coachEntry.route.startsWith("coach/training/")
-                    ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
-                    : undefined
+                coachEntry.route.startsWith("coach/lifting/")
+                  ? liftingPrompt(coachEntry.route.split("/")[2])
+                  : coachEntry.route === "coach/training/new"
+                    ? "Help me build a reusable training program in Train. My goal is "
+                    : coachEntry.route.startsWith("coach/training/")
+                      ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
+                      : undefined
               }
               initialCardioLog={
                 coachEntry.route === "coach/cardio" ||
@@ -477,12 +480,22 @@ export function Journal(props: PrivateSessionProps) {
                 <a
                   href="#workout/choose"
                   aria-current={
-                    section === "workout" && route !== "workout"
+                    section === "workout" &&
+                    route !== "workout" &&
+                    route !== "workout/coaching"
                       ? "page"
                       : undefined
                   }
                 >
                   Programs
+                </a>
+                <a
+                  href="#workout/coaching"
+                  aria-current={
+                    route === "workout/coaching" ? "page" : undefined
+                  }
+                >
+                  Lifting coach
                 </a>
                 <a
                   href="#history"
@@ -512,6 +525,8 @@ export function Journal(props: PrivateSessionProps) {
             )}
             {section === "history" && (
               <HistoryView
+                key={route}
+                sessionId={route.split("/")[1]}
                 state={state}
                 update={journal.update}
                 go={go}

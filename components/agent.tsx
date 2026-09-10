@@ -1034,7 +1034,10 @@ export function TrainingAgent({
                                 ))}
                               </div>
                             )}
-                            {(p.memory || p.plan || p.training) && (
+                            {(p.memory ||
+                              p.plan ||
+                              p.training ||
+                              p.liftingBrief !== undefined) && (
                               <CoachEntryDetails
                                 entry={{
                                   title: p.title,
@@ -1043,6 +1046,7 @@ export function TrainingAgent({
                                   memory: p.memory,
                                   plan: p.plan,
                                   training: p.training,
+                                  liftingBrief: p.liftingBrief,
                                 }}
                               />
                             )}
@@ -1174,38 +1178,43 @@ export function TrainingAgent({
                                     : p.entries
                                       ? setView("today")
                                       : go(
-                                          p.training
-                                            ? "workout/choose"
-                                            : p.cardio
-                                              ? "cardio"
-                                              : p.checkin
-                                                ? "health"
-                                                : p.meal || p.targets
-                                                  ? "food"
-                                                  : p.workoutReview
-                                                    ? p.workoutReview.status ===
-                                                      "ongoing"
-                                                      ? "workout"
-                                                      : "history"
-                                                    : p.workout &&
-                                                        p.workout.exercises.some(
-                                                          (e) =>
-                                                            e.sets.some(
-                                                              (s) => !s.result,
-                                                            ),
-                                                        )
-                                                      ? "workout"
-                                                      : "history",
+                                          p.liftingBrief !== undefined
+                                            ? "workout/coaching"
+                                            : p.training
+                                              ? "workout/choose"
+                                              : p.cardio
+                                                ? "cardio"
+                                                : p.checkin
+                                                  ? "health"
+                                                  : p.meal || p.targets
+                                                    ? "food"
+                                                    : p.workoutReview
+                                                      ? p.workoutReview
+                                                          .status === "ongoing"
+                                                        ? "workout"
+                                                        : "history"
+                                                      : p.workout &&
+                                                          p.workout.exercises.some(
+                                                            (e) =>
+                                                              e.sets.some(
+                                                                (s) =>
+                                                                  !s.result,
+                                                              ),
+                                                          )
+                                                        ? "workout"
+                                                        : "history",
                                         )
                                 }
                               >
-                                {p.training
-                                  ? "Open Train"
-                                  : p.workoutReview?.status === "ongoing"
-                                    ? "Open ongoing workout"
-                                    : p.workoutReview
-                                      ? "Open training history"
-                                      : "Open journal"}{" "}
+                                {p.liftingBrief !== undefined
+                                  ? "Open lifting coach"
+                                  : p.training
+                                    ? "Open Train"
+                                    : p.workoutReview?.status === "ongoing"
+                                      ? "Open ongoing workout"
+                                      : p.workoutReview
+                                        ? "Open training history"
+                                        : "Open journal"}{" "}
                                 <ArrowRight size={17} />
                               </Button>
                             </div>
@@ -1618,6 +1627,9 @@ export function TrainingAgent({
           </Button>
           <Button variant="secondary" onClick={() => go("images")}>
             Image library & categories <ArrowRight size={17} />
+          </Button>
+          <Button variant="secondary" onClick={() => go("workout/coaching")}>
+            Lifting coach <ArrowRight size={17} />
           </Button>
           <Button variant="secondary" onClick={() => go("workout/choose")}>
             Programmes & routines <ArrowRight size={17} />

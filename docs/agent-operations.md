@@ -1,5 +1,7 @@
 # Training assistant operations
 
+Olympic lifting uses a private training brief and shared four-week evidence tool. See [the source review, coaching cycle and compatibility notes](olympic-coaching-2026-09-10.md). The brief is optional, reviewed when changed through Coach, and never included in ordinary automatic logging.
+
 Coach supports AG-UI streaming and generated tables, charts and diagrams. See [the protocol, privacy boundary and verification guide](coach-agui.md).
 
 Lift Journal's default screen is Coach. The model runs behind authenticated server routes; the browser never receives provider keys. Both OpenRouter and Ollama adapters use the same validated training tools.

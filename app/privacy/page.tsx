@@ -110,6 +110,16 @@ export default function PrivacyPage() {
           sign out or clear site data.
         </p>
         <p>
+          Your optional lifting brief stores the goals, experience,
+          availability, equipment and constraints you choose to share. It is
+          private to your account, synchronized and included in journal exports.
+          Coach can retrieve it with your training evidence for lifting advice,
+          sharing those details with your assistant provider. Edit or clear it
+          in Train → Lifting coach. Clearing the brief keeps earlier chats,
+          approved memories and training records. Coach-proposed brief changes
+          require your review before saving.
+        </p>
+        <p>
           The assistant can read only your journal through limited tools. It
           saves meals, sleep, check-ins, cardio and training that you report or
           ask it to log, including requested corrections. Each save has a

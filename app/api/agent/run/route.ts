@@ -34,6 +34,8 @@ export async function POST(request: Request) {
         emit,
         signal,
         directLogging: request.headers.get("x-coach-logging-version") === "1",
+        liftingBriefReview:
+          request.headers.get("x-lifting-coach-version") === "1",
       }),
     );
   } catch (error) {

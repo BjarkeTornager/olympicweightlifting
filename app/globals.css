@@ -3141,7 +3141,8 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 }
 
 /* Clear destinations for ongoing training and completed history. */
-.training-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-bottom: 24px; }
+.training-tabs { display: flex; width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; gap: 4px; margin-bottom: 24px; }
+.training-tabs a { flex: 1 0 auto; min-width: 64px; }
 .training-tabs a { justify-content: center; padding: 12px 4px; font-size: 14px; white-space: nowrap; }
 .ongoing-workout-card { margin-bottom: 24px; }
 .ongoing-workout-card strong, .ongoing-workout-card .eyebrow { display: block; }
@@ -3172,3 +3173,58 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-queue details[open] > p { margin-top: 8px; }
 
 @media (max-width: 700px) { .coach-queue { margin-inline: 9px; } }
+
+/* A quiet workspace for evidence, a personal brief and focused conversations. */
+.lifting-coach-page { display: grid; gap: 28px; min-width: 0; }
+.lifting-coach-page .page-heading { margin-bottom: 0; }
+.lifting-coach-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; min-width: 0; }
+.lifting-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.lifting-section-heading h2 { margin: 0; font-size: 22px; letter-spacing: -.4px; }
+.lifting-brief-panel, .lifting-evidence { padding: 28px; min-width: 0; }
+.lifting-goal { font-size: 24px; line-height: 1.35; letter-spacing: -.5px; overflow-wrap: anywhere; }
+.lifting-brief-panel details { margin: 22px 0; }
+.lifting-brief-details { display: grid; gap: 14px; font-size: 15px; }
+.lifting-brief-details dt { font-weight: 650; }
+.lifting-brief-details dd { margin: 3px 0 0; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.lifting-brief-form { display: grid; gap: 18px; }
+.lifting-brief-form label { display: grid; gap: 7px; min-width: 0; }
+.lifting-brief-form input, .lifting-brief-form textarea, .lifting-brief-form select { width: 100%; min-width: 0; }
+.lifting-conversations { display: grid; gap: 10px; }
+.lifting-conversations > button { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 22px; text-align: left; color: var(--ink); }
+.lifting-conversations > button:hover { background: var(--canvas); border-color: var(--muted); }
+.lifting-conversations strong, .lifting-conversations small { display: block; }
+.lifting-conversations strong { font-size: 17px; }
+.lifting-conversations small { color: var(--muted); font-size: 14px; line-height: 1.45; margin-top: 5px; }
+.lifting-conversations svg { flex-shrink: 0; }
+.lifting-active { border: 1px solid var(--line); border-radius: 18px; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--paper); }
+.lifting-active > div { display: grid; gap: 5px; min-width: 0; }
+.lifting-active strong { overflow-wrap: anywhere; }
+.lifting-active > div > span:last-child { color: var(--muted); font-size: 14px; }
+.lifting-table-scroll { overflow-x: auto; margin: 20px 0; }
+.lifting-table-scroll table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.lifting-table-scroll caption { text-align: left; color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.lifting-table-scroll th, .lifting-table-scroll td { padding: 14px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.lifting-table-scroll th:first-child, .lifting-table-scroll td:first-child { padding-left: 0; }
+.lifting-record-details { padding: 16px 0; border-top: 1px solid var(--line); }
+.lifting-records { list-style: none; padding: 0; margin: 0; }
+.lifting-records li { display: flex; justify-content: space-between; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.lifting-records li > div { min-width: 0; }
+.lifting-records strong, .lifting-records span, .lifting-records small { display: block; overflow-wrap: anywhere; }
+.lifting-records span, .lifting-records small { color: var(--muted); font-size: 13px; margin-top: 5px; }
+.lifting-records a { text-align: right; flex-shrink: 0; }
+.lifting-method { padding: 8px 4px; }
+.lifting-method h2 { font-size: 22px; }
+.lifting-method ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding-left: 24px; }
+.lifting-method li { padding-left: 6px; }
+.lifting-method li::marker { color: var(--blue); font-weight: 650; }
+.lifting-method li span { display: block; color: var(--muted); font-size: 14px; margin-top: 5px; }
+@media (max-width: 700px) {
+  .lifting-coach-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .lifting-brief-panel, .lifting-evidence { padding: 20px; }
+  .lifting-method ol { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .lifting-active { padding: 18px; flex-wrap: wrap; }
+  .lifting-records li { flex-direction: column; gap: 8px; }
+  .lifting-records a { text-align: left; }
+}
+.lifting-coach-page .eyebrow { display: flex; align-items: center; gap: 8px; }
+.lifting-method ol { list-style: decimal; }

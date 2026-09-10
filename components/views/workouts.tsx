@@ -36,6 +36,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Templates } from "../templates";
 import { RestTimer } from "../rest-timer";
+import { LiftingCoach } from "../lifting-coach";
 import { TrainingPrograms } from "../training-programs";
 import { ExercisePicker } from "../exercise-picker";
 import { exerciseLoggingNotes } from "@/lib/exercises";
@@ -164,6 +165,8 @@ export function Workouts(props: Props) {
     [filter, setFilter] = useState("all");
   const parameter = route.split("/")[1];
   const day = days.find((d) => d.id === parameter);
+  if (parameter === "coaching")
+    return <LiftingCoach state={state} update={props.update} go={go} />;
   if (state.activeWorkout && !parameter)
     return <ActiveWorkout key={state.activeWorkout.id} {...props} />;
   if (day) {

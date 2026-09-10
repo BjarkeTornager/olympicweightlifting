@@ -1,4 +1,6 @@
 import { weeklyReview } from "../weekly-review";
+import { liftingReview } from "../lifting-coach";
+import { liftingGuide } from "./lifting-guide";
 import { z } from "zod";
 import { EventType } from "@ag-ui/core";
 import {
@@ -47,6 +49,16 @@ const range = z
   })
   .strict();
 const specifications = {
+  lifting_review: {
+    schema: z
+      .object({
+        endDate: foodDate.optional(),
+        exerciseId: z.string().max(160).optional(),
+      })
+      .strict(),
+    description:
+      "Read the person's lifting brief and four weeks of completed training, explicit made/missed/unrated sets, reported RPE and sleep coverage, with source session IDs. Defaults to the current local date; no future end dates. Required before individualized Olympic weightlifting assessment, planning or review, and before set_lifting_brief. Returns a coaching guide and evidence limits. Summary reads do not authorize edits: read full sessions, current_workout and training_library separately. Unknown data is not zero; highest recorded sets are not tested 1RMs or technique assessments.",
+  },
   weekly_review: {
     schema: z.object({ endDate: foodDate }).strict(),
     description:
@@ -243,6 +255,7 @@ function toolStep(name: string) {
   const labels: Record<string, string> = {
     weekly_review: "Comparing your week with the recorded evidence",
     coach_memory: "Checking your approved preferences and plans",
+    lifting_review: "Reviewing your lifting and training brief",
     meal_favourites: "Finding your favourite meals",
     health_overview: "Checking your sleep and recovery",
     cardio_journal: "Reviewing your cardio activities",
@@ -311,6 +324,7 @@ export async function runTurn(
     emit?: EmitCoachEvent;
     signal?: AbortSignal;
     directLogging?: boolean;
+    liftingBriefReview?: boolean;
   } = {},
 ) {
   const db = getDb();
@@ -463,6 +477,7 @@ export async function runTurn(
   let readFood = false;
   const readFoodRanges: { from: string; to: string }[] = [];
   let readCoachMemory = false;
+  let readLiftingReview = false;
   const signal = AbortSignal.any([
     AbortSignal.timeout(90000),
     ...(hooks.signal ? [hooks.signal] : []),
@@ -702,6 +717,21 @@ export async function runTurn(
               current: compact(report.current),
               previous: compact(report.previous),
             };
+          } else if (key === "lifting_review") {
+            const a = specifications.lifting_review.schema.parse(args);
+            if (a.endDate && a.endDate > currentDate)
+              throw Error(
+                "Choose today or an earlier date for a lifting review.",
+              );
+            output = {
+              ...liftingReview(
+                snapshot.state,
+                a.endDate ?? currentDate,
+                a.exerciseId,
+              ),
+              coachingGuide: liftingGuide,
+            };
+            readLiftingReview = true;
           } else if (key === "coach_memory") {
             readCoachMemory = true;
             output = snapshot.state.profile.coaching ?? {
@@ -952,6 +982,16 @@ export async function runTurn(
                 !readCoachMemory
               )
                 throw Error("Read coach_memory before preparing this change.");
+              if (action.kind === "set_lifting_brief") {
+                if (hooks.liftingBriefReview === false)
+                  throw Error(
+                    "Refresh the app to review all lifting brief details before changing them.",
+                  );
+                if (!readLiftingReview)
+                  throw Error(
+                    "Read lifting_review before updating the lifting brief; preserve unchanged reported fields.",
+                  );
+              }
               if (
                 action.kind === "repeat_meal" &&
                 !readMeals.has(action.mealId)
@@ -1116,6 +1156,9 @@ export async function runTurn(
               ...(prepared.entries ? { entries: prepared.entries } : {}),
               ...(prepared.memory ? { memory: prepared.memory } : {}),
               ...(prepared.plan ? { plan: prepared.plan } : {}),
+              ...(prepared.liftingBrief !== undefined
+                ? { liftingBrief: prepared.liftingBrief }
+                : {}),
               ...(prepared.training ? { training: prepared.training } : {}),
               ...(prepared.workoutReview
                 ? { workoutReview: prepared.workoutReview }
@@ -1240,7 +1283,12 @@ export async function runTurn(
     throw e;
   }
 }
-export async function applyProposal(userId: string, id: string, undo = false) {
+export async function applyProposal(
+  userId: string,
+  id: string,
+  undo = false,
+  options: { liftingBriefReview?: boolean } = {},
+) {
   return getDb().transaction(async (db) => {
     const [proposal] = await db
       .select()
@@ -1251,6 +1299,15 @@ export async function applyProposal(userId: string, id: string, undo = false) {
       throw new ApiError(
         "This proposal has expired. Ask the assistant to prepare it again.",
         410,
+      );
+    if (
+      !undo &&
+      options.liftingBriefReview === false &&
+      proposal.preview.liftingBrief !== undefined
+    )
+      throw new ApiError(
+        "Refresh the app to review all lifting brief details before saving.",
+        409,
       );
     if (!undo && proposal.status === "undone")
       throw new ApiError(

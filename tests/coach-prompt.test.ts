@@ -11,9 +11,9 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     createHash("sha256")
       .update(prompt.replace(coachStyle, "<COACH_STYLE>"))
       .digest("hex"),
-    // Direct logging policy reviewed with coach-direct-log-database.test.ts.
+    // Lifting policy reviewed with lifting-coach and lifting-coach-database tests.
     // Historical GEPA scores are not an evaluation of this policy revision.
-    "31429b4ca5ff8f3ca709bc2c5ce74934d3397f06546cf64297dde69ed2a41706",
+    "782ee719f8adb49d602b5d5841ceac4a5117579c25b917b600f978b64abad5c1",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

@@ -56,6 +56,8 @@ export async function POST(request: Request) {
     return Response.json(
       await runTurn(user.id, input, undefined, {
         directLogging: request.headers.get("x-coach-logging-version") === "1",
+        liftingBriefReview:
+          request.headers.get("x-lifting-coach-version") === "1",
       }),
       {
         headers: { "Cache-Control": "no-store" },

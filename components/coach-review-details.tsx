@@ -7,9 +7,12 @@ import { exerciseName } from "@/lib/domain";
 import { MealDetails } from "./views/food";
 import { CheckinDetails } from "./health";
 import { CardioDetails } from "./cardio";
+import { LiftingBriefDetails } from "./lifting-brief";
 import { TrainingReviewDetails } from "./training-programs";
 
 export function coachEntrySummary(entry: PreviewEntry) {
+  if (entry.liftingBrief !== undefined)
+    return entry.liftingBrief?.goal ?? "Clear your saved lifting brief";
   if (entry.training) return entry.training.after.name;
   if (entry.meal)
     return `${entry.meal.date} · ${totalNutrients(entry.meal.items).calories} kcal${entry.meal.estimated ? " · estimated" : ""}`;
@@ -24,6 +27,9 @@ export function coachEntrySummary(entry: PreviewEntry) {
 export function CoachEntryDetails({ entry }: { entry: PreviewEntry }) {
   return (
     <>
+      {entry.liftingBrief !== undefined && (
+        <LiftingBriefDetails brief={entry.liftingBrief} />
+      )}
       {entry.training && <TrainingReviewDetails review={entry.training} />}
       {entry.meal && <MealDetails meal={entry.meal} />}
       {entry.checkin && (

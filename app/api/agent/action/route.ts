@@ -23,7 +23,10 @@ export async function POST(request: Request) {
     return Response.json(
       foodSnapshotForClient(
         request,
-        await applyProposal(user.id, input.id, input.undo),
+        await applyProposal(user.id, input.id, input.undo, {
+          liftingBriefReview:
+            request.headers.get("x-lifting-coach-version") === "1",
+        }),
       ),
       {
         headers: { "Cache-Control": "no-store" },

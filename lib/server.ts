@@ -100,6 +100,10 @@ export async function writeJournal(
       state.cardio = journalSchema.parse(row.state).cardio;
     if (input.preserveMissingCoachData) {
       const previous = journalSchema.parse(row.state);
+      // Omission by an older client preserves the brief. Explicit null clears it.
+      // Agent transactions omit this compatibility flag, so Undo restores absence.
+      if (state.profile.lifting === undefined)
+        state.profile.lifting = previous.profile.lifting;
       if (previous.profile.coaching) {
         state.profile.coaching ??= { ...previous.profile.coaching };
         state.profile.coaching.memories ??= previous.profile.coaching.memories;

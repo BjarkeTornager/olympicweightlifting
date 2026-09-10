@@ -60,9 +60,12 @@ export function HistoryView({
   update,
   go,
   notify,
-}: Props & { go: (route: string) => void }) {
+  sessionId,
+}: Props & { go: (route: string) => void; sessionId?: string }) {
   const [filter, setFilter] = useState("all"),
-    [date, setDate] = useState(""),
+    [date, setDate] = useState(
+      () => state.sessions.find((s) => s.id === sessionId)?.date ?? "",
+    ),
     [remove, setRemove] = useState<Workout | null>(null);
   const sessions = [...state.sessions]
     .filter(
@@ -150,7 +153,11 @@ export function HistoryView({
       {sessions.length ? (
         <div className="history-list">
           {sessions.map((s) => (
-            <details className="panel history-detail" key={s.id}>
+            <details
+              className="panel history-detail"
+              key={s.id}
+              open={s.id === sessionId || undefined}
+            >
               <summary>
                 <span className="date-tile">
                   <strong>{s.date.slice(8)}</strong>

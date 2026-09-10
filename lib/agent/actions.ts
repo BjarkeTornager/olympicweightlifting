@@ -11,6 +11,7 @@ import {
   type CoachPlan,
 } from "../coaching";
 import { repeatMeal } from "../nutrition";
+import { liftingBriefInputSchema, type LiftingBrief } from "../lifting-brief";
 import { z } from "zod";
 import {
   cardioInputSchema,
@@ -129,6 +130,12 @@ const bundleEntrySchema = z.discriminatedUnion("kind", [
   repeatMealActionSchema,
 ]);
 const singleActionSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("set_lifting_brief"),
+      liftingBrief: liftingBriefInputSchema.nullable(),
+    })
+    .strict(),
   progressSchema,
   z
     .object({
@@ -308,6 +315,7 @@ export const actionToolSchema = z
       "record_bundle",
       "repeat_meal",
       "save_memory",
+      "set_lifting_brief",
       "forget_memory",
       "save_plan",
       "delete_plan",
@@ -361,6 +369,12 @@ export const actionToolSchema = z
       )
       .optional(),
     memoryId: z.string().uuid().optional(),
+    liftingBrief: liftingBriefInputSchema
+      .nullable()
+      .optional()
+      .describe(
+        "For set_lifting_brief only: the complete athlete-reported brief, preserving unchanged fields. Null clears it only when requested. Read lifting_review first; saving requires review.",
+      ),
     plan: planInputSchema
       .describe(
         "Only a concrete plan the person explicitly agreed to. Include a visible follow-up date; follow-up occurs on a visit, not a notification. Do not invent outcomes or treat advice as agreement.",
@@ -452,6 +466,7 @@ export type ActionPreview = {
   memory?: CoachMemory;
   plan?: CoachPlan;
   training?: TrainingReview;
+  liftingBrief?: LiftingBrief | null;
   workoutReview?: {
     status: WorkoutStatus;
     sources?: { id: string; title: string; date: string; sets: number }[];
@@ -473,6 +488,7 @@ export type PreviewEntry = Pick<
   | "memory"
   | "plan"
   | "training"
+  | "liftingBrief"
   | "workoutReview"
 >;
 type PreparedAction = PreviewEntry & {
@@ -572,6 +588,7 @@ export function prepareAction(
   let memory: CoachMemory | undefined;
   let plan: CoachPlan | undefined;
   let training: TrainingReview | undefined;
+  let liftingBrief: LiftingBrief | null | undefined;
   let workoutReview: ActionPreview["workoutReview"];
   const owned = (id: string) => {
     const w = next.sessions.find((s) => s.id === id);
@@ -584,7 +601,18 @@ export function prepareAction(
         "An unfinished workout already exists. Resume or finish it first.",
       );
   };
-  if (
+  if (action.kind === "set_lifting_brief") {
+    liftingBrief = action.liftingBrief
+      ? { ...action.liftingBrief, updatedAt: new Date().toISOString() }
+      : null;
+    next.profile.lifting = liftingBrief;
+    title = liftingBrief
+      ? "Save your lifting brief"
+      : "Clear your lifting brief";
+    detail = liftingBrief
+      ? "Your chosen goal, availability and constraints will guide future lifting conversations. Training programs and recorded sessions stay as they are."
+      : "Removes the saved lifting brief. Programs, sessions, approved memories and earlier chat remain.";
+  } else if (
     action.kind === "create_routine" ||
     action.kind === "update_routine" ||
     action.kind === "delete_routine" ||
@@ -1048,6 +1076,7 @@ export function prepareAction(
     cardio,
     memory,
     plan,
+    liftingBrief,
     training,
     workoutReview,
     action,

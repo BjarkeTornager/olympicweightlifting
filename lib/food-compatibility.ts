@@ -80,3 +80,11 @@ export function hasCoachData(state: JournalState): boolean {
     state.nutrition.completeDays?.length,
   );
 }
+
+/** Only a snapshot known to include lifting fields can assert their absence. */
+export function liftingStateForUndo(state: JournalState): JournalState {
+  return {
+    ...state,
+    profile: { ...state.profile, lifting: state.profile.lifting ?? null },
+  };
+}

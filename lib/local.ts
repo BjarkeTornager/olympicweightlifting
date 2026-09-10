@@ -11,11 +11,13 @@ export type LocalRecord = Snapshot & {
   lastSyncedAt?: string;
   foodTagsVersion?: 1;
   coachJournalVersion?: 1;
+  liftingCoachVersion?: 1;
   undo?: {
     state: JournalState;
     seq: number;
     foodTagsVersion?: 1;
     coachJournalVersion?: 1;
+    liftingCoachVersion?: 1;
   };
   pending?: {
     mutationId: string;

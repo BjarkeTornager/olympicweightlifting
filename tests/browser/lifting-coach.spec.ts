@@ -278,3 +278,50 @@ test("Coach brief reviews show every field and save with reversible account-scop
     page.getByRole("button", { name: "Add your brief" }),
   ).toBeVisible();
 });
+
+test("manual Undo clears a newly saved brief after sync instead of resurrecting it as an omitted legacy field", async ({
+  page,
+  context,
+}) => {
+  let state = emptyJournal(),
+    revision = 1;
+  await context.route("**/api/journal", (r) => {
+    if (r.request().method() === "PUT") {
+      const next = r.request().postDataJSON().state as JournalState;
+      // Match the server's compatibility rule: omission preserves; null clears.
+      if (next.profile.lifting === undefined)
+        next.profile.lifting = state.profile.lifting;
+      state = next;
+      revision++;
+    }
+    return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
+  });
+  await page.goto("/#workout/coaching");
+  await expect(
+    page.getByRole("button", { name: "All changes synced", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Add your brief", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Your lifting goal", { exact: true })
+    .fill("Enjoy learning the lifts");
+  await page
+    .getByRole("button", { name: "Save lifting brief", exact: true })
+    .click();
+  await expect
+    .poll(() => state.profile.lifting?.goal)
+    .toBe("Enjoy learning the lifts");
+  await expect(
+    page.getByRole("button", { name: "All changes synced", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Undo last change", exact: true })
+    .click();
+  await expect.poll(() => state.profile.lifting).toBeNull();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Add your brief", exact: true }),
+  ).toBeVisible();
+});

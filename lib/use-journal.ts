@@ -11,6 +11,7 @@ import {
   foodStateForUndo,
   coachStateForUndo,
   hasCoachData,
+  liftingStateForUndo,
 } from "./food-compatibility";
 import { privateFetch } from "./private-fetch";
 export type SyncStatus =
@@ -124,12 +125,15 @@ export function useJournal(
               state: server.state,
               foodTagsVersion: 1,
               coachJournalVersion: 1,
+              liftingCoachVersion: 1,
               revision: server.revision,
               lastSyncedAt: new Date().toISOString(),
               undo:
                 server.revision === current.revision &&
                 (current.coachJournalVersion === 1 ||
-                  !hasCoachData(server.state))
+                  !hasCoachData(server.state)) &&
+                (current.liftingCoachVersion === 1 ||
+                  !server.state.profile.lifting)
                   ? current.undo
                   : undefined,
             };
@@ -224,6 +228,7 @@ export function useJournal(
                     dirty: false,
                     foodTagsVersion: 1,
                     coachJournalVersion: 1,
+                    liftingCoachVersion: 1,
                   }
                 : { dirty: true }),
             };
@@ -333,6 +338,7 @@ export function useJournal(
             seq: current.seq,
             foodTagsVersion: current.foodTagsVersion,
             coachJournalVersion: current.coachJournalVersion,
+            liftingCoachVersion: current.liftingCoachVersion,
           };
           return current;
         });
@@ -412,10 +418,14 @@ export function useJournal(
     const next = await changeLocal(account.current, (current) => {
       if (!current.undo || current.undo.seq !== current.seq || current.conflict)
         throw Error("This change can no longer be undone safely.");
+      const liftingRestored =
+        current.undo.liftingCoachVersion === 1
+          ? liftingStateForUndo(current.undo.state)
+          : current.undo.state;
       const restored =
         current.undo.coachJournalVersion === 1
-          ? coachStateForUndo(current.undo.state)
-          : current.undo.state;
+          ? coachStateForUndo(liftingRestored)
+          : liftingRestored;
       return {
         ...current,
         state: {

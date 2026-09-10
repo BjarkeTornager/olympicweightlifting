@@ -6,7 +6,20 @@ import { liftingReview, liftingBriefInputSchema } from "../lib/lifting-coach";
 import { offsetDate } from "../lib/health";
 import { prepareAction, loggingToolSchema } from "../lib/agent/actions";
 import { liftingBrief, liftingFixture } from "./fixtures/lifting-coach";
+import { liftingStateForUndo } from "../lib/food-compatibility";
 const date = "2026-09-10";
+
+test("a lifting-aware manual Undo explicitly clears an absent brief without changing its source", () => {
+  const state = emptyJournal();
+  const restored = liftingStateForUndo(state);
+  assert.equal(restored.profile.lifting, null);
+  assert.equal(state.profile.lifting, undefined);
+  const existing = liftingFixture(date);
+  assert.deepEqual(
+    liftingStateForUndo(existing).profile.lifting,
+    existing.profile.lifting,
+  );
+});
 
 test("lifting evidence separates explicit outcomes, unrated work and unknown recovery without mutating the journal", () => {
   const state = liftingFixture(date),

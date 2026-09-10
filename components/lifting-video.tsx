@@ -87,7 +87,15 @@ export function LiftingVideoDialog({
     controller.current = abort;
     const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(90000)]);
     setBusy(true);
+    setStatus("Preparing 24 frames on this device…");
     try {
+      // WebKit can suspend seeking in an offscreen player. Let the compact
+      // preparation view render, then keep the real player visible throughout.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
+      signal.throwIfAborted();
+      video.current.scrollIntoView({ block: "center", behavior: "instant" });
       const group = crypto.randomUUID().slice(0, 8);
       const result = await sampleLiftingVideo(
         video.current,
@@ -113,7 +121,10 @@ export function LiftingVideoDialog({
             : "Could not prepare frames. Try another clip.",
         );
     } finally {
-      if (!abort.signal.aborted) setBusy(false);
+      if (!abort.signal.aborted) {
+        setBusy(false);
+        setStatus("");
+      }
     }
   }
   async function attach() {
@@ -153,7 +164,9 @@ export function LiftingVideoDialog({
         if (!open) onClose();
       }}
     >
-      <div className="lifting-video-flow">
+      <div
+        className={`lifting-video-flow${busy && !prepared ? " lifting-video-preparing" : ""}`}
+      >
         <p className="muted">
           Choose a short section of one lift. Coach reviews 24 sampled frames
           and helps you choose one improvement to try.
@@ -410,7 +423,11 @@ export function LiftingVideoDialog({
             </div>
           </>
         )}
-        {status && <p role="status">{status}</p>}
+        {status && (
+          <p role="status" className="lifting-video-progress">
+            {status}
+          </p>
+        )}
         {error && (
           <p role="alert" className="error-text">
             {error}

@@ -98,12 +98,39 @@ test("video review previews ordered frames locally, retries partial saves and pr
   await expect(dialog.getByLabel("Clip end seconds")).toHaveValue("2");
   await dialog.getByLabel("Lift in video").selectOption("Clean");
   await dialog.getByLabel("Video load").fill("60 kg");
+  await page.evaluate(() => {
+    const visibility: boolean[] = [];
+    Object.assign(window, { sampledVideoVisibility: visibility });
+    document.addEventListener(
+      "seeking",
+      (event) => {
+        if (!(event.target instanceof HTMLVideoElement)) return;
+        const player = event.target.getBoundingClientRect();
+        const modal = event.target
+          .closest("[role=dialog]")!
+          .getBoundingClientRect();
+        visibility.push(
+          player.height > 0 &&
+            player.top >= Math.max(0, modal.top) &&
+            player.bottom <= Math.min(window.innerHeight, modal.bottom),
+        );
+      },
+      true,
+    );
+  });
   await dialog.getByRole("button", { name: "Preview selected frames" }).click();
   await expect(dialog.getByAltText(/^Preview sheet/)).toHaveCount(4, {
     timeout: 30000,
   });
   expect(uploads.size).toBe(0);
   expect(messages).toBe(0);
+  // A scrolled-out player stalls seeks on Linux WebKit. Preparation must keep
+  // the actual decoder visible, including when the Preview button is below it.
+  const visibility = await page.evaluate(
+    () => Reflect.get(window, "sampledVideoVisibility") as boolean[],
+  );
+  expect(visibility.length).toBeGreaterThan(20);
+  expect(visibility.every(Boolean)).toBe(true);
   // Different sheets must contain different actual decoded frames, not repeated screenshots.
   const sources = await dialog
     .getByAltText(/^Preview sheet/)

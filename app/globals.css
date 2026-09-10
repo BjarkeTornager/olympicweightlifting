@@ -3318,6 +3318,12 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
   background: #101010;
   border-radius: 16px;
 }
+.lifting-video-preparing > :not(video):not(.lifting-video-progress) {
+  display: none;
+}
+.lifting-video-preparing video {
+  max-height: min(360px, 50dvh);
+}
 .lifting-video-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

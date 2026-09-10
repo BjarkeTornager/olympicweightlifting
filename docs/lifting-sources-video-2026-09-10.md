@@ -42,6 +42,8 @@ Nutrition guidance connects food preferences, upcoming session timing and demand
 
 The original clip and audio are **not uploaded or stored**. They must be kept by the user for later playback or a new selection. Saved sheets can be enlarged, retrieved, downloaded and deleted through the existing private image library. The catalogue has group identifiers and per-sheet source-time ranges in its labels; the model sees timestamps in the pixels. There is no new persistent video object, calibrated motion data or structured biomechanical measurement table.
 
+During preparation the dialog shows a compact player and progress view. This keeps the real video visible while sampling: Linux WebKit can suspend seeks when a paused player is scrolled out of view. The form remains in place for retry, and errors clear the preparation status. Browser tests verify the player's visibility during seeks as well as changing decoded pixels.
+
 A cancelled/interrupted upload can leave some saved sheets in Activity; the UI and privacy page explain this. Removing a draft attachment does not delete a saved sheet. Clearing/deleting image data is separate from conversation text. Uploads retain owner checks, account pinning, quotas, request size bounds, metadata stripping and private no-store responses. No public media URL is created. The content security policy allows local blob video playback without permitting arbitrary external video providers.
 
 ## Limits and the next quality step

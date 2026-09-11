@@ -7,9 +7,10 @@ import { Button } from "./ui/button";
 import { AssistantText } from "./assistant-text";
 import { privateFetch } from "@/lib/private-fetch";
 import { today } from "@/lib/domain";
-import { videoLifts, type VideoLift } from "@/lib/lifting-video";
 import {
   MAX_VIDEO_BYTES,
+  videoUploadLifts,
+  type VideoUpload,
   videoUploadSchema,
   type SavedVideoReview,
 } from "@/lib/video/types";
@@ -64,8 +65,8 @@ function ReviewResult({
     <div className="video-review-result">
       {a && (
         <p className="fine-print">
-          {a.frameCount} frames processed. Coach reviewed 24 sampled images;
-          fast movement may fall between them.
+          {a.frameCount} frames processed. Coach reviews {a.sampleTimes.length}{" "}
+          sampled images; fast movement may fall between them.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
@@ -245,7 +246,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     [selected, setSelected] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null),
     [url, setUrl] = useState("");
-  const [lift, setLift] = useState<VideoLift>("Snatch"),
+  const [lift, setLift] = useState<VideoUpload["lift"]>("Identify from video"),
     [load, setLoad] = useState(""),
     [date, setDate] = useState(today());
   const [start, setStart] = useState("0"),
@@ -395,12 +396,23 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
       if (!upload.current.signal.aborted) setBusy(false);
     }
   }
-  async function action(target: SavedVideoReview, kind: "retry" | "delete") {
+  async function action(
+    target: SavedVideoReview,
+    kind: "retry" | "delete" | "reanalyse",
+    correctedLift?: string,
+  ) {
     setError("");
+    setBusy(true);
     try {
       const r = await privateFetch(
-        `/api/lifting-videos/${target.id}${kind === "retry" ? "/retry" : ""}`,
-        { method: kind === "retry" ? "POST" : "DELETE", headers: auth },
+        `/api/lifting-videos/${target.id}${kind === "delete" ? "" : `/${kind}`}`,
+        {
+          method: kind === "delete" ? "DELETE" : "POST",
+          headers: {
+            ...auth,
+            ...(correctedLift ? { "X-Video-Lift": correctedLift } : {}),
+          },
+        },
       );
       const data = await r.json();
       if (!r.ok) throw Error(data.error ?? "Could not update this review.");
@@ -410,8 +422,11 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
           : rows.map((v) => (v.id === target.id ? data : v)),
       );
       if (kind === "delete") setSelected(null);
+      else setDetail(data);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
   return (
@@ -513,11 +528,11 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   value={lift}
                   disabled={busy}
                   onChange={(e) => {
-                    setLift(e.target.value as VideoLift);
+                    setLift(e.target.value as VideoUpload["lift"]);
                     id.current = crypto.randomUUID();
                   }}
                 >
-                  {videoLifts.map((v) => (
+                  {videoUploadLifts.map((v) => (
                     <option key={v}>{v}</option>
                   ))}
                 </select>
@@ -584,7 +599,9 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
               <p>
                 Keep the whole lifter, feet and bar visible, with good light and
                 a steady camera. Choose up to 20 seconds, including the setup
-                and catch. For bar measurements, use a fixed side-on view.
+                and catch. For clean & jerk, include the front-rack receipt,
+                recovery and the later jerk overhead. For bar measurements, use
+                a fixed side-on view.
               </p>
               <label className="video-check">
                 <input
@@ -815,7 +832,12 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   }}
                 >
                   <span>
-                    <strong>{r.lift}</strong>
+                    <strong>
+                      {r.analysis?.identification?.lift ??
+                        (r.lift === "Identify from video"
+                          ? "Lifting video"
+                          : r.lift)}
+                    </strong>
                     <small>
                       {r.date}
                       {r.load ? ` · ${r.load}` : ""}
@@ -828,7 +850,10 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
             {review && (
               <section className="video-review-detail">
                 <h3>
-                  {review.lift}
+                  {review.analysis?.identification?.lift ??
+                    (review.lift === "Identify from video"
+                      ? "Lifting video"
+                      : review.lift)}
                   {review.load ? ` · ${review.load}` : ""}
                 </h3>
                 {(review.status === "queued" ||
@@ -845,9 +870,23 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                 />
                 <div className="button-row">
                   {review.status === "failed" && (
-                    <Button onClick={() => void action(review, "retry")}>
+                    <Button
+                      disabled={busy}
+                      onClick={() => void action(review, "retry")}
+                    >
                       Retry analysis
                     </Button>
+                  )}
+                  {(review.status === "ready" ||
+                    review.status === "failed") && (
+                    <CorrectReview
+                      key={review.id + review.lift}
+                      review={review}
+                      busy={busy}
+                      onSubmit={(value) =>
+                        void action(review, "reanalyse", value)
+                      }
+                    />
                   )}
                   <details>
                     <summary>Remove review</summary>
@@ -857,6 +896,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                     </p>
                     <Button
                       variant="danger"
+                      disabled={busy}
                       onClick={() => void action(review, "delete")}
                     >
                       Delete video and review
@@ -874,5 +914,42 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
         )}
       </div>
     </Dialog>
+  );
+}
+
+function CorrectReview({
+  review,
+  busy,
+  onSubmit,
+}: {
+  review: SavedVideoReview;
+  busy: boolean;
+  onSubmit: (lift: string) => void;
+}) {
+  const [value, setValue] = useState(review.lift);
+  return (
+    <details>
+      <summary>Correct lift & reanalyse</summary>
+      <p>
+        Choose the movement you performed, or let Coach identify it. This
+        replaces the feedback using your saved clip; no new upload is needed.
+        Coach will still flag missing or conflicting visual evidence.
+      </p>
+      <label>
+        Lift for this review
+        <select
+          value={value}
+          disabled={busy}
+          onChange={(e) => setValue(e.target.value)}
+        >
+          {videoUploadLifts.map((lift) => (
+            <option key={lift}>{lift}</option>
+          ))}
+        </select>
+      </label>
+      <Button disabled={busy} onClick={() => onSubmit(value)}>
+        Reanalyse saved video
+      </Button>
+    </details>
   );
 }

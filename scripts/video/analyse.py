@@ -90,7 +90,7 @@ def analyse():
         raise ValueError("Choose a shorter clip with at least 12 video frames.")
     if any(b <= a for a, b in zip(times, times[1:])):
         raise ValueError("The clip has inconsistent timing. Export a new copy.")
-    picks = [round(i * (len(times) - 1) / 23) for i in range(24)]
+    picks = [round(i * (len(times) - 1) / 47) for i in range(48)]
     cap = cv2.VideoCapture(media)
     points, samples = [], []
     calibration = spec.get("calibration")
@@ -140,10 +140,10 @@ def analyse():
             previous = (cx, cy)
         points.append({"t": round(t, 6), "x": cx / w, "y": cy / h, "score": round(score, 3)})
     cap.release()
-    # Keep a fixed 24-frame contact sheet even for short clips with repeated selections.
+    # Keep a fixed 48-frame contact sheet even for short clips with repeated selections.
     by_time = {t: frame for t, frame in samples}
     frames = []
-    for sheet in range(4):
+    for sheet in range(8):
         canvas = np.full((1920, 1280, 3), 16, dtype=np.uint8)
         for tile in range(6):
             idx = picks[sheet * 6 + tile]

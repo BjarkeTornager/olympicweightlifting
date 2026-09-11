@@ -52,6 +52,7 @@ test("private video upload processes across navigation and exposes playback, fee
       const input = JSON.parse(
         decodeURIComponent(r.request().headers()["x-video-metadata"]),
       );
+      expect(input.lift).toBe("Identify from video");
       expect(input.end).toBeCloseTo(2, 1);
       expect(input.calibration).toBeUndefined();
       // WebKit's inspector omits File-backed request bodies. Independently
@@ -93,6 +94,9 @@ test("private video upload processes across navigation and exposes playback, fee
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
   await dialog.getByLabel("Upload lifting video").setInputFiles(fixture);
   await expect(dialog.getByLabel("End (seconds)")).toHaveValue("2");
+  await expect(
+    dialog.getByRole("combobox", { name: "Lift", exact: true }),
+  ).toHaveValue("Identify from video");
   expect(uploads).toBe(0);
   await dialog.getByRole("button", { name: "Upload & analyse lift" }).click();
   await expect(
@@ -168,6 +172,36 @@ test("private video upload processes across navigation and exposes playback, fee
   expect(a11y.violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await dialog.screenshot({ path: info.outputPath("saved-video-review.png") });
+  let corrections = 0;
+  await context.route("**/api/lifting-videos/*/reanalyse", (r) => {
+    corrections++;
+    expect(r.request().headers()["x-journal-account"]).toBe(browserUser.id);
+    expect(r.request().headers()["x-video-lift"]).toBe("Clean & jerk");
+    expect(r.request().method()).toBe("POST");
+    expect(r.request().postData()).toBeNull();
+    reviews[0] = {
+      ...reviews[0],
+      lift: "Clean & jerk",
+      status: "queued",
+      stage: "Waiting to reanalyse",
+      feedback: null,
+    };
+    return r.fulfill({ json: reviews[0] });
+  });
+  await dialog.getByText("Correct lift & reanalyse", { exact: true }).click();
+  await dialog
+    .getByRole("combobox", { name: "Lift for this review", exact: true })
+    .selectOption("Clean & jerk");
+  await dialog.getByRole("button", { name: "Reanalyse saved video" }).click();
+  await expect(
+    dialog.getByRole("heading", { name: "Clean & jerk", exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText("Waiting to reanalyse…", { exact: false }),
+  ).toBeVisible();
+  expect(corrections).toBe(1);
+  expect(uploads).toBe(1);
+  await expect(dialog.getByLabel("Coach video feedback")).toHaveCount(0);
   await dialog.getByText("Remove review", { exact: true }).click();
   await dialog.getByRole("button", { name: "Delete video and review" }).click();
   await expect(

@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { videoLifts } from "../lifting-video";
 import { foodDate } from "../nutrition";
+export const videoUploadLifts = ["Identify from video", ...videoLifts] as const;
+export const videoReanalysisSchema = z
+  .object({ lift: z.enum(videoUploadLifts) })
+  .strict();
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const videoUploadSchema = z
   .object({
     id: z.string().uuid(),
-    lift: z.enum(videoLifts),
+    lift: z.enum(videoUploadLifts),
     date: foodDate,
     load: z.string().trim().max(80).default(""),
     start: z.number().finite().min(0).max(119.5),
@@ -33,6 +37,7 @@ export type VideoUpload = z.infer<typeof videoUploadSchema>;
 export type TrackPoint = { t: number; x: number; y: number; score: number };
 export type VideoAnalysis = {
   version: 1;
+  identification?: import("./identification").LiftIdentification;
   width: number;
   height: number;
   duration: number;

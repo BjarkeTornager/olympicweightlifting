@@ -50,7 +50,7 @@ class AnalysisTests(unittest.TestCase):
             out = process(d)
             a, t = out['analysis'], out['analysis']['tracking']
             self.assertEqual(a['frameCount'], 120)
-            self.assertEqual(len(out['frames']), 4)
+            self.assertEqual(len(out['frames']), 8)
             self.assertEqual(t['status'], 'tracked')
             self.assertAlmostEqual(t['riseCm'], 89.25, delta=1.5)
             self.assertAlmostEqual(t['horizontalRangeCm'], 18, delta=1.5)
@@ -78,7 +78,7 @@ class AnalysisTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='lift-frames-test-') as d:
             a = process(d, track=False)['analysis']
             self.assertEqual(a['tracking']['status'], 'not_requested')
-            self.assertEqual(len(a['sampleTimes']), 24)
+            self.assertEqual(len(a['sampleTimes']), 48)
 
 
 if __name__ == '__main__':

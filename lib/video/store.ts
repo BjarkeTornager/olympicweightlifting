@@ -8,7 +8,9 @@ import { canonicalJson } from "../json";
 import {
   MAX_VIDEO_BYTES,
   videoUploadSchema,
+  videoReanalysisSchema,
   type SavedVideoReview,
+  type VideoUpload,
 } from "./types";
 const owner = (userId: string, id: string) =>
   and(eq(liftingVideos.userId, userId), eq(liftingVideos.id, id));
@@ -116,7 +118,7 @@ export async function saveVideo(userId: string, raw: unknown, source: Buffer) {
       );
     if (
       usage.count >= 20 ||
-      Number(usage.bytes) + Math.max(source.length, 34 * 1024 * 1024) >
+      Number(usage.bytes) + Math.max(source.length, 42 * 1024 * 1024) >
         500 * 1024 * 1024
     )
       throw new ApiError(
@@ -129,7 +131,7 @@ export async function saveVideo(userId: string, raw: unknown, source: Buffer) {
       input,
       digest,
       source,
-      bytes: Math.max(source.length, 34 * 1024 * 1024),
+      bytes: Math.max(source.length, 42 * 1024 * 1024),
     });
   });
   return getVideo(userId, input.id);
@@ -142,6 +144,16 @@ export async function deleteVideo(userId: string, id: string) {
   if (!rows.length) throw new ApiError("Video review not found.", 404);
 }
 export async function retryVideo(userId: string, id: string) {
+  return queueReview(userId, id);
+}
+export async function reanalyseVideo(userId: string, id: string, raw: unknown) {
+  return queueReview(userId, id, videoReanalysisSchema.parse(raw).lift);
+}
+async function queueReview(
+  userId: string,
+  id: string,
+  correctedLift?: VideoUpload["lift"],
+) {
   await getDb().transaction(async (tx) => {
     await tx
       .select({ id: journals.userId })
@@ -149,12 +161,23 @@ export async function retryVideo(userId: string, id: string) {
       .where(eq(journals.userId, userId))
       .for("update");
     const [row] = await tx
-      .select({ status: liftingVideos.status })
+      .select({
+        status: liftingVideos.status,
+        input: liftingVideos.input,
+        analysis: liftingVideos.analysis,
+      })
       .from(liftingVideos)
       .where(owner(userId, id));
     if (!row) throw new ApiError("Video review not found.", 404);
-    if (row.status === "queued" || row.status === "processing") return;
-    if (row.status !== "failed")
+    if (row.status === "queued" || row.status === "processing") {
+      if (correctedLift && correctedLift !== row.input.lift)
+        throw new ApiError(
+          "Wait for this review to finish before changing its lift type.",
+          409,
+        );
+      return;
+    }
+    if (row.status !== "failed" && !(correctedLift && row.status === "ready"))
       throw new ApiError("This review is already complete.", 409);
     const [usage] = await tx
       .select({
@@ -171,13 +194,23 @@ export async function retryVideo(userId: string, id: string) {
       .update(liftingVideos)
       .set({
         status: "queued",
-        stage: "Waiting to retry",
+        stage: correctedLift ? "Waiting to reanalyse" : "Waiting to retry",
+        ...(correctedLift
+          ? {
+              // Keep the original upload digest: a repeated upload remains idempotent.
+              input: { ...row.input, lift: correctedLift },
+              analysis: row.analysis
+                ? { ...row.analysis, identification: undefined }
+                : null,
+              feedback: null,
+            }
+          : {}),
         error: null,
         attempts: 0,
         lease: null,
         leaseUntil: null,
       })
-      .where(and(owner(userId, id), eq(liftingVideos.status, "failed")));
+      .where(and(owner(userId, id), eq(liftingVideos.status, row.status)));
   });
   return getVideo(userId, id);
 }

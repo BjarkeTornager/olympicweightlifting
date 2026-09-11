@@ -125,17 +125,17 @@ export default function PrivacyPage() {
           location metadata; the original upload is removed after processing
           succeeds. Failed source uploads remain private until you retry or
           delete the review. Up to 20 reviews or 500 MB are kept per account.
-          The configured Coach provider receives 24 sampled frames and supplied
-          lift details, with the same provider privacy filters as chat. It does
-          not receive the original video. Processing can continue when you close
-          the page. In Your reviews you can replay, download the processed clip,
-          export the analysis and delete the clip and feedback. These reviews
-          are separate from chat and journal backups; clearing chat does not
-          delete them. Optional bar measurements use your marked plate, scale
-          and timing confirmation and are experimental. Video review does not
-          log workouts. The alternative on-device frame review keeps the source
-          on your device and saves four Activity image sheets, which can be
-          deleted in Images.
+          The configured Coach provider receives 48 sampled frames for new
+          uploads (24 in older reviews) and supplied lift details, with the same
+          provider privacy filters as chat. It does not receive the original
+          video. Processing can continue when you close the page. In Your
+          reviews you can replay, download the processed clip, export the
+          analysis and delete the clip and feedback. These reviews are separate
+          from chat and journal backups; clearing chat does not delete them.
+          Optional bar measurements use your marked plate, scale and timing
+          confirmation and are experimental. Video review does not log workouts.
+          The alternative on-device frame review keeps the source on your device
+          and saves four Activity image sheets, which can be deleted in Images.
         </p>
         <p>
           The assistant can read only your journal through limited tools. It

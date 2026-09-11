@@ -19,6 +19,7 @@ test(
       listVideos,
       deleteVideo,
       retryVideo,
+      reanalyseVideo,
       videoMedia,
     } = await import("../lib/video/store");
     const { claimVideo, runVideoJob } = await import("../lib/video/worker");
@@ -54,6 +55,10 @@ test(
       await assert.rejects(deleteVideo(users[1], input.id), /not found/);
       await assert.rejects(retryVideo(users[1], input.id), /not found/);
       await assert.rejects(
+        reanalyseVideo(users[1], input.id, { lift: "Clean & jerk" }),
+        /not found/,
+      );
+      await assert.rejects(
         saveVideo(users[0], { ...input, lift: "Snatch" }, source),
         /already used/,
       );
@@ -74,7 +79,7 @@ test(
         height: 480,
         duration: 2,
         frameCount: 60,
-        sampleTimes: [0, 1, 2],
+        sampleTimes: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
         tracking: {
           status: "not_requested",
           reason: "No marker",
@@ -108,19 +113,87 @@ test(
       await retryVideo(users[0], input.id);
       const retry = await claimVideo();
       assert.ok(retry);
+      let modelCalls = 0;
+      const phaseReply = JSON.stringify({
+        visibility: "sufficient",
+        limitation: "",
+        phases: [
+          {
+            kind: "pull",
+            frame: 1,
+            evidence: "The bar is moving up from below the knee.",
+          },
+          {
+            kind: "front_rack_receive",
+            frame: 3,
+            evidence: "The bar is received on the front shoulders.",
+          },
+          {
+            kind: "leg_drive_from_rack",
+            frame: 6,
+            evidence: "A separate dip and leg drive starts from the rack.",
+          },
+          {
+            kind: "overhead_receive",
+            frame: 8,
+            evidence: "The bar is received with arms overhead.",
+          },
+        ],
+      });
       await runVideoJob(
         retry,
         async (messages, tools) => {
           assert.deepEqual(tools, []);
           assert.equal(messages[1].images?.length, 1);
+          modelCalls++;
+          if (modelCalls === 1)
+            assert.equal(messages[1].content.includes('"lift"'), false);
+          else
+            assert.equal(JSON.parse(messages[1].content).lift, "Clean & jerk");
           return {
             role: "assistant",
-            content: "No lift is visible in this synthetic clip.",
+            content:
+              modelCalls === 1 ? phaseReply : "This is a clear snatch attempt.",
           };
         },
         processor,
       );
       assert.equal(decodes, 1);
+      assert.equal(modelCalls, 2);
+      const guarded = await getVideo(users[0], input.id);
+      assert.match(guarded.feedback!, /withheld/);
+      assert.doesNotMatch(guarded.feedback!, /clear snatch/);
+      assert.equal(guarded.analysis?.identification?.lift, "Clean & jerk");
+      await reanalyseVideo(users[0], input.id, { lift: "Clean & jerk" });
+      assert.equal((await getVideo(users[0], input.id)).feedback, null);
+      assert.equal(
+        (await getVideo(users[0], input.id)).analysis?.identification,
+        undefined,
+      );
+      await assert.rejects(
+        reanalyseVideo(users[0], input.id, { lift: "Snatch" }),
+        /Wait/,
+      );
+      const corrected = await claimVideo();
+      assert.ok(corrected);
+      let correctedCalls = 0;
+      await runVideoJob(
+        corrected,
+        async () => ({
+          role: "assistant",
+          content:
+            ++correctedCalls === 1
+              ? phaseReply
+              : "The front-rack position is visible at 0.50s. No correction is justified by these synthetic frames.",
+        }),
+        processor,
+      );
+      assert.equal(correctedCalls, 2);
+      assert.equal(decodes, 1);
+      assert.equal((await getVideo(users[0], input.id)).lift, "Clean & jerk");
+      // Correcting a review does not make an original upload replay create a duplicate.
+      await saveVideo(users[0], input, source);
+      assert.equal((await listVideos(users[0])).length, 1);
       assert.equal((await getVideo(users[0], input.id)).status, "ready");
       // Old worker cannot overwrite the later fenced result.
       await runVideoJob(

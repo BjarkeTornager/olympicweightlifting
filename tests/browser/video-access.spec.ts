@@ -23,6 +23,7 @@ test("video listing, details, playback and mutations reject unsigned and foreign
     ["/api/lifting-videos", "POST"],
     [`/api/lifting-videos/${id}`, "DELETE"],
     [`/api/lifting-videos/${id}/retry`, "POST"],
+    [`/api/lifting-videos/${id}/reanalyse`, "POST"],
   ]) {
     const response = await request.fetch(path, {
       method,

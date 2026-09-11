@@ -54,7 +54,7 @@ const specifications = {
   lifting_videos: {
     schema: z.object({}).strict(),
     description:
-      "Read this account's saved lifting video reviews, status, Coach feedback and experimental measurement summaries. Use when asked about uploaded lift videos or prior video feedback. No raw video or new visual inspection; null measurements are unavailable. Never present these as validated biomechanics. Does not log training or authorize program changes.",
+      "Read this account's saved lifting video reviews, status, Coach feedback and experimental measurement summaries. Use when asked about uploaded lift videos or prior video feedback. selectedLift is an unverified user/form label; lift is the phase-based visual estimate, or null if not established. Respect identification uncertainty; do not repeat an old label as fact. No raw video or new visual inspection; null measurements are unavailable. Never present these as validated biomechanics. Does not log training or authorize program changes.",
   },
   lifting_knowledge: {
     schema: z
@@ -738,7 +738,10 @@ export async function runTurn(
             output = {
               reviews: (await listVideos(userId)).map((v) => ({
                 id: v.id,
-                lift: v.lift,
+                lift: v.analysis?.identification?.lift ?? null,
+                selectedLift: v.lift,
+                identificationStatus:
+                  v.analysis?.identification?.status ?? "not_reviewed",
                 date: v.date,
                 load: v.load,
                 status: v.status,

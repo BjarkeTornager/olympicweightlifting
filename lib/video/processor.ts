@@ -51,7 +51,7 @@ export async function processVideo(
       throw new ApiError(message, 422);
     }
     const file = path.join(dir, "result.json");
-    if ((await stat(file)).size > 9000000)
+    if ((await stat(file)).size > 18000000)
       throw new ApiError("The video analysis was too large.", 422);
     const result = JSON.parse(await readFile(file, "utf8")) as {
       analysis: VideoAnalysis;

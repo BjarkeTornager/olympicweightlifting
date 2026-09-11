@@ -4,7 +4,7 @@
 
 Open **Coach → attachments → Review lifting video**, or **Train → Lifting coach → Review lifting video**. Upload an MP4/MOV/WebM of up to 50 MB and two minutes, select 0.5–20 seconds and the lift, and choose **Upload & analyse lift**. Load and bar calibration are optional. No typed question is required. Keep the window open until the upload is acknowledged; processing then continues across navigation, closed tabs and server restarts. Reopen **Your reviews** for status, playback, Coach feedback, retry, download, analysis export or deletion. Chat drafts and workouts are untouched.
 
-FFmpeg prepares a silent, rotation-corrected H.264 selected clip and 24 labelled samples in four contact sheets. The existing image-capable Coach provider receives these sheets and lift context in one read-only call. It gets no mutation tools, account identifiers, private URLs or original video/audio. Feedback covers visible strengths, one main improvement and one next-attempt cue/check. The `lifting_videos` tool lets normal Coach conversations retrieve the signed-in person's saved reviews and measurement summaries.
+FFmpeg prepares a silent, rotation-corrected H.264 selected clip and 48 labelled samples in eight contact sheets. The existing image-capable Coach provider first receives the sheets without the selected lift label to describe visible phases. A server-side sequence check distinguishes clean/front-rack/jerk from a continuous pull to overhead; uncertain, contradictory, missing or invalid phase evidence withholds lift-specific coaching. A supported identification permits a second read-only coaching call. A response that names an incompatible lift is withheld. Both calls retain the configured provider/privacy policy. It gets no mutation tools, account identifiers, private URLs or original video/audio. Feedback covers visible strengths, one main improvement and one next-attempt cue/check. The `lifting_videos` tool lets normal Coach conversations retrieve the signed-in person's saved reviews and measurement summaries.
 
 The existing **Use on-device frame review** remains available and keeps the source local, using the existing Coach message queue and Activity image catalogue.
 
@@ -32,9 +32,20 @@ The runtime Docker image installs distribution FFmpeg/FFprobe, Python, NumPy and
 
 ## Verification
 
-- Python end-to-end synthetic clips exercise actual encoding/decoding, 120 original-timed frames, four sheets, known displacement/velocity, occlusion and unconfirmed timing. CI installs Linux FFmpeg/OpenCV and runs these tests.
+- Python end-to-end synthetic clips exercise actual encoding/decoding, 120 original-timed frames, eight sheets, known displacement/velocity, occlusion and unconfirmed timing. CI installs Linux FFmpeg/OpenCV and runs these tests.
 - Database tests cover owned reads/media/deletion/retry, duplicate IDs, source removal after processing, read-only model inputs, provider retry without redecoding, abandoned leases, stale worker fencing and deletion during inference.
 - Browser tests cover upload without chat text, exact uploaded file bytes, cross-page persistence, saved playback, feedback, overlay, JSON export, deletion, failed-upload retries with a stable ID, optional calibration and accessibility/mobile layout. Existing on-device review tests remain.
 - All test media/accounts/model responses are synthetic. No paid provider calls or real athlete data are used for verification.
 
 Primary implementation references: [FFmpeg](https://ffmpeg.org/ffmpeg.html), [FFprobe](https://ffmpeg.org/ffprobe.html), [OpenCV template matching](https://docs.opencv.org/4.x/d4/dc6/tutorial_py_template_matching.html), [Kinovea calibration](https://www.kinovea.org/help/staging/measurement/calibration.html). The implementation is original and these sources do not validate the app's measurements.
+
+
+## Lift-identification correction
+
+The first upload form defaulted to Snatch. That label could anchor a review of a clean & jerk. The new default is **Identify from video**, and the first visual pass receives neither the selected lift nor the reported load. Phase order and actual sampled frame indices are validated before a lift name is derived. A front-rack catch followed by a separate rack drive and overhead receipt is never classified as a snatch. A final overhead frame alone is insufficient evidence of a snatch. These are conservative evidence checks, not validated computer vision or calibrated confidence scores.
+
+Existing saved reviews offer **Correct lift & reanalyse**. The owner can select a movement or automatic identification and replace feedback from the existing saved frames without another upload. Original upload idempotency, media, tracking and journal records are preserved. Older clips retain their 24 cached frames; newly uploaded clips use 48. Missing visual evidence still withholds advice even when a lift is explicitly selected. The UI never treats a selected lift label as verified identity. No migration is required: phase evidence is stored in the existing analysis JSON. Failed coaching retries reuse the phase checkpoint; an explicit reanalysis clears that checkpoint.
+
+Recognition and coaching remain experimental. Synthetic regression tests cover the reported label-conflict scenario, clean/jerk/snatch sequences, sparse/contradictory evidence, invalid timestamps, owner-only correction, stale-worker fencing and correcting a saved clip through the UI. They do not establish real-athlete or live-model accuracy. No paid model evaluations or personal media were used during implementation.
+
+Technique definitions were checked against [Catalyst Athletics' snatch description](https://catalystathletics.com/exercise/58/Snatch/) and [clean and jerk rack positions](https://catalystathletics.com/article/1874/The-Clean-and-Jerk-Rack-Positions/).

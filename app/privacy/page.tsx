@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 7 September 2026.</p>
+        <p className="lead">Last updated 11 September 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -120,19 +120,22 @@ export default function PrivacyPage() {
           require your review before saving.
         </p>
         <p>
-          Lifting video review prepares sampled frame sheets in your browser.
-          Your original video and audio are not uploaded or retained by the
-          platform. Get lift feedback stores four images in your private
-          Activity library, under the same image quota and account access rules,
-          and queues a dedicated review that shares those frames with your
-          configured assistant provider. No typed question or separate Send is
-          needed; unrelated chat drafts and attachments remain untouched. You
-          can download or delete them in Images; removing an attachment from a
-          draft does not delete the saved image. A cancelled or interrupted save
-          may leave some sheets in the library. Chat text remains until you
-          clear the conversation. Keep your original clip if you want to review
-          it again. This is experimental visual feedback, not calibrated
-          movement measurement or a medical assessment.
+          Upload & analyse lift privately stores your video for background
+          processing. The selected section is re-encoded without audio or
+          location metadata; the original upload is removed after processing
+          succeeds. Failed source uploads remain private until you retry or
+          delete the review. Up to 20 reviews or 500 MB are kept per account.
+          The configured Coach provider receives 24 sampled frames and supplied
+          lift details, with the same provider privacy filters as chat. It does
+          not receive the original video. Processing can continue when you close
+          the page. In Your reviews you can replay, download the processed clip,
+          export the analysis and delete the clip and feedback. These reviews
+          are separate from chat and journal backups; clearing chat does not
+          delete them. Optional bar measurements use your marked plate, scale
+          and timing confirmation and are experimental. Video review does not
+          log workouts. The alternative on-device frame review keeps the source
+          on your device and saves four Activity image sheets, which can be
+          deleted in Images.
         </p>
         <p>
           The assistant can read only your journal through limited tools. It

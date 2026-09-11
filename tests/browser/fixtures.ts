@@ -28,6 +28,9 @@ export const test = base.extend<{
         );
         return r.fulfill({ status: 401, json: { error: "Unmocked test API" } });
       });
+      await context.route("**/api/lifting-videos", (r) =>
+        r.fulfill({ json: { videos: [] } }),
+      );
       await context.route("**/api/session", (r) =>
         r.fulfill({
           json: {

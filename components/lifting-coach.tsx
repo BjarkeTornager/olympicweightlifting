@@ -479,9 +479,11 @@ export function LiftingCoach({
           </li>
         </ol>
         <p className="fine-print">
-          Coach uses your reports, journal and visible image evidence. Video
-          reviews use sampled frames, which can miss fast movement. A qualified
-          coach in person can assess details this view cannot establish.
+          Coach uses your reports, journal and visible image evidence. Saved
+          video reviews include playback and sampled-frame feedback, which can
+          miss fast movement. Optional bar tracking provides experimental
+          estimates. A qualified coach in person can assess details this view
+          cannot establish.
         </p>
       </section>
       <Dialog

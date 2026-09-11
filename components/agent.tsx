@@ -52,7 +52,7 @@ import { CoachMemoryBook } from "./coach-memory";
 import { WeeklyReview } from "./weekly-review";
 import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
-import { LiftingVideoDialog } from "./lifting-video";
+import { LiftingVideoDialog } from "./lifting-video-upload";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
 type Turn = {
   id: string;
@@ -1611,6 +1611,7 @@ export function TrainingAgent({
       </section>
       {videoOpen && accountId && (
         <LiftingVideoDialog
+          key={accountId}
           accountId={accountId}
           reviewBlockedReason={
             !ready

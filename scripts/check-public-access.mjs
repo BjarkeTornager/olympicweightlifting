@@ -14,6 +14,9 @@ const paths = [
   "/api/invitations",
   "/api/journal",
   "/api/agent",
+  "/api/lifting-videos",
+  "/api/lifting-videos/00000000-0000-4000-8000-000000000000",
+  "/api/lifting-videos/00000000-0000-4000-8000-000000000000/media",
   "/api/images",
   "/api/images?category=sleep",
   "/api/food/photos",
@@ -60,6 +63,10 @@ for (const path of paths) {
     ].includes(path)
   )
     assert.equal(r.status, 401);
+  if (path.startsWith("/api/lifting-videos")) {
+    assert.equal(r.status, 401);
+    assert.match(r.headers.get("cache-control") ?? "", /no-store/);
+  }
   if (path === "/api/session") assert.equal(JSON.parse(body).user, null);
   if (path === "/") {
     assert.match(body, /Your health/);

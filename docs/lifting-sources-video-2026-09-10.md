@@ -1,3 +1,5 @@
+> Superseded for the default upload flow by [private video analysis, 11 September](video-analysis-2026-09-11.md). The on-device frame-review alternative described below remains available.
+
 # Olympic weightlifting knowledge, fuelling and video review
 
 Reviewed 10 September 2026. This extends the personal lifting brief and four-week evidence workspace. The aim is a useful, verifiable coaching loop: understand the athlete, inspect relevant evidence, choose one practical adjustment, then review its effect.

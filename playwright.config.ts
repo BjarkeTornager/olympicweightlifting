@@ -13,6 +13,17 @@ export default defineConfig({
   ],
   webServer: {
     command: "PORT=34173 npm run start",
+    // Synthetic authentication configuration, including for unsigned API tests.
+    // The browser suite must never run the background model worker.
+    env: {
+      VIDEO_ANALYSIS_WORKER: "0",
+      BETTER_AUTH_SECRET: "synthetic-browser-tests-only-secret-123456789",
+      BETTER_AUTH_URL: "http://127.0.0.1:34173",
+      OWNER_EMAIL: "ci@example.test",
+      DATABASE_URL:
+        process.env.TEST_DATABASE_URL ??
+        "postgresql://localhost/lift_browser_test",
+    },
     url: "http://127.0.0.1:34173",
     reuseExistingServer: false,
     timeout: 60000,

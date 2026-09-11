@@ -3352,3 +3352,31 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Private video reviews */
+.video-review-tabs {display:flex;gap:.5rem;border-bottom:1px solid var(--border,#e5e5e5);padding-bottom:1rem;}
+.video-review-list {display:grid;gap:.75rem;}
+.video-review-list>button {display:flex;align-items:center;justify-content:space-between;gap:1rem;text-align:left;padding:1rem;border:1px solid #deded9;border-radius:16px;background:#fff;color:inherit;}
+.video-review-list>button.selected {border-color:#b83b61;background:#fff8fa;}
+.video-review-list small {display:block;color:#666;margin-top:.25rem;}
+.video-review-list>button>span:last-child {font-size:.85rem;max-width:45%;}
+.video-review-detail {border-top:1px solid #e5e5e5;padding-top:1.25rem;}
+.video-review-result {display:grid;gap:1.25rem;margin:1rem 0;}
+.video-review-player,.video-seed {position:relative;display:block;width:100%;padding:0;overflow:hidden;border-radius:16px;background:#151515;}
+.lifting-video-flow .video-review-player video {display:block;max-height:none;border-radius:0;width:100%;}
+.video-review-player>svg,.video-seed>svg {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+.video-seed img {display:block;width:100%;height:auto;}
+.video-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1rem 0;}
+.video-metrics>div {padding:.85rem;background:#f7f7f4;border-radius:12px;}
+.video-metrics dt {font-size:.8rem;color:#666;}
+.video-metrics dd {margin:.5rem 0 0;font-size:1.1rem;font-weight:650;}
+.video-velocity-chart {margin:0;}
+.video-velocity-chart svg {width:100%;height:auto;}
+.video-velocity-chart text {font:13px system-ui;fill:currentColor;}
+.video-velocity-chart figcaption {font-size:.8rem;color:#666;}
+.lifting-video-flow .video-check {display:flex;align-items:center;gap:.6rem;font-weight:400;margin:.75rem 0;}
+.lifting-video-flow .video-check input {width:20px;flex:none;}
+.video-calibration {display:grid;gap:1rem;padding-top:1rem;}
+@media(max-width:420px){.video-metrics{grid-template-columns:1fr;}.video-review-tabs{flex-wrap:wrap;}}
+.video-calibration {border:0;margin:0;padding:1rem 0 0;min-width:0;}
+.lifting-video-flow label.video-check {flex-direction:row;justify-content:flex-start;}

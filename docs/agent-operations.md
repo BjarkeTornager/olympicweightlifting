@@ -1,6 +1,6 @@
 # Training assistant operations
 
-Olympic lifting also has curated coaching/nutrition guidance and experimental video-frame review. See [sources, private media handling and evaluation limits](lifting-sources-video-2026-09-10.md). The original video stays on the device; four Activity image sheets use existing private storage and the Coach message queue.
+Olympic lifting also has curated coaching/nutrition guidance and experimental video-frame review. See [sources, private media handling and evaluation limits](lifting-sources-video-2026-09-10.md). Private saved video uploads and background FFmpeg/OpenCV processing are now available; see [video analysis operations and limits](video-analysis-2026-09-11.md). The alternative on-device frame review keeps the source local.
 
 Olympic lifting uses a private training brief and shared four-week evidence tool. See [the source review, coaching cycle and compatibility notes](olympic-coaching-2026-09-10.md). The brief is optional, reviewed when changed through Coach, and never included in ordinary automatic logging.
 

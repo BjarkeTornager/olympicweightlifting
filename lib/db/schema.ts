@@ -292,3 +292,36 @@ export const agentProposals = pgTable(
   },
   (t) => [index("agent_proposals_user_idx").on(t.userId)],
 );
+
+export const liftingVideos = pgTable(
+  "lifting_videos",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    input: jsonb("input")
+      .$type<import("../video/types").VideoUpload>()
+      .notNull(),
+    digest: text("digest").notNull(),
+    bytes: integer("bytes").notNull(),
+    source: bytea("source"),
+    media: bytea("media"),
+    frames: jsonb("frames").$type<string[]>(),
+    analysis: jsonb("analysis").$type<import("../video/types").VideoAnalysis>(),
+    feedback: text("feedback"),
+    status: text("status").notNull().default("queued"),
+    stage: text("stage").notNull().default("Waiting to analyse"),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    lease: text("lease"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.id] }),
+    index("lifting_videos_queue_idx").on(t.status, t.createdAt),
+  ],
+);

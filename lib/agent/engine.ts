@@ -1,3 +1,4 @@
+import { listVideos } from "../video/store";
 import { weeklyReview } from "../weekly-review";
 import { liftingReview } from "../lifting-coach";
 import { liftingGuide } from "./lifting-guide";
@@ -50,6 +51,11 @@ const range = z
   })
   .strict();
 const specifications = {
+  lifting_videos: {
+    schema: z.object({}).strict(),
+    description:
+      "Read this account's saved lifting video reviews, status, Coach feedback and experimental measurement summaries. Use when asked about uploaded lift videos or prior video feedback. No raw video or new visual inspection; null measurements are unavailable. Never present these as validated biomechanics. Does not log training or authorize program changes.",
+  },
   lifting_knowledge: {
     schema: z
       .object({ topic: z.enum(["technique", "programming", "nutrition"]) })
@@ -264,6 +270,7 @@ function toolStep(name: string) {
     weekly_review: "Comparing your week with the recorded evidence",
     coach_memory: "Checking your approved preferences and plans",
     lifting_review: "Reviewing your lifting and training brief",
+    lifting_videos: "Reading your saved video reviews",
     lifting_knowledge: "Reading lifting and nutrition guidance",
     meal_favourites: "Finding your favourite meals",
     health_overview: "Checking your sleep and recovery",
@@ -725,6 +732,29 @@ export async function runTurn(
               ...report,
               current: compact(report.current),
               previous: compact(report.previous),
+            };
+          } else if (key === "lifting_videos") {
+            specifications.lifting_videos.schema.parse(args);
+            output = {
+              reviews: (await listVideos(userId)).map((v) => ({
+                id: v.id,
+                lift: v.lift,
+                date: v.date,
+                load: v.load,
+                status: v.status,
+                feedback: v.feedback,
+                measurements: v.analysis
+                  ? {
+                      status: v.analysis.tracking.status,
+                      reason: v.analysis.tracking.reason,
+                      horizontalRangeCm: v.analysis.tracking.horizontalRangeCm,
+                      riseCm: v.analysis.tracking.riseCm,
+                      peakUpwardVelocity:
+                        v.analysis.tracking.peakUpwardVelocity,
+                    }
+                  : null,
+              })),
+              open: "#coach/lifting/video",
             };
           } else if (key === "lifting_knowledge") {
             output = liftingKnowledge(

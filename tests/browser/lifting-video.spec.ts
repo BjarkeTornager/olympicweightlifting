@@ -127,6 +127,9 @@ test("video feedback submits without a question, retries partial saves and prese
     .click();
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
   await dialog
+    .getByRole("button", { name: "Use on-device frame review" })
+    .click();
+  await dialog
     .getByLabel("Choose lifting video")
     .setInputFiles(path.resolve("tests/fixtures/lifting-motion.mp4"));
   await expect(dialog.getByLabel("Clip end seconds")).toHaveValue("2");
@@ -261,6 +264,9 @@ test("lifting learning and nutrition are discoverable, responsive and do not sen
   await page.goto("/#workout/coaching");
   await page.getByRole("button", { name: "Get technique feedback" }).click();
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog
+    .getByRole("button", { name: "Use on-device frame review" })
+    .click();
   await dialog.getByLabel("Choose lifting video").setInputFiles({
     name: "invalid.mp4",
     mimeType: "video/mp4",
@@ -341,6 +347,9 @@ test("video feedback joins a running Coach queue without taking over the next dr
   await page.getByLabel("Message your coach").fill("Keep this for later.");
   await page.goto("/#coach/lifting/video");
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog
+    .getByRole("button", { name: "Use on-device frame review" })
+    .click();
   await dialog
     .getByLabel("Choose lifting video")
     .setInputFiles(path.resolve("tests/fixtures/lifting-motion.mp4"));

@@ -541,17 +541,26 @@ button,
   background: white;
 }
 .coach-workspace .agent-composer:focus-within {
-  border-color: #9d9991;
+  border-color: #5b5b5b;
+  box-shadow: 0 0 0 1px #5b5b5b;
 }
 .coach-workspace .agent-composer textarea {
   margin: 0 0 6px;
   padding: 3px 2px;
-  min-height: 52px;
-  line-height: 1.6;
+  min-height: 64px;
+  max-height: min(160px, max(64px, calc(var(--coach-viewport-height, 100dvh) * .3)));
+  line-height: 1.5;
   color: var(--ink);
+  caret-color: var(--ink);
+  resize: none;
+  overflow-y: auto;
+}
+.coach-workspace .agent-composer textarea:focus-visible {
+  /* The containing composer supplies the high-contrast focus indicator. */
+  outline: none;
 }
 .agent-composer textarea::placeholder {
-  color: #76736e;
+  color: #6b6b6b;
   opacity: 1;
 }
 .composer-quick-actions {
@@ -1002,7 +1011,8 @@ button,
     border-radius: 20px;
   }
   .coach-workspace .agent-composer textarea {
-    min-height: 48px;
+    min-height: 64px;
+    font-size: 17px;
   }
   .composer-quick-actions .button {
     padding-inline: 7px;

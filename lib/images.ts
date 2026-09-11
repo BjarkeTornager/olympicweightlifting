@@ -53,7 +53,7 @@ export const imagePatchSchema = z
   .strict();
 export function imageCoachPrompt(category: ImageCategory) {
   if (category === "food")
-    return "Log the food I ate in this image using its catalog date and estimated nutrition. Explain portion assumptions.";
+    return "Log the food I ate in this image now using its catalog date and estimated nutrition. Use the visible serving as the initial portion estimate, label assumptions, and let me correct details after saving.";
   if (category === "sleep")
     return "Help me read this sleep screenshot. Explain only clearly visible information and ask about anything unclear. The upload date may differ from the sleep date. Do not save a check-in unless I ask.";
   return "Help me understand this image in the context of my journal. Identify what it shows first; do not assume it is food. Do not save an entry unless I ask.";

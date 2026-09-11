@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -137,6 +138,23 @@ export function TrainingAgent({
   const [view, setView] = useState<"conversation" | "today" | "week">(
     "conversation",
   );
+
+  useLayoutEffect(() => {
+    const field = input.current;
+    if (!field || !visible || view !== "conversation") return;
+    const fit = () => {
+      const limit = parseFloat(getComputedStyle(field).maxHeight) || 160;
+      field.style.height = "0px";
+      field.style.height = `${Math.min(limit, Math.max(64, field.scrollHeight))}px`;
+    };
+    fit();
+    window.visualViewport?.addEventListener("resize", fit);
+    window.addEventListener("resize", fit);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", fit);
+      window.removeEventListener("resize", fit);
+    };
+  }, [message, visible, view]);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(initialVideoReview);
@@ -1435,7 +1453,7 @@ export function TrainingAgent({
                     disabled={uploading || loadingImage}
                     onClick={() =>
                       draft(
-                        "Help me log what I ate. Ask for materially missing details, then save the entry.",
+                        "Log what I ate with sensible portion estimates. Save it now, label assumptions, and let me correct details afterward.",
                       )
                     }
                   >

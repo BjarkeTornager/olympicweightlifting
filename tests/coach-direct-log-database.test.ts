@@ -93,6 +93,170 @@ test(
     const hooks = { directLogging: true };
     try {
       await t.test(
+        "uncertain tray portions do not block three reported eggs; a correction updates the saved meal",
+        async () => {
+          const a = await user();
+          const request = input("Also eat 3 fried eggs");
+          const meal = {
+            ...food().meal,
+            name: "Lunch",
+            type: "lunch",
+            estimated: true,
+            notes:
+              "Estimated the visible serving as consumed. Meat type unknown; assumed three medium eggs with one teaspoon of oil. Correct portions afterward.",
+            items: [
+              {
+                name: "Grilled meat, type uncertain",
+                portion: "Estimated 150 g visible serving",
+                calories: 330,
+                protein: 35,
+                carbs: 0,
+                fat: 21,
+                classification: { foodGroups: ["meat"], ingredients: [] },
+              },
+              {
+                name: "Fried eggs",
+                portion: "3 medium eggs; estimated 1 tsp cooking oil",
+                calories: 255,
+                protein: 18,
+                carbs: 1,
+                fat: 20,
+                classification: {
+                  foodGroups: ["eggs", "fats_oils"],
+                  ingredients: [
+                    { name: "egg", evidence: "reported" },
+                    { name: "cooking oil", evidence: "estimated" },
+                  ],
+                },
+              },
+            ],
+          };
+          let calls = 0;
+          const saved = await runTurn(
+            a,
+            request,
+            async (messages) => {
+              calls++;
+              if (calls === 1) {
+                assert.match(
+                  String(messages[0].content),
+                  /save-first estimation/,
+                );
+                return {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [call("food_journal", { from: date, to: date })],
+                };
+              }
+              if (calls === 2)
+                return {
+                  role: "assistant",
+                  content:
+                    "I still need two details before saving: Did you eat the whole tray, and was the grilled meat chicken, pork, or another meat?",
+                };
+              assert.equal(calls, 3);
+              assert.equal(messages.at(-1)?.role, "system");
+              assert.match(
+                String(messages.at(-1)?.content),
+                /finish the authorised save/,
+              );
+              return {
+                role: "assistant",
+                content: "",
+                tool_calls: [call("log_entry", { kind: "record_meal", meal })],
+              };
+            },
+            hooks,
+          );
+          assert.equal(calls, 3);
+          assert.equal(saved.proposals[0].status, "saved");
+          assert.equal(saved.proposals[0].automatic, true);
+          assert.match(saved.reply, /Saved to your journal/);
+          const initial = await readJournal(a);
+          assert.equal(initial.revision, 1);
+          assert.equal(initial.state.nutrition.meals.length, 1);
+          const entry = initial.state.nutrition.meals[0];
+          assert.equal(entry.estimated, true);
+          assert.equal(entry.items[1].portion, meal.items[1].portion);
+          assert.deepEqual(entry.items[0].classification?.ingredients, []);
+          assert.match(entry.notes, /Meat type unknown/);
+          await runTurn(
+            a,
+            request,
+            async () => {
+              assert.fail("Retry must recover the existing saved turn");
+            },
+            hooks,
+          );
+          assert.equal((await readJournal(a)).revision, 1);
+          const correction = await runTurn(
+            a,
+            input("I ate half the meat, keep the three eggs", 1),
+            sequence(
+              [call("food_journal", { from: date, to: date })],
+              [
+                call("log_entry", {
+                  kind: "update_meal",
+                  mealId: entry.id,
+                  meal: {
+                    ...meal,
+                    items: [
+                      {
+                        ...meal.items[0],
+                        portion: "Half the visible serving, estimated 75 g",
+                        calories: 165,
+                        protein: 17.5,
+                        fat: 10.5,
+                      },
+                      meal.items[1],
+                    ],
+                  },
+                }),
+              ],
+            ),
+            hooks,
+          );
+          const updated = await readJournal(a);
+          assert.equal(updated.state.nutrition.meals.length, 1);
+          assert.equal(updated.state.nutrition.meals[0].id, entry.id);
+          assert.deepEqual(
+            updated.state.nutrition.meals[0].items[1],
+            entry.items[1],
+          );
+          assert.equal(updated.state.nutrition.meals[0].items[0].calories, 165);
+          await applyProposal(a, correction.proposals[0].id, true);
+          assert.deepEqual(
+            (await readJournal(a)).state.nutrition.meals,
+            initial.state.nutrition.meals,
+          );
+        },
+      );
+      await t.test(
+        "meal recovery is bounded and never enables auto-save for a reviewed client",
+        async () => {
+          for (const directLogging of [true, false]) {
+            const a = await user();
+            let calls = 0;
+            const response = await runTurn(
+              a,
+              input("Also eat 3 fried eggs"),
+              async () => {
+                calls++;
+                return {
+                  role: "assistant",
+                  content:
+                    "Did you eat the whole tray? I need that before saving.",
+                };
+              },
+              { directLogging },
+            );
+            assert.equal(calls, directLogging ? 2 : 1);
+            assert.equal((await readJournal(a)).revision, 0);
+            assert.equal(response.proposals.length, 0);
+          }
+        },
+      );
+      await t.test(
         "queued messages keep submission clock through a failed run and retry",
         async () => {
           const a = await user();

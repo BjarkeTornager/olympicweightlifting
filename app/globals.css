@@ -2863,6 +2863,15 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-thread-tools { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 18px; border-bottom: 1px solid #edf1ee; color: #576e63; font-size: 11px; }
 .coach-thread-tools button { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; color: #315b4d; }
 .coach-thread-tools .coach-review-jump { font-weight: 650; color: #245d50; }
+/* Prioritise the draft while the phone keyboard is open, including embedded iOS browsers. */
+@media (max-width: 768px) {
+  html[data-keyboard-open] .coach-mode .save-detail,
+  html[data-keyboard-open] .coach-mode .coach-composer-note { display: none; }
+  html[data-keyboard-open] .coach-mode .coach-header { padding-block: 0 4px; }
+  html[data-keyboard-open] .coach-mode .coach-thread-tools { padding-block: 3px; }
+  html[data-keyboard-open] .coach-mode .coach-workspace .agent-composer { max-height: 70%; margin: 4px 2px; padding: 8px 12px; }
+  html[data-keyboard-open] .coach-mode .coach-workspace .conversation { padding-block: 8px; }
+}
 .coach-attachment-strip { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 4px; }
 .coach-attachment-strip > div { display: flex; align-items: center; flex-shrink: 0; gap: 8px; padding: 6px; background: #f4f7f5; border: 1px solid #e0e8e2; border-radius: 10px; }
 .coach-attachment-strip .food-photo-image { width: 48px; font-size: 9px; }

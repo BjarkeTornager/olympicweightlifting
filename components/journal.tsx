@@ -21,6 +21,7 @@ import {
   SquaresFour,
   PersonSimpleRun,
 } from "@/components/ui/icons";
+import { trackKeyboardViewport } from "@/lib/keyboard-viewport";
 import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
 import { backup, days, today, createWorkout } from "@/lib/domain";
@@ -132,70 +133,7 @@ export function Journal(props: PrivateSessionProps) {
         );
     };
   }, []);
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const refreshKeyboard = () => {
-      const editing =
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement;
-      const inset = Math.max(
-        0,
-        window.innerHeight - viewport.height - viewport.offsetTop,
-      );
-      // Safari blurs the input before the keyboard finishes closing. Keep the
-      // compact layout until the viewport recovers so Send cannot move between
-      // touch-down and click, and the conversation doesn't collapse mid-send.
-      const open =
-        viewport.scale === 1 &&
-        inset > 150 &&
-        (editing ||
-          document.documentElement.hasAttribute("data-keyboard-open"));
-      document.documentElement.toggleAttribute("data-keyboard-open", open);
-      document.documentElement.style.setProperty(
-        "--coach-viewport-height",
-        `${viewport.height}px`,
-      );
-      document.documentElement.style.setProperty(
-        "--coach-viewport-top",
-        `${viewport.offsetTop}px`,
-      );
-      document.documentElement.style.setProperty(
-        "--keyboard-inset",
-        `${open ? inset : 0}px`,
-      );
-      if (
-        open &&
-        document.activeElement instanceof HTMLElement &&
-        !document.activeElement.closest(".coach-mode")
-      ) {
-        const bounds = document.activeElement.getBoundingClientRect();
-        if (
-          bounds.bottom > viewport.offsetTop + viewport.height - 90 ||
-          bounds.top < viewport.offsetTop
-        )
-          document.activeElement.scrollIntoView({
-            block: "center",
-            behavior: "smooth",
-          });
-      }
-    };
-    refreshKeyboard();
-    viewport.addEventListener("resize", refreshKeyboard);
-    viewport.addEventListener("scroll", refreshKeyboard);
-    window.addEventListener("focusin", refreshKeyboard);
-    window.addEventListener("focusout", refreshKeyboard);
-    return () => {
-      viewport.removeEventListener("resize", refreshKeyboard);
-      viewport.removeEventListener("scroll", refreshKeyboard);
-      window.removeEventListener("focusin", refreshKeyboard);
-      window.removeEventListener("focusout", refreshKeyboard);
-      document.documentElement.removeAttribute("data-keyboard-open");
-      document.documentElement.style.removeProperty("--keyboard-inset");
-      document.documentElement.style.removeProperty("--coach-viewport-height");
-      document.documentElement.style.removeProperty("--coach-viewport-top");
-    };
-  }, []);
+  useEffect(trackKeyboardViewport, []);
   const go = (target: string) => {
     location.hash = target;
     window.scrollTo({ top: 0, behavior: "instant" });

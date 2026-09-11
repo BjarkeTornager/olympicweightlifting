@@ -40,7 +40,7 @@ test(
     try {
       const input = {
         id: crypto.randomUUID(),
-        lift: "Clean",
+        lift: "Identify from video",
         date: "2026-09-11",
         start: 0,
         end: 2,

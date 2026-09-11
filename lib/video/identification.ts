@@ -188,6 +188,25 @@ export function identificationSummary(
   return `**Movement review: ${result.lift}**\n\n${mismatch ? `You selected ${selected}; the visible sequence instead suggests ${result.lift}. The feedback below uses that sequence. ` : ""}Sampled phase evidence: ${events}.\n\nThis identification is an estimate from sampled images.`;
 }
 
+export function respectSelectedLift(
+  result: LiftIdentification,
+  selected: string,
+): LiftIdentification {
+  if (
+    !result.lift ||
+    selected === "Identify from video" ||
+    selected === "Other lifting movement" ||
+    selected === result.lift
+  )
+    return result;
+  return {
+    ...result,
+    status: "uncertain",
+    lift: null,
+    reason: `You selected ${selected}, but Coach could not reconcile that with the sampled phase evidence. Your selection has been kept. No conflicting lift-specific advice has been generated; include the full movement when reviewing again.`,
+  };
+}
+
 export function feedbackMatchesLift(
   content: string,
   lift: NonNullable<LiftIdentification["lift"]>,

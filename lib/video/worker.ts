@@ -13,6 +13,7 @@ import {
   identifyLift,
   identificationSummary,
   feedbackMatchesLift,
+  respectSelectedLift,
 } from "./identification";
 export function reviewMessages(
   input: VideoUpload,
@@ -123,9 +124,12 @@ export async function runVideoJob(
       signal.throwIfAborted();
       analysis = {
         ...analysis,
-        identification: identifyLift(
-          evidence.tool_calls?.length ? "" : evidence.content,
-          analysis,
+        identification: respectSelectedLift(
+          identifyLift(
+            evidence.tool_calls?.length ? "" : evidence.content,
+            analysis,
+          ),
+          row.input.lift,
         ),
       };
       await getDb()
@@ -134,7 +138,11 @@ export async function runVideoJob(
         .where(fence);
     }
     if (!(await check())) return;
-    const identified = analysis.identification!;
+    const identified = respectSelectedLift(
+      analysis.identification!,
+      row.input.lift,
+    );
+    analysis = { ...analysis, identification: identified };
     let feedback = identificationSummary(identified, row.input.lift);
     if (identified.lift) {
       const reply = await model(
@@ -159,6 +167,7 @@ export async function runVideoJob(
       .set({
         status: "ready",
         stage: "Review ready",
+        analysis,
         feedback,
         error: null,
         lease: null,

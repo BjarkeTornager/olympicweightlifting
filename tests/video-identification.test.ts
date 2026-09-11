@@ -5,6 +5,7 @@ import {
   identificationMessages,
   identificationSummary,
   feedbackMatchesLift,
+  respectSelectedLift,
 } from "../lib/video/identification";
 import type { VideoAnalysis } from "../lib/video/types";
 import { videoUploadSchema } from "../lib/video/types";
@@ -49,6 +50,18 @@ test("clean then rack then jerk is not reclassified as a snatch by a selected la
     phase("overhead_receive", 13),
   ]);
   assert.equal(result.lift, "Clean & jerk");
+  assert.equal(
+    respectSelectedLift(result, "Identify from video").lift,
+    "Clean & jerk",
+  );
+  assert.equal(
+    respectSelectedLift(result, "Clean & jerk").lift,
+    "Clean & jerk",
+  );
+  const conflict = respectSelectedLift(result, "Snatch");
+  assert.equal(conflict.status, "uncertain");
+  assert.equal(conflict.lift, null);
+  assert.match(conflict.reason, /Your selection has been kept/);
   assert.match(
     identificationSummary(result, "Snatch"),
     /You selected Snatch; the visible sequence instead suggests Clean & jerk/,

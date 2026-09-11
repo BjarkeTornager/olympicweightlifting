@@ -3,6 +3,7 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 import tempfile
 import unittest
 import cv2
@@ -36,7 +37,7 @@ def process(directory, fps=60, occluded=False, real=True, track=True):
                                'diameterCm':45, 'sideView':True, 'realTime':real}
     with open(os.path.join(directory, 'input.json'), 'w') as f:
         json.dump(spec, f)
-    result = subprocess.run([os.environ.get('VIDEO_PYTHON_PATH', 'python3'), str(SCRIPT), directory], capture_output=True, text=True, timeout=180)
+    result = subprocess.run([os.environ.get('VIDEO_PYTHON_PATH', sys.executable), str(SCRIPT), directory], capture_output=True, text=True, timeout=180)
     if result.returncode:
         raise AssertionError(result.stdout + result.stderr)
     with open(os.path.join(directory, 'result.json')) as f:

@@ -207,6 +207,129 @@ test(
       assert.equal((await readJournal(users[0])).revision, 0);
       await deleteVideo(users[0], input.id);
       await assert.rejects(videoMedia(users[0], input.id), /not available/);
+      // Automatic upload checkpoints identification and retries malformed coaching
+      // without losing the private clip or leaking large pose tracks in list reads.
+      const automatic = {
+        ...input,
+        id: crypto.randomUUID(),
+        mode: "automatic",
+        end: 120,
+      };
+      await saveVideo(users[0], automatic, source);
+      const automaticJob = await claimVideo();
+      assert.ok(automaticJob);
+      const autoAnalysis: VideoAnalysis = {
+        ...analysis,
+        pose: {
+          status: "partial",
+          reason: "Synthetic",
+          frames: [{ t: 0.5, points: [{ id: 13, x: 0.4, y: 0.5 }] }],
+        },
+      };
+      const autoProcessor = async () => ({
+        analysis: structuredClone(autoAnalysis),
+        media: source,
+        frames: ["coarse-synthetic"],
+      });
+      const refiner = async (
+        _media: Buffer,
+        current: VideoAnalysis,
+        attempt: import("../lib/video/attempts").VideoAttempt,
+      ) => ({
+        analysis: { ...current, identification: attempt.identification },
+        frames: ["dense-synthetic"],
+      });
+      const coaching = {
+        strength: "The receiving position is visible.",
+        limitation: "Synthetic footage only.",
+        moments: [
+          {
+            title: "Receiving position",
+            observation: "Synthetic visible evidence for the receiving phase.",
+            cue: "A synthetic cue for the next attempt.",
+            check: "Compare the next receiving frame.",
+            region: "elbows",
+            frames: [3],
+          },
+        ],
+      };
+      let autoCalls = 0;
+      await runVideoJob(
+        automaticJob,
+        async (messages, tools) => {
+          assert.deepEqual(tools, []);
+          autoCalls++;
+          if (autoCalls === 1)
+            return {
+              role: "assistant",
+              content: JSON.stringify({
+                attempts: [
+                  {
+                    startFrame: 1,
+                    endFrame: 9,
+                    evidence: JSON.parse(phaseReply),
+                  },
+                ],
+              }),
+            };
+          assert.deepEqual(messages[1].images, ["dense-synthetic"]);
+          return {
+            role: "assistant",
+            content: JSON.stringify({
+              ...coaching,
+              moments: [{ ...coaching.moments[0], frames: [999] }],
+            }),
+          };
+        },
+        autoProcessor,
+        refiner,
+      );
+      assert.equal((await getVideo(users[0], automatic.id)).status, "failed");
+      assert.equal(
+        (await getVideo(users[0], automatic.id)).analysis?.attempts?.[0]
+          .identification.lift,
+        "Clean & jerk",
+      );
+      await retryVideo(users[0], automatic.id);
+      const automaticRetry = await claimVideo();
+      assert.ok(automaticRetry);
+      await runVideoJob(
+        automaticRetry,
+        async (messages) => {
+          autoCalls++;
+          assert.deepEqual(messages[1].images, ["dense-synthetic"]);
+          return { role: "assistant", content: JSON.stringify(coaching) };
+        },
+        async () => {
+          throw Error("Must reuse saved media");
+        },
+        refiner,
+      );
+      const completed = await getVideo(users[0], automatic.id);
+      assert.equal(completed.status, "ready");
+      assert.equal(autoCalls, 3);
+      assert.equal(completed.analysis?.coaching?.moments[0].evidenceTime, 0.5);
+      assert.deepEqual(
+        completed.analysis?.coaching?.moments[0].evidenceTimes,
+        [0.5],
+      );
+      assert.equal(completed.analysis?.pose?.frames.length, 1);
+      assert.deepEqual(
+        (await listVideos(users[0]))[0].analysis?.pose?.frames,
+        [],
+      );
+      await reanalyseVideo(users[0], automatic.id, {
+        lift: "Identify from video",
+      });
+      assert.equal(
+        (await getVideo(users[0], automatic.id)).analysis?.attempts,
+        undefined,
+      );
+      assert.equal(
+        (await getVideo(users[0], automatic.id)).analysis?.coaching,
+        undefined,
+      );
+      await deleteVideo(users[0], automatic.id);
       // Restart recovery claims an expired lease with a new token.
       const next = { ...input, id: crypto.randomUUID() };
       await saveVideo(users[0], next, source);

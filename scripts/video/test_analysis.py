@@ -8,6 +8,8 @@ import tempfile
 import unittest
 import cv2
 import numpy as np
+from types import SimpleNamespace
+from pose import visible_points, deny_network, PoseTracker
 
 SCRIPT = pathlib.Path(__file__).with_name('analyse.py')
 
@@ -29,9 +31,11 @@ def fixture(directory, fps=60, occluded=False):
     os.rename(output, path)
 
 
-def process(directory, fps=60, occluded=False, real=True, track=True):
+def process(directory, fps=60, occluded=False, real=True, track=True, automatic=False):
     fixture(directory, fps, occluded)
     spec = {'id': 'synthetic', 'lift': 'Snatch', 'date': '2026-09-11', 'load': '', 'start': 0, 'end': 120 / fps}
+    if automatic:
+        spec.update(mode="automatic", start=0, end=120)
     if track:
         spec['calibration'] = {'x':100/320, 'y':330/480, 'diameterPixelsRatio':60/320,
                                'diameterCm':45, 'sideView':True, 'realTime':real}
@@ -45,6 +49,54 @@ def process(directory, fps=60, occluded=False, real=True, track=True):
 
 
 class AnalysisTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('VIDEO_POSE_MODEL_PATH'), 'Pose model not configured locally')
+    def test_pose_backend_initializes(self):
+        tracker = PoseTracker()
+        self.assertIsNotNone(tracker.model, tracker.reason)
+        tracker.close()
+
+    def test_whole_upload_keeps_late_motion_without_manual_trim(self):
+        with tempfile.TemporaryDirectory(prefix='lift-auto-test-') as d:
+            a = process(d, fps=4, track=False, automatic=True)['analysis']
+            self.assertGreater(a['duration'], 29)
+            self.assertEqual(len(a['sampleTimes']), 48)
+            self.assertEqual(a['sampleTimes'], sorted(a['sampleTimes']))
+            self.assertGreater(a['sampleTimes'][-1], 29)
+            self.assertEqual(a['pose']['status'], 'unavailable')
+            self.assertEqual(a['pose']['frames'], [])
+
+    def test_pose_highlights_omit_hidden_landmarks_and_multiple_people(self):
+        person = [SimpleNamespace(x=.5, y=.5, visibility=.99, presence=.99) for _ in range(33)]
+        self.assertEqual(len(visible_points([person])), 16)
+        self.assertEqual(visible_points([person, person]), [])
+        person[13].visibility = .5
+        person[14].x = float('nan')
+        person[11].presence = .4
+        self.assertNotIn(13, [p['id'] for p in visible_points([person])])
+        self.assertNotIn(14, [p['id'] for p in visible_points([person])])
+        self.assertNotIn(11, [p['id'] for p in visible_points([person])])
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Production Linux sandbox')
+    def test_native_tracking_process_cannot_create_network_sockets(self):
+        code = 'from pose import deny_network; import socket; deny_network(); socket.socket()'
+        result = subprocess.run([sys.executable, '-c', code], cwd=SCRIPT.parent, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'PermissionError', result.stderr)
+
+    def test_dense_evidence_uses_observed_times_around_the_event(self):
+        with tempfile.TemporaryDirectory(prefix='lift-dense-test-') as d:
+            process(d, track=False)
+            with open(os.path.join(d, 'input.json'), 'w') as f:
+                json.dump({'start':0, 'end':1.98, 'phases':[.5, 1.0, 1.5]}, f)
+            subprocess.run([sys.executable, str(SCRIPT.with_name('refine.py')), d], check=True, capture_output=True)
+            with open(os.path.join(d, 'result.json')) as f:
+                result = json.load(f)
+            self.assertEqual(len(result['frames']), 8)
+            self.assertEqual(len(result['sampleTimes']), 48)
+            self.assertTrue(any(abs(t-.5) < .001 for t in result['sampleTimes']))
+            self.assertTrue(any(abs(t-(.5+1/12)) < .002 for t in result['sampleTimes']))
+            self.assertTrue(all(0 <= t <= 1.98 for t in result['sampleTimes']))
+
     def test_known_motion_and_timestamps(self):
         with tempfile.TemporaryDirectory(prefix='lift-motion-test-') as d:
             out = process(d)

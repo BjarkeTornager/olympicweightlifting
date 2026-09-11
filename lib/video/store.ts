@@ -52,8 +52,8 @@ export async function listVideos(userId: string) {
         ...fields,
         analysis: sql<import("./types").VideoAnalysis | null>`
     CASE WHEN ${liftingVideos.analysis} IS NULL THEN NULL ELSE
-    jsonb_set(${liftingVideos.analysis}, '{tracking}',
-      (${liftingVideos.analysis}->'tracking') - 'points' - 'velocities' || '{"points":[],"velocities":[]}'::jsonb)
+    jsonb_set(jsonb_set(${liftingVideos.analysis}, '{tracking}',
+      (${liftingVideos.analysis}->'tracking') - 'points' - 'velocities' || '{"points":[],"velocities":[]}'::jsonb), '{pose,frames}', '[]'::jsonb)
     END`,
       })
       .from(liftingVideos)
@@ -118,8 +118,7 @@ export async function saveVideo(userId: string, raw: unknown, source: Buffer) {
       );
     if (
       usage.count >= 20 ||
-      Number(usage.bytes) + Math.max(source.length, 42 * 1024 * 1024) >
-        500 * 1024 * 1024
+      Number(usage.bytes) + MAX_VIDEO_BYTES > 500 * 1024 * 1024
     )
       throw new ApiError(
         "Your video library is full (20 clips or 500 MB). Download and remove a review to make room.",
@@ -131,7 +130,7 @@ export async function saveVideo(userId: string, raw: unknown, source: Buffer) {
       input,
       digest,
       source,
-      bytes: Math.max(source.length, 42 * 1024 * 1024),
+      bytes: MAX_VIDEO_BYTES,
     });
   });
   return getVideo(userId, input.id);
@@ -200,7 +199,12 @@ async function queueReview(
               // Keep the original upload digest: a repeated upload remains idempotent.
               input: { ...row.input, lift: correctedLift },
               analysis: row.analysis
-                ? { ...row.analysis, identification: undefined }
+                ? {
+                    ...row.analysis,
+                    identification: undefined,
+                    coaching: undefined,
+                    attempts: undefined,
+                  }
                 : null,
               feedback: null,
             }

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import cv2
 import numpy as np
+from pose import PoseTracker
 
 cv2.setNumThreads(2)
 ROOT = sys.argv[1]
@@ -56,6 +57,28 @@ def probe(path, frames=False):
     return json.loads(run([*args, "-of", "json", path]))
 
 
+def make_sheets(by_time, times, picks, w, h):
+    frames = []
+    for sheet in range(8):
+        canvas = np.full((1920, 1280, 3), 16, dtype=np.uint8)
+        for tile in range(6):
+            idx = picks[sheet * 6 + tile]
+            t = times[idx]
+            frame = by_time[t]
+            scale = min(640 / w, 584 / h)
+            fw, fh = round(w * scale), round(h * scale)
+            resized = cv2.resize(frame, (fw, fh))
+            ox, oy = (tile % 2) * 640, (tile // 2) * 640
+            x, y = ox + (640 - fw) // 2, oy + 56 + (584 - fh) // 2
+            canvas[y:y + fh, x:x + fw] = resized
+            cv2.putText(canvas, f"{sheet * 6 + tile + 1} | {t:.3f}s", (ox + 18, oy + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
+        ok, jpg = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 78])
+        if not ok or len(jpg) > 1500000:
+            raise ValueError("The preview could not be prepared. Try a shorter, clearer clip.")
+        frames.append(base64.b64encode(jpg).decode("ascii"))
+    return frames
+
+
 def analyse():
     with open(os.path.join(ROOT, "input.json")) as f:
         spec = json.load(f)
@@ -72,8 +95,9 @@ def analyse():
         raise ValueError("Export the video as MP4 (H.264 or HEVC) or WebM.")
     if stream.get("width", 0) * stream.get("height", 0) > 20000000:
         raise ValueError("Export a smaller video (1080p is sufficient).")
-    start, end = spec["start"], spec["end"]
-    if end > duration + 0.05 or not 0.5 <= end - start <= 20 or start < 0:
+    automatic = spec.get("mode") == "automatic"
+    start, end = (0, min(duration, 120)) if automatic else (spec["start"], spec["end"])
+    if end > duration + 0.05 or not 0.5 <= end - start <= (120 if automatic else 20) or start < 0:
         raise ValueError("Choose a valid section of up to 20 seconds.")
     media = os.path.join(ROOT, "media.mp4")
     # Passthrough timing: never duplicate/interpolate frames to manufacture samples.
@@ -81,27 +105,64 @@ def analyse():
     run([FFMPEG, "-v", "error", "-nostdin", "-threads", "2", *SAFE, "-i", source,
          "-map", "0:v:0", "-vf", f"trim=start={start}:end={end},setpts=PTS-STARTPTS,scale=960:960:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1",
          "-an", "-sn", "-dn", "-map_metadata", "-1", "-map_chapters", "-1",
-         "-c:v", "libx264", "-threads", "2", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+         "-c:v", "libx264", "-threads", "2", "-preset", "veryfast", "-crf", "23", "-maxrate", "1400k", "-bufsize", "2800k", "-pix_fmt", "yuv420p",
          "-fps_mode", "passthrough", "-movflags", "+faststart", "-y", media])
     if os.path.getsize(media) > 25 * 1024 * 1024:
         raise ValueError("The processed clip is too large. Choose a shorter section.")
     times = [float(f["best_effort_timestamp_time"]) for f in probe(media, True)["frames"]]
-    if not 12 <= len(times) <= 5000 or any(not math.isfinite(t) for t in times):
+    if not 12 <= len(times) <= (14400 if automatic else 5000) or any(not math.isfinite(t) for t in times):
         raise ValueError("Choose a shorter clip with at least 12 video frames.")
     if any(b <= a for a, b in zip(times, times[1:])):
         raise ValueError("The clip has inconsistent timing. Export a new copy.")
     picks = [round(i * (len(times) - 1) / 47) for i in range(48)]
+    if automatic and times[-1] > 8:
+        # Preserve full-timeline coverage, then spend half the evidence frames on
+        # short motion bursts. Never trim away a later jerk or a rack pause.
+        scout = cv2.VideoCapture(media)
+        movement, previous, last = [], None, -1
+        for i, t in enumerate(times):
+            ok, frame = scout.read()
+            if not ok:
+                raise ValueError("The video could not be decoded.")
+            if t - last < .12:
+                continue
+            gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 160))
+            score = float(np.mean(cv2.absdiff(gray, previous))) if previous is not None else 0
+            movement.append((score, i, t))
+            previous, last = gray, t
+        scout.release()
+        peaks = []
+        for score, i, t in sorted(movement, reverse=True):
+            if score > 1 and all(abs(t - pt) > 1.5 for _, pt in peaks):
+                peaks.append((i, t))
+                if len(peaks) == 6:
+                    break
+        candidates = {round(i * (len(times) - 1) / 23) for i in range(24)}
+        for _, t in peaks:
+            for offset in [-.25, 0, .25, .5]:
+                candidates.add(min(range(len(times)), key=lambda j: abs(times[j] - (t + offset))))
+        # Fill sparse/constant clips evenly. All labels still refer to actual PTS.
+        for i in picks:
+            if len(candidates) >= 48:
+                break
+            candidates.add(i)
+        picks = sorted(candidates)
+        while len(picks) < 48:
+            picks.append(picks[-1])
+        picks.sort()
     cap = cv2.VideoCapture(media)
     points, samples = [], []
     calibration = spec.get("calibration")
     alive, template, previous = bool(calibration), None, None
     reason = "Bar tracking was not requested."
+    pose = PoseTracker()
     w = h = 0
     for i, t in enumerate(times):
         ok, frame = cap.read()
         if not ok:
             raise ValueError("Some video frames could not be decoded. Export a new copy.")
         h, w = frame.shape[:2]
+        pose.add(frame, t)
         if i in picks:
             samples.append((t, frame.copy()))
         if not alive:
@@ -140,26 +201,10 @@ def analyse():
             previous = (cx, cy)
         points.append({"t": round(t, 6), "x": cx / w, "y": cy / h, "score": round(score, 3)})
     cap.release()
+    pose.close()
     # Keep a fixed 48-frame contact sheet even for short clips with repeated selections.
     by_time = {t: frame for t, frame in samples}
-    frames = []
-    for sheet in range(8):
-        canvas = np.full((1920, 1280, 3), 16, dtype=np.uint8)
-        for tile in range(6):
-            idx = picks[sheet * 6 + tile]
-            t = times[idx]
-            frame = by_time[t]
-            scale = min(640 / w, 584 / h)
-            fw, fh = round(w * scale), round(h * scale)
-            resized = cv2.resize(frame, (fw, fh))
-            ox, oy = (tile % 2) * 640, (tile // 2) * 640
-            x, y = ox + (640 - fw) // 2, oy + 56 + (584 - fh) // 2
-            canvas[y:y + fh, x:x + fw] = resized
-            cv2.putText(canvas, f"{sheet * 6 + tile + 1} | {t:.3f}s", (ox + 18, oy + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2)
-        ok, jpg = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 78])
-        if not ok or len(jpg) > 1500000:
-            raise ValueError("The preview could not be prepared. Try a shorter, clearer clip.")
-        frames.append(base64.b64encode(jpg).decode("ascii"))
+    frames = make_sheets(by_time, times, picks, w, h)
     tracking = {"status": "not_requested", "reason": reason, "points": points,
                 "coverage": len(points) / len(times), "horizontalRangeCm": None, "riseCm": None,
                 "peakUpwardVelocity": None, "velocities": []}
@@ -191,15 +236,16 @@ def analyse():
             else:
                 tracking["reason"] += " Velocity unavailable: confirm real-time footage with at least 50 frames/second."
     analysis = {"version": 1, "width": w, "height": h, "duration": times[-1], "frameCount": len(times),
-                "sampleTimes": [times[i] for i in picks], "tracking": tracking}
+                "sampleTimes": [times[i] for i in picks], "tracking": tracking, "pose": pose.result()}
     with open(os.path.join(ROOT, "result.json"), "w") as f:
         json.dump({"analysis": analysis, "frames": frames}, f, allow_nan=False)
 
 
-try:
-    analyse()
-except (ValueError, KeyError, OSError, subprocess.SubprocessError, cv2.error) as e:
-    # Never return paths, decoder stderr or raw media metadata to the user/log.
-    message = str(e) if isinstance(e, ValueError) else "The video could not be processed. Try an MP4 export or a shorter clip."
-    print(json.dumps({"error": message[:200]}))
-    sys.exit(1)
+if __name__ == "__main__":
+    try:
+        analyse()
+    except (ValueError, KeyError, OSError, subprocess.SubprocessError, cv2.error) as e:
+        # Never return paths, decoder stderr or raw media metadata to the user/log.
+        message = str(e) if isinstance(e, ValueError) else "The video could not be processed. Try an MP4 export or a shorter clip."
+        print(json.dumps({"error": message[:200]}))
+        sys.exit(1)

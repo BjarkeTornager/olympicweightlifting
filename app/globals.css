@@ -3389,3 +3389,48 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 @media(max-width:420px){.video-metrics{grid-template-columns:1fr;}.video-review-tabs{flex-wrap:wrap;}}
 .video-calibration {border:0;margin:0;padding:1rem 0 0;min-width:0;}
 .lifting-video-flow label.video-check {flex-direction:row;justify-content:flex-start;}
+
+/* Guided video review: the clip and one actionable priority lead. */
+.guided-video-dialog {max-width:760px;}
+.video-upload-picker {padding:24px;border:1px dashed #b8abae;border-radius:20px;background:#fbf8f9;text-align:center;font-size:20px;color:#922e4f;}
+.video-upload-picker input {font-size:14px;max-width:100%;margin:8px auto 0;}
+.video-upload-picker input::file-selector-button {padding:12px 18px;border:0;border-radius:12px;background:#a83056;color:white;font:inherit;margin-right:12px;cursor:pointer;}
+.guided-replay {display:block;min-width:0;}
+.guided-replay-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:14px;font-weight:600;}
+.guided-replay-heading>span {display:flex;align-items:center;gap:8px;}
+.video-replay-stage {overflow:hidden;border-radius:18px;background:#151515;}
+.video-replay-stage .video-review-player {border-radius:0;max-height:min(64dvh,560px);width:auto;margin:auto;}
+.lifting-video-flow .video-replay-stage video {height:100%;width:100%;object-fit:contain;}
+.video-coach-caption {padding:14px 18px;background:#202020;color:#fff;display:grid;gap:6px;border-top:2px solid #ffde59;}
+.video-coach-caption span {font-size:11px;font-weight:700;letter-spacing:.07em;color:#ffde59;}
+.video-coach-caption strong {font-size:17px;line-height:1.4;font-weight:550;}
+.video-icon-button {display:grid;place-items:center;min-width:44px;min-height:44px;flex-shrink:0;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;}
+.video-icon-button:hover {background:#f3eff0;}
+.video-icon-button:focus-visible {outline:3px solid #a83056;outline-offset:2px;}
+.video-replay-controls {padding:8px 0 14px;border-bottom:1px solid var(--border);}
+.video-playback-row,.video-playback-options {display:flex;align-items:center;gap:10px;min-width:0;}
+.video-playback-row input {flex:1;min-width:30px;accent-color:#a83056;cursor:pointer;}
+.video-clock {font-size:11px;color:#626262;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.video-playback-options {justify-content:space-between;}
+.video-playback-options select {width:auto;max-width:48%;padding:8px 10px;font-size:13px;}
+.video-playback-options .video-check {font-size:13px;}
+.video-coaching-cards {display:grid;gap:14px;padding-top:18px;}
+.video-coaching-card {display:grid;gap:12px;padding:20px;border:1px solid #e6e0e1;border-radius:18px;background:#fff;}
+.video-coaching-card.primary {background:#fcf8f9;border-color:#e9cfd8;}
+.video-coaching-card h3 {font-size:21px;margin:0;line-height:1.25;}
+.video-coaching-card p {font-size:15px;line-height:1.6;}
+.video-coaching-card .fine-print {font-size:13px;color:#666;}
+.video-coaching-card button {width:fit-content;display:flex;gap:8px;align-items:center;}
+.video-next-cue {padding-left:13px;border-left:3px solid #ad365c;}
+.video-next-cue strong {font-size:12px;color:#922e4f;}
+.video-strength {padding:4px 8px;line-height:1.6;font-size:14px;}
+.video-strength strong {color:#35715b;}
+.video-review-tools summary {font-size:14px;}
+.guided-video-dialog:has(.video-replay-expanded) {inset:0;transform:none;width:100%;height:100dvh;max-height:none;max-width:none;border-radius:0;}
+.guided-video-dialog:has(.video-replay-expanded)>.dialog-close {display:none;}
+.video-replay-expanded {position:fixed;inset:0;z-index:1;background:#fff;padding:16px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom));overflow:auto;align-content:start;}
+.video-replay-expanded .video-replay-stage {max-width:1000px;width:100%;margin:auto;}
+.video-replay-expanded .video-coaching-cards {max-width:740px;width:100%;margin:auto;}
+@media(max-width:480px){.video-coaching-card{padding:17px}.video-coaching-card h3{font-size:19px}.video-upload-picker{padding:18px}.video-playback-row{gap:5px}}
+.video-upload-picker {position:relative;cursor:pointer;justify-items:center;}
+.video-upload-picker:focus-within {outline:3px solid #a83056;outline-offset:3px;}

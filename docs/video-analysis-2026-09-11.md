@@ -1,5 +1,7 @@
 # Private lifting video analysis
 
+**Current flow:** see [Guided video replay](guided-video-replay-2026-09-11.md). Upload now starts automatically, the complete video is retained for review, and timestamped coaching can highlight visible body regions. The historical implementation below explains the original manual-clip path, which remains available under optional details.
+
 ## Product flow
 
 Open **Coach → attachments → Review lifting video**, or **Train → Lifting coach → Review lifting video**. Upload an MP4/MOV/WebM of up to 50 MB and two minutes, select 0.5–20 seconds and the lift, and choose **Upload & analyse lift**. Load and bar calibration are optional. No typed question is required. Keep the window open until the upload is acknowledged; processing then continues across navigation, closed tabs and server restarts. Reopen **Your reviews** for status, playback, Coach feedback, retry, download, analysis export or deletion. Chat drafts and workouts are untouched.

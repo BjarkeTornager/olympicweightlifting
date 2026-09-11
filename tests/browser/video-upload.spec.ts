@@ -53,7 +53,8 @@ test("private video upload processes across navigation and exposes playback, fee
         decodeURIComponent(r.request().headers()["x-video-metadata"]),
       );
       expect(input.lift).toBe("Identify from video");
-      expect(input.end).toBeCloseTo(2, 1);
+      expect(input.end).toBe(120);
+      expect(input.mode).toBe("automatic");
       expect(input.calibration).toBeUndefined();
       // WebKit's inspector omits File-backed request bodies. Independently
       // verify the exact Blob passed to fetch, rather than weakening the check.
@@ -93,12 +94,6 @@ test("private video upload processes across navigation and exposes playback, fee
   await page.goto("/#coach/lifting/video");
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
   await dialog.getByLabel("Upload lifting video").setInputFiles(fixture);
-  await expect(dialog.getByLabel("End (seconds)")).toHaveValue("2");
-  await expect(
-    dialog.getByRole("combobox", { name: "Lift", exact: true }),
-  ).toHaveValue("Identify from video");
-  expect(uploads).toBe(0);
-  await dialog.getByRole("button", { name: "Upload & analyse lift" }).click();
   await expect(
     dialog.getByText("Video saved.", { exact: false }),
   ).toBeVisible();
@@ -147,12 +142,14 @@ test("private video upload processes across navigation and exposes playback, fee
   await expect(dialog.getByLabel("Coach video feedback")).toContainText(
     "no lifter",
   );
+  await dialog.getByText("Optional bar measurements", { exact: true }).click();
   await expect(dialog.getByLabel("Bar measurements")).toContainText(
     "Unavailable",
   );
   await expect(
     dialog.getByLabel("Experimental bar trajectory overlay"),
   ).toBeVisible();
+  await dialog.getByText("More detail & downloads", { exact: true }).click();
   const download = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Export analysis" }).click();
   expect((await download).suggestedFilename()).toBe(
@@ -239,6 +236,10 @@ test("video upload retries preserve the request ID and calibration never guesses
   });
   await page.goto("/#coach/lifting/video");
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog
+    .getByText("Add details or trim (optional)", { exact: true })
+    .click();
+  await dialog.getByLabel("Choose a shorter section").check();
   await dialog.getByLabel("Upload lifting video").setInputFiles(fixture);
   await expect(dialog.getByLabel("End (seconds)")).toHaveValue("2");
   await dialog
@@ -265,4 +266,154 @@ test("video upload retries preserve the request ID and calibration never guesses
     dialog.getByText("Video saved.", { exact: false }),
   ).toBeVisible();
   expect(ids[0]).toBe(ids[1]);
+});
+
+test("guided replay seeks to evidence, highlights visible landmarks and keeps overlays when enlarged", async ({
+  page,
+  context,
+}, info) => {
+  const review: SavedVideoReview = {
+    ...saved("00000000-0000-4000-8000-000000000010"),
+    status: "ready",
+    stage: "Review ready",
+    hasMedia: true,
+    feedback: "Synthetic feedback with no real athlete.",
+    analysis: {
+      version: 1,
+      width: 320,
+      height: 480,
+      duration: 2,
+      frameCount: 120,
+      sampleTimes: [0, 0.5, 1, 1.5, 1.98],
+      tracking: {
+        status: "not_requested",
+        reason: "",
+        points: [],
+        coverage: 0,
+        horizontalRangeCm: null,
+        riseCm: null,
+        peakUpwardVelocity: null,
+        velocities: [],
+      },
+      pose: {
+        status: "partial",
+        reason: "Synthetic landmarks",
+        frames: Array.from({ length: 30 }, (_, i) => ({
+          t: i * 0.05,
+          points: [{ id: 13, x: 0.4, y: 0.4 }],
+        })),
+      },
+      coaching: {
+        version: 1,
+        strength: "Synthetic strength for UI verification.",
+        limitation: "Synthetic footage, no actual lifter.",
+        moments: [
+          {
+            id: "moment-1",
+            title: "Watch this receiving position",
+            observation:
+              "This is a synthetic coaching observation for the replay test.",
+            cue: "Synthetic cue: focus on the highlighted elbow",
+            check: "Compare this moment in your next attempt.",
+            region: "elbows",
+            evidenceFrames: [2],
+            evidenceTimes: [0.5],
+            evidenceTime: 0.5,
+            start: 0.2,
+            end: 1.4,
+          },
+        ],
+      },
+    },
+  };
+  await context.route("**/api/lifting-videos", (r) =>
+    r.fulfill({ json: { videos: [review] } }),
+  );
+  await context.route(/\/api\/lifting-videos\/[^/]+$/, (r) =>
+    r.fulfill({ json: review }),
+  );
+  await context.route("**/api/lifting-videos/*/media", async (r) =>
+    r.fulfill({ contentType: "video/mp4", body: await readFile(fixture) }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#coach/lifting/video");
+  const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
+  await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
+  const video = dialog.getByLabel("Saved lifting video");
+  await expect(video).toHaveAttribute("src", /^blob:/);
+  await expect(
+    dialog.getByRole("heading", { name: "Watch this receiving position" }),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("Coach video feedback")).not.toBeVisible();
+  await dialog.getByRole("button", { name: "Watch this moment" }).click();
+  await expect(dialog.getByLabel("Playback speed")).toHaveValue("0.5");
+  await expect(dialog.getByLabel("Coaching overlay")).toContainText(
+    "highlighted elbow",
+  );
+  await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.paused))
+    .toBe(true);
+  expect(
+    await video.evaluate((v: HTMLVideoElement) => v.currentTime),
+  ).toBeCloseTo(0.5, 1);
+  await dialog.getByRole("button", { name: "Enlarge video" }).click();
+  await expect(
+    dialog.getByRole("button", { name: "Reduce video" }),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("Coaching overlay")).toBeVisible();
+  const playerLayout = await dialog.evaluate((el) => {
+    const selectors = [
+      ".video-replay-stage",
+      ".video-review-player",
+      "video",
+      ".video-coach-caption",
+      ".video-replay-controls",
+      ".video-coaching-cards",
+    ];
+    return Object.fromEntries(
+      selectors.map((selector) => {
+        const n = el.querySelector(selector)!;
+        const r = n.getBoundingClientRect();
+        return [
+          selector,
+          { top: r.top, bottom: r.bottom, height: r.height, width: r.width },
+        ];
+      }),
+    );
+  });
+  expect(
+    playerLayout[".video-coach-caption"].top,
+    JSON.stringify(playerLayout),
+  ).toBeGreaterThanOrEqual(playerLayout["video"].bottom - 1);
+  expect(
+    playerLayout[".video-replay-controls"].top,
+    JSON.stringify(playerLayout),
+  ).toBeGreaterThanOrEqual(playerLayout[".video-coach-caption"].bottom - 1);
+  const dimensions = await video.evaluate((v) => {
+    const r = v.getBoundingClientRect();
+    return { width: r.width, height: r.height };
+  });
+  expect(dimensions.width / dimensions.height).toBeCloseTo(320 / 480, 1);
+  await dialog.screenshot({
+    path: info.outputPath("guided-replay-mobile.png"),
+  });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Enlarge video" }),
+  ).toBeVisible();
+  await dialog.getByLabel("Coach overlay", { exact: true }).uncheck();
+  await expect(dialog.getByLabel("Coaching overlay")).toHaveCount(0);
+  await expect(dialog.getByLabel("Coach focus highlight")).toHaveCount(0);
+  const a11y = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(a11y.violations).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });

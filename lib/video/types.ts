@@ -12,6 +12,8 @@ export const videoUploadSchema = z
     lift: z.enum(videoUploadLifts),
     date: foodDate,
     load: z.string().trim().max(80).default(""),
+    // Missing mode preserves older clients' explicit trim semantics.
+    mode: z.enum(["automatic", "manual"]).optional(),
     start: z.number().finite().min(0).max(119.5),
     end: z.number().finite().min(0.5).max(120),
     calibration: z
@@ -30,8 +32,11 @@ export const videoUploadSchema = z
   })
   .strict()
   .refine(
-    (v) => v.end - v.start >= 0.5 && v.end - v.start <= 20,
-    "Choose between 0.5 and 20 seconds.",
+    (v) =>
+      v.mode === "automatic"
+        ? v.start === 0 && v.end === 120 && !v.calibration
+        : v.end - v.start >= 0.5 && v.end - v.start <= 20,
+    "Upload the whole video automatically, or choose between 0.5 and 20 seconds.",
   );
 export type VideoUpload = z.infer<typeof videoUploadSchema>;
 export type TrackPoint = { t: number; x: number; y: number; score: number };
@@ -43,6 +48,13 @@ export type VideoAnalysis = {
   duration: number;
   frameCount: number;
   sampleTimes: number[];
+  pose?: {
+    status: "tracked" | "partial" | "unavailable";
+    reason: string;
+    frames: { t: number; points: { id: number; x: number; y: number }[] }[];
+  };
+  coaching?: import("./coaching").GuidedCoaching;
+  attempts?: import("./attempts").VideoAttempt[];
   tracking: {
     status: "not_requested" | "partial" | "tracked" | "unavailable";
     reason: string;

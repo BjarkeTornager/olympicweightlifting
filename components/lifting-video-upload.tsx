@@ -4,7 +4,9 @@ import type { ComponentProps } from "react";
 import { LiftingVideoDialog as FrameReview } from "./lifting-video";
 import { Dialog } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { FileUp } from "./ui/icons";
 import { AssistantText } from "./assistant-text";
+import { GuidedReplay } from "./video-guided-replay";
 import { privateFetch } from "@/lib/private-fetch";
 import { today } from "@/lib/domain";
 import {
@@ -25,7 +27,6 @@ function ReviewResult({
   const [url, setUrl] = useState(""),
     [error, setError] = useState(""),
     [time, setTime] = useState(0);
-  const [overlay, setOverlay] = useState(true);
   useEffect(() => {
     if (!review.hasMedia) return;
     const abort = new AbortController();
@@ -51,7 +52,6 @@ function ReviewResult({
   }, [accountId, review.id, review.hasMedia]);
   const a = review.analysis,
     t = a?.tracking;
-  const point = t?.points.findLast((p) => p.t <= time);
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -63,183 +63,150 @@ function ReviewResult({
     .join(" ");
   return (
     <div className="video-review-result">
-      {a && (
-        <p className="fine-print">
-          {a.frameCount} frames processed. Coach reviews {a.sampleTimes.length}{" "}
-          sampled images; fast movement may fall between them.
-        </p>
-      )}
       {error && <p role="alert">{error}</p>}
       {url && (
         <>
-          <div className="video-review-player">
-            <video
-              src={url}
-              controls
-              playsInline
-              muted
-              aria-label="Saved lifting video"
-              onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
-            />
-            {overlay && a && t && t.points.length > 0 && (
-              <svg
-                viewBox={`0 0 ${a.width} ${a.height}`}
-                aria-label="Experimental bar trajectory overlay"
-                role="img"
+          <GuidedReplay review={review} url={url} onTime={setTime} />
+          <details className="video-review-tools">
+            <summary>More detail & downloads</summary>
+            {a && (
+              <p className="fine-print">
+                Coach reviewed {a.sampleTimes.length} sampled frames. Fast
+                movement may fall between them; highlights are experimental.
+              </p>
+            )}
+            <div className="button-row">
+              <a
+                className="text-link"
+                href={url}
+                download={`lift-${review.date}.mp4`}
               >
-                <polyline
-                  points={t.points
-                    .map((p) => `${p.x * a.width},${p.y * a.height}`)
-                    .join(" ")}
-                  fill="none"
-                  stroke="#ffde59"
-                  strokeWidth="3"
-                />
-                {point && time <= (t.points.at(-1)?.t ?? 0) + 0.05 && (
-                  <circle
-                    cx={point.x * a.width}
-                    cy={point.y * a.height}
-                    r="7"
-                    fill="#ffde59"
-                    stroke="#202020"
-                    strokeWidth="2"
-                  />
-                )}
-              </svg>
-            )}
-          </div>
-          <div className="button-row">
-            {Boolean(t?.points.length) && (
-              <label className="video-check">
-                <input
-                  type="checkbox"
-                  checked={overlay}
-                  onChange={(e) => setOverlay(e.target.checked)}
-                />
-                Show bar path
-              </label>
-            )}
-            <a
-              className="text-link"
-              href={url}
-              download={`lift-${review.date}.mp4`}
-            >
-              Download clip
-            </a>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                const blob = URL.createObjectURL(
-                  new Blob([JSON.stringify(review, null, 2)], {
-                    type: "application/json",
-                  }),
-                );
-                const link = document.createElement("a");
-                link.href = blob;
-                link.download = `lift-review-${review.date}.json`;
-                link.click();
-                setTimeout(() => URL.revokeObjectURL(blob), 1000);
-              }}
-            >
-              Export analysis
-            </Button>
-          </div>
+                Download clip
+              </a>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const blob = URL.createObjectURL(
+                    new Blob([JSON.stringify(review, null, 2)], {
+                      type: "application/json",
+                    }),
+                  );
+                  const link = document.createElement("a");
+                  link.href = blob;
+                  link.download = `lift-review-${review.date}.json`;
+                  link.click();
+                  setTimeout(() => URL.revokeObjectURL(blob), 1000);
+                }}
+              >
+                Export analysis
+              </Button>
+            </div>
+          </details>
         </>
       )}
       {t && t.status !== "not_requested" && (
-        <section aria-label="Bar measurements">
-          <p className="eyebrow">EXPERIMENTAL BAR TRACKING</p>
-          <p className="fine-print">{t.reason}</p>
-          <dl className="video-metrics">
-            <div>
-              <dt>Horizontal range</dt>
-              <dd>
-                {t.horizontalRangeCm === null
-                  ? "Unavailable"
-                  : `${t.horizontalRangeCm} cm`}
-              </dd>
-            </div>
-            <div>
-              <dt>Rise from start</dt>
-              <dd>{t.riseCm === null ? "Unavailable" : `${t.riseCm} cm`}</dd>
-            </div>
-            <div>
-              <dt>Peak upward velocity*</dt>
-              <dd>
-                {t.peakUpwardVelocity === null
-                  ? "Unavailable"
-                  : `${t.peakUpwardVelocity} m/s`}
-              </dd>
-            </div>
-          </dl>
-          {velocities.length > 0 && (
-            <figure className="video-velocity-chart">
-              <svg
-                viewBox="0 0 600 205"
-                role="img"
-                aria-label="Vertical velocity in metres per second over playback time"
-              >
-                <line
-                  x1="36"
-                  x2="564"
-                  y1="170"
-                  y2="170"
-                  stroke="currentColor"
-                />
-                <polyline
-                  points={plot}
-                  fill="none"
-                  stroke="var(--brand, #b83b61)"
-                  strokeWidth="3"
-                />
-                <text x="36" y="20">
-                  {max.toFixed(1)} m/s
-                </text>
-                <text x="36" y="193">
-                  0 s
-                </text>
-                <text x="510" y="193">
-                  {a?.duration.toFixed(1)} s
-                </text>
-                <line
-                  x1={
-                    36 +
-                    (Math.min(time, a?.duration ?? 1) /
-                      Math.max(a?.duration ?? 1, 0.001)) *
-                      528
-                  }
-                  x2={
-                    36 +
-                    (Math.min(time, a?.duration ?? 1) /
-                      Math.max(a?.duration ?? 1, 0.001)) *
-                      528
-                  }
-                  y1="30"
-                  y2="170"
-                  stroke="#777"
-                  strokeDasharray="4"
-                />
-              </svg>
-              <figcaption>
-                *Smoothed over approximately 100 ms. Estimates depend on your
-                scale, timing and a correct track; this is not an instantaneous
-                peak.
-              </figcaption>
-            </figure>
-          )}
-        </section>
+        <details>
+          <summary>Optional bar measurements</summary>
+          <section aria-label="Bar measurements">
+            <p className="eyebrow">EXPERIMENTAL BAR TRACKING</p>
+            <p className="fine-print">{t.reason}</p>
+            <dl className="video-metrics">
+              <div>
+                <dt>Horizontal range</dt>
+                <dd>
+                  {t.horizontalRangeCm === null
+                    ? "Unavailable"
+                    : `${t.horizontalRangeCm} cm`}
+                </dd>
+              </div>
+              <div>
+                <dt>Rise from start</dt>
+                <dd>{t.riseCm === null ? "Unavailable" : `${t.riseCm} cm`}</dd>
+              </div>
+              <div>
+                <dt>Peak upward velocity*</dt>
+                <dd>
+                  {t.peakUpwardVelocity === null
+                    ? "Unavailable"
+                    : `${t.peakUpwardVelocity} m/s`}
+                </dd>
+              </div>
+            </dl>
+            {velocities.length > 0 && (
+              <figure className="video-velocity-chart">
+                <svg
+                  viewBox="0 0 600 205"
+                  role="img"
+                  aria-label="Vertical velocity in metres per second over playback time"
+                >
+                  <line
+                    x1="36"
+                    x2="564"
+                    y1="170"
+                    y2="170"
+                    stroke="currentColor"
+                  />
+                  <polyline
+                    points={plot}
+                    fill="none"
+                    stroke="var(--brand, #b83b61)"
+                    strokeWidth="3"
+                  />
+                  <text x="36" y="20">
+                    {max.toFixed(1)} m/s
+                  </text>
+                  <text x="36" y="193">
+                    0 s
+                  </text>
+                  <text x="510" y="193">
+                    {a?.duration.toFixed(1)} s
+                  </text>
+                  <line
+                    x1={
+                      36 +
+                      (Math.min(time, a?.duration ?? 1) /
+                        Math.max(a?.duration ?? 1, 0.001)) *
+                        528
+                    }
+                    x2={
+                      36 +
+                      (Math.min(time, a?.duration ?? 1) /
+                        Math.max(a?.duration ?? 1, 0.001)) *
+                        528
+                    }
+                    y1="30"
+                    y2="170"
+                    stroke="#777"
+                    strokeDasharray="4"
+                  />
+                </svg>
+                <figcaption>
+                  *Smoothed over approximately 100 ms. Estimates depend on your
+                  scale, timing and a correct track; this is not an
+                  instantaneous peak.
+                </figcaption>
+              </figure>
+            )}
+          </section>
+        </details>
       )}
       {review.feedback && (
-        <section aria-label="Coach video feedback">
-          <h3>Coach’s feedback</h3>
-          <AssistantText text={review.feedback} />
-        </section>
+        <details open={!a?.coaching}>
+          <summary>Full Coach review</summary>
+          <section aria-label="Coach video feedback">
+            <h3>Coach’s feedback</h3>
+            <AssistantText text={review.feedback} />
+          </section>
+        </details>
       )}
     </div>
   );
 }
 
 export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
+  const [advanced, setAdvanced] = useState(false),
+    [manual, setManual] = useState(false);
+  const submitting = useRef(false);
   const [legacy, setLegacy] = useState(false),
     [tab, setTab] = useState<"upload" | "reviews">("upload");
   const [reviews, setReviews] = useState<SavedVideoReview[]>([]),
@@ -328,8 +295,8 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
   ]);
   if (legacy) return <FrameReview {...props} />;
   const review = detail?.id === selected ? detail : summary;
-  async function submit() {
-    if (!file || busy) return;
+  async function submit(chosenFile = file, automatic = !manual) {
+    if (!chosenFile || submitting.current || busy) return;
     setError("");
     let input;
     try {
@@ -338,9 +305,10 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
         lift,
         load,
         date,
-        start: Number(start),
-        end: Number(end),
-        ...(tracking
+        mode: automatic ? "automatic" : "manual",
+        start: automatic ? 0 : Number(start),
+        end: automatic ? 120 : Number(end),
+        ...(!automatic && tracking
           ? {
               calibration: {
                 x,
@@ -353,7 +321,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
             }
           : {}),
       });
-      if (tracking && !frame)
+      if (!automatic && tracking && !frame)
         throw Error("Preview the start frame and mark your plate first.");
     } catch {
       setError(
@@ -361,6 +329,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
       );
       return;
     }
+    submitting.current = true;
     upload.current = new AbortController();
     setBusy(true);
     try {
@@ -371,7 +340,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
           "Content-Type": "application/octet-stream",
           "X-Video-Metadata": encodeURIComponent(JSON.stringify(input)),
         },
-        body: file,
+        body: chosenFile,
         signal: upload.current.signal,
       });
       const data = await r.json();
@@ -393,6 +362,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     } catch (e) {
       if (!upload.current.signal.aborted) setError((e as Error).message);
     } finally {
+      submitting.current = false;
       if (!upload.current.signal.aborted) setBusy(false);
     }
   }
@@ -433,6 +403,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     <Dialog
       open
       title="Review a lifting video"
+      className="guided-video-dialog"
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
@@ -462,12 +433,14 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
           <>
             <p className="lead">Your lift. One clear next step.</p>
             <p className="muted">
-              Upload a snatch, clean or jerk for feedback on what went well, one
-              main improvement and what to try next.
+              Upload your lift. Coach will find the movement and show you what
+              to work on, with feedback on the replay.
             </p>
-            <label>
-              Choose a lifting video
+            <label className="video-upload-picker">
+              <FileUp size={30} aria-hidden="true" />
+              <span>{busy ? "Uploading your lift…" : "Upload lift"}</span>
               <input
+                className="sr-only"
                 aria-label="Upload lifting video"
                 type="file"
                 accept="video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm"
@@ -486,9 +459,13 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   setStart("0");
                   setDuration(0);
                   id.current = crypto.randomUUID();
+                  if (!advanced) void submit(f, true);
                 }}
               />
             </label>
+            <p className="fine-print">
+              Private to you · MP4, MOV or WebM · Up to 2 minutes / 50 MB
+            </p>
             {url && (
               <video
                 ref={player}
@@ -521,297 +498,326 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                 }
               />
             )}
-            <div className="lifting-video-fields">
-              <label>
-                Lift
-                <select
-                  value={lift}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setLift(e.target.value as VideoUpload["lift"]);
-                    id.current = crypto.randomUUID();
-                  }}
-                >
-                  {videoUploadLifts.map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Load, if known
-                <input
-                  value={load}
-                  disabled={busy}
-                  placeholder="e.g. 60 kg"
-                  maxLength={80}
-                  onChange={(e) => {
-                    setLoad(e.target.value);
-                    id.current = crypto.randomUUID();
-                  }}
-                />
-              </label>
-              <label>
-                Start (seconds)
-                <input
-                  type="number"
-                  min="0"
-                  max={duration || 120}
-                  step="0.01"
-                  value={start}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setStart(e.target.value);
-                    setFrame("");
-                    id.current = crypto.randomUUID();
-                  }}
-                />
-              </label>
-              <label>
-                End (seconds)
-                <input
-                  type="number"
-                  min="0.5"
-                  max={duration || 120}
-                  step="0.01"
-                  value={end}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setEnd(e.target.value);
-                    id.current = crypto.randomUUID();
-                  }}
-                />
-              </label>
-            </div>
-            <label>
-              Training date
-              <input
-                type="date"
-                value={date}
-                disabled={busy}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  id.current = crypto.randomUUID();
-                }}
-              />
-            </label>
-            <details>
-              <summary>Filming tips & optional bar measurements</summary>
-              <p>
-                Keep the whole lifter, feet and bar visible, with good light and
-                a steady camera. Choose up to 20 seconds, including the setup
-                and catch. For clean & jerk, include the front-rack receipt,
-                recovery and the later jerk overhead. For bar measurements, use
-                a fixed side-on view.
-              </p>
+            <details
+              open={advanced}
+              onToggle={(e) => setAdvanced(e.currentTarget.open)}
+            >
+              <summary>Add details or trim (optional)</summary>
               <label className="video-check">
                 <input
                   type="checkbox"
-                  checked={tracking}
+                  checked={manual}
                   disabled={busy}
                   onChange={(e) => {
-                    setTracking(e.target.checked);
+                    setManual(e.target.checked);
+                    if (!e.target.checked) setTracking(false);
                     id.current = crypto.randomUUID();
                   }}
                 />
-                Add experimental bar tracking
+                Choose a shorter section
               </label>
-              {tracking && (
-                <fieldset disabled={busy} className="video-calibration">
-                  <p>
-                    At the start of your selection, mark the visible plate
-                    centre. Adjust the circle to its outside edge and enter its
-                    actual diameter.
-                  </p>
-                  <Button
-                    variant="secondary"
-                    disabled={busy || !duration}
-                    onClick={() => {
-                      const v = player.current;
-                      if (!v) return;
-                      setError("");
-                      const capture = () => {
-                        try {
-                          const c = document.createElement("canvas");
-                          c.width = v.videoWidth;
-                          c.height = v.videoHeight;
-                          c.getContext("2d")!.drawImage(v, 0, 0);
-                          setFrame(c.toDataURL("image/jpeg", 0.8));
-                        } catch {
-                          setError(
-                            "Could not preview the start frame. Try another clip.",
-                          );
-                        }
-                      };
-                      v.pause();
-                      if (Math.abs(v.currentTime - Number(start)) < 0.001)
-                        capture();
-                      else {
-                        v.addEventListener("seeked", capture, { once: true });
-                        v.currentTime = Number(start);
-                        v.scrollIntoView({ block: "center" });
-                      }
+              <div className="lifting-video-fields">
+                <label>
+                  Lift
+                  <select
+                    value={lift}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setLift(e.target.value as VideoUpload["lift"]);
+                      id.current = crypto.randomUUID();
                     }}
                   >
-                    Mark plate on start frame
-                  </Button>
-                  {frame && (
-                    <button
-                      className="video-seed"
-                      type="button"
-                      aria-label="Set plate centre on preview"
-                      onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setX(
-                          Math.max(
-                            0.03,
-                            Math.min(
-                              0.97,
-                              (e.clientX - rect.left) / rect.width,
-                            ),
-                          ),
-                        );
-                        setY(
-                          Math.max(
-                            0.03,
-                            Math.min(
-                              0.97,
-                              (e.clientY - rect.top) / rect.height,
-                            ),
-                          ),
-                        );
-                        id.current = crypto.randomUUID();
+                    {videoUploadLifts.map((v) => (
+                      <option key={v}>{v}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Load, if known
+                  <input
+                    value={load}
+                    disabled={busy}
+                    placeholder="e.g. 60 kg"
+                    maxLength={80}
+                    onChange={(e) => {
+                      setLoad(e.target.value);
+                      id.current = crypto.randomUUID();
+                    }}
+                  />
+                </label>
+                {manual && (
+                  <>
+                    <label>
+                      Start (seconds)
+                      <input
+                        type="number"
+                        min="0"
+                        max={duration || 120}
+                        step="0.01"
+                        value={start}
+                        disabled={busy}
+                        onChange={(e) => {
+                          setStart(e.target.value);
+                          setFrame("");
+                          id.current = crypto.randomUUID();
+                        }}
+                      />
+                    </label>
+                    <label>
+                      End (seconds)
+                      <input
+                        type="number"
+                        min="0.5"
+                        max={duration || 120}
+                        step="0.01"
+                        value={end}
+                        disabled={busy}
+                        onChange={(e) => {
+                          setEnd(e.target.value);
+                          id.current = crypto.randomUUID();
+                        }}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+              <label>
+                Training date
+                <input
+                  type="date"
+                  value={date}
+                  disabled={busy}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    id.current = crypto.randomUUID();
+                  }}
+                />
+              </label>
+              <details>
+                <summary>Filming tips & optional bar measurements</summary>
+                <p>
+                  Keep the whole lifter, feet and bar visible, with good light
+                  and a steady camera. Choose up to 20 seconds, including the
+                  setup and catch. For clean & jerk, include the front-rack
+                  receipt, recovery and the later jerk overhead. For bar
+                  measurements, use a fixed side-on view.
+                </p>
+                <label className="video-check">
+                  <input
+                    type="checkbox"
+                    checked={tracking}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setTracking(e.target.checked);
+                      if (e.target.checked) setManual(true);
+                      id.current = crypto.randomUUID();
+                    }}
+                  />
+                  Add experimental bar tracking
+                </label>
+                {tracking && (
+                  <fieldset disabled={busy} className="video-calibration">
+                    <p>
+                      At the start of your selection, mark the visible plate
+                      centre. Adjust the circle to its outside edge and enter
+                      its actual diameter.
+                    </p>
+                    <Button
+                      variant="secondary"
+                      disabled={busy || !duration}
+                      onClick={() => {
+                        const v = player.current;
+                        if (!v) return;
+                        setError("");
+                        const capture = () => {
+                          try {
+                            const c = document.createElement("canvas");
+                            c.width = v.videoWidth;
+                            c.height = v.videoHeight;
+                            c.getContext("2d")!.drawImage(v, 0, 0);
+                            setFrame(c.toDataURL("image/jpeg", 0.8));
+                          } catch {
+                            setError(
+                              "Could not preview the start frame. Try another clip.",
+                            );
+                          }
+                        };
+                        v.pause();
+                        if (Math.abs(v.currentTime - Number(start)) < 0.001)
+                          capture();
+                        else {
+                          v.addEventListener("seeked", capture, { once: true });
+                          v.currentTime = Number(start);
+                          v.scrollIntoView({ block: "center" });
+                        }
                       }}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={frame}
-                        alt="Start frame for marking the plate"
-                      />
-                      <svg
-                        viewBox={`0 0 ${dimensions.w} ${dimensions.h}`}
-                        aria-hidden="true"
+                      Mark plate on start frame
+                    </Button>
+                    {frame && (
+                      <button
+                        className="video-seed"
+                        type="button"
+                        aria-label="Set plate centre on preview"
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setX(
+                            Math.max(
+                              0.03,
+                              Math.min(
+                                0.97,
+                                (e.clientX - rect.left) / rect.width,
+                              ),
+                            ),
+                          );
+                          setY(
+                            Math.max(
+                              0.03,
+                              Math.min(
+                                0.97,
+                                (e.clientY - rect.top) / rect.height,
+                              ),
+                            ),
+                          );
+                          id.current = crypto.randomUUID();
+                        }}
                       >
-                        <circle
-                          cx={x * dimensions.w}
-                          cy={y * dimensions.h}
-                          r={(diameter * dimensions.w) / 2}
-                          fill="none"
-                          stroke="#ffde59"
-                          strokeWidth="4"
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={frame}
+                          alt="Start frame for marking the plate"
                         />
-                        <circle
-                          cx={x * dimensions.w}
-                          cy={y * dimensions.h}
-                          r="5"
-                          fill="#ffde59"
+                        <svg
+                          viewBox={`0 0 ${dimensions.w} ${dimensions.h}`}
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx={x * dimensions.w}
+                            cy={y * dimensions.h}
+                            r={(diameter * dimensions.w) / 2}
+                            fill="none"
+                            stroke="#ffde59"
+                            strokeWidth="4"
+                          />
+                          <circle
+                            cx={x * dimensions.w}
+                            cy={y * dimensions.h}
+                            r="5"
+                            fill="#ffde59"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                    <div className="lifting-video-fields">
+                      <label>
+                        Centre from left (%)
+                        <input
+                          type="number"
+                          min="3"
+                          max="97"
+                          value={Math.round(x * 100)}
+                          onChange={(e) => {
+                            setX(Number(e.target.value) / 100);
+                            id.current = crypto.randomUUID();
+                          }}
                         />
-                      </svg>
-                    </button>
-                  )}
-                  <div className="lifting-video-fields">
-                    <label>
-                      Centre from left (%)
+                      </label>
+                      <label>
+                        Centre from top (%)
+                        <input
+                          type="number"
+                          min="3"
+                          max="97"
+                          value={Math.round(y * 100)}
+                          onChange={(e) => {
+                            setY(Number(e.target.value) / 100);
+                            id.current = crypto.randomUUID();
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Circle size
+                        <input
+                          type="range"
+                          min="0.02"
+                          max="0.6"
+                          step="0.005"
+                          value={diameter}
+                          onChange={(e) => {
+                            setDiameter(Number(e.target.value));
+                            id.current = crypto.randomUUID();
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Actual plate diameter (cm)
+                        <input
+                          type="number"
+                          min="5"
+                          max="100"
+                          value={cm}
+                          placeholder="Measure or check the plate"
+                          onChange={(e) => {
+                            setCm(e.target.value);
+                            id.current = crypto.randomUUID();
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <label className="video-check">
                       <input
-                        type="number"
-                        min="3"
-                        max="97"
-                        value={Math.round(x * 100)}
+                        type="checkbox"
+                        checked={side}
                         onChange={(e) => {
-                          setX(Number(e.target.value) / 100);
+                          setSide(e.target.checked);
                           id.current = crypto.randomUUID();
                         }}
                       />
+                      The camera is fixed and side-on, with the plate face
+                      visible.
                     </label>
-                    <label>
-                      Centre from top (%)
+                    <label className="video-check">
                       <input
-                        type="number"
-                        min="3"
-                        max="97"
-                        value={Math.round(y * 100)}
+                        type="checkbox"
+                        checked={realTime}
                         onChange={(e) => {
-                          setY(Number(e.target.value) / 100);
+                          setRealTime(e.target.checked);
                           id.current = crypto.randomUUID();
                         }}
                       />
+                      Playback is real-time, with no slow-motion or speed edits.
                     </label>
-                    <label>
-                      Circle size
-                      <input
-                        type="range"
-                        min="0.02"
-                        max="0.6"
-                        step="0.005"
-                        value={diameter}
-                        onChange={(e) => {
-                          setDiameter(Number(e.target.value));
-                          id.current = crypto.randomUUID();
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Actual plate diameter (cm)
-                      <input
-                        type="number"
-                        min="5"
-                        max="100"
-                        value={cm}
-                        placeholder="Measure or check the plate"
-                        onChange={(e) => {
-                          setCm(e.target.value);
-                          id.current = crypto.randomUUID();
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <label className="video-check">
-                    <input
-                      type="checkbox"
-                      checked={side}
-                      onChange={(e) => {
-                        setSide(e.target.checked);
-                        id.current = crypto.randomUUID();
-                      }}
-                    />
-                    The camera is fixed and side-on, with the plate face
-                    visible.
-                  </label>
-                  <label className="video-check">
-                    <input
-                      type="checkbox"
-                      checked={realTime}
-                      onChange={(e) => {
-                        setRealTime(e.target.checked);
-                        id.current = crypto.randomUUID();
-                      }}
-                    />
-                    Playback is real-time, with no slow-motion or speed edits.
-                  </label>
-                  <p className="fine-print">
-                    Unconfirmed timing keeps velocity unavailable. Even a
-                    plausible track can be wrong; check the overlay before using
-                    the estimates.
-                  </p>
-                </fieldset>
-              )}
+                    <p className="fine-print">
+                      Unconfirmed timing keeps velocity unavailable. Even a
+                      plausible track can be wrong; check the overlay before
+                      using the estimates.
+                    </p>
+                  </fieldset>
+                )}
+              </details>
             </details>
-            <Button disabled={busy || !file} onClick={() => void submit()}>
-              {busy ? "Uploading video…" : "Upload & analyse lift"}
-            </Button>
+            {file && (
+              <Button disabled={busy} onClick={() => void submit()}>
+                {busy ? "Uploading video…" : "Upload & analyse lift"}
+              </Button>
+            )}
             <p className="fine-print">
               Keep this window open until upload finishes. Processing then
-              continues in the background. The selected section is saved
-              privately without audio or location metadata; the source upload is
-              removed after processing. Sampled frames go to your configured
-              Coach provider. This does not log a workout.
+              continues in the background. The video is saved privately without
+              audio or location metadata; the source upload is removed after
+              processing. Sampled frames go to your configured Coach provider.
+              This does not log a workout.
             </p>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => setLegacy(true)}
-            >
-              Use on-device frame review
-            </Button>
+            <details>
+              <summary>Other review options</summary>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setLegacy(true)}
+              >
+                Use on-device frame review
+              </Button>
+            </details>
           </>
         ) : (
           <>

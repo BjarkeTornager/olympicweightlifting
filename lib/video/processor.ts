@@ -6,6 +6,70 @@ import path from "node:path";
 import type { VideoAnalysis, VideoUpload } from "./types";
 import { ApiError } from "../agent/http";
 const exec = promisify(execFile);
+export async function refineVideo(
+  media: Buffer,
+  analysis: VideoAnalysis,
+  attempt: import("./attempts").VideoAttempt,
+  signal: AbortSignal,
+) {
+  const dir = await mkdtemp(path.join(tmpdir(), "lift-video-evidence-"));
+  try {
+    await writeFile(path.join(dir, "media.mp4"), media, { mode: 0o600 });
+    await writeFile(
+      path.join(dir, "input.json"),
+      JSON.stringify({
+        start: attempt.start,
+        end: attempt.end,
+        phases: attempt.identification.phases.map((p) => p.time),
+      }),
+      { mode: 0o600 },
+    );
+    await exec(
+      process.env.VIDEO_PYTHON_PATH ?? "python3",
+      [path.join(process.cwd(), "scripts/video/refine.py"), dir],
+      {
+        signal,
+        timeout: 90000,
+        maxBuffer: 65536,
+        env: {
+          NODE_ENV: process.env.NODE_ENV,
+          PATH: process.env.PATH,
+          FFPROBE_PATH: process.env.FFPROBE_PATH,
+          PYTHONDONTWRITEBYTECODE: "1",
+          OMP_NUM_THREADS: "2",
+        },
+      },
+    );
+    const file = path.join(dir, "result.json");
+    if ((await stat(file)).size > 18000000) throw Error("Oversized evidence");
+    const result = JSON.parse(await readFile(file, "utf8")) as {
+      sampleTimes: number[];
+      frames: string[];
+    };
+    if (
+      result.sampleTimes.length !== 48 ||
+      result.frames.length !== 8 ||
+      result.sampleTimes.some(
+        (t, i) =>
+          !Number.isFinite(t) ||
+          t < attempt.start ||
+          t > attempt.end + 0.05 ||
+          (i > 0 && t < result.sampleTimes[i - 1]),
+      )
+    )
+      throw Error("Invalid evidence");
+    return {
+      analysis: {
+        ...analysis,
+        sampleTimes: result.sampleTimes,
+        identification: attempt.identification,
+      },
+      frames: result.frames,
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
 export async function processVideo(
   source: Buffer,
   input: VideoUpload,
@@ -31,6 +95,8 @@ export async function processVideo(
             PATH: process.env.PATH,
             FFMPEG_PATH: process.env.FFMPEG_PATH,
             FFPROBE_PATH: process.env.FFPROBE_PATH,
+            VIDEO_POSE_MODEL_PATH: process.env.VIDEO_POSE_MODEL_PATH,
+            MPLCONFIGDIR: dir,
             PYTHONDONTWRITEBYTECODE: "1",
             OMP_NUM_THREADS: "2",
           },

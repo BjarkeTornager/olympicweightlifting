@@ -24,16 +24,20 @@ jobs:
       BETTER_AUTH_URL: http://127.0.0.1:34173
       ALLOWED_EMAILS: ci@example.test
       OWNER_EMAIL: ci@example.test
+      VIDEO_PYTHON_PATH: /tmp/lift-video-env/bin/python
+      VIDEO_POSE_MODEL_PATH: /tmp/lift-video-model/pose.task
+      MPLCONFIGDIR: /tmp/lift-video-matplotlib
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3-opencv python3-numpy
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3-venv libseccomp2 libgl1 libglib2.0-0
+      - run: python3 -m venv /tmp/lift-video-env && /tmp/lift-video-env/bin/pip install -r scripts/video/requirements.txt && /tmp/lift-video-env/bin/python scripts/video/install_model.py /tmp/lift-video-model/pose.task
       - run: npm ci
       - run: npm run db:migrate
-      - run: /usr/bin/python3 scripts/video/test_analysis.py
+      - run: /tmp/lift-video-env/bin/python scripts/video/test_analysis.py
       - run: npm run check:production
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build

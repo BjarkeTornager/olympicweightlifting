@@ -126,6 +126,7 @@ test("video feedback submits without a question, retries partial saves and prese
     .getByRole("button", { name: "Review lifting video", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByText("Other review options", { exact: true }).click();
   await dialog
     .getByRole("button", { name: "Use on-device frame review" })
     .click();
@@ -264,6 +265,7 @@ test("lifting learning and nutrition are discoverable, responsive and do not sen
   await page.goto("/#workout/coaching");
   await page.getByRole("button", { name: "Get technique feedback" }).click();
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByText("Other review options", { exact: true }).click();
   await dialog
     .getByRole("button", { name: "Use on-device frame review" })
     .click();
@@ -347,6 +349,7 @@ test("video feedback joins a running Coach queue without taking over the next dr
   await page.getByLabel("Message your coach").fill("Keep this for later.");
   await page.goto("/#coach/lifting/video");
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByText("Other review options", { exact: true }).click();
   await dialog
     .getByRole("button", { name: "Use on-device frame review" })
     .click();

@@ -1,6 +1,6 @@
 # Coach: visible phone drafts and save-first meal estimates
 
-The reported phone layout could leave the draft outside the usable area when the keyboard opened. The previous detector compared `innerHeight` with `visualViewport.height - offsetTop`; that misses browsers which shrink both heights or pan the viewport. It also left the sync detail/Undo row visible in the compact layout.
+The reported phone layout could leave the draft outside the usable area when the keyboard opened. The previous detector used only the inset `innerHeight - visualViewport.height - offsetTop`; that misses browsers which shrink both heights or pan the viewport. It also left the sync detail/Undo row visible in the compact layout.
 
 The app now tracks a keyboard-closed height, checks focus and viewport changes, and performs bounded delayed measurements after focus for browsers that miss the initial resize event. It resets its baseline after a substantial width change and avoids treating pinch zoom as the keyboard. An already short phone viewport gets a focused-composer fallback. The compact layout persists through the Send pointer interaction, hides the title, navigation, sync details and footnote, and prioritises the draft and Send. The textarea grows with the draft up to a viewport-based limit, then scrolls internally; text is dark and 17 px on phones. Keyboard dismissal restores navigation without clearing the draft.
 

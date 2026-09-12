@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isEvidenceFrameTime } from "./body";
 import type { VideoAnalysis } from "./types";
 
 // These are review categories, not diagnoses or a universal model of good form.
@@ -294,7 +295,7 @@ export function buildPostureGhost(
 export function ghostAt(preview: CorrectionPreview | undefined, time: number) {
   return preview?.status === "available" &&
     Number.isFinite(time) &&
-    Math.abs(preview.ghost.focusTime - time) < 0.012
+    isEvidenceFrameTime(preview.ghost.focusTime, time)
     ? preview.ghost
     : null;
 }

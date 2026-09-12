@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isEvidenceFrameTime } from "./body";
 
 const coordinate = z.number().finite().min(0).max(1);
 const outline = z
@@ -95,7 +96,7 @@ export function segmentationFrameAt(
         : best,
     undefined,
   );
-  return frame && Math.abs(frame.t - time) <= 0.012 ? frame : undefined;
+  return frame && isEvidenceFrameTime(frame.t, time) ? frame : undefined;
 }
 
 // Replay an observed video frame together with its masks. Never keep a contour

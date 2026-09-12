@@ -7,6 +7,7 @@ import {
   reconstructBody,
 } from "../lib/video/body-server";
 import {
+  evidenceSeekTime,
   bodyFrameAt,
   bodyReplayAction,
   mergeBody,
@@ -170,6 +171,8 @@ test("3D sends only matching normalized media and selected polygons; validates P
 test("body shadows clear during missing frames and gaps; retries never keep stale images", async () => {
   const b = await result();
   assert.ok(bodyFrameAt(b, 0.5)?.image);
+  assert.equal(bodyFrameAt(b, 0.499), undefined);
+  assert.ok(bodyFrameAt(b, evidenceSeekTime(0.5))?.image);
   assert.equal(bodyFrameAt(b, 0.7), undefined);
   assert.equal(bodyReplayAction(b, 0.5, null).kind, "capture");
   assert.equal(bodyReplayAction(b, 1, 0.5).kind, "clear");
@@ -189,4 +192,14 @@ test("body shadows clear during missing frames and gaps; retries never keep stal
       .frames,
     [],
   );
+});
+
+test("rounded source timestamps seek inside the intended frame, including a bounded video end", () => {
+  const fps = 60,
+    actual = 161 / fps,
+    stored = Number(actual.toFixed(6));
+  assert.equal(Math.floor(stored * fps), 160);
+  assert.equal(Math.floor(evidenceSeekTime(stored) * fps), 161);
+  assert.ok(evidenceSeekTime(stored) - actual < 1 / 120);
+  assert.equal(evidenceSeekTime(2, 2), 2);
 });

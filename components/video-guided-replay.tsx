@@ -6,7 +6,11 @@ import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
 import { segmentationAt, trackedReplayAction } from "@/lib/video/segmentation";
 import { ghostAt } from "@/lib/video/correction";
-import { bodyFrameAt, bodyReplayAction } from "@/lib/video/body";
+import {
+  bodyFrameAt,
+  bodyReplayAction,
+  evidenceSeekTime,
+} from "@/lib/video/body";
 import { techniqueDrills } from "@/lib/video/technique";
 import {
   barTrailSegments,
@@ -192,9 +196,10 @@ export function GuidedReplay({
         const freeze = stopAt.current.freeze;
         v.pause();
         stopAt.current = null;
-        pendingSeek.current = freeze;
+        const target = evidenceSeekTime(freeze, v.duration);
+        pendingSeek.current = target;
         setSeeking(true);
-        v.currentTime = freeze;
+        v.currentTime = target;
         setTime(freeze);
         onTime(freeze);
       }
@@ -276,19 +281,23 @@ export function GuidedReplay({
   function seekTo(at: number) {
     const v = video.current;
     if (!v) return;
-    pendingSeek.current = at;
+    const target = evidenceSeekTime(
+      at,
+      Number.isFinite(v.duration) ? v.duration : Infinity,
+    );
+    pendingSeek.current = target;
     setSeeking(true);
     // A click may arrive before Safari has decoded the blob's metadata.
     // Retain the requested frame until a media readiness event can apply it.
     if (
       !v.seeking &&
       v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-      Math.abs(v.currentTime - at) < 0.001
+      Math.abs(v.currentTime - target) < 0.0001
     ) {
       pendingSeek.current = null;
       setSeeking(false);
     } else if (v.readyState >= HTMLMediaElement.HAVE_METADATA)
-      v.currentTime = at;
+      v.currentTime = target;
     setTime(at);
     onTime(at);
   }
@@ -576,6 +585,7 @@ export function GuidedReplay({
               </Button>
               <Button
                 variant="secondary"
+                aria-label="Previous body frame"
                 disabled={!bodyFrames.some((f) => f.t < time - 0.02)}
                 onClick={() =>
                   inspectBody(
@@ -583,16 +593,17 @@ export function GuidedReplay({
                   )
                 }
               >
-                Previous body frame
+                ← Previous
               </Button>
               <Button
                 variant="secondary"
+                aria-label="Next body frame"
                 disabled={!bodyFrames.some((f) => f.t > time + 0.02)}
                 onClick={() =>
                   inspectBody(bodyFrames.find((f) => f.t > time + 0.02)!.t)
                 }
               >
-                Next body frame
+                Next →
               </Button>
             </div>
           </div>

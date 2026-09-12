@@ -30,9 +30,24 @@ export const bodySchema = z
   })
   .strict();
 export type VideoBody = z.infer<typeof bodySchema>;
+// Evidence timestamps have six decimal places. Seeking exactly to a rounded-
+// down PTS can display the preceding frame. Enter the intended frame by 1 ms,
+// well inside the supported <=120 FPS source interval, without changing its ID.
+export function evidenceSeekTime(time: number, duration = Infinity) {
+  return Math.min(duration, Math.max(0, time) + 0.001);
+}
+// Accommodate the deliberate seek bias and timestamp rounding, but never show
+// the next frame's geometry before its pixels have actually been presented.
+export function isEvidenceFrameTime(evidenceTime: number, time: number) {
+  return (
+    Number.isFinite(time) &&
+    time >= evidenceTime - 0.000001 &&
+    time < evidenceTime + 0.002
+  );
+}
 export function bodyFrameAt(body: VideoBody | undefined, time: number) {
   if (!body || !Number.isFinite(time)) return undefined;
-  return body.frames.find((f) => Math.abs(f.t - time) < 0.012);
+  return body.frames.find((f) => isEvidenceFrameTime(f.t, time));
 }
 export function mergeBody(
   previous: VideoBody | undefined,

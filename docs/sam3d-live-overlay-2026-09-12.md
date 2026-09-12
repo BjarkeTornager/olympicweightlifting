@@ -33,5 +33,6 @@ Body inference uses SAM 3.1's selected-person mask and bounding box. Mesh projec
 - Production checks passed: TypeScript, ESLint, legacy checks and 184 tests with no skips. A new database case exercised a queued body-job restart, private receipt redaction, owner-only detail access, list-size reduction and deletion.
 - Python checks cover authentication before dispatch, invalid source/timestamps/regions, service-bound receipts and projection checks. Existing SAM queue/tracking checks remain in place.
 - Browser tests cover phone/desktop Chromium and WebKit, original/shadow/guide comparisons, frame navigation, clearing on missing samples/seeks and existing segmentation replay.
+- A real-video pixel comparison found that six-decimal timestamps could seek to the previous frame. Evidence seeks now enter the intended frame by 1 ms (inside the supported source frame interval). Rechecking source frame 161 at 2.683333 seconds confirmed that Chromium and WebKit both present frame 161 under its body texture. A regression covers this rounding boundary and clipping at the video end.
 
 These checks verify integration and rendering behaviour. They do not constitute expert validation of coaching accuracy or a measurement-grade motion-capture benchmark.

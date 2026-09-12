@@ -788,12 +788,13 @@ for (const partial of [false, true])
     await expect
       .poll(() =>
         video.evaluate((v: HTMLVideoElement) => ({
-          time: v.currentTime,
+          // Evidence seeks enter the frame slightly after its rounded PTS.
+          atEvidenceFrame: v.currentTime >= 0.5 && v.currentTime < 0.502,
           seeking: v.seeking,
           ready: v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
         })),
       )
-      .toEqual({ time: 0.5, seeking: false, ready: true });
+      .toEqual({ atEvidenceFrame: true, seeking: false, ready: true });
     await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
     await expect(video).toHaveJSProperty("paused", true);
     await expect(

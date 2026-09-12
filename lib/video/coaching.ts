@@ -1,3 +1,4 @@
+import { isEvidenceFrameTime } from "./body";
 import { z } from "zod";
 import type { VideoAnalysis } from "./types";
 import {
@@ -265,13 +266,15 @@ export function evidenceFocusPoints(
 ) {
   if (!moment.evidenceTimes.some((t) => Math.abs(t - time) < 0.025)) return [];
   if (moment.region === "bar") {
-    const p = analysis.tracking.points.find(
-      (p) => Math.abs(p.t - time) < 0.001,
+    const p = analysis.tracking.points.find((p) =>
+      isEvidenceFrameTime(p.t, time),
     );
     return p ? [{ id: -1, x: p.x, y: p.y }] : [];
   }
   if (analysis.pose?.version !== 2) return [];
-  const frame = analysis.pose.frames.find((f) => Math.abs(f.t - time) < 0.001);
+  const frame = analysis.pose.frames.find((f) =>
+    isEvidenceFrameTime(f.t, time),
+  );
   return (
     frame?.points.filter((p) => regionIds[moment.region].includes(p.id)) ?? []
   );

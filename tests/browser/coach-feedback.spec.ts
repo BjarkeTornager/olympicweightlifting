@@ -55,6 +55,10 @@ for (const notifyResize of [true, false]) {
       const rect = await target.boundingBox();
       expect(rect!.y).toBeGreaterThanOrEqual(45);
       expect(rect!.y + rect!.height).toBeLessThanOrEqual(435);
+      const form = (await page.locator(".agent-composer").boundingBox())!;
+      expect(rect!.y + rect!.height).toBeLessThanOrEqual(
+        form.y + form.height - 6,
+      );
     }
     expect((await composer.boundingBox())!.height).toBeGreaterThanOrEqual(64);
     expect(

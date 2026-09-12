@@ -29,6 +29,7 @@ import {
   Square,
   CalendarDays,
   Table2,
+  Dumbbell,
 } from "@/components/ui/icons";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
@@ -1507,16 +1508,6 @@ export function TrainingAgent({
                   <Button
                     type="button"
                     variant="ghost"
-                    aria-label="Add images"
-                    aria-expanded={toolsOpen}
-                    aria-controls="coach-image-tools"
-                    onClick={() => setToolsOpen((open) => !open)}
-                  >
-                    <Plus size={20} />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
                     disabled={uploading || loadingImage}
                     onClick={() =>
                       draft(
@@ -1540,20 +1531,50 @@ export function TrainingAgent({
                   >
                     <Moon size={16} /> <span>Log sleep</span>
                   </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={uploading || loadingImage}
+                    onClick={() =>
+                      draft(
+                        photoIds.length
+                          ? "Log my workout from the attached photo and any details I provided."
+                          : message.trim()
+                            ? "Please log this workout."
+                            : "Log my workout: ",
+                      )
+                    }
+                  >
+                    <Dumbbell size={16} /> <span>Add workout</span>
+                  </Button>
                 </div>
-                <Button
-                  type="submit"
-                  disabled={
-                    !ready ||
-                    uploading ||
-                    queue.length >= MAX_QUEUED_MESSAGES ||
-                    photoIds.length > 4 ||
-                    (!message.trim() && !photoIds.length)
-                  }
-                >
-                  <Send size={17} />
-                  Send
-                </Button>
+                <div className="composer-send-controls">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="composer-attach-button"
+                    aria-label="Add images"
+                    aria-expanded={toolsOpen}
+                    aria-controls="coach-image-tools"
+                    onClick={() => setToolsOpen((open) => !open)}
+                  >
+                    <Plus size={20} />
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="composer-send-button"
+                    disabled={
+                      !ready ||
+                      uploading ||
+                      queue.length >= MAX_QUEUED_MESSAGES ||
+                      photoIds.length > 4 ||
+                      (!message.trim() && !photoIds.length)
+                    }
+                  >
+                    <Send size={17} />
+                    Send
+                  </Button>
+                </div>
               </div>
               <div
                 id="coach-image-tools"

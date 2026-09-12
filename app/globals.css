@@ -2780,10 +2780,11 @@ summary {
 .coach-workspace .agent-composer { flex-shrink: 0; margin: 0 18px; border-radius: 14px; padding: 12px 16px; box-shadow: 0 3px 15px #1c41480a; max-height: 50%; overflow-y: auto; }
 .coach-workspace .agent-composer > label { font-size: 12px; font-weight: 600; }
 .coach-workspace .agent-composer textarea { width: 100%; min-height: 58px; max-height: 140px; margin: 2px 0 4px; padding: 6px 0; font-size: 16px; line-height: 1.6; resize: vertical; }
-.coach-workspace .composer-actions { gap: 6px; align-items: center; }
-.composer-quick-actions { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.coach-workspace .composer-actions { gap: 6px; align-items: center; flex-wrap: wrap; }
+.composer-quick-actions { display: flex; align-items: center; justify-content: space-between; gap: 3px; min-width: 0; flex: 1 1 280px; }
+.composer-send-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 1 1 110px; }
 .composer-quick-actions .button { min-height: 44px; padding: 8px; gap: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; }
-.coach-workspace .composer-actions > .button { min-height: 44px; font-size: 13px; padding: 9px 14px; gap: 7px; }
+.coach-workspace .composer-send-controls > .button { min-height: 44px; font-size: 13px; padding: 9px 14px; gap: 7px; }
 .coach-image-tools { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 12px; }
 .coach-image-tools .food-attachments { gap: 12px; }
 .coach-image-tools .fine-print { margin-top: 8px; }
@@ -2845,9 +2846,8 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
   .coach-workspace .agent-composer { margin-inline: 9px; padding: 10px; max-height: 53%; }
   .coach-workspace .chat-user { max-width: 92%; }
   .coach-composer-note { font-size: 9px; padding: 7px 9px 9px; }
-  .composer-quick-actions .button { padding-inline: 6px; font-size: 11px; gap: 4px; }
-  .coach-workspace .composer-actions > .button { padding-inline: 10px; }
-  .coach-workspace .composer-actions > .button svg { display: none; }
+  .composer-quick-actions .button { padding-inline: 6px; gap: 4px; }
+  .coach-workspace .composer-send-controls > .button { padding-inline: 10px; }
   .proposal-summary { padding: 13px; }
   .proposal-body { padding: 0 13px 13px; }
   html[data-keyboard-open] .coach-mode .mobile-nav { display: none; }
@@ -2857,8 +2857,8 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 }
 @media (max-width: 350px) {
   .composer-quick-actions .button { gap: 3px; padding-inline: 4px; }
-  .composer-quick-actions .button svg { width: 14px; }
-  .coach-workspace .composer-actions > .button { padding-inline: 8px; }
+  .composer-quick-actions .button svg { display: none; }
+  .coach-workspace .composer-send-controls > .button { padding-inline: 8px; }
 }
 .coach-thread-tools { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 18px; border-bottom: 1px solid #edf1ee; color: #576e63; font-size: 11px; }
 .coach-thread-tools button { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; color: #315b4d; }
@@ -2869,7 +2869,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
   html[data-keyboard-open] .coach-mode .coach-composer-note { display: none; }
   html[data-keyboard-open] .coach-mode .coach-header { padding-block: 0 4px; }
   html[data-keyboard-open] .coach-mode .coach-thread-tools { padding-block: 3px; }
-  html[data-keyboard-open] .coach-mode .coach-workspace .agent-composer { max-height: 70%; margin: 4px 2px; padding: 8px 12px; }
+  html[data-keyboard-open] .coach-mode .coach-workspace .agent-composer { max-height: 85%; margin: 4px 2px; padding: 8px 12px; }
   html[data-keyboard-open] .coach-mode .coach-workspace .conversation { padding-block: 8px; }
 }
 .coach-attachment-strip { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 4px; }

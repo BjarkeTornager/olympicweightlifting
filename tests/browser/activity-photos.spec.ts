@@ -5,7 +5,7 @@ import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
 import { saveCardio } from "../../lib/cardio";
 import { activityLoggingPrompt, type UserImage } from "../../lib/images";
 
-for (const source of ["workout", "coach"] as const) {
+for (const source of ["workout", "coach", "coach-shortcut"] as const) {
   test(`${source} activity photo saves automatically and opens from activity history`, async ({
     page,
     context,
@@ -69,7 +69,11 @@ for (const source of ["workout", "coach"] as const) {
         });
       const input = r.request().postDataJSON();
       expect(input.photoIds).toEqual([photo.id]);
-      expect(input.message).toBe(activityLoggingPrompt(true));
+      if (source === "coach-shortcut")
+        expect(input.message).toContain(
+          "Log my workout from the attached photo",
+        );
+      else expect(input.message).toBe(activityLoggingPrompt(true));
       if (source === "workout") expect(input.id).toBe(photo.id);
       started = true;
       await wait;
@@ -104,7 +108,7 @@ for (const source of ["workout", "coach"] as const) {
         },
       });
     });
-    await page.goto(`/#${source}`);
+    await page.goto(`/#${source === "workout" ? "workout" : "coach"}`);
     if (source === "workout") {
       const uploader = page.getByRole("region", {
         name: "Log activity from a photo",
@@ -143,6 +147,15 @@ for (const source of ["workout", "coach"] as const) {
       await expect(
         page.getByRole("button", { name: "Send", exact: true }),
       ).toBeEnabled();
+      if (source === "coach-shortcut") {
+        await page
+          .getByRole("button", { name: "Add workout", exact: true })
+          .click();
+        await expect(
+          page.getByRole("img", { name: "Image ready to send" }),
+        ).toHaveCount(1);
+        await expect(page).toHaveURL(/#coach$/);
+      }
       await page.getByRole("button", { name: "Send", exact: true }).click();
     }
     await expect.poll(() => started).toBe(true);

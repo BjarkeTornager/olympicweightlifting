@@ -15,6 +15,9 @@ The latest reported failure occurred after frame extraction and SAM segmentation
 - Production checks: typecheck, lint, 23 legacy progression checks and 172 application tests passed.
 - Chromium and Safari WebKit: 16 video upload, replay, recovery and access checks passed using synthetic accounts and fixtures.
 - Additional database regression verifies recovery of older checkpoint-only outlines, private DTO boundaries, backoff, bounded exhaustion and reuse without another GPU call.
-- Production build passed before the final legacy-checkpoint compatibility change; a final build and hosted checks are required before release is declared complete.
+- Final production build, typecheck and changed-file lint passed after the legacy-checkpoint compatibility change.
+- Railway deployment `3590b4f8-d970-4251-97d0-ede7e4b619ac` succeeded from exact source commit `2378a6b72b5a5def77873dbb7520f76170cc9f5b`. The source archive excluded credentials, private artifacts and unrelated untracked work.
+- All 16 Chromium/WebKit video checks also passed against the hosted release with synthetic intercepted account data. Live readiness returned 200; unauthenticated journal, image and Coach requests returned 401 with private/no-store caching. Hosted video access tests verified unsigned listing, details, playback and mutation rejection.
+- Read-only container checks confirmed the new automatic recovery, precise validation diagnostics and checkpoint geometry compatibility code are running. A read-only check of saved regions found athlete outlines and some plate outlines in the affected clip; no new private-media model/GPU request was made.
 
 The real affected clip still needs a successful coaching replay and a visual check of the resulting evidence markers. Automatic approval review blocked the isolated model replay because it would transmit private frames; explicit approval for this clip's existing OpenRouter/Modal processing has been requested. Do not describe that replay as completed until verified.

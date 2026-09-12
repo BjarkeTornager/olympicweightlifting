@@ -94,6 +94,106 @@ test("a limited review explains missing corrections and outlines without offerin
     dialog.getByRole("button", { name: "Play video", exact: true }),
   ).toBeVisible();
 });
+test("segmented replay stays visible during playback, clears on gaps and can be inspected without coaching markers", async ({
+  page,
+  context,
+}) => {
+  const review: SavedVideoReview = {
+    ...saved("00000000-0000-4000-8000-000000000033"),
+    status: "ready",
+    stage: "Review ready",
+    hasMedia: true,
+    analysis: {
+      version: 1,
+      reviewVersion: 2,
+      width: 320,
+      height: 480,
+      duration: 2,
+      frameCount: 120,
+      sampleTimes: [0, 1, 2],
+      tracking: {
+        status: "not_requested",
+        reason: "",
+        points: [],
+        coverage: 0,
+        horizontalRangeCm: null,
+        riseCm: null,
+        peakUpwardVelocity: null,
+        velocities: [],
+      },
+      segmentation: {
+        version: 1,
+        model: "sam3.1",
+        revision: "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7",
+        sourceSha256: "a".repeat(64),
+        status: "partial",
+        reason: "Synthetic outlines",
+        width: 320,
+        height: 480,
+        frames: Array.from({ length: 120 }, (_, i) => ({
+          t: i / 60,
+          objects:
+            i >= 48 && i < 72
+              ? []
+              : [
+                  {
+                    id: "person-1",
+                    kind: "person" as const,
+                    polygon: [
+                      [0.2, 0.1],
+                      [0.8, 0.1],
+                      [0.8, 0.8],
+                      [0.2, 0.8],
+                    ] as [number, number][],
+                  },
+                ],
+        })),
+      },
+    },
+  };
+  await context.route("**/api/lifting-videos", (r) =>
+    r.fulfill({ json: { videos: [review] } }),
+  );
+  await context.route(/\/api\/lifting-videos\/[^/]+$/, (r) =>
+    r.fulfill({ json: review }),
+  );
+  await context.route("**/api/lifting-videos/*/media", async (r) =>
+    r.fulfill({ contentType: "video/mp4", body: await readFile(fixture) }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#coach/lifting/video");
+  const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
+  await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
+  const video = dialog.getByLabel("Saved lifting video"),
+    canvas = dialog.getByLabel("Segmented video replay");
+  await dialog.getByLabel("Playback speed").selectOption("0.25");
+  await dialog.getByRole("button", { name: "Play video", exact: true }).click();
+  await expect(canvas).toBeVisible();
+  await expect(video).toHaveJSProperty("paused", false);
+  const first = Number(await canvas.getAttribute("data-frame-time"));
+  await expect
+    .poll(async () => Number(await canvas.getAttribute("data-frame-time")))
+    .toBeGreaterThan(first);
+  expect(
+    await canvas.evaluate(
+      (c: HTMLCanvasElement) =>
+        c.getContext("2d")!.getImageData(160, 200, 1, 1).data[3],
+    ),
+  ).toBe(255);
+  await dialog.getByLabel("Tracked replay").uncheck();
+  await expect(canvas).toBeHidden();
+  await dialog.getByLabel("Tracked replay").check();
+  await video.evaluate((v: HTMLVideoElement) => {
+    v.currentTime = 1;
+  });
+  await expect(canvas).toBeHidden();
+  await dialog.getByRole("button", { name: "Inspect outlines" }).click();
+  await expect(video).toHaveJSProperty("paused", true);
+  await expect(dialog.getByLabel("Tracked object outlines")).toBeVisible();
+  await expect(canvas).toBeHidden();
+});
+
 function saved(id: string): SavedVideoReview {
   return {
     id,
@@ -181,7 +281,7 @@ test("saved outlines remain usable while feedback recovers automatically", async
       "Your outlines are ready. Coach is finishing the feedback automatically.",
     ),
   ).toBeVisible();
-  await expect(dialog.getByLabel("Object outlines when paused")).toBeChecked();
+  await expect(dialog.getByLabel("Tracked replay")).toBeChecked();
   await expect(
     dialog
       .getByRole("img", { name: "Tracked object outlines" })
@@ -699,11 +799,11 @@ for (const partial of [false, true])
     await expect(
       dialog.locator(".video-review-player svg polygon"),
     ).toHaveCount(1);
-    await dialog.getByLabel("Object outlines when paused").uncheck();
+    await dialog.getByLabel("Tracked replay").uncheck();
     await expect(
       dialog.locator(".video-review-player svg polygon"),
     ).toHaveCount(0);
-    await dialog.getByLabel("Object outlines when paused").check();
+    await dialog.getByLabel("Tracked replay").check();
     expect(
       await video.evaluate((v: HTMLVideoElement) => v.currentTime),
     ).toBeCloseTo(0.5, 2);

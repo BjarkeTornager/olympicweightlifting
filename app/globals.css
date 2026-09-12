@@ -3374,6 +3374,8 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .video-review-player,.video-seed {position:relative;display:block;width:100%;padding:0;overflow:hidden;border-radius:16px;background:#151515;}
 .lifting-video-flow .video-review-player video {display:block;max-height:none;border-radius:0;width:100%;}
 .video-review-player>svg,.video-seed>svg {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+.video-review-player>.video-tracked-replay {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+.video-tracked-replay[hidden] {display:none;}
 .video-seed img {display:block;width:100%;height:auto;}
 .video-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1rem 0;}
 .video-metrics>div {padding:.85rem;background:#f7f7f4;border-radius:12px;}

@@ -46,3 +46,18 @@ the front rack and overhead receipt.
 The Modal gateway change was deployed with no minimum idle GPU. The website
 release uses an exact tracked-source archive. Private media and credentials are
 excluded. This change does not broaden the owner-only segmentation pilot.
+
+
+## Moving overlay follow-up
+
+The player previously hid all region outlines during playback. Tracked replay
+now captures an observed video frame and its matching masks together on a canvas,
+then advances to the next analysed frame. Explicit occlusions, skipped evidence
+and long gaps restore the original unmarked video. The separate inspection
+button seeks to a real frame with saved outlines. Coach captions and region
+outlines have independent visibility controls.
+
+The implementation uses the browser's presented media timestamp rather than a
+wall-clock estimate. See [requestVideoFrameCallback documentation](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback).
+This is sampled visual replay, not continuous anatomical tracking or a velocity
+measurement. No interpolation or new inference is performed by the browser.

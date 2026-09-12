@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Expand, X, RotateCcw, Sparkles } from "./ui/icons";
 import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
-import { segmentationAt } from "@/lib/video/segmentation";
+import { segmentationAt, trackedReplayAction } from "@/lib/video/segmentation";
 import {
   barTrailSegments,
   currentVideoReview,
@@ -28,8 +28,11 @@ export function GuidedReplay({
 }) {
   const video = useRef<HTMLVideoElement>(null),
     container = useRef<HTMLDivElement>(null);
+  const trackedCanvas = useRef<HTMLCanvasElement>(null);
+  const capturedTime = useRef<number | null>(null);
   const stopAt = useRef<{ end: number; freeze: number } | null>(null);
   const pendingSeek = useRef<number | null>(null);
+  const [renderTime, setRenderTime] = useState(0);
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
     [seeking, setSeeking] = useState(false),
@@ -53,7 +56,10 @@ export function GuidedReplay({
     a && active && !playing && !seeking
       ? evidenceFocusPoints(a, active, time)
       : [];
-  const trails = a && barTrail ? barTrailSegments(a, time) : [];
+  const trails =
+    a && barTrail && !seeking
+      ? barTrailSegments(a, playing ? renderTime : time)
+      : [];
   const regions =
     outlines && !playing && !seeking
       ? segmentationAt(a?.segmentation, time)
@@ -65,7 +71,11 @@ export function GuidedReplay({
     let handle = 0,
       fallback = 0,
       closed = false;
-    const sync = (presentedTime: number) => {
+    const hideTracked = () => {
+      if (trackedCanvas.current) trackedCanvas.current.hidden = true;
+      capturedTime.current = null;
+    };
+    const sync = (presentedTime: number, exactFrame = false) => {
       if (closed || v.seeking) return;
       if (pendingSeek.current !== null) {
         if (
@@ -79,6 +89,53 @@ export function GuidedReplay({
       // Safari can deliver an older queued presentation callback after a seek
       // or resize. It must not replace the paused inspection position.
       const t = v.paused ? v.currentTime : presentedTime;
+      const canvas = trackedCanvas.current,
+        segmentation = a?.segmentation;
+      if (
+        !v.paused &&
+        exactFrame &&
+        outlines &&
+        canvas &&
+        segmentation &&
+        v.videoWidth === segmentation.width &&
+        v.videoHeight === segmentation.height
+      ) {
+        const action = trackedReplayAction(
+          segmentation,
+          t,
+          capturedTime.current,
+        );
+        if (action.kind === "clear") hideTracked();
+        else if (action.kind === "capture") {
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            // Capture pixels and polygons from the SAME presented source frame.
+            // Between samples we retain this complete annotated frame, not a
+            // stale polygon over the independently moving original video.
+            canvas.width = segmentation.width;
+            canvas.height = segmentation.height;
+            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            ctx.lineWidth = (2.5 * canvas.width) / Math.max(1, v.clientWidth);
+            for (const region of action.frame.objects) {
+              ctx.beginPath();
+              region.polygon.forEach(([x, y], i) => {
+                if (i) ctx.lineTo(x * canvas.width, y * canvas.height);
+                else ctx.moveTo(x * canvas.width, y * canvas.height);
+              });
+              ctx.closePath();
+              ctx.strokeStyle = region.kind === "plate" ? "#83d5ea" : "#ffde59";
+              ctx.fillStyle =
+                region.kind === "plate" ? "#83d5ea20" : "#ffde5910";
+              ctx.fill();
+              ctx.stroke();
+            }
+            canvas.dataset.frameTime = String(action.frame.t);
+            canvas.hidden = false;
+            capturedTime.current = action.frame.t;
+          } else hideTracked();
+        }
+      } else hideTracked();
+      setRenderTime(capturedTime.current ?? t);
       setTime(t);
       onTime(t);
       if (stopAt.current !== null && t >= stopAt.current.end - 0.035) {
@@ -109,7 +166,7 @@ export function GuidedReplay({
     v.addEventListener("canplay", ready);
     if (typeof v.requestVideoFrameCallback === "function") {
       const frame: VideoFrameRequestCallback = (_now, metadata) => {
-        sync(metadata.mediaTime);
+        sync(metadata.mediaTime, true);
         if (!closed) handle = v.requestVideoFrameCallback(frame);
       };
       handle = v.requestVideoFrameCallback(frame);
@@ -122,6 +179,7 @@ export function GuidedReplay({
     }
     return () => {
       closed = true;
+      hideTracked();
       v.removeEventListener("seeked", seek);
       v.removeEventListener("loadedmetadata", ready);
       v.removeEventListener("loadeddata", ready);
@@ -129,7 +187,7 @@ export function GuidedReplay({
       if (handle) v.cancelVideoFrameCallback(handle);
       if (fallback) cancelAnimationFrame(fallback);
     };
-  }, [url, onTime]);
+  }, [url, onTime, outlines, a?.segmentation]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -252,8 +310,16 @@ export function GuidedReplay({
             aria-label="Saved lifting video"
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
             onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onSeeking={() => setSeeking(true)}
+            onPause={() => {
+              setPlaying(false);
+              if (trackedCanvas.current) trackedCanvas.current.hidden = true;
+              capturedTime.current = null;
+            }}
+            onSeeking={() => {
+              setSeeking(true);
+              if (trackedCanvas.current) trackedCanvas.current.hidden = true;
+              capturedTime.current = null;
+            }}
             onEnded={() => {
               setPlaying(false);
               stopAt.current = null;
@@ -264,8 +330,14 @@ export function GuidedReplay({
               )
             }
           />
-          {overlay &&
-            a &&
+          <canvas
+            ref={trackedCanvas}
+            className="video-tracked-replay"
+            hidden
+            role="img"
+            aria-label="Segmented video replay"
+          />
+          {a &&
             (points.length > 0 || trails.length > 0 || regions.length > 0) && (
               <svg
                 viewBox={`0 0 ${a.width} ${a.height}`}
@@ -344,14 +416,38 @@ export function GuidedReplay({
       </div>
       <div className="video-replay-controls">
         {!!a?.segmentation?.frames.some((f) => f.objects.length) && (
-          <label className="video-check">
-            <input
-              type="checkbox"
-              checked={outlines}
-              onChange={(e) => setOutlines(e.target.checked)}
-            />
-            Object outlines when paused
-          </label>
+          <div>
+            <label className="video-check">
+              <input
+                type="checkbox"
+                checked={outlines}
+                onChange={(e) => setOutlines(e.target.checked)}
+              />
+              Tracked replay
+            </label>
+            <p className="fine-print">
+              Yellow: lifter. Blue: plate, when visible. Replay uses the
+              analysed frames; switch off for the original video.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const frames = a.segmentation!.frames.filter(
+                  (f) => f.objects.length,
+                );
+                const nearest = frames.reduce((best, f) =>
+                  Math.abs(f.t - time) < Math.abs(best.t - time) ? f : best,
+                );
+                video.current?.pause();
+                setPlaying(false);
+                setOutlines(true);
+                stopAt.current = null;
+                seekTo(nearest.t);
+              }}
+            >
+              Inspect outlines
+            </Button>
+          </div>
         )}
         <div className="video-playback-row">
           <button

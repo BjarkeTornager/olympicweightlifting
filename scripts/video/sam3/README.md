@@ -25,8 +25,12 @@ This small debugging set does not establish general segmentation accuracy.
   Incoherent competing tracks and ambiguous people are omitted. This is a
   conservative heuristic, not a validated identity or plate-selection model.
 - Coach receives candidate object bounds with explicit limitations. The player
-  shows outlines only when paused within 12 ms of an observed frame, with an
-  on/off control. It does not interpolate across missing masks.
+  pairs each observed mask with its matching decoded video pixels during
+  tracked replay. It holds that complete annotated frame until the next
+  sample, clearing on explicit occlusion, missed samples, seeking and gaps
+  longer than 400 ms. It never paints an old mask over newer moving pixels.
+  Turning off tracked replay restores the original video. Paused inspection
+  still requires a source timestamp within 12 ms of a segmentation frame.
 - Region centres are used internally to rank movement, never as bar hubs. SAM
   does not produce velocity, anatomical angles, lift labels or technique scores.
 - Timeouts, bad responses and unavailable GPUs retain the existing review path.

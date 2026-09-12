@@ -10,6 +10,7 @@ import {
 import {
   mergeSegmentation,
   segmentationAt,
+  trackedReplayAction,
   segmentationEvidence,
   type VideoSegmentation,
 } from "../lib/video/segmentation";
@@ -225,6 +226,38 @@ test("outlines never interpolate across motion or fill an explicitly empty occlu
     [1, 4],
   );
   assert.match(evidence!.purpose, /do not establish.*bar centres/);
+});
+
+test("tracked playback retains matching pixels and masks only until the next observed frame", () => {
+  assert.equal(trackedReplayAction(segmentation, 0, null).kind, "capture");
+  assert.equal(trackedReplayAction(segmentation, 0.05, 0).kind, "hold");
+  assert.equal(
+    trackedReplayAction(segmentation, 0.1, 0).kind,
+    "clear",
+    "an empty observation must erase the tracked frame",
+  );
+  assert.equal(trackedReplayAction(segmentation, 0.15, 0.1).kind, "clear");
+  assert.equal(
+    trackedReplayAction(segmentation, 0.15, null).kind,
+    "clear",
+    "a dropped callback cannot reuse a frame that was never captured",
+  );
+  assert.equal(trackedReplayAction(segmentation, 0.2, null).kind, "capture");
+  assert.equal(
+    trackedReplayAction(segmentation, 0.25, 0.2).kind,
+    "clear",
+    "no holding after the last observation",
+  );
+  assert.equal(trackedReplayAction(segmentation, -0.1, 0).kind, "clear");
+  const sparse = {
+    ...segmentation,
+    frames: [segmentation.frames[0], { ...segmentation.frames[2], t: 1 }],
+  };
+  assert.equal(
+    trackedReplayAction(sparse, 0.05, 0).kind,
+    "clear",
+    "no holding across a large tracking gap",
+  );
 });
 
 test("retry drops stale masks for that attempt, preserves other attempts and never combines videos", () => {

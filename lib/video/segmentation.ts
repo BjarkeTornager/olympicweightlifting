@@ -78,7 +78,14 @@ export function segmentationAt(
   segmentation: VideoSegmentation | undefined,
   time: number,
 ) {
-  if (!segmentation || !Number.isFinite(time)) return [];
+  return segmentationFrameAt(segmentation, time)?.objects ?? [];
+}
+
+export function segmentationFrameAt(
+  segmentation: VideoSegmentation | undefined,
+  time: number,
+) {
+  if (!segmentation || !Number.isFinite(time)) return undefined;
   const frame = segmentation.frames.reduce<
     VideoSegmentation["frames"][number] | undefined
   >(
@@ -88,7 +95,40 @@ export function segmentationAt(
         : best,
     undefined,
   );
-  return frame && Math.abs(frame.t - time) <= 0.012 ? frame.objects : [];
+  return frame && Math.abs(frame.t - time) <= 0.012 ? frame : undefined;
+}
+
+// Replay an observed video frame together with its masks. Never keep a contour
+// on top of newer, unsegmented pixels. A missing sample/occlusion clears both.
+export function trackedReplayAction(
+  segmentation: VideoSegmentation | undefined,
+  time: number,
+  heldTime: number | null,
+) {
+  const frame = segmentationFrameAt(segmentation, time);
+  if (frame)
+    return frame.objects.length
+      ? { kind: "capture" as const, frame }
+      : { kind: "clear" as const };
+  if (
+    !segmentation ||
+    heldTime === null ||
+    !Number.isFinite(time) ||
+    time < heldTime
+  )
+    return { kind: "clear" as const };
+  const next = segmentation.frames.find((f) => f.t > heldTime + 0.00001);
+  const held = segmentation.frames.find(
+    (f) => Math.abs(f.t - heldTime) < 0.00001,
+  );
+  if (
+    !held?.objects.length ||
+    !next ||
+    next.t - heldTime > 0.4 ||
+    time >= next.t - 0.012
+  )
+    return { kind: "clear" as const };
+  return { kind: "hold" as const };
 }
 
 export function segmentationEvidence(

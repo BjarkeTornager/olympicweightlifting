@@ -151,5 +151,7 @@ unsupported state offloading. Video-frame offloading remains enabled.
 
 The Hugging Face secret and checkpoint access were verified, and two public
 clips completed real GPU inference on 12 September 2026. Local integration
-tests remain distinct from model-quality validation. No endpoint deployment
-or production activation has occurred; full quality benchmarking is required.
+tests remain distinct from model-quality validation. The service and an
+owner-only website pilot are now deployed; see the
+[pilot release record](../../../docs/sam31-pilot-deployment-2026-09-12.md).
+Broader quality benchmarking is required before widening the pilot.

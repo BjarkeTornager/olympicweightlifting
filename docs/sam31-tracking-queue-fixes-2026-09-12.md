@@ -98,4 +98,8 @@ The fixes are implemented and tested. SAM remains disabled on the live website
 until its separate service credential, endpoint and website release are activated.
 Existing saved reviews are not automatically reprocessed.
 
+Subsequent rollout: the owner approved and enabled a restricted live pilot.
+See the [deployment record](sam31-pilot-deployment-2026-09-12.md) for the current
+activation and verification status.
+
 Protocol reference: [Modal's polling recommendation](https://modal.com/docs/guide/webhook-timeouts).

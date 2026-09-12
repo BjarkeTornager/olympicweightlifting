@@ -248,3 +248,129 @@ test("retry drops stale masks for that attempt, preserves other attempts and nev
     [],
   );
 });
+
+test("queued work survives multiple polls and transient failures without another upload", async () => {
+  const methods: string[] = [];
+  let reads = 0;
+  let requestId = "";
+  const budget = { remainingMs: 300_000 };
+  const result = await segmentVideo(
+    media,
+    analysis,
+    new AbortController().signal,
+    config,
+    async (_url, options) => {
+      methods.push(options!.method!);
+      const headers = new Headers(options!.headers);
+      if (options!.method === "POST") {
+        requestId = headers.get("x-sam3-request")!;
+        assert.match(requestId, /^[0-9a-f-]{36}$/);
+        assert.equal(headers.get("x-sam3-budget-ms"), "300000");
+        return Response.json(
+          {
+            job: "signed-fixture-receipt",
+            sourceSha256: segmentation.sourceSha256,
+          },
+          { status: 202 },
+        );
+      }
+      assert.equal(headers.get("x-sam3-request"), requestId);
+      assert.equal(headers.get("x-sam3-job"), "signed-fixture-receipt");
+      if (++reads === 1)
+        return Response.json({ status: "pending" }, { status: 202 });
+      if (reads === 2) throw Error("network unavailable");
+      return Response.json(segmentation);
+    },
+    budget,
+  );
+  assert.deepEqual(result, segmentation);
+  assert.deepEqual(methods, ["POST", "GET", "GET", "GET"]);
+  assert.ok(budget.remainingMs < 300_000);
+});
+
+test("account cancellation cancels the queued GPU call using a fresh bounded signal", async () => {
+  const abort = new AbortController();
+  const methods: string[] = [];
+  await assert.rejects(
+    segmentVideo(
+      media,
+      analysis,
+      abort.signal,
+      config,
+      async (_url, options) => {
+        methods.push(options!.method!);
+        if (options!.method === "POST") {
+          setTimeout(() => abort.abort(), 10);
+          return Response.json(
+            { job: "signed-fixture", sourceSha256: segmentation.sourceSha256 },
+            { status: 202 },
+          );
+        }
+        assert.equal(options!.method, "DELETE");
+        assert.equal(options!.signal!.aborted, false);
+        return Response.json({ status: "cancelled" });
+      },
+    ),
+    /abort/i,
+  );
+  assert.deepEqual(methods, ["POST", "DELETE"]);
+});
+
+test("exhausted shared GPU budget skips additional attempts; queue expiry preserves feedback", async () => {
+  let calls = 0;
+  const result = await segmentVideo(
+    media,
+    analysis,
+    new AbortController().signal,
+    config,
+    async () => {
+      calls++;
+      throw Error("must not submit");
+    },
+    { remainingMs: 0 },
+  );
+  assert.equal(calls, 0);
+  assert.equal(result?.status, "unavailable");
+  const methods: string[] = [];
+  const expired = await segmentVideo(
+    media,
+    analysis,
+    new AbortController().signal,
+    config,
+    async (_url, options) => {
+      methods.push(options!.method!);
+      if (options!.method === "POST")
+        return Response.json(
+          { job: "signed-fixture", sourceSha256: segmentation.sourceSha256 },
+          { status: 202 },
+        );
+      return Response.json(
+        {},
+        { status: options!.method === "GET" ? 410 : 200 },
+      );
+    },
+  );
+  assert.equal(expired?.status, "unavailable");
+  assert.deepEqual(methods, ["POST", "GET", "DELETE"]);
+});
+
+test("mismatched and oversized receipts cannot redirect polls or expose another job", async () => {
+  for (const receipt of [
+    { job: "receipt", sourceSha256: "0".repeat(64) },
+    { job: "x".repeat(5_000), sourceSha256: segmentation.sourceSha256 },
+  ]) {
+    let calls = 0;
+    const result = await segmentVideo(
+      media,
+      analysis,
+      new AbortController().signal,
+      config,
+      async () => {
+        calls++;
+        return Response.json(receipt, { status: 202 });
+      },
+    );
+    assert.equal(result?.status, "unavailable");
+    assert.equal(calls, 1);
+  }
+});

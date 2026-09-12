@@ -2,9 +2,10 @@
 
 This integration adds object-region evidence to the existing private lift-review
 pipeline. It is disabled until `VIDEO_SAM3_URL` and `VIDEO_SAM3_TOKEN` are set on
-the application server. Real GPU execution has now succeeded, but plate tracking
-and cold-start timing still fail the rollout requirements. See the
-[measured test results](../../../docs/sam31-modal-gpu-test-2026-09-12.md).
+the application server. Real GPU tests now retain plate outlines on both public
+fixtures, and requests use queued submission/polling. See the
+[fixes and measured results](../../../docs/sam31-tracking-queue-fixes-2026-09-12.md).
+This small debugging set does not establish general segmentation accuracy.
 
 ## What is implemented
 
@@ -17,9 +18,10 @@ and cold-start timing still fail the rollout requirements. See the
 - SAM runs separate person and plate sessions, closes both after processing,
   and returns bounded normalized outlines. Temporary clips and frames are
   removed on normal completion and errors; only model weights use a volume.
-- Subject selection uses visible torso landmarks. Ambiguous people and competing
-  plate tracks are omitted. This is a conservative heuristic, not a validated
-  identity or plate-selection model.
+- Subject selection uses visible torso landmarks. Coherent motion can associate
+  two bar ends and stacked plates; one consistently visible plate is selected.
+  Incoherent competing tracks and ambiguous people are omitted. This is a
+  conservative heuristic, not a validated identity or plate-selection model.
 - Coach receives candidate object bounds with explicit limitations. The player
   shows outlines only when paused within 12 ms of an observed frame, with an
   on/off control. It does not interpolate across missing masks.
@@ -68,9 +70,18 @@ The checkpoint is manually gated by Meta on
 The Modal image mounts only `engine.py` and `gateway.py`, not the repository or
 local data. It has no idle GPU minimum and allows one GPU container. The initial
 configuration uses a 30-second scale-down window and a 180-second GPU method
-timeout. The app bounds each request at 90 seconds; cold-start behavior still
-requires real measurement. A timed-out client can leave a bounded GPU call
-running until its own timeout.
+timeout, plus a 300-second startup bound. Authenticated POST submission returns
+202 and a signed receipt; GET polls and DELETE cancellation use that receipt
+and the same random request nonce in headers. The service token is required
+for every method. No raw Modal call ID or receipt reaches the browser.
+
+The app shares five minutes of optional GPU waiting across attempts, with an
+earlier cutoff to leave time within its ten-minute video-job deadline. POST
+is bounded at 60 seconds and each GET at 30 seconds. Polling can retry without
+resubmitting the video. Cancellation uses an independent five-second request.
+A lost submit response can leave a call running; its queue-expiry check and
+inference timeout limit that work. The gateway needs no process-local job map,
+but receipts are not persisted across app-worker restarts.
 
 As checked on 12 September 2026, Modal lists L40S GPU time at $0.000542/second
 ($1.9512/hour), plus CPU, memory and storage charges. This is a resource rate,
@@ -106,9 +117,22 @@ the same production image and model loader, a 300-second model startup bound,
 a 180-second inference bound, and a two-second idle window. The local harness
 cancels the call if queueing plus execution exceed ten minutes. It has no HTTP
 endpoint and requires only the Hugging Face secret. Its result contains
-`segmentation` and separate timing/peak CUDA memory `metrics`; the round trip
+`segmentation`, diagnostic raw candidate polygons (test only), and separate
+ timing/peak CUDA memory `metrics`; the round trip
 includes container startup but excludes image building. Neither coverage nor
 successful execution establishes coaching or segmentation accuracy.
+
+To test the queued contract locally against a real remote GPU, install Modal,
+FastAPI and httpx in a temporary local environment and run:
+
+```sh
+python -m modal run scripts/video/sam3/modal_app.py::queued_smoke --video /private/tmp/public-lift.mp4 --manifest /private/tmp/public-lift-manifest.json --output /private/tmp/sam31-queued-result.json
+```
+
+This uses an ephemeral local service token and ASGI requests; no production
+secret or public endpoint is created. It records submit/poll timings and cancels
+unfinished work when its five-minute deadline is reached. The public-fixture
+harness is distinct from production HTTP and account-isolation verification.
 
 Render nine actual source frames and their observed outlines for manual review:
 

@@ -17,49 +17,98 @@ TOKEN = "fixture-secret-not-a-real-token-12345"
 
 class GatewayTests(unittest.TestCase):
     def setUp(self):
-        self.calls = []
-        async def segment(data, manifest):
-            self.calls.append((data, manifest))
+        from types import SimpleNamespace
+        self.calls, self.cancelled, self.reads = [], [], []
+        self.now = 1000
+        self.pending = False
+        async def get(timeout):
+            self.reads.append(timeout)
+            if self.pending: raise TimeoutError()
             return {"fixture": True}
-        self.client = TestClient(create_app(segment, TOKEN))
+        async def cancel(): self.cancelled.append("job-1")
+        self.call = SimpleNamespace(object_id="job-1", get=SimpleNamespace(aio=get), cancel=SimpleNamespace(aio=cancel))
+        async def spawn(data, manifest, expires):
+            self.calls.append((data, manifest, expires))
+            return self.call
+        self.spawn = spawn
+        self.lookup = lambda job: self.call if job == "job-1" else self.fail("Wrong job")
+        self.client = TestClient(create_app(spawn, self.lookup, TOKEN, lambda: self.now))
         self.headers = {"Authorization": f"Bearer {TOKEN}","Content-Type":"video/mp4",
-                        "X-SAM3-Manifest":json.dumps(MANIFEST)}
+                        "X-SAM3-Manifest":json.dumps(MANIFEST),
+                        "X-SAM3-Request":"12345678-abcd-1234-abcd-123456789012", "X-SAM3-Budget-Ms":"300000"}
+
+    def queue(self):
+        r = self.client.post("/segment",headers=self.headers,content=DATA)
+        self.assertEqual(r.status_code,202)
+        return {**self.headers, "X-SAM3-Job":r.json()["job"]}
 
     def test_auth_before_gpu_or_body_processing(self):
         for path in ["/", "/docs", "/openapi.json"]:
             self.assertEqual(self.client.get(path).status_code,404)
-        r = self.client.post("/segment",content=DATA)
-        self.assertEqual(r.status_code,401)
+        for method in ["post", "get", "delete"]:
+            self.assertEqual(getattr(self.client,method)("/segment").status_code,401)
         self.assertEqual(self.calls,[])
+        self.assertEqual(self.reads,[])
 
-    def test_valid_binary_request(self):
-        r = self.client.post("/segment",headers=self.headers,content=DATA)
-        self.assertEqual(r.status_code,200)
-        self.assertEqual(r.headers["cache-control"],"no-store")
-        self.assertEqual(self.calls,[(DATA,MANIFEST)])
+    def test_queue_poll_and_repeat_reads_do_not_resubmit(self):
+        headers = self.queue()
+        self.assertEqual(self.calls,[(DATA,MANIFEST,1300)])
+        self.pending = True
+        self.assertEqual(self.client.get("/segment",headers=headers).status_code,202)
+        self.pending = False
+        for _ in range(2):
+            r = self.client.get("/segment",headers=headers)
+            self.assertEqual(r.json(),{"fixture":True})
+            self.assertEqual(r.headers["cache-control"],"no-store")
+        self.assertEqual(len(self.calls),1)
+        self.assertEqual(self.reads,[0,0,0])
+
+    def test_cold_start_beyond_90_seconds_survives_gateway_restart(self):
+        headers = self.queue()
+        self.now += 150
+        self.pending = True
+        restarted = TestClient(create_app(self.spawn,self.lookup,TOKEN,lambda:self.now))
+        self.assertEqual(restarted.get("/segment",headers=headers).status_code,202)
+        self.now += 90
+        self.pending = False
+        self.assertEqual(restarted.get("/segment",headers=headers).json(),{"fixture":True})
+        self.assertEqual(len(self.calls),1)
+
+    def test_receipt_tampering_and_wrong_request_do_not_access_job(self):
+        headers = self.queue()
+        for patch in [{"X-SAM3-Job":headers["X-SAM3-Job"]+"x"},
+                      {"X-SAM3-Request":"different account job"}, {"X-SAM3-Job":"invalid"}]:
+            for method in ["get", "delete"]:
+                self.assertEqual(getattr(self.client,method)("/segment",headers={**headers,**patch}).status_code,400)
+        self.assertEqual(self.reads,[])
+        self.assertEqual(self.cancelled,[])
+
+    def test_expiration_and_cancellation_stop_only_this_job(self):
+        headers = self.queue()
+        self.now = 1301
+        self.assertEqual(self.client.get("/segment",headers=headers).status_code,410)
+        self.assertEqual(self.client.delete("/segment",headers=headers).status_code,200)
+        self.assertEqual(self.reads,[])
+        self.assertEqual(self.cancelled,["job-1","job-1"])
 
     def test_bad_hash_and_arbitrary_remote_url_never_reach_gpu(self):
         r = self.client.post("/segment",headers=self.headers,content=b"different video")
         self.assertEqual(r.status_code,400)
-        headers = dict(self.headers)
-        headers["X-SAM3-Manifest"] = json.dumps({**MANIFEST,"url":"http://internal"})
-        self.assertEqual(self.client.post("/segment",headers=headers,content=DATA).status_code,400)
+        for patch in [{"X-SAM3-Manifest":json.dumps({**MANIFEST,"url":"http://internal"})},
+                      {"X-SAM3-Budget-Ms":"9999999"}, {"X-SAM3-Request":""}]:
+            self.assertEqual(self.client.post("/segment",headers={**self.headers,**patch},content=DATA).status_code,400)
         self.assertEqual(self.calls,[])
 
-    def test_large_body_and_provider_errors(self):
-        import gateway
-        before = gateway.MAX_BYTES
-        gateway.MAX_BYTES = 3
-        try:
-            self.assertEqual(self.client.post("/segment",headers=self.headers,content=DATA).status_code,413)
-        finally:
-            gateway.MAX_BYTES = before
-        async def failed(*args):
-            raise RuntimeError("private path and secret")
-        client = TestClient(create_app(failed,TOKEN))
-        response = client.post("/segment",headers=self.headers,content=DATA)
-        self.assertEqual(response.status_code,503)
-        self.assertNotIn("secret",response.text)
+    def test_oversize_body_rejected_before_dispatch(self):
+        self.assertEqual(self.client.post("/segment",headers=self.headers,content=b"a"*(25*1024*1024+1)).status_code,413)
+        self.assertEqual(self.calls,[])
+
+    def test_provider_errors_never_escape(self):
+        async def fail(*args): raise RuntimeError("private secret media")
+        client = TestClient(create_app(fail,self.lookup,TOKEN))
+        r = client.post("/segment",headers=self.headers,content=DATA)
+        self.assertEqual(r.status_code,503)
+        self.assertNotIn("private",r.text)
 
 
 def box(key, kind, x=.2, y=.1, w=.6, h=.8):
@@ -105,6 +154,37 @@ class EvidenceTests(unittest.TestCase):
         frames[0]["objects"].pop()
         frames[1]["objects"].pop()
         self.assertTrue(all(f["objects"] for f in select_subjects(frames,anchors)))
+
+    def plate_fixture(self, competing=False, camera_pan=False):
+        frames, anchors = [], []
+        for i in range(30):
+            t = i / 10
+            travel = abs(__import__("math").sin(i/29*3.14))
+            y = .6 - .1*travel if camera_pan else .7 - .4*travel
+            shift = .6-y if camera_pan else 0
+            person = {"id":"person-1","kind":"person","polygon":[[.3,.1-shift],[.7,.1-shift],[.7,.9-shift],[.3,.9-shift]]}
+            def plate(id,x,cy,size):
+                return {"id":id,"kind":"plate","polygon":[[x-size,cy-size],[x+size,cy-size],[x+size,cy+size],[x-size,cy+size]]}
+            # Two ends and a stacked plate, with perspective-scaled travel.
+            objects = [person, plate("plate-1",.25,y,.05),
+                       plate("plate-2",.75, (.6-shift if camera_pan else .1+.8*y),.06),
+                       plate("plate-3",.73, (.6-shift if camera_pan else .1+.8*y),.03)]
+            if competing:
+                objects[2] = plate("plate-2",.75,.3+i/29*.4,.06)
+            frames.append({"t":t,"objects":objects})
+            anchors.append({"t":t,"points":[{"id":id,"x":.5,"y":.5-shift} for id in [11,12,23]]})
+        return frames, anchors
+
+    def test_two_bar_ends_and_stacked_plates_are_not_false_ambiguity(self):
+        frames, anchors = self.plate_fixture()
+        result = select_subjects(frames,anchors)
+        self.assertTrue(all(len(f["objects"]) == 2 for f in result))
+        self.assertEqual(len({o["id"] for f in result for o in f["objects"] if o["kind"] == "plate"}),1)
+
+    def test_unrelated_motion_and_camera_pan_do_not_select_a_plate(self):
+        for options in [{"competing":True}, {"camera_pan":True}]:
+            frames, anchors = self.plate_fixture(**options)
+            self.assertTrue(all(o["kind"] == "person" for f in select_subjects(frames,anchors) for o in f["objects"]))
 
     def test_mask_contours_bound_coordinates_and_drop_fragments(self):
         import numpy as np

@@ -7,6 +7,8 @@ import bisect
 import hashlib
 import json
 import math
+import statistics
+from itertools import combinations
 from pathlib import Path
 import subprocess
 import tempfile
@@ -178,26 +180,59 @@ def select_subjects(frames, anchors):
                 x0, y0, x1, y1 = bounds(obj)
                 x, y = (x0+x1)/2, (y0+y1)/2
                 if left-.25 <= x <= right+.25 and top-.1 <= y <= bottom+.1:
-                    trajectories.setdefault(obj["id"], []).append((x,y))
+                    trajectories.setdefault(obj["id"], []).append((frame["t"], x, y, (x1-x0)*(y1-y0),
+                                                                         min(x0,y0,1-x1,1-y1) > .005,
+                                                                         y-(top+bottom)/2))
     movement = {}
     for key, positions in trajectories.items():
         if len(positions) < 8:
             continue
         # Robust spread avoids selecting a region from a single jumping mask.
-        xs, ys = [sorted(v) for v in zip(*positions)]
+        xs, ys = [sorted(p[k] for p in positions) for k in [1,2]]
         lo, hi = len(xs)//10, len(xs)-1-len(xs)//10
         spread = math.hypot(xs[hi]-xs[lo], ys[hi]-ys[lo])
-        if spread >= .03:
+        relative = sorted(p[5] for p in positions)
+        # A camera pan alone must not make stationary plates eligible.
+        if spread >= .03 and relative[hi] - relative[lo] >= .04:
             movement[key] = spread
     ordered = sorted(movement, key=movement.get, reverse=True)
     plate = ordered[0] if ordered else None
     if plate and len(ordered) > 1 and movement[plate] < movement[ordered[1]] * 1.8:
-        plate = None
+        contenders = [key for key in ordered if movement[key] * 1.8 > movement[plate]]
+        # Both bar ends normally move together. Similar movement is not itself
+        # ambiguity: require correlated vertical motion, consistent perspective-scaled motion
+        # and comparable size (including stacked plates on one end) before choosing the clearer end.
+        if 2 <= len(contenders) <= 4 and all(coherent_pair(trajectories[a], trajectories[b])
+                                                    for a,b in combinations(contenders, 2)):
+            plate = max(contenders, key=lambda key: (
+                sum(p[4] for p in trajectories[key]),
+                statistics.median(p[3] for p in trajectories[key]),
+            ))
+        else:
+            plate = None
     chosen = {person, plate} - {None}
     return [{"t": f["t"], "objects": [o for o in f["objects"] if o["id"] in chosen]} for f in frames]
 
 
-def infer_frames(predictor, directory, times, anchors):
+def coherent_pair(first, second):
+    other = {p[0]: p for p in second}
+    pairs = [(p, other[p[0]]) for p in first if p[0] in other]
+    if len(pairs) < 8:
+        return False
+    a, b = [p[2] for p,q in pairs], [q[2] for p,q in pairs]
+    if min(statistics.pstdev(a), statistics.pstdev(b)) < .025:
+        return False
+    correlation = statistics.correlation(a, b)
+    # Perspective makes the near end travel farther in pixels. Fit a scale
+    # for association only; this is never exported as a physical measurement.
+    slope = statistics.covariance(a, b) / statistics.variance(a)
+    residual = statistics.pstdev([y-slope*x for x,y in zip(a,b)])
+    area_ratio = statistics.median(p[3]/max(q[3], 1e-8) for p,q in pairs)
+    return (correlation >= .95 and residual <= .035
+            and .5 <= slope <= 2 and .2 <= area_ratio <= 5)
+
+
+def infer_frames(predictor, directory, times, anchors, diagnostics=None):
     collected = [{"t": round(t, 6), "objects": []} for t in times]
     for kind, prompt in [("person", "person"), ("plate", "weight plate")]:
         session = predictor.handle_request({
@@ -226,10 +261,12 @@ def infer_frames(predictor, directory, times, anchors):
                         })
         finally:
             predictor.handle_request({"type": "close_session", "session_id": session})
+    if diagnostics is not None:
+        diagnostics["candidates"] = collected
     return select_subjects(collected, anchors)
 
 
-def analyse(predictor, media, manifest):
+def analyse(predictor, media, manifest, diagnostics=None):
     import cv2
     manifest = validate_manifest(manifest)
     if not 1 <= len(media) <= MAX_BYTES or hashlib.sha256(media).hexdigest() != manifest["sha256"]:
@@ -273,7 +310,7 @@ def analyse(predictor, media, manifest):
                     n += 1
         finally:
             cap.release()
-        frames = infer_frames(predictor, directory, [times[i] for i in picks], manifest["anchors"])
+        frames = infer_frames(predictor, directory, [times[i] for i in picks], manifest["anchors"], diagnostics)
         count = sum(bool(f["objects"]) for f in frames)
         return {
             "version": 1, "model": "sam3.1", "revision": REVISION,

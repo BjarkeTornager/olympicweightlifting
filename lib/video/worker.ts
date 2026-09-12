@@ -229,6 +229,7 @@ export async function runVideoJob(
     eq(liftingVideos.id, job.id),
     eq(liftingVideos.lease, job.token),
   );
+  const jobStarted = Date.now();
   const abort = new AbortController();
   const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(600000)]);
   const check = async () => {
@@ -282,6 +283,12 @@ export async function runVideoJob(
         "This video's playback is unavailable. Upload it again.",
         422,
       );
+    // One optional-GPU allowance shared by all attempts, leaving time for
+    // coaching within the ten-minute job deadline and eleven-minute lease.
+    const segmentationBudget = {
+      remainingMs: 300_000,
+      deadlineMs: jobStarted + 480_000,
+    };
     const result = await automaticFeedback(
       row.input,
       analysis,
@@ -295,7 +302,8 @@ export async function runVideoJob(
           .set({ analysis: updated, stage })
           .where(fence);
       },
-      (current, attempt) => refiner(media!, current, attempt, signal),
+      (current, attempt) =>
+        refiner(media!, current, attempt, signal, segmentationBudget),
     );
     analysis = result.analysis;
     const feedback = result.feedback;

@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from fastapi.testclient import TestClient
-from engine import analyse, infer_frames, mask_outline, sample_indices, select_subjects, validate_manifest
+from engine import adapt_multiplex_state, analyse, infer_frames, mask_outline, sample_indices, select_subjects, validate_manifest
 from gateway import create_app
 
 DATA = b"synthetic video"
@@ -67,6 +67,21 @@ def box(key, kind, x=.2, y=.1, w=.6, h=.8):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_multiplex_adapter_preserves_video_offload_and_rejects_state_offload(self):
+        from types import SimpleNamespace
+        calls = []
+        def init_state(resource_path, offload_video_to_cpu=False, async_loading_frames=False):
+            calls.append((resource_path, offload_video_to_cpu, async_loading_frames))
+            return {"loaded": True}
+        predictor = SimpleNamespace(model=SimpleNamespace(init_state=init_state))
+        adapt_multiplex_state(predictor)
+        self.assertEqual(predictor.model.init_state(resource_path="frames", offload_state_to_cpu=False,
+                         offload_video_to_cpu=True, async_loading_frames=False), {"loaded": True})
+        self.assertEqual(calls, [("frames", True, False)])
+        with self.assertRaises(ValueError):
+            predictor.model.init_state(resource_path="frames", offload_state_to_cpu=True)
+        self.assertEqual(len(calls), 1)
+
     def test_bounded_samples_preserve_real_pts(self):
         times = [round(i/120,6) for i in range(14400)]
         requested = [times[i*297] for i in range(48)]

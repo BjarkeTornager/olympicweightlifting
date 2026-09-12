@@ -16,6 +16,41 @@ CHECKPOINT_REVISION = "daa63191845a41281374e725f4c9e51c7a824460"
 MAX_BYTES = 25 * 1024 * 1024
 
 
+def load_predictor():
+    """Shared by production and the isolated GPU check."""
+    import os
+    from huggingface_hub import hf_hub_download
+    from sam3.model_builder import build_sam3_multiplex_video_predictor
+    checkpoint = hf_hub_download("facebook/sam3.1", "sam3.1_multiplex.pt",
+                                 revision=CHECKPOINT_REVISION, token=os.environ["HF_TOKEN"])
+    predictor = build_sam3_multiplex_video_predictor(
+        checkpoint_path=checkpoint, max_num_objects=8,
+        use_fa3=False, use_rope_real=False, compile=False, async_loading_frames=False,
+    )
+    adapt_multiplex_state(predictor)
+    return predictor
+
+
+def adapt_multiplex_state(predictor):
+    """Pinned SAM base dispatch passes a flag its multiplex model cannot accept.
+
+    Preserve the model's normal GPU state behavior when the flag is false.
+    Reject a request to offload state rather than silently claim support for it.
+    Remove this adapter when the pinned upstream signatures are compatible.
+    """
+    import inspect
+    original = predictor.model.init_state
+    if "offload_state_to_cpu" in inspect.signature(original).parameters:
+        return
+
+    def init_state(*args, offload_state_to_cpu=False, **kwargs):
+        if offload_state_to_cpu:
+            raise ValueError("SAM 3.1 multiplex does not support state offloading")
+        return original(*args, **kwargs)
+
+    predictor.model.init_state = init_state
+
+
 def validate_manifest(value):
     if not isinstance(value, dict) or set(value) != {
         "version", "sha256", "width", "height", "duration", "sampleTimes", "anchors"

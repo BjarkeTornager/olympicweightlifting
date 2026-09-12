@@ -2,7 +2,9 @@
 
 This integration adds object-region evidence to the existing private lift-review
 pipeline. It is disabled until `VIDEO_SAM3_URL` and `VIDEO_SAM3_TOKEN` are set on
-the application server. Do not enable it before a real GPU smoke test succeeds.
+the application server. Real GPU execution has now succeeded, but plate tracking
+and cold-start timing still fail the rollout requirements. See the
+[measured test results](../../../docs/sam31-modal-gpu-test-2026-09-12.md).
 
 ## What is implemented
 
@@ -55,7 +57,7 @@ The checkpoint is manually gated by Meta on
 3. Run the isolated public-fixture GPU smoke test below. Check that the pinned
    weights load, masks actually follow the intended objects, and memory and
    latency fit the limits. Synthetic tests do not prove model accuracy.
-4. Deploy `modal deploy scripts/video/sam3/modal_app.py`. Set
+4. Deploy `modal deploy scripts/video/sam3/modal_app.py::app`. Set
    `VIDEO_SAM3_URL` to the returned HTTPS ASGI endpoint with `/segment` appended.
    Do not expose this URL or either credential via `NEXT_PUBLIC_*` variables.
 5. Deploy the tested website changes, verify anonymous requests are rejected
@@ -99,7 +101,27 @@ GPU usage and sends only that supplied test clip:
 modal run scripts/video/sam3/modal_app.py::smoke --video /private/tmp/public-lift.mp4 --manifest /private/tmp/public-lift-manifest.json --output /private/tmp/sam31-result.json
 ```
 
-Local integration tests are distinct from GPU validation. At implementation
-time, the Modal account connection was verified but no SAM/Hugging Face secret
-was present. No model weights, GPU inference, endpoint deployment or production
-activation had occurred. Full quality benchmarking remains required.
+The smoke entrypoint starts an isolated ephemeral Modal app with one L40S,
+the same production image and model loader, a 300-second model startup bound,
+a 180-second inference bound, and a two-second idle window. The local harness
+cancels the call if queueing plus execution exceed ten minutes. It has no HTTP
+endpoint and requires only the Hugging Face secret. Its result contains
+`segmentation` and separate timing/peak CUDA memory `metrics`; the round trip
+includes container startup but excludes image building. Neither coverage nor
+successful execution establishes coaching or segmentation accuracy.
+
+Render nine actual source frames and their observed outlines for manual review:
+
+```sh
+python scripts/video/sam3/render_preview.py --video /private/tmp/public-lift.mp4 --result /private/tmp/sam31-result.json --output /private/tmp/sam31-preview.png
+```
+
+The pinned upstream base predictor passes `offload_state_to_cpu` to a multiplex
+initializer that does not accept it. The model loader applies a tested adapter
+that accepts only the default false value, preserving GPU state and rejecting
+unsupported state offloading. Video-frame offloading remains enabled.
+
+The Hugging Face secret and checkpoint access were verified, and two public
+clips completed real GPU inference on 12 September 2026. Local integration
+tests remain distinct from model-quality validation. No endpoint deployment
+or production activation has occurred; full quality benchmarking is required.

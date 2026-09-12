@@ -79,13 +79,30 @@ timeout, plus a 300-second startup bound. Authenticated POST submission returns
 and the same random request nonce in headers. The service token is required
 for every method. No raw Modal call ID or receipt reaches the browser.
 
-The app shares five minutes of optional GPU waiting across attempts, with an
-earlier cutoff to leave time within its ten-minute video-job deadline. POST
-is bounded at 60 seconds and each GET at 30 seconds. Polling can retry without
-resubmitting the video. Cancellation uses an independent five-second request.
-A lost submit response can leave a call running; its queue-expiry check and
-inference timeout limit that work. The gateway needs no process-local job map,
-but receipts are not persisted across app-worker restarts.
+The app persists the signed receipt in its private, account-fenced evidence
+checkpoint before polling. Each worker waits for up to 90 seconds, then queues
+itself to resume the same GPU job after 15 seconds. Waiting does not consume the
+three failure-retry attempts. The GPU receipt expires after 15 minutes; it is
+bound to the source bytes, exact evidence manifest and configured destination.
+No receipt is returned to the browser or Coach. Evidence is saved before GPU
+dispatch so a process restart can reuse it without decoding or uploading again.
+
+POST is bounded at 60 seconds and GET at 30 seconds. Only reads retry after
+transport failures. Cancellation uses an independent five-second request.
+A lost submit response (or a crash before its receipt is persisted) can still
+leave a call running; the queue-expiry check and 180-second inference timeout
+bound that work. This is not an exactly-once submission guarantee.
+
+An expired service job is distinguished from a completed segmentation with no
+confident subject match. The UI labels incomplete reviews explicitly and does
+not describe missing coaching markers as proof of correct technique.
+
+Detailed frame selection now fills gaps throughout the detected movement
+window, retaining phase anchors and full-clip context. It does not spend all
+remaining samples clustered around already-known poses. A synthetic clean &
+jerk transition regression verifies gaps of no more than 0.25 seconds in the
+test's rack-to-overhead interval. This is a sampling check, not proof of model
+accuracy or of capturing every rapid transition in an arbitrary clip.
 
 As checked on 12 September 2026, Modal lists L40S GPU time at $0.000542/second
 ($1.9512/hour), plus CPU, memory and storage charges. This is a resource rate,

@@ -435,7 +435,7 @@ test(
       assert.equal("checkpoint" in legacyCheckpoint, false);
       assert.equal("failure" in legacyCheckpoint, false);
       await pool.query(
-        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','2') WHERE user_id=$1 AND id=$2",
+        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','3') WHERE user_id=$1 AND id=$2",
         [users[0], automatic.id],
       );
       assert.equal(
@@ -597,6 +597,141 @@ test(
         assert.doesNotMatch(partial.feedback!, /withheld lift-specific/);
         await deleteVideo(users[0], partialInput.id);
       }
+      // A slow GPU is durable waiting, not repeated failed uploads. Each call
+      // below starts a new worker invocation and must use the private receipt.
+      const { SegmentationPending } = await import("../lib/video/sam3");
+      const queuedInput = { ...input, id: crypto.randomUUID() };
+      await saveVideo(users[0], queuedInput, source);
+      let queueModels = 0,
+        queueRefines = 0,
+        queueSubmits = 0,
+        queueReads = 0;
+      let gpuReady = false;
+      const queuedModel: typeof import("../lib/agent/provider").callModel =
+        async () => ({
+          role: "assistant",
+          content:
+            ++queueModels === 1
+              ? phaseReply
+              : JSON.stringify({
+                  evidence: JSON.parse(phaseReply),
+                  coaching: {
+                    strength: "The front rack receiving position is visible.",
+                    limitation: "",
+                    moments: [],
+                  },
+                }),
+        });
+      const queuedRefiner: typeof import("../lib/video/processor").refineVideo =
+        async (_media, current) => {
+          queueRefines++;
+          return {
+            analysis: { ...current, segmentation: undefined },
+            frames: ["synthetic-dense-queue-evidence"],
+          };
+        };
+      const queuedSegmenter: typeof import("../lib/video/sam3").segmentVideo =
+        async (
+          _media,
+          _analysis,
+          _signal,
+          _config,
+          _request,
+          _budget,
+          resume,
+        ) => {
+          assert.ok(resume);
+          if (!resume.job) {
+            queueSubmits++;
+            await resume.saveJob({
+              requestId: crypto.randomUUID(),
+              receipt: "private-fixture-job",
+              binding: "a".repeat(64),
+              expiresAt: Date.now() + 900000,
+            });
+          } else {
+            queueReads++;
+            assert.equal(resume.job.receipt, "private-fixture-job");
+          }
+          if (!gpuReady) throw new SegmentationPending();
+          return (
+            await refiner(source, analysis, {
+              id: "attempt-1",
+              start: 0,
+              end: 2,
+              identification: JSON.parse(phaseReply),
+            })
+          ).analysis.segmentation;
+        };
+      for (let i = 0; i < 5; i++) {
+        const waitingJob = await claimVideo();
+        assert.ok(waitingJob);
+        await runVideoJob(
+          waitingJob,
+          queuedModel,
+          processor,
+          queuedRefiner,
+          queuedSegmenter,
+        );
+        const visible = await getVideo(users[0], queuedInput.id);
+        assert.equal(visible.status, "queued");
+        assert.match(visible.stage, /continuing automatically/);
+        assert.doesNotMatch(
+          JSON.stringify(visible),
+          /private-fixture-job|sam3Job|receipt/,
+        );
+        assert.doesNotMatch(
+          JSON.stringify(await listVideos(users[0])),
+          /private-fixture-job|sam3Job|receipt/,
+        );
+        const stored = await pool.query(
+          "SELECT attempts,refinement FROM lifting_videos WHERE user_id=$1 AND id=$2",
+          [users[0], queuedInput.id],
+        );
+        assert.equal(stored.rows[0].attempts, 0);
+        assert.equal(
+          stored.rows[0].refinement.sam3Job.receipt,
+          "private-fixture-job",
+        );
+        await pool.query(
+          "UPDATE lifting_videos SET lease_until=now()-interval '1 second' WHERE user_id=$1 AND id=$2",
+          [users[0], queuedInput.id],
+        );
+      }
+      gpuReady = true;
+      const readyJob = await claimVideo();
+      assert.ok(readyJob);
+      await runVideoJob(
+        readyJob,
+        queuedModel,
+        processor,
+        queuedRefiner,
+        queuedSegmenter,
+      );
+      assert.equal((await getVideo(users[0], queuedInput.id)).status, "ready");
+      assert.equal(queueSubmits, 1);
+      assert.equal(queueReads, 5);
+      assert.equal(queueModels, 2);
+      assert.equal(queueRefines, 1);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT refinement FROM lifting_videos WHERE user_id=$1 AND id=$2",
+            [users[0], queuedInput.id],
+          )
+        ).rows[0].refinement,
+        null,
+      );
+      await pool.query(
+        "UPDATE lifting_videos SET analysis=jsonb_set(analysis,'{segmentation,failure}','\"deadline\"') WHERE user_id=$1 AND id=$2",
+        [users[0], queuedInput.id],
+      );
+      assert.equal(
+        (await getVideo(users[0], queuedInput.id)).stage,
+        "Partial review · outlines unavailable",
+      );
+      await deleteVideo(users[0], queuedInput.id);
+
       // A non-lifting clip still never receives fabricated coaching.
       const emptyInput = { ...automatic, id: crypto.randomUUID() };
       await saveVideo(users[0], emptyInput, source);

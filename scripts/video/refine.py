@@ -5,6 +5,7 @@ import sys
 import cv2
 from analyse import probe, make_sheets
 from pose import PoseTracker
+from sampling import evidence_indices
 
 root = sys.argv[1]
 with open(os.path.join(root, "input.json")) as f:
@@ -12,32 +13,7 @@ with open(os.path.join(root, "input.json")) as f:
 path = os.path.join(root, "media.mp4")
 times = [float(f["best_effort_timestamp_time"]) for f in probe(path, True)["frames"]]
 start, end = spec["start"], spec["end"]
-available = [i for i, t in enumerate(times) if start <= t <= end + .001]
-if len(available) < 2:
-    raise ValueError("No complete evidence window")
-picks = set()
-
-
-def pick(time):
-    if len(picks) < 48:
-        picks.add(min(available, key=lambda i: abs(times[i] - time)))
-
-
-# Keep complete-attempt context and exact phase centres, then add 12 fps
-# neighbourhoods. These are observed decoded frames, never interpolated images.
-for time in spec["phases"]:
-    pick(time)
-for i in range(12):
-    pick(start + (end - start) * i / 11)
-for offset in [-1/12, 1/12, -2/12, 2/12, -3/12, 3/12]:
-    for time in spec["phases"]:
-        pick(time + offset)
-for i in range(48):
-    pick(start + (end - start) * i / 47)
-picks = sorted(picks)
-while len(picks) < 48:
-    picks.append(picks[-1])
-picks.sort()
+picks = evidence_indices(times, start, end, spec["phases"])
 cap = cv2.VideoCapture(path)
 samples = {}
 tracker = PoseTracker(interval=.099)

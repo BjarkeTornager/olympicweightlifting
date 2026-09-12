@@ -141,7 +141,9 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(len(result['frames']), 8)
             self.assertEqual(len(result['sampleTimes']), 48)
             self.assertTrue(any(abs(t-.5) < .001 for t in result['sampleTimes']))
-            self.assertTrue(any(abs(t-(.5+1/12)) < .002 for t in result['sampleTimes']))
+            self.assertLessEqual(max(b-a for a, b in zip(result['sampleTimes'], result['sampleTimes'][1:])), .084)
+            # Every frame remains on this 60-fps fixture's decoded timeline.
+            self.assertTrue(all(abs(t*60-round(t*60)) < .001 for t in result['sampleTimes']))
             self.assertTrue(all(0 <= t <= 1.98 for t in result['sampleTimes']))
             self.assertEqual(result['pose']['version'], 2)
             self.assertTrue(all(any(abs(f['t']-t) < .00001 for t in result['sampleTimes']) for f in result['pose']['frames']))

@@ -65,10 +65,24 @@ test("a limited review explains missing corrections and outlines without offerin
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
   await expect(
-    dialog.getByText("No correction markers in this review"),
+    dialog.getByText("No supported correction markers"),
   ).toBeVisible();
   await expect(dialog.getByRole("status")).toContainText(
-    "Object tracking was unavailable",
+    "could not be tracked confidently",
+  );
+  await expect(
+    dialog.getByText(
+      "This does not mean every part of your lift was assessed.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  review.analysis!.segmentation!.failure = "deadline";
+  review.analysis!.segmentation!.frames = [];
+  await page.reload();
+  await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
+  await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
+  await expect(dialog.getByRole("status")).toContainText(
+    "Outline processing did not finish",
   );
   await expect(dialog.getByLabel("Coach overlay", { exact: true })).toHaveCount(
     0,
@@ -176,9 +190,9 @@ test("saved outlines remain usable while feedback recovers automatically", async
   await expect(
     dialog.getByRole("button", { name: "Retry analysis" }),
   ).toHaveCount(0);
-  await expect(
-    dialog.getByText("No correction markers in this review"),
-  ).toHaveCount(0);
+  await expect(dialog.getByText("No supported correction markers")).toHaveCount(
+    0,
+  );
 });
 test("an older mislabelled review can be updated with fresh identification and no new upload", async ({
   page,

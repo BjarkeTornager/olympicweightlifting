@@ -5,19 +5,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { VideoAnalysis, VideoUpload } from "./types";
 import { ApiError } from "../agent/http";
-import {
-  segmentVideo,
-  type SegmentationBudget,
-  type Sam3Configuration,
-} from "./sam3";
 const exec = promisify(execFile);
 export async function refineVideo(
   media: Buffer,
   analysis: VideoAnalysis,
   attempt: import("./attempts").VideoAttempt,
   signal: AbortSignal,
-  segmentationBudget?: SegmentationBudget,
-  segmentationConfig: Sam3Configuration = {},
 ): Promise<{ analysis: VideoAnalysis; frames: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), "lift-video-evidence-"));
   try {
@@ -73,18 +66,10 @@ export async function refineVideo(
       sampleTimes: result.sampleTimes,
       identification: attempt.identification,
       pose: result.pose,
+      segmentation: undefined,
     };
-    // Segment the same evidence frames the detailed Coach pass will inspect.
-    const segmentation = await segmentVideo(
-      media,
-      current,
-      signal,
-      segmentationConfig,
-      undefined,
-      segmentationBudget,
-    );
     return {
-      analysis: { ...current, ...(segmentation ? { segmentation } : {}) },
+      analysis: current,
       frames: result.frames,
     };
   } finally {

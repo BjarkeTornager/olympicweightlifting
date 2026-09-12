@@ -1,10 +1,31 @@
 import { createHash, randomUUID } from "node:crypto";
+import { z } from "zod";
+import { canonicalJson } from "../json";
 import { segmentationSchema, type VideoSegmentation } from "./segmentation";
 import type { VideoAnalysis } from "./types";
 
 const MAX_RESPONSE = 2_000_000;
 export type SegmentationBudget = { remainingMs: number; deadlineMs?: number };
 export type Sam3Configuration = { endpoint?: string; token?: string };
+const queuedJobSchema = z
+  .object({
+    requestId: z.string().uuid(),
+    receipt: z.string().min(1).max(2048),
+    binding: z.string().regex(/^[a-f0-9]{64}$/),
+    expiresAt: z.number().finite(),
+  })
+  .strict();
+// Private worker checkpoint only. Never include this receipt in video DTOs or logs.
+export type Sam3Job = z.infer<typeof queuedJobSchema>;
+export class SegmentationPending extends Error {
+  constructor() {
+    super("Object tracking is still processing");
+  }
+}
+export type Sam3Resume = {
+  job?: Sam3Job;
+  saveJob: (job: Sam3Job) => Promise<void>;
+};
 
 // Called only with the account read from the fenced video job, never upload
 // fields. An empty pilot setting disables dispatch even when secrets exist.
@@ -28,8 +49,11 @@ export async function segmentVideo(
   config: Sam3Configuration = {},
   request: typeof fetch = fetch,
   budget: SegmentationBudget = { remainingMs: 300_000 },
+  resume?: Sam3Resume,
 ): Promise<VideoSegmentation | undefined> {
   if (!config.endpoint && !config.token) return undefined;
+  let failure: NonNullable<VideoSegmentation["failure"]> =
+    "service_unavailable";
   const unavailable = (): VideoSegmentation => ({
     version: 1,
     model: "sam3.1",
@@ -41,12 +65,16 @@ export async function segmentVideo(
     width: analysis.width,
     height: analysis.height,
     frames: [],
+    failure,
   });
   const started = Date.now();
   let receipt: string | undefined;
   let url: URL | undefined;
   let completed = false;
-  const requestId = randomUUID();
+  let preserved = false;
+  let savedJob: Sam3Job | undefined;
+  let windowSignal: AbortSignal | undefined;
+  let requestId: string = randomUUID();
   try {
     signal.throwIfAborted();
     const allowance = Math.floor(
@@ -58,7 +86,11 @@ export async function segmentVideo(
           : budget.deadlineMs - Date.now(),
       ),
     );
-    if (allowance < 1_000) return unavailable();
+    if (allowance < 1_000) {
+      if (resume) throw new SegmentationPending();
+      failure = "deadline";
+      return unavailable();
+    }
     if (!config.endpoint || !config.token || config.token.length < 32)
       throw Error("Configuration");
     url = new URL(config.endpoint);
@@ -90,10 +122,26 @@ export async function segmentVideo(
         };
       }),
     };
-    const waitSignal = AbortSignal.any([
-      signal,
-      AbortSignal.timeout(allowance),
-    ]);
+    const binding = createHash("sha256")
+      .update(canonicalJson({ endpoint: url.href, manifest }))
+      .digest("hex");
+    if (resume?.job) {
+      const restored = queuedJobSchema.parse(resume.job);
+      if (
+        restored.binding !== binding ||
+        restored.expiresAt > Date.now() + 900_000
+      )
+        throw Error("Invalid saved job");
+      savedJob = restored;
+      requestId = restored.requestId;
+      receipt = restored.receipt;
+      if (restored.expiresAt <= Date.now()) {
+        failure = "deadline";
+        throw Error("Expired job");
+      }
+    }
+    windowSignal = AbortSignal.timeout(allowance);
+    const waitSignal = AbortSignal.any([signal, windowSignal]);
     const headers = {
       Authorization: `Bearer ${config.token}`,
       "X-SAM3-Request": requestId,
@@ -116,15 +164,19 @@ export async function segmentVideo(
       });
     // Submit once. Only reads are retried: never duplicate GPU work after an
     // ambiguous upload failure. Receipts stay on this account-fenced worker.
-    let response = await send("POST", {
-      headers: {
-        "Content-Type": "video/mp4",
-        "X-SAM3-Manifest": JSON.stringify(manifest),
-        "X-SAM3-Budget-Ms": String(allowance),
-      },
-      body: new Uint8Array(media),
-    });
-    if (response.status === 202) {
+    const lifetime = resume ? 900_000 : allowance;
+    const submittedAt = Date.now();
+    let response = receipt
+      ? new Response(null, { status: 202 })
+      : await send("POST", {
+          headers: {
+            "Content-Type": "video/mp4",
+            "X-SAM3-Manifest": JSON.stringify(manifest),
+            "X-SAM3-Budget-Ms": String(lifetime),
+          },
+          body: new Uint8Array(media),
+        });
+    if (response.status === 202 && !receipt) {
       const queued = (await readJson(response, 4096)) as {
         job?: unknown;
         sourceSha256?: unknown;
@@ -136,10 +188,25 @@ export async function segmentVideo(
       )
         throw Error("Invalid job receipt");
       receipt = queued.job;
+      if (resume) {
+        const job = {
+          requestId,
+          receipt,
+          binding,
+          expiresAt: submittedAt + lifetime,
+        };
+        // Do not continue if the account fence/checkpoint write fails.
+        await resume.saveJob(job);
+        savedJob = job;
+      }
+    }
+    if (response.status === 202) {
       let failures = 0;
+      let immediate = Boolean(resume?.job);
       while (true) {
         waitSignal.throwIfAborted();
-        await pause(2_000, waitSignal);
+        if (!immediate) await pause(2_000, waitSignal);
+        immediate = false;
         try {
           response = await send("GET");
           if (response.status >= 500) {
@@ -157,9 +224,11 @@ export async function segmentVideo(
       }
     }
     if (!response.ok) {
+      if (response.status === 410) failure = "deadline";
       await response.body?.cancel();
       throw Error("Unavailable");
     }
+    failure = "invalid_response";
     const result = segmentationSchema.parse(
       await readJson(response, MAX_RESPONSE),
     );
@@ -178,18 +247,34 @@ export async function segmentVideo(
     waitSignal.throwIfAborted();
     completed = true;
     return result;
-  } catch {
+  } catch (error) {
     // Account deletion/cancellation must abort the job; an optional GPU outage
     // must not discard the usable video or misrepresent SAM as having run.
     signal.throwIfAborted();
-    console.warn(JSON.stringify({ event: "video_segmentation_unavailable" }));
+    if (
+      error instanceof SegmentationPending ||
+      (resume &&
+        savedJob &&
+        windowSignal?.aborted &&
+        savedJob.expiresAt > Date.now())
+    ) {
+      preserved = true;
+      throw new SegmentationPending();
+    }
+    if (windowSignal?.aborted) failure = "deadline";
+    console.warn(
+      JSON.stringify({
+        event: "video_segmentation_unavailable",
+        reason: failure,
+      }),
+    );
     return unavailable();
   } finally {
     budget.remainingMs = Math.max(
       0,
       budget.remainingMs - (Date.now() - started),
     );
-    if (receipt && !completed && url && config.token) {
+    if (receipt && !completed && !preserved && url && config.token) {
       // Use a separate bounded signal: the account/job signal may be cancelled.
       await request(url, {
         method: "DELETE",

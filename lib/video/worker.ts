@@ -6,7 +6,12 @@ import { callModel, ProviderError } from "../agent/provider";
 import { ApiError } from "../agent/http";
 import { userAllowed } from "../access";
 import { processVideo, refineVideo } from "./processor";
-import { sam3ConfigurationForAccount, type Sam3Configuration } from "./sam3";
+import {
+  sam3ConfigurationForAccount,
+  segmentVideo,
+  SegmentationPending,
+  type Sam3Configuration,
+} from "./sam3";
 import { mergeSegmentation } from "./segmentation";
 import { MAX_VIDEO_BYTES, type VideoAnalysis, type VideoUpload } from "./types";
 import { VIDEO_REVIEW_VERSION, coachingText } from "./coaching";
@@ -228,6 +233,7 @@ export async function runVideoJob(
   model = callModel,
   processor = processVideo,
   refiner = refineVideo,
+  segmenter = segmentVideo,
 ) {
   const fence = and(
     eq(liftingVideos.userId, job.user_id),
@@ -296,10 +302,10 @@ export async function runVideoJob(
         "This video's playback is unavailable. Upload it again.",
         422,
       );
-    // One optional-GPU allowance shared by all attempts, leaving time for
-    // coaching within the ten-minute job deadline and eleven-minute lease.
+    // Each worker only waits briefly. A private receipt survives queue yields
+    // and process restarts; the remote job has its own bounded lifetime.
     const segmentationBudget = {
-      remainingMs: 300_000,
+      remainingMs: 90_000,
       deadlineMs: jobStarted + 480_000,
     };
     const result = await automaticFeedback(
@@ -322,62 +328,80 @@ export async function runVideoJob(
       },
       async (current, attempt) => {
         if (!(await check())) signal.throwIfAborted();
-        if (
+        const reusable =
           refinement?.version === VIDEO_REFINEMENT_VERSION &&
           refinement.reviewVersion === VIDEO_REVIEW_VERSION &&
           current.reviewVersion === VIDEO_REVIEW_VERSION &&
           refinement.attemptId === attempt.id &&
           refinement.start === attempt.start &&
-          refinement.end === attempt.end
-        ) {
-          return {
-            analysis: {
-              ...current,
-              identification: attempt.identification,
-              sampleTimes: refinement.sampleTimes,
-              pose: refinement.pose,
-              segmentation: refinement.segmentation,
-            },
-            frames: refinement.frames,
+          refinement.end === attempt.end;
+        let saved: VideoRefinementCheckpoint;
+        if (reusable) saved = refinement!;
+        else {
+          const refined = await refiner(media!, current, attempt, signal);
+          signal.throwIfAborted();
+          saved = {
+            version: VIDEO_REFINEMENT_VERSION,
+            reviewVersion: VIDEO_REVIEW_VERSION,
+            attemptId: attempt.id,
+            start: attempt.start,
+            end: attempt.end,
+            sampleTimes: refined.analysis.sampleTimes,
+            frames: refined.frames,
+            pose: refined.analysis.pose,
+            segmentation: refined.analysis.segmentation,
           };
+          const bytes =
+            media!.length +
+            frames!.reduce((n, f) => n + f.length, 0) +
+            Buffer.byteLength(JSON.stringify(current)) +
+            Buffer.byteLength(JSON.stringify(saved));
+          if (bytes > MAX_VIDEO_BYTES)
+            throw new ApiError(
+              "This review is too large. Try a shorter clip.",
+              422,
+            );
         }
-        const refined = await refiner(
-          media!,
-          current,
-          attempt,
-          signal,
-          segmentationBudget,
-          segmentationConfig,
-        );
-        signal.throwIfAborted();
-        const saved: VideoRefinementCheckpoint = {
-          version: VIDEO_REFINEMENT_VERSION,
-          reviewVersion: VIDEO_REVIEW_VERSION,
-          attemptId: attempt.id,
-          start: attempt.start,
-          end: attempt.end,
-          sampleTimes: refined.analysis.sampleTimes,
-          frames: refined.frames,
-          pose: refined.analysis.pose,
-          segmentation: refined.analysis.segmentation,
+        const save = async () => {
+          if (!(await check())) signal.throwIfAborted();
+          await getDb()
+            .update(liftingVideos)
+            .set({ refinement: saved })
+            .where(fence);
+          refinement = saved;
         };
-        const bytes =
-          media!.length +
-          frames!.reduce((n, f) => n + f.length, 0) +
-          Buffer.byteLength(JSON.stringify(current)) +
-          Buffer.byteLength(JSON.stringify(saved));
-        if (bytes > MAX_VIDEO_BYTES)
-          throw new ApiError(
-            "This review is too large. Try a shorter clip.",
-            422,
+        // Persist decoded evidence before dispatching any GPU work. A queued
+        // receipt can then be resumed without decoding or uploading again.
+        if (!reusable) await save();
+        const detailed = {
+          ...current,
+          identification: attempt.identification,
+          sampleTimes: saved.sampleTimes,
+          pose: saved.pose,
+          segmentation: saved.segmentation,
+        };
+        if (!saved.segmentation) {
+          const segmentation = await segmenter(
+            media!,
+            detailed,
+            signal,
+            segmentationConfig,
+            undefined,
+            segmentationBudget,
+            {
+              job: saved.sam3Job,
+              saveJob: async (job) => {
+                saved = { ...saved, sam3Job: job };
+                await save();
+              },
+            },
           );
-        if (!(await check())) signal.throwIfAborted();
-        await getDb()
-          .update(liftingVideos)
-          .set({ refinement: saved })
-          .where(fence);
-        refinement = saved;
-        return refined;
+          signal.throwIfAborted();
+          saved = { ...saved, segmentation, sam3Job: undefined };
+          await save();
+          detailed.segmentation = segmentation;
+        }
+        return { analysis: detailed, frames: saved.frames };
       },
     );
     analysis = result.analysis;
@@ -393,7 +417,11 @@ export async function runVideoJob(
       .set({
         status: "ready",
         bytes,
-        stage: "Review ready",
+        stage: analysis.segmentation?.failure
+          ? "Partial review · outlines unavailable"
+          : analysis.coaching?.scope === "visible_phases"
+            ? "Partial movement review"
+            : "Review ready",
         analysis,
         feedback,
         refinement: null,
@@ -403,6 +431,23 @@ export async function runVideoJob(
       })
       .where(fence);
   } catch (error) {
+    if (error instanceof SegmentationPending && !signal.aborted) {
+      const [saved] = await getDb().select().from(liftingVideos).where(fence);
+      if (!saved || !(await check())) return;
+      await getDb()
+        .update(liftingVideos)
+        .set({
+          status: "queued",
+          stage: "Preparing object outlines · continuing automatically",
+          error: null,
+          lease: null,
+          leaseUntil: new Date(Date.now() + 15_000),
+          // Waiting for the same GPU input is not a failed processing attempt.
+          attempts: Math.max(0, saved.attempts - 1),
+        })
+        .where(fence);
+      return;
+    }
     console.warn(
       JSON.stringify({
         event: "video_job_failed",

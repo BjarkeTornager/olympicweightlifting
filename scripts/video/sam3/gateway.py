@@ -53,7 +53,7 @@ def create_app(spawn, lookup, token=None, clock=time.time):
             if not re.fullmatch(r"[a-f0-9-]{36}", request_id):
                 raise ValueError("Invalid request ID")
             lifetime = int(request.headers.get("x-sam3-budget-ms", "0")) / 1000
-            if not 1 <= lifetime <= 300:
+            if not 1 <= lifetime <= 900:
                 raise ValueError("Invalid budget")
             raw = request.headers.get("x-sam3-manifest", "")
             if len(raw) > 20000:

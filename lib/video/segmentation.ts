@@ -20,6 +20,9 @@ export const segmentationSchema = z
     sourceSha256: z.string().regex(/^[a-f0-9]{64}$/),
     status: z.enum(["tracked", "partial", "unavailable"]),
     reason: z.string().max(240),
+    failure: z
+      .enum(["deadline", "service_unavailable", "invalid_response"])
+      .optional(),
     width: z.number().int().positive().max(960),
     height: z.number().int().positive().max(960),
     frames: z

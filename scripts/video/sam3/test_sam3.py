@@ -74,6 +74,22 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(restarted.get("/segment",headers=headers).json(),{"fixture":True})
         self.assertEqual(len(self.calls),1)
 
+    def test_durable_receipt_survives_cold_start_beyond_five_minutes(self):
+        self.headers["X-SAM3-Budget-Ms"] = "900000"
+        headers = self.queue()
+        self.assertEqual(self.calls[0][2], 1900)
+        self.now += 400
+        self.pending = True
+        restarted = TestClient(create_app(self.spawn,self.lookup,TOKEN,lambda:self.now))
+        self.assertEqual(restarted.get("/segment",headers=headers).status_code,202)
+        self.now += 170
+        self.pending = False
+        self.assertEqual(restarted.get("/segment",headers=headers).json(),{"fixture":True})
+        self.assertEqual(len(self.calls),1)
+        self.assertEqual(self.cancelled,[])
+        self.now = 1901
+        self.assertEqual(restarted.get("/segment",headers=headers).status_code,410)
+
     def test_receipt_tampering_and_wrong_request_do_not_access_job(self):
         headers = self.queue()
         for patch in [{"X-SAM3-Job":headers["X-SAM3-Job"]+"x"},

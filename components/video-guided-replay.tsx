@@ -433,18 +433,19 @@ export function GuidedReplay({
       {a?.segmentation &&
         !a.segmentation.frames.some((f) => f.objects.length) && (
           <p className="fine-print" role="status">
-            Object tracking was unavailable for this clip. No outlines will be
-            shown.
+            {a.segmentation.failure || !a.segmentation.frames.length
+              ? "Outline processing did not finish. This review is incomplete; it does not mean your lift could not be tracked."
+              : "The athlete or plates could not be tracked confidently in the sampled frames. No outlines are shown."}
           </p>
         )}
       {coaching && (
         <section className="video-coaching-cards" aria-label="Guided coaching">
           {!moments.length && (
             <p className="fine-print">
-              <strong>No correction markers in this review</strong>
+              <strong>No supported correction markers</strong>
               <br />
-              Coach’s observations are below. No specific technique correction
-              was identified.
+              Coach could not establish a specific correction from the frames it
+              reviewed. This does not mean every part of your lift was assessed.
             </p>
           )}
           {coaching.scope === "visible_phases" && (
@@ -505,7 +506,11 @@ export function GuidedReplay({
           ))}
           {coaching.strength && (
             <p className="video-strength">
-              <strong>Keep doing this</strong>
+              <strong>
+                {coaching.scope === "visible_phases"
+                  ? "What Coach could observe"
+                  : "Keep doing this"}
+              </strong>
               <br />
               {coaching.strength}
             </p>

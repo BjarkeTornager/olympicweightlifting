@@ -37,6 +37,17 @@ function present(
   const { input, ...rest } = row;
   return {
     ...rest,
+    stage:
+      row.status === "ready"
+        ? row.analysis?.segmentation?.failure ||
+          row.analysis?.segmentation?.reason.startsWith(
+            "Object outlines could not be prepared",
+          )
+          ? "Partial review · outlines unavailable"
+          : row.analysis?.coaching?.scope === "visible_phases"
+            ? "Partial movement review"
+            : row.stage
+        : row.stage,
     settings: input,
     lift: input.lift,
     date: input.date,

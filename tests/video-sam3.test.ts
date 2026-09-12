@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { segmentVideo, sam3ConfigurationForAccount } from "../lib/video/sam3";
+import {
+  segmentVideo,
+  sam3ConfigurationForAccount,
+  SegmentationPending,
+  type Sam3Job,
+} from "../lib/video/sam3";
 import {
   mergeSegmentation,
   segmentationAt,
@@ -424,4 +429,176 @@ test("SAM rollout is restricted to the configured verified account and fails clo
     ),
     undefined,
   );
+});
+
+test("durable GPU receipt survives a worker yield and a cold start over five minutes without resubmission", async () => {
+  const evidence: VideoAnalysis = {
+    ...analysis,
+    pose: {
+      version: 2,
+      status: "partial",
+      reason: "Synthetic",
+      frames: [{ t: 0, points: [{ id: 11, x: 0.3, y: 0.4 }] }],
+    },
+  };
+  const restored: VideoAnalysis = {
+    ...evidence,
+    pose: {
+      ...evidence.pose!,
+      frames: [{ t: 0, points: [{ y: 0.4, x: 0.3, id: 11 }] }],
+    },
+  };
+  let job: Sam3Job | undefined;
+  const methods: string[] = [];
+  const request: typeof fetch = async (_url, options) => {
+    methods.push(options!.method!);
+    if (options!.method === "POST") {
+      assert.equal(
+        new Headers(options!.headers).get("x-sam3-budget-ms"),
+        "900000",
+      );
+      return Response.json(
+        {
+          job: "private-fixture-receipt",
+          sourceSha256: segmentation.sourceSha256,
+        },
+        { status: 202 },
+      );
+    }
+    assert.equal(new Headers(options!.headers).get("x-sam3-job"), job!.receipt);
+    return Response.json(segmentation);
+  };
+  await assert.rejects(
+    segmentVideo(
+      media,
+      evidence,
+      new AbortController().signal,
+      config,
+      request,
+      { remainingMs: 1000 },
+      {
+        saveJob: async (saved) => {
+          job = saved;
+        },
+      },
+    ),
+    SegmentationPending,
+  );
+  assert.ok(job);
+  assert.deepEqual(
+    methods,
+    ["POST"],
+    "a polling-window timeout must not cancel a still-valid GPU input",
+  );
+  const now = Date.now;
+  const later = now() + 360_000;
+  Date.now = () => later;
+  try {
+    const result = await segmentVideo(
+      media,
+      restored,
+      new AbortController().signal,
+      config,
+      request,
+      { remainingMs: 1000 },
+      {
+        job,
+        saveJob: async () => {
+          assert.fail("must reuse saved receipt");
+        },
+      },
+    );
+    assert.deepEqual(result, segmentation);
+    assert.deepEqual(methods, ["POST", "GET"]);
+  } finally {
+    Date.now = now;
+  }
+});
+
+test("saved GPU receipts are bound to the configured destination, media and exact evidence", async () => {
+  let job: Sam3Job | undefined;
+  await assert.rejects(
+    segmentVideo(
+      media,
+      analysis,
+      new AbortController().signal,
+      config,
+      async () =>
+        Response.json(
+          { job: "fixture", sourceSha256: segmentation.sourceSha256 },
+          { status: 202 },
+        ),
+      { remainingMs: 1000 },
+      {
+        saveJob: async (saved) => {
+          job = saved;
+        },
+      },
+    ),
+    SegmentationPending,
+  );
+  for (const [clip, evidence, destination] of [
+    [Buffer.from("other clip"), analysis, config],
+    [media, { ...analysis, sampleTimes: [0, 0.5, 2] }, config],
+    [
+      media,
+      analysis,
+      { ...config, endpoint: "https://other.example.test/segment" },
+    ],
+  ] as [Buffer, VideoAnalysis, typeof config][]) {
+    let calls = 0;
+    const result = await segmentVideo(
+      clip,
+      evidence,
+      new AbortController().signal,
+      destination,
+      async () => {
+        calls++;
+        throw Error("must not send foreign receipt");
+      },
+      { remainingMs: 1000 },
+      { job, saveJob: async () => {} },
+    );
+    assert.equal(result?.status, "unavailable");
+    assert.equal(calls, 0);
+  }
+});
+
+test("expired durable GPU inputs are cancelled without another submission", async () => {
+  let job: Sam3Job | undefined;
+  await assert.rejects(
+    segmentVideo(
+      media,
+      analysis,
+      new AbortController().signal,
+      config,
+      async () =>
+        Response.json(
+          { job: "fixture", sourceSha256: segmentation.sourceSha256 },
+          { status: 202 },
+        ),
+      { remainingMs: 1000 },
+      {
+        saveJob: async (saved) => {
+          job = saved;
+        },
+      },
+    ),
+    SegmentationPending,
+  );
+  const methods: string[] = [];
+  const result = await segmentVideo(
+    media,
+    analysis,
+    new AbortController().signal,
+    config,
+    async (_url, options) => {
+      methods.push(options!.method!);
+      return Response.json({});
+    },
+    { remainingMs: 1000 },
+    { job: { ...job!, expiresAt: Date.now() - 1 }, saveJob: async () => {} },
+  );
+  assert.equal(result?.failure, "deadline");
+  assert.deepEqual(methods, ["DELETE"]);
 });

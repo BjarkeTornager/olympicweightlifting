@@ -6,6 +6,7 @@ import {
   identificationSummary,
   feedbackMatchesLift,
   respectSelectedLift,
+  canReviewIdentification,
 } from "../lib/video/identification";
 import type { VideoAnalysis } from "../lib/video/types";
 import { videoUploadSchema } from "../lib/video/types";
@@ -108,9 +109,9 @@ test("a final overhead position, sparse gap or conflicting phases cannot establi
         : "sufficient",
     );
     assert.equal(result.lift, null);
-    assert.match(
+    assert.doesNotMatch(
       identificationSummary(result, "Snatch"),
-      /withheld lift-specific/,
+      /Movement review: Snatch/,
     );
   }
 });
@@ -163,4 +164,35 @@ test("invalid timestamps, repeated lifts, invented frame numbers and malformed o
     null,
   );
   assert.equal(identify([], "not_lifting").lift, null);
+});
+
+test("partial movement can be coached without claiming the whole lift; invalid evidence cannot", () => {
+  const partial = identify([phase("front_rack_hold", 1)], "limited");
+  assert.equal(partial.lift, null);
+  assert.equal(canReviewIdentification(partial), true);
+  assert.match(
+    identificationSummary(partial, "Identify from video"),
+    /Feedback covers only what is visible/,
+  );
+  for (const result of [
+    identify([], "limited"),
+    identify([phase("front_rack_hold", 1)], "not_lifting"),
+    identify([phase("front_rack_hold", 90)], "limited"),
+    identify(
+      [phase("front_rack_hold", 1), phase("front_rack_hold", 4)],
+      "limited",
+    ),
+    identify(
+      [phase("front_rack_hold", 1), phase("direct_pull_to_overhead", 4)],
+      "limited",
+    ),
+    identifyLift("malformed output", analysis),
+  ])
+    assert.equal(canReviewIdentification(result), false);
+  const conflictingSelection = respectSelectedLift(
+    identify([phase("pull", 2), phase("front_rack_receive", 5)]),
+    "Snatch",
+  );
+  assert.equal(conflictingSelection.lift, null);
+  assert.equal(canReviewIdentification(conflictingSelection), true);
 });

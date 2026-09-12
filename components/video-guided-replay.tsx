@@ -303,6 +303,14 @@ export function GuidedReplay({
       {error && <p role="alert">{error}</p>}
       {coaching && (
         <section className="video-coaching-cards" aria-label="Guided coaching">
+          {coaching.scope === "visible_phases" && (
+            <p className="fine-print">
+              <strong>Feedback on the visible movement</strong>
+              <br />
+              Some phases could not be assessed. These cues cover only what
+              Coach could see.
+            </p>
+          )}
           {moments.map((m, i) => (
             <article
               key={m.id}

@@ -330,6 +330,114 @@ test(
         undefined,
       );
       await deleteVideo(users[0], automatic.id);
+      // The reported regression: a visible front-rack hold used to skip the
+      // coaching call entirely when the complete lift could not be named.
+      for (const mode of ["automatic", "manual"] as const) {
+        const partialInput = {
+          ...input,
+          id: crypto.randomUUID(),
+          mode,
+          end: mode === "automatic" ? 120 : 2,
+        };
+        await saveVideo(users[0], partialInput, source);
+        const partialJob = await claimVideo();
+        assert.ok(partialJob);
+        let calls = 0;
+        const partialEvidence = {
+          visibility: "limited",
+          limitation:
+            "The bar is already at the front shoulders; the preceding pull is not visible.",
+          phases: [
+            {
+              kind: "front_rack_hold",
+              frame: 1,
+              evidence:
+                "The bar rests at the front shoulders in the opening frame.",
+            },
+          ],
+        };
+        await runVideoJob(
+          partialJob,
+          async (messages) => {
+            if (++calls === 1)
+              return {
+                role: "assistant",
+                content: JSON.stringify(
+                  mode === "automatic"
+                    ? {
+                        attempts: [
+                          {
+                            startFrame: 1,
+                            endFrame: 9,
+                            evidence: partialEvidence,
+                          },
+                        ],
+                      }
+                    : partialEvidence,
+                ),
+              };
+            assert.match(messages[0].content, /PARTIAL MOVEMENT REVIEW/);
+            assert.equal(JSON.parse(messages[1].content).lift, null);
+            assert.equal(
+              JSON.parse(messages[1].content).reviewScope,
+              "visible_phases",
+            );
+            if (mode === "automatic")
+              assert.deepEqual(messages[1].images, ["dense-synthetic"]);
+            return { role: "assistant", content: JSON.stringify(coaching) };
+          },
+          autoProcessor,
+          refiner,
+        );
+        const partial = await getVideo(users[0], partialInput.id);
+        assert.equal(calls, 2);
+        assert.equal(partial.status, "ready");
+        assert.equal(partial.analysis?.identification?.lift, null);
+        assert.equal(partial.analysis?.coaching?.scope, "visible_phases");
+        assert.equal(partial.analysis?.coaching?.moments[0].evidenceTime, 0.5);
+        assert.match(partial.feedback!, /Review of the visible movement/);
+        assert.match(partial.feedback!, /Try next/);
+        assert.doesNotMatch(partial.feedback!, /withheld lift-specific/);
+        await deleteVideo(users[0], partialInput.id);
+      }
+      // A non-lifting clip still never receives fabricated coaching.
+      const emptyInput = { ...automatic, id: crypto.randomUUID() };
+      await saveVideo(users[0], emptyInput, source);
+      const emptyJob = await claimVideo();
+      assert.ok(emptyJob);
+      let emptyCalls = 0;
+      await runVideoJob(
+        emptyJob,
+        async () => {
+          assert.equal(++emptyCalls, 1);
+          return {
+            role: "assistant",
+            content: JSON.stringify({
+              attempts: [
+                {
+                  startFrame: 1,
+                  endFrame: 9,
+                  evidence: {
+                    visibility: "not_lifting",
+                    phases: [],
+                    limitation: "No lifting is visible.",
+                  },
+                },
+              ],
+            }),
+          };
+        },
+        autoProcessor,
+        async () => {
+          throw Error("Do not refine a non-lifting clip");
+        },
+      );
+      assert.equal(
+        (await getVideo(users[0], emptyInput.id)).analysis?.coaching?.moments
+          .length,
+        0,
+      );
+      await deleteVideo(users[0], emptyInput.id);
       // Restart recovery claims an expired lease with a new token.
       const next = { ...input, id: crypto.randomUUID() };
       await saveVideo(users[0], next, source);

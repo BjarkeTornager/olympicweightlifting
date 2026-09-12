@@ -875,6 +875,17 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   accountId={props.accountId}
                 />
                 <div className="button-row">
+                  {review.status === "ready" &&
+                    !review.analysis?.identification?.lift && (
+                      <Button
+                        disabled={busy}
+                        onClick={() =>
+                          void action(review, "reanalyse", review.lift)
+                        }
+                      >
+                        Analyse again
+                      </Button>
+                    )}
                   {review.status === "failed" && (
                     <Button
                       disabled={busy}

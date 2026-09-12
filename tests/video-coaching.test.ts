@@ -121,6 +121,71 @@ test("guided coaching only produces moments at actual evidence frames", () => {
   );
 });
 
+test("partial clips receive timestamped cues without invented lift classification", () => {
+  const partial = {
+    ...analysis,
+    identification: identifyLift(
+      JSON.stringify({
+        visibility: "limited",
+        limitation:
+          "The clip starts with the bar at the front shoulders; the preceding pull is not visible.",
+        phases: [
+          {
+            kind: "front_rack_hold",
+            frame: 1,
+            evidence: "The bar is already resting at the front shoulders.",
+          },
+        ],
+      }),
+      analysis,
+    ),
+  };
+  const result = parseGuidedCoaching(JSON.stringify(reply), partial)!;
+  assert.equal(result.scope, "visible_phases");
+  assert.equal(result.moments[0].evidenceTime, 1);
+  assert.equal(partial.identification.lift, null);
+  const missingLift = parseGuidedCoaching(
+    JSON.stringify({
+      ...reply,
+      limitation: "The full lift and earlier clean are not visible.",
+    }),
+    partial,
+  )!;
+  assert.equal(missingLift.moments.length, 1);
+  assert.equal(missingLift.limitation, partial.identification.reason);
+  for (const observation of [
+    "This is a snatch attempt.",
+    "The full lift was visible.",
+    "Your clean needs work.",
+  ]) {
+    assert.equal(
+      parseGuidedCoaching(
+        JSON.stringify({
+          ...reply,
+          moments: [{ ...reply.moments[0], observation }],
+        }),
+        partial,
+      ),
+      null,
+    );
+  }
+  assert.equal(
+    parseGuidedCoaching(
+      JSON.stringify({
+        ...reply,
+        moments: [{ ...reply.moments[0], frames: [999] }],
+      }),
+      partial,
+    ),
+    null,
+  );
+  assert.deepEqual(
+    parseGuidedCoaching(JSON.stringify({ ...reply, moments: [] }), partial)
+      ?.moments,
+    [],
+  );
+});
+
 test("replay highlights disappear at tracking gaps rather than drifting over the video", () => {
   const tracked: VideoAnalysis = {
     ...analysis,

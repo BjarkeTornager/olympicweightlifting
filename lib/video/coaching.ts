@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { VideoAnalysis } from "./types";
-import { feedbackMatchesLift } from "./identification";
+import { canReviewIdentification, feedbackMatchesLift } from "./identification";
 
 export const focusRegions = [
   "whole_lift",
@@ -39,6 +39,7 @@ export type CoachingMoment = Omit<z.infer<typeof momentSchema>, "frames"> & {
 };
 export type GuidedCoaching = {
   version: 1;
+  scope?: "visible_phases";
   strength: string;
   limitation: string;
   moments: CoachingMoment[];
@@ -62,7 +63,17 @@ export function parseGuidedCoaching(
       ),
     );
     const lift = analysis.identification?.lift;
-    if (!lift || !feedbackMatchesLift(JSON.stringify(parsed), lift))
+    if (!canReviewIdentification(analysis.identification)) return null;
+    if (
+      lift
+        ? !feedbackMatchesLift(JSON.stringify(parsed), lift)
+        : /\b(snatch|clean|jerk)\b|\b(full|complete|entire) lift\b/i.test(
+            JSON.stringify({
+              strength: parsed.strength,
+              moments: parsed.moments,
+            }),
+          )
+    )
       return null;
     const moments: CoachingMoment[] = [];
     for (const raw of parsed.moments) {
@@ -93,8 +104,12 @@ export function parseGuidedCoaching(
     if (parsed.moments.length && !moments.length) return null;
     return {
       version: 1,
+      ...(!lift ? { scope: "visible_phases" as const } : {}),
       strength: parsed.strength,
-      limitation: parsed.limitation,
+      // Keep the validated first-pass boundary on partial coaching. A model
+      // saying "the full lift is not visible" must not reject otherwise useful
+      // cues, or introduce a different lift label through its limitation.
+      limitation: lift ? parsed.limitation : analysis.identification!.reason,
       moments,
     };
   } catch {

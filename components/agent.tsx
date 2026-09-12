@@ -166,6 +166,7 @@ export function TrainingAgent({
     };
   }, [message, visible, view]);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const attachmentButton = useRef<HTMLButtonElement>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(initialVideoReview);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
@@ -416,6 +417,7 @@ export function TrainingAgent({
   const attach = async (file?: File) => {
     if (!file || !accountId || photoIds.length >= 4) return;
     submittedDraft.current = null;
+    setToolsOpen(false);
     setUploading(true);
     setError("");
     try {
@@ -1465,6 +1467,14 @@ export function TrainingAgent({
                 {notice}
               </div>
             )}
+            {uploading && (
+              <div className="notice coach-photo-progress" role="status">
+                <LoaderCircle size={18} className="spin" aria-hidden="true" />
+                {autoTag
+                  ? "Saving and tagging your photo…"
+                  : "Saving your photo…"}
+              </div>
+            )}
             <form
               className="agent-composer"
               onSubmit={(e) => {
@@ -1553,7 +1563,9 @@ export function TrainingAgent({
                     type="button"
                     variant="ghost"
                     className="composer-attach-button"
+                    ref={attachmentButton}
                     aria-label="Add images"
+                    aria-haspopup="dialog"
                     aria-expanded={toolsOpen}
                     aria-controls="coach-image-tools"
                     onClick={() => setToolsOpen((open) => !open)}
@@ -1576,87 +1588,115 @@ export function TrainingAgent({
                   </Button>
                 </div>
               </div>
-              <div
-                id="coach-image-tools"
-                className="coach-image-tools"
-                hidden={!toolsOpen}
+              <Dialog
+                open={toolsOpen && visible}
+                onOpenChange={setToolsOpen}
+                title="Add photos to Coach"
+                description="Take a photo or choose an image. Your message stays here."
+                className="coach-image-dialog"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault();
+                  attachmentButton.current?.focus({ preventScroll: true });
+                }}
               >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={uploading || loadingImage}
-                  onClick={() =>
-                    draft(activityLoggingPrompt(photoIds.length > 0))
-                  }
-                >
-                  Log walk, run or ride
-                </Button>
-                <div className="food-attachments">
-                  <label className="food-upload">
-                    <Camera size={17} />{" "}
-                    {uploading ? "Saving & tagging…" : "Take photo"}
-                    <input
-                      type="file"
-                      aria-label="Take photo"
-                      accept="image/*"
-                      capture="environment"
-                      disabled={
-                        uploading ||
-                        loadingImage ||
-                        !accountId ||
-                        photoIds.length >= 4
-                      }
-                      onChange={(e) => {
-                        void attach(e.target.files?.[0]);
-                        e.target.value = "";
+                <div id="coach-image-tools" className="coach-image-tools">
+                  <div className="food-attachments">
+                    <label className="food-upload">
+                      <Camera size={17} />{" "}
+                      {uploading ? "Saving & tagging…" : "Take photo"}
+                      <input
+                        type="file"
+                        aria-label="Take photo"
+                        accept="image/*"
+                        capture="environment"
+                        disabled={
+                          uploading ||
+                          loadingImage ||
+                          !accountId ||
+                          photoIds.length >= 4
+                        }
+                        onChange={(e) => {
+                          void attach(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    <label className="food-upload">
+                      Attach image
+                      <input
+                        type="file"
+                        aria-label="Attach image"
+                        accept="image/*"
+                        disabled={
+                          uploading ||
+                          loadingImage ||
+                          !accountId ||
+                          photoIds.length >= 4
+                        }
+                        onChange={(e) => {
+                          void attach(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="coach-image-more">
+                    <a href="#images" onClick={() => setToolsOpen(false)}>
+                      Image library & categories
+                    </a>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={uploading || loadingImage}
+                      onClick={() => {
+                        setToolsOpen(false);
+                        draft(activityLoggingPrompt(photoIds.length > 0));
                       }}
-                    />
-                  </label>
-                  <label className="food-upload">
-                    Attach image
-                    <input
-                      type="file"
-                      aria-label="Attach image"
-                      accept="image/*"
-                      disabled={
-                        uploading ||
-                        loadingImage ||
-                        !accountId ||
-                        photoIds.length >= 4
-                      }
-                      onChange={(e) => {
-                        void attach(e.target.files?.[0]);
-                        e.target.value = "";
+                    >
+                      Log walk, run or ride
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!accountId || uploading || loadingImage}
+                      onClick={() => {
+                        setToolsOpen(false);
+                        setVideoOpen(true);
                       }}
-                    />
+                    >
+                      Review lifting video
+                    </Button>
+                  </div>
+                  {photoIds.length >= 4 && (
+                    <p className="fine-print" role="status">
+                      Four photos are attached. Send this message or remove an
+                      attachment to add another.
+                    </p>
+                  )}
+                  {!accountId && (
+                    <p className="fine-print" role="status">
+                      Sign in to attach private photos.
+                    </p>
+                  )}
+                  <label className="image-auto-tag">
+                    <input
+                      type="checkbox"
+                      checked={autoTag}
+                      disabled={uploading}
+                      onChange={(e) => setAutoTag(e.target.checked)}
+                    />{" "}
+                    Tag uploads automatically
                   </label>
-                  <a href="#images">Image library & categories</a>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={!accountId || uploading || loadingImage}
-                    onClick={() => setVideoOpen(true)}
-                  >
-                    Review lifting video
-                  </Button>
+                  <p className="fine-print">
+                    Automatic tagging sends each new image to{" "}
+                    {connection?.provider ??
+                      "your configured assistant provider"}{" "}
+                    to identify food, sleep, activity or other content. Turn it
+                    off to save in Needs review. No journal entry is created by
+                    tagging.
+                  </p>
                 </div>
-                <label className="image-auto-tag">
-                  <input
-                    type="checkbox"
-                    checked={autoTag}
-                    disabled={uploading}
-                    onChange={(e) => setAutoTag(e.target.checked)}
-                  />{" "}
-                  Tag uploads automatically
-                </label>
-                <p className="fine-print">
-                  Automatic tagging sends each new image to{" "}
-                  {connection?.provider ?? "your configured assistant provider"}{" "}
-                  to identify food, sleep, activity or other content. Turn it
-                  off to save in Needs review. No journal entry is created by
-                  tagging.
-                </p>
-              </div>
+              </Dialog>
               {photoIds.length > 0 && accountId && (
                 <>
                   {photoIds.length > 4 && (

@@ -221,7 +221,10 @@ test.describe("focused Coach conversation", () => {
     await page
       .getByRole("checkbox", { name: "Tag uploads automatically" })
       .uncheck();
-    await page.getByRole("button", { name: "Add images" }).click();
+    await page
+      .getByRole("dialog", { name: "Add photos to Coach" })
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
     await expect(
       page.getByRole("checkbox", { name: "Tag uploads automatically" }),
     ).not.toBeVisible();

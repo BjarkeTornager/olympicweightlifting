@@ -297,6 +297,10 @@ test("each queued message owns its photos, and completing one cannot clear the n
   await expect.poll(async () => (await requests(page)).length).toBe(1);
   await page.getByRole("button", { name: "Add images" }).click();
   await expect(page.getByLabel("Attach image", { exact: true })).toBeEnabled();
+  await page
+    .getByRole("dialog", { name: "Add photos to Coach" })
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   await page.evaluate((id) => {
     location.hash = `coach/photo/${id}`;
   }, ids[0]);

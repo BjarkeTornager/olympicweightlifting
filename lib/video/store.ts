@@ -5,6 +5,8 @@ import { liftingVideos, journals } from "../db/schema";
 import { readJournal } from "../server";
 import { ApiError } from "../agent/http";
 import { canonicalJson } from "../json";
+import { mergeSegmentation, segmentationSchema } from "./segmentation";
+import type { VideoRefinementCheckpoint } from "./checkpoint";
 import {
   MAX_VIDEO_BYTES,
   videoUploadSchema,
@@ -52,8 +54,8 @@ export async function listVideos(userId: string) {
         ...fields,
         analysis: sql<import("./types").VideoAnalysis | null>`
     CASE WHEN ${liftingVideos.analysis} IS NULL THEN NULL ELSE
-    jsonb_set(jsonb_set(${liftingVideos.analysis}, '{tracking}',
-      (${liftingVideos.analysis}->'tracking') - 'points' - 'velocities' || '{"points":[],"velocities":[]}'::jsonb), '{pose,frames}', '[]'::jsonb)
+    jsonb_set(jsonb_set(jsonb_set(${liftingVideos.analysis}, '{tracking}',
+      (${liftingVideos.analysis}->'tracking') - 'points' - 'velocities' || '{"points":[],"velocities":[]}'::jsonb), '{pose,frames}', '[]'::jsonb), '{segmentation,frames}', '[]'::jsonb)
     END`,
       })
       .from(liftingVideos)
@@ -64,11 +66,49 @@ export async function listVideos(userId: string) {
 }
 export async function getVideo(userId: string, id: string) {
   const [row] = await getDb()
-    .select(fields)
+    .select({
+      ...fields,
+      // Older failed jobs kept successful outlines only in their private
+      // checkpoint. Select geometry alone; never return source/contact sheets.
+      checkpoint: sql<Pick<
+        VideoRefinementCheckpoint,
+        "reviewVersion" | "attemptId" | "start" | "end" | "segmentation"
+      > | null>`
+        CASE WHEN ${liftingVideos.refinement} IS NULL THEN NULL ELSE jsonb_build_object(
+          'reviewVersion', ${liftingVideos.refinement}->'reviewVersion',
+          'attemptId', ${liftingVideos.refinement}->'attemptId',
+          'start', ${liftingVideos.refinement}->'start',
+          'end', ${liftingVideos.refinement}->'end',
+          'segmentation', ${liftingVideos.refinement}->'segmentation') END`,
+    })
     .from(liftingVideos)
     .where(owner(userId, id));
   if (!row) throw new ApiError("Video review not found.", 404);
-  return present(row);
+  const { checkpoint, ...visible } = row;
+  if (
+    checkpoint &&
+    visible.analysis &&
+    checkpoint.reviewVersion === visible.analysis.reviewVersion &&
+    visible.analysis.attempts?.some(
+      (a) =>
+        a.id === checkpoint.attemptId &&
+        a.start === checkpoint.start &&
+        a.end === checkpoint.end,
+    )
+  ) {
+    const segmentation = segmentationSchema.safeParse(checkpoint.segmentation);
+    if (segmentation.success)
+      visible.analysis = {
+        ...visible.analysis,
+        segmentation: mergeSegmentation(
+          visible.analysis.segmentation,
+          segmentation.data,
+          checkpoint.start,
+          checkpoint.end,
+        ),
+      };
+  }
+  return present(visible);
 }
 export async function saveVideo(userId: string, raw: unknown, source: Buffer) {
   const input = videoUploadSchema.parse(raw);

@@ -423,6 +423,13 @@ export function GuidedReplay({
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {!coaching && a?.segmentation?.frames.some((f) => f.objects.length) && (
+        <p className="fine-print" role="status">
+          {review.status === "failed"
+            ? "Your outlines are available. Coach’s feedback could not be completed."
+            : "Your outlines are ready. Coach is finishing the feedback automatically."}
+        </p>
+      )}
       {a?.segmentation &&
         !a.segmentation.frames.some((f) => f.objects.length) && (
           <p className="fine-print" role="status">

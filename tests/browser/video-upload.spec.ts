@@ -95,6 +95,91 @@ function saved(id: string): SavedVideoReview {
     analysis: null,
   };
 }
+test("saved outlines remain usable while feedback recovers automatically", async ({
+  page,
+  context,
+}) => {
+  const review: SavedVideoReview = {
+    ...saved("00000000-0000-4000-8000-000000000023"),
+    hasMedia: true,
+    stage: "Finishing Coach’s feedback automatically",
+    analysis: {
+      version: 1,
+      reviewVersion: 2,
+      width: 320,
+      height: 480,
+      duration: 2,
+      frameCount: 60,
+      sampleTimes: [0, 1, 2],
+      tracking: {
+        status: "not_requested",
+        reason: "",
+        points: [],
+        coverage: 0,
+        horizontalRangeCm: null,
+        riseCm: null,
+        peakUpwardVelocity: null,
+        velocities: [],
+      },
+      segmentation: {
+        version: 1,
+        model: "sam3.1",
+        revision: "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7",
+        sourceSha256: "a".repeat(64),
+        width: 320,
+        height: 480,
+        status: "partial",
+        reason: "Synthetic outline",
+        frames: [
+          {
+            t: 0,
+            objects: [
+              {
+                id: "person-1",
+                kind: "person",
+                polygon: [
+                  [0.2, 0.2],
+                  [0.7, 0.2],
+                  [0.7, 0.8],
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  };
+  await context.route("**/api/lifting-videos", (r) =>
+    r.fulfill({ json: { videos: [review] } }),
+  );
+  await context.route(/\/api\/lifting-videos\/[^/]+$/, (r) =>
+    r.fulfill({ json: review }),
+  );
+  await context.route("**/api/lifting-videos/*/media", async (r) =>
+    r.fulfill({ contentType: "video/mp4", body: await readFile(fixture) }),
+  );
+  await page.goto("/#coach/lifting/video");
+  const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
+  await dialog.getByRole("button", { name: /Snatch.*Finishing/ }).click();
+  await expect(
+    dialog.getByText(
+      "Your outlines are ready. Coach is finishing the feedback automatically.",
+    ),
+  ).toBeVisible();
+  await expect(dialog.getByLabel("Object outlines when paused")).toBeChecked();
+  await expect(
+    dialog
+      .getByRole("img", { name: "Tracked object outlines" })
+      .locator("polygon"),
+  ).toHaveCount(1);
+  await expect(
+    dialog.getByRole("button", { name: "Retry analysis" }),
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByText("No correction markers in this review"),
+  ).toHaveCount(0);
+});
 test("an older mislabelled review can be updated with fresh identification and no new upload", async ({
   page,
   context,

@@ -14,4 +14,5 @@ export type VideoRefinementCheckpoint = {
   frames: string[];
   pose?: VideoAnalysis["pose"];
   segmentation?: VideoAnalysis["segmentation"];
+  failure?: import("./review").ReviewDiagnostic;
 };

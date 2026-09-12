@@ -105,6 +105,32 @@ test(
             reason: "Synthetic exact-frame tracking",
             frames: [{ t: 0.5, points: [{ id: 13, x: 0.4, y: 0.5 }] }],
           },
+          segmentation: {
+            version: 1 as const,
+            model: "sam3.1" as const,
+            revision: "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7" as const,
+            sourceSha256: "a".repeat(64),
+            width: 320,
+            height: 480,
+            status: "partial" as const,
+            reason: "Synthetic outline",
+            frames: [
+              {
+                t: 0.5,
+                objects: [
+                  {
+                    kind: "person" as const,
+                    id: "person-1",
+                    polygon: [
+                      [0.1, 0.1],
+                      [0.2, 0.1],
+                      [0.2, 0.2],
+                    ] as [number, number][],
+                  },
+                ],
+              },
+            ],
+          },
         },
         frames: ["dense-synthetic"],
       });
@@ -183,8 +209,35 @@ test(
         "one identification plus two bounded review attempts",
       );
       const guarded = await getVideo(users[0], input.id);
-      assert.equal(guarded.status, "failed");
+      assert.equal(guarded.status, "queued");
       assert.equal(guarded.feedback, null);
+      assert.equal(guarded.error, null);
+      assert.equal(guarded.analysis?.segmentation?.frames.length, 1);
+      assert.equal(await claimVideo(), null, "recovery waits for its backoff");
+      // Exhaust bounded recovery to verify that a persistent fault still has
+      // an honest terminal status and an explicit reanalysis remains possible.
+      await pool.query(
+        "UPDATE lifting_videos SET attempts=2,lease_until=now()-interval '1 second' WHERE user_id=$1 AND id=$2",
+        [users[0], input.id],
+      );
+      const finalRecovery = await claimVideo();
+      assert.ok(finalRecovery);
+      await runVideoJob(
+        finalRecovery,
+        async () => ({ role: "assistant", content: "invalid" }),
+        async () => {
+          throw Error("Must reuse media");
+        },
+        async () => {
+          throw Error("Must reuse GPU work");
+        },
+      );
+      assert.equal((await getVideo(users[0], input.id)).status, "failed");
+      assert.equal(
+        await claimVideo(),
+        null,
+        "repeated failure cannot loop forever",
+      );
       assert.equal(
         guarded.analysis?.attempts?.[0].identification.lift,
         "Clean & jerk",
@@ -352,7 +405,12 @@ test(
         autoProcessor,
         refiner,
       );
-      assert.equal((await getVideo(users[0], automatic.id)).status, "failed");
+      assert.equal((await getVideo(users[0], automatic.id)).status, "queued");
+      assert.equal(
+        (await getVideo(users[0], automatic.id)).analysis?.segmentation?.frames
+          .length,
+        1,
+      );
       const savedRefinement = await pool.query(
         "SELECT refinement FROM lifting_videos WHERE user_id=$1 AND id=$2",
         [users[0], automatic.id],
@@ -360,6 +418,26 @@ test(
       assert.deepEqual(savedRefinement.rows[0].refinement.frames, [
         "dense-synthetic",
       ]);
+      assert.deepEqual(savedRefinement.rows[0].refinement.failure, {
+        reason: "coaching_evidence",
+        coaching: "frame_range",
+      });
+      await pool.query(
+        "UPDATE lifting_videos SET analysis=analysis-'segmentation', refinement=jsonb_set(refinement,'{version}','1') WHERE user_id=$1 AND id=$2",
+        [users[0], automatic.id],
+      );
+      const legacyCheckpoint = await getVideo(users[0], automatic.id);
+      assert.equal(
+        legacyCheckpoint.analysis?.segmentation?.frames.length,
+        1,
+        "previously failed reviews expose their saved outlines without another GPU call",
+      );
+      assert.equal("checkpoint" in legacyCheckpoint, false);
+      assert.equal("failure" in legacyCheckpoint, false);
+      await pool.query(
+        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','2') WHERE user_id=$1 AND id=$2",
+        [users[0], automatic.id],
+      );
       assert.equal(
         "refinement" in (await getVideo(users[0], automatic.id)),
         false,
@@ -370,7 +448,11 @@ test(
           .identification.lift,
         "Snatch",
       );
-      await retryVideo(users[0], automatic.id);
+      assert.equal(await claimVideo(), null);
+      await pool.query(
+        "UPDATE lifting_videos SET lease_until=now()-interval '1 second' WHERE user_id=$1 AND id=$2",
+        [users[0], automatic.id],
+      );
       const automaticRetry = await claimVideo();
       assert.ok(automaticRetry);
       await runVideoJob(
@@ -425,6 +507,11 @@ test(
         (await listVideos(users[0]))[0].analysis?.pose?.frames,
         [],
       );
+      assert.deepEqual(
+        (await listVideos(users[0]))[0].analysis?.segmentation?.frames,
+        [],
+      );
+      assert.equal(completed.analysis?.segmentation?.frames.length, 1);
       await reanalyseVideo(users[0], automatic.id, {
         lift: "Identify from video",
       });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb, getPool } from "../db";
 import { liftingVideos, user } from "../db/schema";
-import { callModel } from "../agent/provider";
+import { callModel, ProviderError } from "../agent/provider";
 import { ApiError } from "../agent/http";
 import { userAllowed } from "../access";
 import { processVideo, refineVideo } from "./processor";
@@ -18,7 +18,11 @@ import {
   respectSelectedLift,
   canReviewIdentification,
 } from "./identification";
-import { reviewMessages, reviewWithRecovery } from "./review";
+import {
+  reviewMessages,
+  reviewWithRecovery,
+  ReviewValidationError,
+} from "./review";
 import {
   VIDEO_REFINEMENT_VERSION,
   type VideoRefinementCheckpoint,
@@ -99,25 +103,6 @@ async function automaticFeedback(
     const refined = await refine(analysis, attempt);
     signal.throwIfAborted();
     const current = refined.analysis;
-    const messages = reviewMessages(input, current, refined.frames);
-    messages[1].content = JSON.stringify({
-      ...JSON.parse(messages[1].content),
-      attempt: { start: attempt.start, end: attempt.end },
-      instruction:
-        "Review only this attempt. Every evidence frame must be within its start/end range. Other attempts are context only.",
-    });
-    const reviewed = await reviewWithRecovery(
-      messages,
-      current,
-      input,
-      attempt,
-      model,
-      signal,
-      () => checkpoint(analysis, "Checking Coach’s feedback automatically"),
-    );
-    const coaching = reviewed.coaching;
-    attempt.identification = reviewed.identification;
-    attempt.coaching = coaching;
     if (current.segmentation) {
       analysis.segmentation = mergeSegmentation(
         analysis.segmentation,
@@ -143,6 +128,26 @@ async function automaticFeedback(
         frames: [...merged.values()].sort((a, b) => a.t - b.t),
       };
     }
+    await checkpoint(analysis, "Coach is reviewing the tracked movement");
+    const messages = reviewMessages(input, current, refined.frames);
+    messages[1].content = JSON.stringify({
+      ...JSON.parse(messages[1].content),
+      attempt: { start: attempt.start, end: attempt.end },
+      instruction:
+        "Review only this attempt. Every evidence frame must be within its start/end range. Other attempts are context only.",
+    });
+    const reviewed = await reviewWithRecovery(
+      messages,
+      current,
+      input,
+      attempt,
+      model,
+      signal,
+      () => checkpoint(analysis, "Checking Coach’s feedback automatically"),
+    );
+    const coaching = reviewed.coaching;
+    attempt.identification = reviewed.identification;
+    attempt.coaching = coaching;
     await checkpoint(analysis, "Preparing your guided replay", true);
   }
   const attempts = analysis.attempts!;
@@ -210,7 +215,7 @@ export async function claimVideo() {
   const token = randomUUID();
   const { rows } = await getPool().query<{ user_id: string; id: string }>(
     `WITH next AS (
-    SELECT user_id,id FROM lifting_videos WHERE (status='queued' OR (status='processing' AND lease_until<now())) AND attempts<3
+    SELECT user_id,id FROM lifting_videos WHERE ((status='queued' AND (lease_until IS NULL OR lease_until<=now())) OR (status='processing' AND lease_until<now())) AND attempts<3
     ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
     UPDATE lifting_videos v SET status='processing',stage='Preparing video',lease=$1,lease_until=now()+interval '11 minutes',attempts=attempts+1
     FROM next WHERE v.user_id=next.user_id AND v.id=next.id RETURNING v.user_id,v.id`,
@@ -408,18 +413,36 @@ export async function runVideoJob(
             : "processing_or_provider_error",
       }),
     );
-    // Media stays available when the model fails, so retry need not reprocess it.
+    const [saved] = await getDb().select().from(liftingVideos).where(fence);
+    // A deleted/revoked account or superseded lease must never restart a job.
+    if (!saved || !(await check())) return;
+    const recoverable =
+      error instanceof ReviewValidationError ||
+      (error instanceof ProviderError &&
+        (error.status === 429 || error.status >= 500)) ||
+      (signal.aborted && !abort.signal.aborted);
+    const retry = recoverable && saved.attempts < 3;
+    // Save fixed diagnostic codes, never provider responses, inside the private
+    // checkpoint so a deployment/log-retention boundary cannot erase the cause.
     await getDb()
       .update(liftingVideos)
       .set({
-        status: "failed",
-        stage: "Review needs a retry",
-        error:
-          error instanceof ApiError
+        status: retry ? "queued" : "failed",
+        stage: retry
+          ? "Finishing Coach’s feedback automatically"
+          : "Feedback needs attention",
+        error: retry
+          ? null
+          : error instanceof ApiError
             ? error.message
             : "Coach could not finish this review. Your saved video is safe; retry shortly.",
         lease: null,
-        leaseUntil: null,
+        leaseUntil: retry
+          ? new Date(Date.now() + 30_000 * saved.attempts)
+          : null,
+        ...(error instanceof ReviewValidationError && saved.refinement
+          ? { refinement: { ...saved.refinement, failure: error.diagnostic } }
+          : {}),
       })
       .where(fence);
   } finally {

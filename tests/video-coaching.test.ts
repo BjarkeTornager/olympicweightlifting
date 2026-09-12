@@ -12,6 +12,7 @@ import {
   reviewMessages,
   reviewWithRecovery,
   type ReviewFailure,
+  type ReviewDiagnostic,
 } from "../lib/video/review";
 import { identifyLift } from "../lib/video/identification";
 import { identifyAttempts } from "../lib/video/attempts";
@@ -127,6 +128,12 @@ test("rejected video feedback gets one automatic repair using identical evidence
           request.at(-1)!.content,
           /previous response failed validation/,
         );
+        assert.equal(request.at(-2)!.role, "assistant");
+        assert.equal(request.at(-2)!.content, first.content);
+        if (first.content.includes("999"))
+          assert.match(request.at(-1)!.content, /frame_range/);
+        if (first.content.includes("x".repeat(261)))
+          assert.match(request.at(-1)!.content, /strength:too_big/);
         return {
           role: "assistant",
           content: JSON.stringify({ evidence, coaching: reply }),
@@ -186,6 +193,93 @@ test("rejected video feedback gets one automatic repair using identical evidence
     calls,
     1,
     "account revocation or cancellation prevents the repair call",
+  );
+});
+
+test("review diagnostics identify evidence faults without retaining response values or unknown keys", () => {
+  const input = videoUploadSchema.parse({
+    id: crypto.randomUUID(),
+    lift: "Identify from video",
+    date: "2026-09-12",
+    start: 0,
+    end: 4,
+  });
+  const diagnostics: ReviewDiagnostic[] = [];
+  parseVideoReview(
+    JSON.stringify({
+      evidence,
+      coaching: {
+        ...reply,
+        strength: "private".repeat(60),
+        "private-key": "private value",
+      },
+    }),
+    analysis,
+    input,
+    undefined,
+    (d) => diagnostics.push(d),
+  );
+  assert.equal(diagnostics[0].reason, "coaching_schema");
+  assert.ok(diagnostics[0].issues?.includes("strength:too_big"));
+  assert.doesNotMatch(JSON.stringify(diagnostics), /private/);
+  diagnostics.length = 0;
+  parseVideoReview(
+    JSON.stringify({
+      evidence,
+      coaching: {
+        ...reply,
+        moments: [{ ...reply.moments[0], frames: [3], focusFrame: 4 }],
+      },
+    }),
+    analysis,
+    input,
+    undefined,
+    (d) => diagnostics.push(d),
+  );
+  assert.deepEqual(diagnostics, [
+    { reason: "coaching_evidence", coaching: "focus_frame" },
+  ]);
+});
+
+test("describing an unseen lift in limitations does not reject supported feedback", () => {
+  const jerk = {
+    ...analysis,
+    identification: identifyLift(
+      JSON.stringify({
+        ...evidence,
+        phases: [
+          {
+            kind: "front_rack_hold",
+            frame: 1,
+            evidence: "The bar is already supported at the shoulders.",
+          },
+          evidence.phases[2],
+          evidence.phases[3],
+        ],
+      }),
+      analysis,
+    ),
+  };
+  assert.equal(jerk.identification.lift, "Jerk");
+  const parsed = parseGuidedCoaching(
+    JSON.stringify({
+      ...reply,
+      limitation:
+        "The preceding clean is not visible; this review covers the jerk only.",
+    }),
+    jerk,
+  );
+  assert.equal(parsed?.moments.length, 1);
+  assert.equal(
+    parseGuidedCoaching(
+      JSON.stringify({
+        ...reply,
+        strength: "A strong snatch receiving position.",
+      }),
+      jerk,
+    ),
+    null,
+    "actual contradictory coaching still fails",
   );
 });
 

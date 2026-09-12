@@ -57,6 +57,7 @@ Put the single most useful improvement first, at most two supporting moments. Do
 export function parseGuidedCoaching(
   content: string,
   analysis: VideoAnalysis,
+  onInvalid?: (reason: CoachingFailure) => void,
 ): GuidedCoaching | null {
   try {
     const parsed = coachingResponseSchema.parse(
@@ -71,16 +72,25 @@ export function parseGuidedCoaching(
     if (!canReviewIdentification(analysis.identification)) return null;
     if (
       lift
-        ? !feedbackMatchesLift(JSON.stringify(parsed), lift)
+        ? !feedbackMatchesLift(
+            JSON.stringify({
+              strength: parsed.strength,
+              moments: parsed.moments,
+            }),
+            lift,
+          )
         : /\b(snatch|clean|jerk)\b|\b(full|complete|entire) lift\b/i.test(
             JSON.stringify({
               strength: parsed.strength,
               moments: parsed.moments,
             }),
           )
-    )
+    ) {
+      onInvalid?.("lift_label");
       return null;
+    }
     const moments: CoachingMoment[] = [];
+    let failure: CoachingFailure = "frame_range";
     for (const raw of parsed.moments) {
       const frames = [...new Set(raw.frames)].sort((a, b) => a - b);
       const times = frames.map((f) => analysis.sampleTimes[f - 1]);
@@ -88,16 +98,24 @@ export function parseGuidedCoaching(
         times.some(
           (t) => !Number.isFinite(t) || t < 0 || t > analysis.duration + 0.05,
         )
-      )
+      ) {
+        failure = "frame_range";
         continue;
+      }
       const start = times[0],
         end = times.at(-1)!;
-      if (
-        end - start > 2.5 ||
-        !frames.includes(raw.focusFrame) ||
-        (raw.evidenceType === "movement" && new Set(times).size < 2)
-      )
+      if (end - start > 2.5) {
+        failure = "evidence_span";
         continue;
+      }
+      if (!frames.includes(raw.focusFrame)) {
+        failure = "focus_frame";
+        continue;
+      }
+      if (raw.evidenceType === "movement" && new Set(times).size < 2) {
+        failure = "movement_frames";
+        continue;
+      }
       const { frames: unused, focusFrame, ...text } = raw;
       void unused;
       moments.push({
@@ -111,7 +129,10 @@ export function parseGuidedCoaching(
       });
     }
     // Invalid evidence never turns into a plausible-looking replay card.
-    if (parsed.moments.length && !moments.length) return null;
+    if (parsed.moments.length && !moments.length) {
+      onInvalid?.(failure);
+      return null;
+    }
     return {
       version: 1,
       ...(!lift ? { scope: "visible_phases" as const } : {}),
@@ -126,6 +147,13 @@ export function parseGuidedCoaching(
     return null;
   }
 }
+
+export type CoachingFailure =
+  | "lift_label"
+  | "frame_range"
+  | "evidence_span"
+  | "focus_frame"
+  | "movement_frames";
 
 export function coachingText(coaching: GuidedCoaching) {
   return [

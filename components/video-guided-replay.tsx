@@ -28,6 +28,7 @@ export function GuidedReplay({
   const video = useRef<HTMLVideoElement>(null),
     container = useRef<HTMLDivElement>(null);
   const stopAt = useRef<{ end: number; freeze: number } | null>(null);
+  const pendingSeek = useRef<number | null>(null);
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
     [seeking, setSeeking] = useState(false),
@@ -60,6 +61,15 @@ export function GuidedReplay({
       closed = false;
     const sync = (presentedTime: number) => {
       if (closed || v.seeking) return;
+      if (pendingSeek.current !== null) {
+        if (
+          v.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+          Math.abs(v.currentTime - pendingSeek.current) > 0.025
+        )
+          return;
+        pendingSeek.current = null;
+      }
+      setSeeking(false);
       // Safari can deliver an older queued presentation callback after a seek
       // or resize. It must not replace the paused inspection position.
       const t = v.paused ? v.currentTime : presentedTime;
@@ -69,13 +79,28 @@ export function GuidedReplay({
         const freeze = stopAt.current.freeze;
         v.pause();
         stopAt.current = null;
+        pendingSeek.current = freeze;
+        setSeeking(true);
         v.currentTime = freeze;
         setTime(freeze);
         onTime(freeze);
       }
     };
     const seek = () => sync(v.currentTime);
+    const ready = () => {
+      const target = pendingSeek.current;
+      if (
+        target !== null &&
+        v.readyState >= HTMLMediaElement.HAVE_METADATA &&
+        Math.abs(v.currentTime - target) > 0.001
+      )
+        v.currentTime = target;
+      sync(v.currentTime);
+    };
     v.addEventListener("seeked", seek);
+    v.addEventListener("loadedmetadata", ready);
+    v.addEventListener("loadeddata", ready);
+    v.addEventListener("canplay", ready);
     if (typeof v.requestVideoFrameCallback === "function") {
       const frame: VideoFrameRequestCallback = (_now, metadata) => {
         sync(metadata.mediaTime);
@@ -92,6 +117,9 @@ export function GuidedReplay({
     return () => {
       closed = true;
       v.removeEventListener("seeked", seek);
+      v.removeEventListener("loadedmetadata", ready);
+      v.removeEventListener("loadeddata", ready);
+      v.removeEventListener("canplay", ready);
       if (handle) v.cancelVideoFrameCallback(handle);
       if (fallback) cancelAnimationFrame(fallback);
     };
@@ -131,6 +159,25 @@ export function GuidedReplay({
       ?.play()
       .catch(() => setError("Tap play to start the replay."));
   }
+  function seekTo(at: number) {
+    const v = video.current;
+    if (!v) return;
+    pendingSeek.current = at;
+    setSeeking(true);
+    // A click may arrive before Safari has decoded the blob's metadata.
+    // Retain the requested frame until a media readiness event can apply it.
+    if (
+      !v.seeking &&
+      v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      Math.abs(v.currentTime - at) < 0.001
+    ) {
+      pendingSeek.current = null;
+      setSeeking(false);
+    } else if (v.readyState >= HTMLMediaElement.HAVE_METADATA)
+      v.currentTime = at;
+    setTime(at);
+    onTime(at);
+  }
   function replay(moment: CoachingMoment) {
     const v = video.current;
     if (!v) return;
@@ -138,10 +185,8 @@ export function GuidedReplay({
     setOverlay(true);
     setSpeed("0.5");
     v.playbackRate = 0.5;
-    v.currentTime = moment.start;
+    seekTo(moment.start);
     stopAt.current = { end: moment.end, freeze: moment.evidenceTime };
-    setTime(moment.start);
-    onTime(moment.start);
     play();
     container.current?.scrollIntoView({
       block: "nearest",
@@ -156,9 +201,7 @@ export function GuidedReplay({
     setPlaying(false);
     setSelected(moment.id);
     setOverlay(true);
-    v.currentTime = at;
-    setTime(at);
-    onTime(at);
+    seekTo(at);
     container.current?.scrollIntoView({
       block: "nearest",
       behavior: "instant",
@@ -202,13 +245,12 @@ export function GuidedReplay({
             src={url}
             playsInline
             muted
-            preload="metadata"
+            preload="auto"
             aria-label="Saved lifting video"
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onSeeking={() => setSeeking(true)}
-            onSeeked={() => setSeeking(false)}
             onEnded={() => {
               setPlaying(false);
               stopAt.current = null;
@@ -308,9 +350,7 @@ export function GuidedReplay({
             onChange={(e) => {
               const t = Number(e.target.value);
               stopAt.current = null;
-              if (video.current) video.current.currentTime = t;
-              setTime(t);
-              onTime(t);
+              seekTo(t);
             }}
           />
           <span className="video-clock">

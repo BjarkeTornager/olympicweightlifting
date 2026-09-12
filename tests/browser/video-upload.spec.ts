@@ -324,6 +324,32 @@ for (const partial of [false, true])
     page,
     context,
   }, info) => {
+    // Reproduce a user tapping a cue before Safari has decoded the video.
+    // Media setters are ignored until readiness, as on a cold metadata load.
+    await page.addInitScript((hold) => {
+      const state = window as Window & { holdVideoReadiness?: boolean };
+      state.holdVideoReadiness = hold;
+      const readiness = Object.getOwnPropertyDescriptor(
+        HTMLMediaElement.prototype,
+        "readyState",
+      )!;
+      const position = Object.getOwnPropertyDescriptor(
+        HTMLMediaElement.prototype,
+        "currentTime",
+      )!;
+      Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+        ...readiness,
+        get() {
+          return state.holdVideoReadiness ? 0 : readiness.get!.call(this);
+        },
+      });
+      Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
+        ...position,
+        set(value: number) {
+          if (!state.holdVideoReadiness) position.set!.call(this, value);
+        },
+      });
+    }, partial);
     await page.addInitScript(() => {
       const original = HTMLVideoElement.prototype.requestVideoFrameCallback;
       if (!original) return;
@@ -445,6 +471,23 @@ for (const partial of [false, true])
         "Feedback on the visible movement",
       );
     await dialog.getByRole("button", { name: "Freeze & inspect" }).click();
+    if (partial) {
+      await expect(dialog.getByLabel("Coach focus highlight")).not.toBeVisible();
+      await video.evaluate((v: HTMLVideoElement) => {
+        (window as Window & { holdVideoReadiness?: boolean })
+          .holdVideoReadiness = false;
+        v.dispatchEvent(new Event("loadedmetadata"));
+      });
+    }
+    await expect
+      .poll(() =>
+        video.evaluate((v: HTMLVideoElement) => ({
+          time: v.currentTime,
+          seeking: v.seeking,
+          ready: v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
+        })),
+      )
+      .toEqual({ time: 0.5, seeking: false, ready: true });
     await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
     await expect(video).toHaveJSProperty("paused", true);
     expect(

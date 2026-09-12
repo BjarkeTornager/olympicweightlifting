@@ -53,18 +53,63 @@ abstained from naming a lift when the excerpt omitted recovery, while retaining
 visible phase observations. That is different from misidentifying a clean and
 jerk as a snatch. The samples are too few to estimate error rates.
 
-**Actual confirmed evaluation usage: $1.98757.** The conservative total including
-all unreconciled failure/timeout reservations is **$2.49509**, below the authorized
+**Actual confirmed evaluation usage: $1.99540.** The conservative total including
+all unreconciled failure/timeout reservations is **$2.50292**, below the authorized
 $10 cap. Usage comes from individual provider responses; no account-wide spending
 is attributed to this experiment. Failed-generation billing lookups did not
 resolve two rate-limited requests, so their allowances remain reserved.
 
-Native-video comparison is prepared but not completed. OpenRouter rejected the
-first native request because the production API key had less than the required
-$1 of unused key allowance, even though the account had credit. A temporary $3,
-one-hour evaluation key was prepared; automatic approval review requires explicit
-authorization to create that additional credential. No production key limit or
-billing setting was changed and no credit purchase was made.
+The native-video comparison is now complete on three cases. The first request
+was rejected because the production API key had less than the required $1 of
+unused key allowance, even though the account had credit. After explicit approval
+and account verification, an isolated $3 key with one-hour expiry was used for
+three successful requests. The key was deleted and its local credential file
+removed afterward; the key list was checked to confirm only the production key
+remained. No production key limit or billing setting was changed and no credit
+purchase was made. The earlier failed request and its reservation were retained.
+
+## Direct video versus sampled frames
+
+Cases 01, 03 and 06 were sent as silent MP4 input to Gemini using OpenRouter's
+static video-processing mode. The comparison used the existing review schema
+and prompt with an explicit input adaptation, mapping reported moments to the
+same 48 timestamp anchors. It did not optimize a separate native-video prompt or
+set a verified dense sampling rate. These results apply to this configuration,
+not to every possible native-video setup.
+
+| Gemini 3.8 Flash input, same three cases | Completed | Passed structural checks | Median request time | Mean cost |
+| --- | ---: | ---: | ---: | ---: |
+| Silent video, static mode | 3 | 2 | 5.53 s | $0.00261 |
+| Eight contact sheets, 48 frames | 3 | 2 | 5.74 s | $0.00897 |
+
+The three additional requests cost **$0.00783075 total**. The API reported video
+input tokens, confirming that these were video requests. It did not expose the
+actual sampled frame timestamps, so fewer tokens cannot be treated as equivalent
+temporal coverage at a lower price.
+
+Direct video did not establish a coaching improvement:
+
+- Case 01 retained the correct clean-to-jerk sequence, but selected focus anchor
+  27 while citing only 26 and 28. The parser correctly rejected the replay marker.
+  Visual inspection did not establish the claimed loss of rack contact as a
+  justified correction from those cited images.
+- Case 03 passed the schema checks but placed the overhead receipt at anchor 15
+  (1.083 s). Inspection shows the bar still below overhead during pull/extension
+  there; an overhead squat is visible at anchor 22 (1.617 s). Its recommendation
+  to stand more decisively also did not establish the reference coach's main
+  balance and bar-separation issues. A structurally valid marker can still be
+  visually wrong.
+- Case 06 correctly retained the clean, long rack pause and subsequent jerk. Its
+  cue alleged backward hip movement/forward torso inclination during the dip,
+  citing anchors 34–36. Those anchors span a rack hold and rapid drive/transition;
+  the inspected images do not establish that this is the athlete's priority
+  correction. Dense phase inspection is still needed.
+
+There is no basis here to replace the frame pipeline with default static video.
+The useful next experiment is explicit temporal sampling and independent checks
+of cited events, alongside measured tracking. Do not relax replay validation to
+make the completion rate look better. A validated response format is not a
+validated coaching recommendation.
 
 ## Coaching findings
 
@@ -148,9 +193,10 @@ speed make those claims inappropriate.
 3. Keep overlay geometry in the vision pipeline. Give the coaching model supported
    phase windows and visible tracks; require an observation, a practical cue and
    a checkable expected change. Do not ask an LLM to invent an ideal bar path.
-4. Complete native-video testing, then compare a cheap first pass plus selective
-   Astra review against Astra-only coaching on blinded coach annotations. Do not
-   switch the production model solely on this six-case pilot.
+4. Compare explicit dense video sampling and a cheap first pass plus selective
+   Astra review against Astra-only coaching on blinded coach annotations. The
+   default-static video pilot did not establish an improvement. Do not switch
+   the production model solely on this six-case pilot.
 
 Reproduction commands and constraints are in the
 [benchmark README](../scripts/video/benchmark/README.md); the per-case scores and

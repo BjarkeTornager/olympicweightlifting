@@ -15,6 +15,7 @@ type Row = {
   case: string;
   model: string;
   input: string;
+  attempt: number;
   responseReceived: boolean;
   httpStatus: number;
   providerError: number | null;
@@ -41,7 +42,7 @@ for (const c of manifest.cases) {
     await fs.readFile(path.join(work, "input.json"), "utf8"),
   );
   for (const name of await fs.readdir(work)) {
-    if (!/-(sheets|native)-v2\.json$/.test(name)) continue;
+    if (!/-(sheets|native)-v2(?:-attempt\d+)?\.json$/.test(name)) continue;
     const raw = JSON.parse(await fs.readFile(path.join(work, name), "utf8"));
     let evidence = null;
     try {
@@ -61,6 +62,7 @@ for (const c of manifest.cases) {
       case: c.id,
       model: raw.requestedModel,
       input: name.includes("-native-") ? "native" : "sheets",
+      attempt: raw.attempt ?? 1,
       responseReceived: Boolean(raw.content),
       httpStatus: raw.httpStatus,
       providerError: raw.errorCode ?? null,
@@ -110,6 +112,35 @@ const models = [...new Set(rows.map((r) => r.model))].map((model) => {
       : null,
   };
 });
+// Compare modalities on the same cases. Failed attempts stay in rows/ledger,
+// but do not become duplicate successful observations in this summary.
+const nativeCases = new Set(
+  rows
+    .filter((r) => r.input === "native" && r.responseReceived)
+    .map((r) => r.case),
+);
+const pairedInputComparisons = [
+  ...new Set(rows.map((r) => `${r.model}:${r.input}`)),
+]
+  .map((group) => {
+    const r = rows.filter(
+      (r) =>
+        `${r.model}:${r.input}` === group &&
+        nativeCases.has(r.case) &&
+        r.responseReceived,
+    );
+    if (!r.length) return null;
+    return {
+      model: r[0].model,
+      input: r[0].input,
+      cases: [...new Set(r.map((v) => v.case))],
+      completedResponses: r.length,
+      acceptedAfterFix: r.filter((v) => v.acceptedAfterFix).length,
+      medianLatencySeconds: median(r.map((v) => v.latencyMs / 1000)),
+      meanCostUsd: r.reduce((sum, v) => sum + (v.costUsd ?? 0), 0) / r.length,
+    };
+  })
+  .filter((r) => r !== null);
 const ledger: Charge[] = JSON.parse(
   await fs.readFile(path.join(root, "cost-ledger.json"), "utf8"),
 );
@@ -125,6 +156,7 @@ const report = {
     .filter((c) => c.cost === undefined)
     .map((c) => ({ id: c.id, reservationUsd: c.reserved })),
   models,
+  pairedInputComparisons,
   rows,
   tracking: JSON.parse(
     await fs.readFile(path.join(root, "tracking/summary.json"), "utf8"),

@@ -49,6 +49,12 @@ if (selectedModels.some((m) => !allModels.includes(m)))
 const inputMode = option("input") ?? "sheets";
 if (!["sheets", "native"].includes(inputMode))
   throw Error("Unknown input mode");
+// Explicit retries get separate output files and reservations. Never overwrite
+// an earlier attempt or discard its unknown charge when resuming a comparison.
+const attempt = Number(option("attempt") ?? "1");
+if (!Number.isSafeInteger(attempt) || attempt < 1 || attempt > 10)
+  throw Error("Attempt must be an integer from 1 to 10");
+const runSuffix = `${inputMode}-v2${attempt === 1 ? "" : `-attempt${attempt}`}`;
 if (
   inputMode === "native" &&
   selectedModels.some((m) => m.startsWith("openai/"))
@@ -129,7 +135,7 @@ try {
     if (messages.reduce((n, m) => n + Buffer.byteLength(m.content), 0) > 30000)
       throw Error("Oversized prompt");
     for (const model of selectedModels) {
-      const id = `${c.id}:${model}:${inputMode}-v2`;
+      const id = `${c.id}:${model}:${runSuffix}`;
       if (ledger.some((l) => l.id === id)) continue;
       const entry = catalog.data.find((m) => m.id === model);
       if (
@@ -168,6 +174,8 @@ try {
           event: "request",
           case: c.id,
           model,
+          inputMode,
+          attempt,
           reservedUsd: reservation,
           committedUsd: committed(ledger),
         }),
@@ -237,7 +245,7 @@ try {
       const latencyMs = Math.round(performance.now() - started);
       const output = path.join(
         work,
-        model.replaceAll("/", "--") + `-${inputMode}-v2.json`,
+        model.replaceAll("/", "--") + `-${runSuffix}.json`,
       );
       // Deliberately exclude request headers, credential, media and hidden reasoning from saved results.
       const content = raw.choices?.[0]?.message?.content ?? "";
@@ -247,6 +255,8 @@ try {
           {
             id: raw.id,
             requestedModel: model,
+            inputMode,
+            attempt,
             returnedModel: raw.model,
             provider: raw.provider,
             httpStatus: response.status,
@@ -283,6 +293,7 @@ try {
         case: c.id,
         model,
         inputMode,
+        attempt,
         costUsd: raw.usage.cost,
         latencyMs,
         parsed: Boolean(parsed),

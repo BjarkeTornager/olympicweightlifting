@@ -2,6 +2,13 @@
 
 Research date: 12 September 2026. Baseline: `d368064a268d8bf656b31f37dda0992f21945aa0`.
 
+Follow-up: the authorized [public YouTube diagnostic pilot](lift-video-benchmark-2026-09-12.md)
+now includes actual paid frame and native-video tests, local tracker comparisons,
+and a tested response-validation fix. Statements below about tests not yet run
+describe the original research phase; the linked report contains the measured
+results and limitations. Default static video did not establish a coaching
+improvement, and a schema-valid response still cited a visually incorrect phase.
+
 ## Recommendation
 
 Build a measured video-analysis pipeline with a coaching layer. The strongest next investment is automatic plate/hub tracking, better athlete tracking, and an evaluated lift-phase timeline. Use a vision-language model to interpret visible events and explain a small number of useful corrections. Generate overlay geometry from tracked evidence, never from prose alone.

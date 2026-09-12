@@ -64,6 +64,13 @@ there are no automatic retries. A US$0.50 margin remains below the authorized ca
 Keep the ledger when resuming. A crash can leave a lock: check that no runner is
 active before removing that lock, and retain all reservations.
 
+When deliberately retrying a failed case after resolving its cause, select that
+case and add `--attempt=2` (or the next unused attempt number, up to 10). This
+creates a separate result and reservation; the original attempt and uncertain
+charge remain in the ledger. Repeating the same command skips recorded attempts.
+Do not combine failed-case retries with already successful cases unless repeated
+measurements are intended. Summary rows retain attempt numbers.
+
 The request uses ZDR endpoints and disallows provider data collection. This is
 also deliberately restricted to the fixed six public cases. No production user
 images, chats or health records are loaded or changed.

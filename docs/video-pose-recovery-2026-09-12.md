@@ -37,3 +37,27 @@ subjects. The video Python suite passed eight tests, with two local skips for
 Linux sandbox/model setup; the isolated production CPU probe used the actual
 model. All 167 Node tests and 14 Chromium/WebKit video tests passed. Production
 verification is recorded after release.
+
+## Release
+
+Railway deployment `aa46ed8e-2816-45b1-9961-5205715a38b9` succeeded from source
+`fe2b802dd2716bcb95fc5cfc2b06cac123c2dd28`. Deployed code and private pilot settings
+were verified. All 14 hosted Chromium/WebKit video checks passed, including the
+new limited-review explanation and unsigned/foreign-origin access protections.
+
+The exact tracked-source archive was deployed directly to Railway. GitHub's
+previously identified authentication issue remains; no new GitHub CI run is
+claimed. Credentials, private artifacts and the unrelated routing draft were
+excluded. One saved owner clip was reanalysed to verify the complete path;
+other saved reviews were not changed.
+
+The live run finished `ready` without error. SAM returned athlete outlines in
+209 of 212 sampled frames, and Coach saved one timestamped correction moment.
+A private, exact-evidence-frame preview was inspected: its outline followed the
+foreground lifter while excluding the spectators and the occluding weight plate.
+The temporary preview was then deleted. The private refinement checkpoint was
+cleared on completion.
+
+Plate outlines were still unavailable (zero frames), so this run does not validate
+plate/bar tracking or speed measurement. The final result and this limitation
+were reported separately; completed execution is not equated with perfect tracking.

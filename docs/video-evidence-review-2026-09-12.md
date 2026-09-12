@@ -24,6 +24,8 @@ Paused inspection uses the video's settled playback position rather than late pr
 
 Inspection requests made before media metadata is available are retained and applied when the clip is ready. The already-downloaded private blob is preloaded for decoding. A second regression deliberately delays media readiness: no marker appears before the requested frame is decoded, then inspection resumes without requiring another tap.
 
+Cue selection centres the actual video, rather than scrolling the whole review with its taller feedback cards. The Linux WebKit failure trace showed the video entirely outside the viewport after inspection was selected, with the decoder stuck seeking. The browser regression now checks that at least 95% of the video is onscreen before expecting the evidence highlight; the same rule applies to slow replay.
+
 ## Foreground tracking
 
 Local MediaPipe inference remains CPU-based with the existing pinned model and Linux socket isolation. The selector can follow a dominant foreground body with background spectators present. It matches visible torso anchors and body scale, suppresses ambiguous matches, permits short tracking gaps, and never falls back to a different remaining person after losing the selected subject. This is a conservative geometric heuristic, not person recognition; it may still fail when a spotter is more prominent, bodies overlap, or the athlete is obscured.

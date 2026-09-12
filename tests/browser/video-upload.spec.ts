@@ -471,6 +471,7 @@ for (const partial of [false, true])
         "Feedback on the visible movement",
       );
     await dialog.getByRole("button", { name: "Freeze & inspect" }).click();
+    await expect(video).toBeInViewport({ ratio: 0.95 });
     if (partial) {
       await expect(dialog.getByLabel("Coach focus highlight")).not.toBeVisible();
       await video.evaluate((v: HTMLVideoElement) => {
@@ -501,6 +502,7 @@ for (const partial of [false, true])
     ).toBeCloseTo(1, 2);
     await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
     await dialog.getByRole("button", { name: "Watch this moment" }).click();
+    await expect(video).toBeInViewport({ ratio: 0.95 });
     await expect(dialog.getByLabel("Playback speed")).toHaveValue("0.5");
     await expect(dialog.getByLabel("Coaching overlay")).toContainText(
       "highlighted elbow",

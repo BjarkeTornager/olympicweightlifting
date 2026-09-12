@@ -181,6 +181,7 @@ export function GuidedReplay({
   function replay(moment: CoachingMoment) {
     const v = video.current;
     if (!v) return;
+    v.scrollIntoView({ block: "center", behavior: "instant" });
     setSelected(moment.id);
     setOverlay(true);
     setSpeed("0.5");
@@ -188,24 +189,20 @@ export function GuidedReplay({
     seekTo(moment.start);
     stopAt.current = { end: moment.end, freeze: moment.evidenceTime };
     play();
-    container.current?.scrollIntoView({
-      block: "nearest",
-      behavior: "instant",
-    });
   }
   function inspect(moment: CoachingMoment, at = moment.evidenceTime) {
     const v = video.current;
     if (!v) return;
+    // Scrolling the entire review can leave the video offscreen when the cue
+    // cards make it taller than the viewport. WebKit can suspend decoding of
+    // that offscreen media, and the user cannot see the requested evidence.
+    v.scrollIntoView({ block: "center", behavior: "instant" });
     stopAt.current = null;
     v.pause();
     setPlaying(false);
     setSelected(moment.id);
     setOverlay(true);
     seekTo(at);
-    container.current?.scrollIntoView({
-      block: "nearest",
-      behavior: "instant",
-    });
   }
 
   return (

@@ -140,6 +140,7 @@ test("3D sends only matching normalized media and selected polygons; validates P
         "duration",
         "frames",
         "height",
+        "motionVersion",
         "sha256",
         "version",
         "width",
@@ -150,6 +151,15 @@ test("3D sends only matching normalized media and selected polygons; validates P
   assert.deepEqual(actual, expected);
   for (const bad of [
     { ...expected, sourceSha256: "0".repeat(64) },
+    {
+      ...expected,
+      motion: {
+        version: 1,
+        status: "available",
+        reason: "Unexpected correction",
+        clips: [{ id: "not-requested", start: 0.5, end: 1, frames: [] }],
+      },
+    },
     { ...expected, frames: [expected.frames[1], expected.frames[0]] },
     {
       ...expected,

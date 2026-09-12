@@ -1,4 +1,4 @@
-"""Observed SAM 3D Body overlays, exact selected-lifter frames only.
+"""Observed and constrained suggested movement, selected-lifter frames only.
 
 No ideal-form inference, measurements, external URLs or persistent media. The
 returned PNGs are shaded projections of a mesh, not joint-confidence evidence.
@@ -23,8 +23,13 @@ def finite(x):
 
 
 def validate_manifest(m):
-    if not isinstance(m, dict) or set(m) != {'version', 'sha256', 'width', 'height', 'duration', 'frames'}:
+    required = {'version', 'sha256', 'width', 'height', 'duration', 'frames'}
+    if not isinstance(m, dict) or not required.issubset(m) or set(m)-required-{'motionVersion','corrections'}:
         raise ValueError('Invalid body manifest')
+    if 'motionVersion' in m and (type(m['motionVersion']) is not int or m['motionVersion'] != 1):
+        raise ValueError('Invalid motion version')
+    if 'corrections' in m and m.get('motionVersion') != 1:
+        raise ValueError('Corrections require the movement protocol')
     if m['version'] != 1 or not isinstance(m['sha256'], str) or len(m['sha256']) != 64 or any(c not in '0123456789abcdef' for c in m['sha256']):
         raise ValueError('Invalid source')
     if any(type(m[k]) is not int or not 1 <= m[k] <= 960 for k in ('width', 'height')):
@@ -47,6 +52,14 @@ def validate_manifest(m):
                 raise ValueError('Invalid region')
             if any(not isinstance(xy, list) or len(xy) != 2 or any(not finite(x) or not 0 <= x <= 1 for x in xy) for xy in p):
                 raise ValueError('Invalid polygon')
+    if 'corrections' in m:
+        from correction_engine import validate_plan
+        if not isinstance(m['corrections'],list) or len(m['corrections']) != 1:
+            raise ValueError('One main correction per attempt')
+        for plan in m['corrections']:
+            validate_plan(plan)
+            if any(not any(abs(f['t']-plan[k]) < .00001 for f in m['frames']) for k in ('referenceTime','focusTime')):
+                raise ValueError('Correction must use exact evidence frames')
     return m
 
 
@@ -83,7 +96,7 @@ def mask_for(polygon, w, h):
     return mask
 
 
-def render_body(result, faces, mask, plates):
+def render_body(result, faces, mask, plates, *, suggested=False):
     import cv2
     import numpy as np
     h, w = mask.shape
@@ -112,12 +125,13 @@ def render_body(result, faces, mask, plates):
     overlap = np.logical_and(silhouette, observed).sum() / max(1, np.logical_or(silhouette, observed).sum())
     # Model-to-model agreement is only a coarse misalignment rejection, not a
     # confidence score or technique threshold. Unselected/occluded pixels stay clear.
-    if overlap < .55:
+    if not suggested and overlap < .55:
         return None
-    painted[:, :, 3][~observed] = 0
+    if not suggested:
+        painted[:, :, 3][~observed] = 0
     for plate in plates:
         painted[:, :, 3][mask_for(plate, w, h) > 0] = 0
-    scale = min(1, 640/max(w, h))
+    scale = min(1, (480 if suggested else 640)/max(w, h))
     if scale < 1:
         painted = cv2.resize(painted, (round(w*scale), round(h*scale)), interpolation=cv2.INTER_AREA)
     ok, png = cv2.imencode('.png', painted)
@@ -134,6 +148,8 @@ def analyse(estimator, media, manifest, expires):
     if not 0 < len(media) <= MAX_BYTES or hashlib.sha256(media).hexdigest() != m['sha256']:
         raise ValueError('Mismatched source')
     frames = []
+    plans = m.get('corrections', [])
+    motion_clips = []
     with tempfile.TemporaryDirectory(prefix='lift-body-') as root:
         source = Path(root)/'clip.mp4'
         source.write_bytes(media)
@@ -152,11 +168,27 @@ def analyse(estimator, media, manifest, expires):
         if abs(times[-1]-m['duration']) > .002 or any(f['width'] != m['width'] or f['height'] != m['height'] for f in raw):
             raise ValueError('Mismatched source dimensions')
         wanted = {}
+        original_indices = {}
         for f in m['frames']:
             i = min(range(len(times)), key=lambda i: abs(times[i]-f['t']))
             if abs(times[i]-f['t']) > .002 or i in wanted:
                 raise ValueError('Evidence frame mismatch')
             wanted[i] = f
+            original_indices[i] = f
+        plan_indices = []
+        for plan in plans:
+            start, end = plan['referenceTime'], plan['focusTime']
+            picks = sorted(set(min(range(len(times)), key=lambda i:abs(times[i]-t))
+                               for t in np.linspace(start,end,min(66,math.ceil((end-start)*24)+1))))
+            plan_indices.append(picks)
+            for i in picks:
+                if i in wanted: continue
+                nearest = min(m['frames'],key=lambda f:abs(f['t']-times[i]))
+                # Keep a bounded link to the selected person's real mask. Sparse
+                # tracking must not turn into invented identity through a gap.
+                wanted[i] = {'t':round(times[i],6), 'person':nearest['person'] if abs(nearest['t']-times[i]) <= .14 else None,
+                             'plates':[]}
+        reconstructed = {}
         cap = cv2.VideoCapture(str(source))
         try:
             for i in range(max(wanted)+1):
@@ -177,13 +209,76 @@ def analyse(estimator, media, manifest, expires):
                             bboxes=np.array([[xs.min(), ys.min(), xs.max()+1, ys.max()+1]], dtype=np.float32),
                             masks=(mask > 127).astype(np.uint8)[None], inference_type='body')
                     if len(predictions) == 1:
-                        png = render_body(predictions[0], estimator.faces, mask, f['plates'])
-                        if png: record['image'] = png
-                frames.append(record)
+                        prediction = predictions[0]
+                        png = render_body(prediction, estimator.faces, mask, f['plates'])
+                        if png:
+                            record['image'] = png
+                            # Keep temporary model parameters only inside this
+                            # request; none enter the persistent weights volume.
+                            reconstructed[i] = prediction
+                if i in original_indices:
+                    frames.append(record)
         finally:
             cap.release()
+        from correction_engine import solve, frame_target, LANDMARKS
+        from collections import Counter
+        diagnostics = Counter()
+        for plan,picks in zip(plans,plan_indices):
+            clip = {'id':plan['id'],'start':plan['referenceTime'],'end':plan['focusTime'],'frames':[]}
+            reference = reconstructed.get(picks[0])
+            focus = reconstructed.get(picks[-1])
+            valid = reference is not None and focus is not None
+            if valid:
+                for source,points in [(reference,plan['reference']), (focus,plan['observed'])]:
+                    actual = np.array([source['pred_keypoints_2d'][LANDMARKS[p['id']]] for p in points])
+                    expected = np.array([[p['x']*m['width'],p['y']*m['height']] for p in points])
+                    if np.linalg.norm(actual-expected,axis=1).max() > max(m['width'],m['height'])*.035:
+                        valid = False
+            previous = None
+            changed_frames = 0
+            focus_solved = False
+            for i in picks:
+                row = {'t':round(times[i],6)}
+                prediction = reconstructed.get(i)
+                reason = 'reference_mismatch' if not valid else 'body_unavailable' if prediction is None else 'phase_geometry'
+                if valid and prediction is not None:
+                    target = frame_target(plan,prediction,reference,m['width'],m['height'])
+                    if target is not None:
+                        adjusted, report = solve(estimator.model.head_pose,prediction,target,m['width'],m['height'],expires,previous=previous)
+                        reason = report['reason']
+                        if report['reason'] == 'no_correction': adjusted = prediction
+                        if adjusted is not None:
+                            png = render_body(adjusted,estimator.faces,np.zeros((m['height'],m['width']),np.uint8),wanted[i]['plates'],suggested=True)
+                            if png:
+                                row['image'] = png
+                                previous = report.get('delta')
+                                if report['reason'] == 'solved':
+                                    changed_frames += 1
+                                    if i == picks[-1]: focus_solved = True
+                        else: previous = None
+                if 'image' not in row: previous = None
+                clip['frames'].append(row)
+                diagnostics['rendered' if 'image' in row else reason] += 1
+            # An unchanged reconstruction at the start must never masquerade as
+            # a correction. Require the actual focus target and a usable motion
+            # sequence; an isolated plausible mesh is insufficient.
+            coverage = sum('image' in f for f in clip['frames']) / max(1,len(clip['frames']))
+            if not focus_solved or changed_frames < 2 or coverage < .85:
+                clip['frames'] = [{'t':f['t']} for f in clip['frames']]
+                diagnostics['sequence_withheld'] += 1
+            motion_clips.append(clip)
+        if plans:
+            print(json.dumps({'stage':'movement_reconstruction','results':dict(diagnostics)}),flush=True)
     count = sum('image' in f for f in frames)
-    return {'version': 1, 'model': 'sam-3d-body', 'revision': REVISION, 'sourceSha256': m['sha256'],
+    motion_count = sum('image' in f for c in motion_clips for f in c['frames'])
+    motion_total = sum(len(c['frames']) for c in motion_clips)
+    result = {'version': 1, 'model': 'sam-3d-body', 'revision': REVISION, 'sourceSha256': m['sha256'],
             'width': m['width'], 'height': m['height'], 'status': 'tracked' if count == len(frames) else 'partial' if count else 'unavailable',
             'reason': 'Observed body reconstruction at analysed frames; hands and hidden body parts are approximate.' if count else 'No body reconstruction aligned well enough with the selected lifter.',
             'frames': frames}
+    if m.get('motionVersion') == 1:
+        result['motion'] = {'version':1,'status':'available' if motion_count and motion_count == motion_total else 'partial' if motion_count else 'unavailable',
+                       'reason':'Suggested movement for the supported coaching cue. Missing or uncertain frames are left clear.' if motion_count else
+                                'No supported movement target could be reconstructed for this review. Use the coaching cue and evidence frames.',
+                       'clips':motion_clips}
+    return result

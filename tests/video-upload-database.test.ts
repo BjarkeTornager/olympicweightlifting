@@ -435,7 +435,7 @@ test(
       assert.equal("checkpoint" in legacyCheckpoint, false);
       assert.equal("failure" in legacyCheckpoint, false);
       await pool.query(
-        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','3') WHERE user_id=$1 AND id=$2",
+        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','4') WHERE user_id=$1 AND id=$2",
         [users[0], automatic.id],
       );
       assert.equal(
@@ -754,6 +754,10 @@ test(
             resume,
           ) => {
             assert.equal(config?.endpoint, process.env.VIDEO_BODY_URL);
+            assert.ok(
+              _analysis.coaching,
+              "feedback is established before computing a suggested pose",
+            );
             assert.ok(resume);
             if (++bodyCalls === 1) {
               await resume.saveJob({
@@ -777,6 +781,21 @@ test(
               frames: [
                 { t: 0.5, image: "data:image/png;base64,iVBORw0KGgoAAA" },
               ],
+              motion: {
+                version: 1,
+                status: "available",
+                reason: "Synthetic",
+                clips: [
+                  {
+                    id: "synthetic",
+                    start: 0.5,
+                    end: 1,
+                    frames: [
+                      { t: 0.5, image: "data:image/png;base64,iVBORw0KGgoAAA" },
+                    ],
+                  },
+                ],
+              },
             };
           };
         const first = await claimVideo();
@@ -802,6 +821,7 @@ test(
         );
         const second = await claimVideo();
         assert.ok(second);
+        const modelsBeforeResume = queueModels;
         await runVideoJob(
           second,
           queuedModel,
@@ -813,10 +833,20 @@ test(
         const bodyReview = await getVideo(users[0], bodyInput.id);
         assert.equal(bodyReview.status, "ready");
         assert.equal(bodyCalls, 2);
+        assert.equal(
+          queueModels,
+          modelsBeforeResume,
+          "queued correction resumes without regenerating Coach's advice",
+        );
         assert.equal(bodyReview.analysis?.body?.frames.length, 1);
         assert.deepEqual(
           (await listVideos(users[0])).find((v) => v.id === bodyInput.id)
             ?.analysis?.body?.frames,
+          [],
+        );
+        assert.deepEqual(
+          (await listVideos(users[0])).find((v) => v.id === bodyInput.id)
+            ?.analysis?.body?.motion?.clips,
           [],
         );
         await assert.rejects(getVideo(users[1], bodyInput.id), /not found/);

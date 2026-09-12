@@ -64,7 +64,7 @@ export function visiblePoseAt(a: VideoAnalysis, time: number): BodyPoint[] {
 
 // A narrow, illustrative counterfactual: preserve THIS lifter's earlier trunk
 // orientation. Pixels are never warped and an LLM never chooses joint coordinates.
-// Visible lower-body points stay fixed; upper-body segment lengths are preserved
+// Hands, shoulders and feet stay fixed; limb lengths are preserved
 // in image-pixel space, including non-square portrait video.
 export function buildPostureGhost(
   a: VideoAnalysis,
@@ -208,50 +208,45 @@ export function buildPostureGhost(
         Math.abs(referenceAngle) > (15 * Math.PI) / 180)
     )
       continue;
-    const lower = [hipId, 25 + side, ankleId, heelId, toeId];
-    const elbowId = 13 + side,
-      wristId = 15 + side;
+    // Keep the shoulders/arms with the bar. Restore the reference torso
+    // orientation by repositioning the hips, then solve the knee with planted
+    // feet and unchanged thigh/shin lengths. Rotating the shoulder around a
+    // fixed hip can otherwise demand an impossible arm position.
     const points = ids.map((id) => current.get(id)!);
-    const suggested = points.map((p) => {
-      if (lower.includes(p.id) || p.id === wristId || p.id === elbowId)
-        return { ...p };
-      const x = (p.x - hip.x) * w,
-        y = (p.y - hip.y) * h;
-      return {
-        id: p.id,
-        x: hip.x + (x * Math.cos(delta) - y * Math.sin(delta)) / w,
-        y: hip.y + (x * Math.sin(delta) + y * Math.cos(delta)) / h,
-      };
-    });
-    // Keep the hand at its observed bar contact. Solve the elbow from the two
-    // observed limb lengths instead of rotating the hand away from the bar.
-    const targetShoulder = suggested.find((p) => p.id === shoulderId)!,
-      wrist = current.get(wristId)!,
-      elbow = current.get(elbowId)!;
-    const upperLength = distance(shoulder, elbow, w, h),
-      forearmLength = distance(elbow, wrist, w, h),
-      span = distance(targetShoulder, wrist, w, h);
+    const kneeId = 25 + side;
+    const knee = current.get(kneeId)!,
+      ankle = current.get(ankleId)!;
+    const targetHip = {
+      id: hipId,
+      x: shoulder.x - (length * Math.sin(referenceAngle)) / w,
+      y: shoulder.y + (length * Math.cos(referenceAngle)) / h,
+    };
+    const thigh = distance(hip, knee, w, h),
+      shin = distance(knee, ankle, w, h);
+    const span = distance(targetHip, ankle, w, h);
     if (
       span < h * 0.01 ||
-      span > upperLength + forearmLength ||
-      span < Math.abs(upperLength - forearmLength)
+      span > thigh + shin + 1e-7 ||
+      span < Math.abs(thigh - shin) ||
+      distance(targetHip, hip, w, h) > h * 0.08
     )
       continue;
-    const along =
-        (upperLength ** 2 - forearmLength ** 2 + span ** 2) / (2 * span),
-      offset = Math.sqrt(Math.max(0, upperLength ** 2 - along ** 2)),
-      dx = ((wrist.x - targetShoulder.x) * w) / span,
-      dy = ((wrist.y - targetShoulder.y) * h) / span;
+    const along = (thigh ** 2 - shin ** 2 + span ** 2) / (2 * span);
+    const offset = Math.sqrt(Math.max(0, thigh ** 2 - along ** 2));
+    const dx = ((ankle.x - targetHip.x) * w) / span,
+      dy = ((ankle.y - targetHip.y) * h) / span;
     const choices = [-1, 1].map((sign) => ({
-      id: elbowId,
-      x: targetShoulder.x + (along * dx - sign * offset * dy) / w,
-      y: targetShoulder.y + (along * dy + sign * offset * dx) / h,
+      id: kneeId,
+      x: targetHip.x + (along * dx - sign * offset * dy) / w,
+      y: targetHip.y + (along * dy + sign * offset * dx) / h,
     }));
-    const targetElbow = choices.sort(
-      (p, q) => distance(p, elbow, w, h) - distance(q, elbow, w, h),
+    const targetKnee = choices.sort(
+      (p, q) => distance(p, knee, w, h) - distance(q, knee, w, h),
     )[0];
-    if (distance(targetElbow, elbow, w, h) > h * 0.08) continue;
-    suggested[suggested.findIndex((p) => p.id === elbowId)] = targetElbow;
+    if (distance(targetKnee, knee, w, h) > h * 0.08) continue;
+    const suggested = points.map((p) =>
+      p.id === hipId ? targetHip : p.id === kneeId ? targetKnee : { ...p },
+    );
     if (
       suggested.some(
         (p) =>
@@ -283,7 +278,7 @@ export function buildPostureGhost(
           [heelId, toeId],
         ],
         explanation:
-          "The teal guide illustrates your earlier torso position with your hand and lower body held at their observed positions. It is a 2D suggestion, not a reconstructed perfect lift.",
+          "The teal guide suggests a hip and knee position that preserves your earlier torso orientation while keeping your shoulders, hands and feet at their observed positions. It illustrates this coaching cue; it is not a universal ideal lift.",
       },
     };
   }

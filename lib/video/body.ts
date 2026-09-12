@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { suggestedMotionSchema, mergeSuggestedMotion } from "./motion";
 export const BODY_VERSION = 1;
 export const bodySchema = z
   .object({
@@ -10,6 +11,7 @@ export const bodySchema = z
     height: z.number().int().positive().max(960),
     status: z.enum(["tracked", "partial", "unavailable"]),
     reason: z.string().max(240),
+    motion: suggestedMotionSchema.optional(),
     failure: z
       .enum(["deadline", "service_unavailable", "invalid_response"])
       .optional(),
@@ -30,6 +32,17 @@ export const bodySchema = z
   })
   .strict();
 export type VideoBody = z.infer<typeof bodySchema>;
+export function playbackBodyFor(
+  body: VideoBody | undefined,
+  selected: string | null,
+  suggested: boolean,
+) {
+  if (!suggested || !body) return body;
+  const clips =
+    body.motion?.clips.filter((c) => c.frames.some((f) => f.image)) ?? [];
+  const clip = clips.find((c) => c.id === selected) ?? clips[0];
+  return clip ? { ...body, frames: clip.frames } : body;
+}
 // Evidence timestamps have six decimal places. Seeking exactly to a rounded-
 // down PTS can display the preceding frame. Enter the intended frame by 1 ms,
 // well inside the supported <=120 FPS source interval, without changing its ID.
@@ -64,6 +77,14 @@ export function mergeBody(
   return {
     ...current,
     frames,
+    motion: mergeSuggestedMotion(
+      previous?.sourceSha256 === current.sourceSha256
+        ? previous.motion
+        : undefined,
+      current.motion,
+      start,
+      end,
+    ),
     status: !count
       ? "unavailable"
       : current.status === "unavailable" || count < frames.length

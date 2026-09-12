@@ -12,11 +12,12 @@ app = modal.App('lift-journal-sam3d')
 image = (tested_image.apt_install('ffmpeg')
          .env({'PYTHONPATH': '/opt/lift:/opt/sam3d'})
          .add_local_file(ROOT/'body_engine.py', '/opt/lift/body_engine.py')
+         .add_local_file(ROOT/'correction_engine.py', '/opt/lift/correction_engine.py')
          .add_local_file(ROOT/'modal_probe.py', '/root/modal_probe.py'))
 
 
 @app.cls(image=image, gpu='L40S', cpu=4, memory=32768, min_containers=0,
-         max_containers=1, scaledown_window=30, timeout=240, startup_timeout=300,
+         max_containers=1, scaledown_window=30, timeout=480, startup_timeout=300,
          volumes={'/models': weights}, secrets=[secret])
 class Reconstructor:
     @modal.enter()
@@ -36,6 +37,7 @@ class Reconstructor:
 common = (modal.Image.debian_slim(python_version='3.12').pip_install('fastapi==0.135.1')
           .env({'PYTHONPATH': '/opt/lift'})
           .add_local_file(ROOT/'body_engine.py', '/opt/lift/body_engine.py')
+          .add_local_file(ROOT/'correction_engine.py', '/opt/lift/correction_engine.py')
           .add_local_file(ROOT.parent/'sam3'/'engine.py', '/opt/lift/engine.py')
           .add_local_file(ROOT.parent/'sam3'/'gateway.py', '/opt/lift/gateway.py')
           .add_local_file(ROOT/'modal_probe.py', '/root/modal_probe.py'))

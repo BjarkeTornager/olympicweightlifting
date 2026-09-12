@@ -3379,6 +3379,14 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .video-review-player>.video-body-shadow {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:contain;}
 .video-body-shadow.correction-reference {filter:grayscale(1);opacity:.55;}
 .video-body-controls {padding:12px 0;border-bottom:1px solid var(--line,#e7e7e7);}
+.video-movement-compare {display:grid;gap:12px;padding:18px;border:1px solid #b8d9cf;border-radius:16px;background:#f1f8f5;}
+.video-movement-compare p {margin:6px 0 0;}
+.video-movement-compare button[aria-pressed="true"] {background:#175c50;color:white;border-color:#175c50;}
+.video-shadow-visibility {display:flex!important;align-items:center;gap:12px;font-size:13px;}
+.video-shadow-visibility input {min-width:80px;max-width:180px;accent-color:#175c50;}
+.video-movement-compare .button {font-size:13px;min-height:44px;padding:10px 12px;}
+.video-movement-compare .video-evidence-actions {gap:8px;}
+.video-comparison-options summary {font-size:13px;cursor:pointer;}
 .video-seed img {display:block;width:100%;height:auto;}
 .video-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin:1rem 0;}
 .video-metrics>div {padding:.85rem;background:#f7f7f4;border-radius:12px;}

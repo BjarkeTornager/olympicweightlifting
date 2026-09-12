@@ -140,13 +140,16 @@ export default function PrivacyPage() {
           3D body reconstruction is enabled, that worker also uses the selected
           lifter regions to reconstruct an approximate body surface. The
           projected body shadows are stored only with your private review and
-          are deleted with it. Body shadows show observed positions; labelled
-          posture guides illustrate suggested changes. Hidden joints, hands and
-          depth are estimates, not validated technique measurements. Optional
-          bar measurements use your marked plate, scale and timing confirmation
-          and are experimental. Video review does not log workouts. The
-          alternative on-device frame review keeps the source on your device and
-          saves four Activity image sheets, which can be deleted in Images.
+          are deleted with it. The observed reconstruction shows estimated
+          recorded positions. Suggested movement reposes that reconstruction for
+          a supported coaching cue while keeping body proportions and contact
+          points constrained. It covers only the labelled interval; uncertain
+          frames remain clear. Hidden joints, hands and depth are estimates, not
+          validated technique measurements or a universal ideal lifting form.
+          Optional bar measurements use your marked plate, scale and timing
+          confirmation and are experimental. Video review does not log workouts.
+          The alternative on-device frame review keeps the source on your device
+          and saves four Activity image sheets, which can be deleted in Images.
         </p>
         <p>
           The assistant can read only your journal through limited tools. It

@@ -8,6 +8,7 @@ import {
 } from "./gpu-job";
 import { segmentationAt } from "./segmentation";
 import type { VideoAnalysis } from "./types";
+import { movementTargets } from "./motion-plan";
 export function bodyConfigurationForAccount(
   account: { email: string; emailVerified: boolean },
   env: Record<string, string | undefined> = process.env,
@@ -42,6 +43,13 @@ export async function reconstructBody(
     status: "unavailable",
     reason,
     frames: [],
+    motion: {
+      version: 1,
+      status: "unavailable",
+      reason:
+        "The suggested movement could not be reconstructed. Your coaching and original video are available.",
+      clips: [],
+    },
   });
   if (analysis.segmentation?.sourceSha256 !== hash)
     return unavailable(
@@ -60,13 +68,16 @@ export async function reconstructBody(
     return unavailable(
       "The lifter could not be selected clearly enough for body reconstruction.",
     );
+  const corrections = movementTargets(analysis);
   const manifest = {
     version: 1,
     sha256: hash,
+    motionVersion: 1,
     width: analysis.width,
     height: analysis.height,
     duration: analysis.duration,
     frames,
+    ...(corrections.length ? { corrections } : {}),
   };
   const encoded = Buffer.from(JSON.stringify(manifest));
   if (frames.length > 48 || encoded.length > 200_000)
@@ -82,7 +93,7 @@ export async function reconstructBody(
     budget,
     resume,
     contentType: "application/octet-stream",
-    maxResponse: 9_000_000,
+    maxResponse: 24_000_000,
     unavailable: (failure) => ({
       ...unavailable(
         "The 3D body overlay could not finish. Your video and coaching are still available.",
@@ -103,7 +114,29 @@ export async function reconstructBody(
         )
       )
         throw Error("Mismatched body evidence");
-      for (const f of result.frames)
+      if (result.motion) {
+        if (result.motion.clips.length !== corrections.length)
+          throw Error("Mismatched correction count");
+        for (const [i, clip] of result.motion.clips.entries()) {
+          const target = corrections[i];
+          if (
+            clip.id !== target.id ||
+            clip.start !== target.referenceTime ||
+            clip.end !== target.focusTime ||
+            clip.frames.some(
+              (f, j) =>
+                f.t < clip.start - 0.002 ||
+                f.t > clip.end + 0.002 ||
+                (j > 0 && f.t <= clip.frames[j - 1].t),
+            )
+          )
+            throw Error("Mismatched correction evidence");
+        }
+      }
+      for (const f of [
+        ...result.frames,
+        ...(result.motion?.clips.flatMap((c) => c.frames) ?? []),
+      ])
         if (f.image) {
           const png = Buffer.from(f.image.slice(22), "base64");
           if (png.length < 33 || png.subarray(12, 16).toString() !== "IHDR")

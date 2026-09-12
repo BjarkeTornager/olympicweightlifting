@@ -49,4 +49,12 @@ class BodyGatewayTest(unittest.TestCase):
         m=copy.deepcopy(M);m['frames'][0]['person'][0][0]=float('nan')
         with self.assertRaises(ValueError): validate_manifest(m)
 
+    def test_movement_protocol_is_explicit_and_legacy_requests_still_validate(self):
+        self.assertEqual(validate_manifest(copy.deepcopy(M)),M)
+        movement={**copy.deepcopy(M),'motionVersion':1}
+        self.assertEqual(validate_manifest(movement),movement)
+        for change in [{'motionVersion':True},{'motionVersion':2},{'corrections':[]},
+                       {'motionVersion':1,'corrections':[]}]:
+            with self.assertRaises(ValueError):validate_manifest({**copy.deepcopy(M),**change})
+
 if __name__=='__main__':unittest.main()

@@ -63,7 +63,7 @@ function ReviewResult({
   const coachingUpdate =
     review.status === "ready" && a?.coaching?.version !== 2;
   const bodyUpdate =
-    review.status === "ready" && bodyOverlayEnabled && !a?.body;
+    review.status === "ready" && bodyOverlayEnabled && !a?.body?.motion;
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -83,14 +83,16 @@ function ReviewResult({
         >
           <strong>
             {bodyUpdate
-              ? "3D body review is available"
+              ? a?.body
+                ? "Suggested movement is available"
+                : "3D body review is available"
               : "Updated coaching is available"}
           </strong>
           <p>
             Update this saved review for a coaching priority, a practice task
             and a suggested posture guide when the visible evidence supports it.
             {bodyUpdate &&
-              " This also adds an observed 3D body shadow when the lifter can be reconstructed clearly."}
+              " This adds a suggested movement comparison when Coach can establish a supported posture adjustment. Your original clip is reused."}
           </p>
           <Button disabled={busy} onClick={onReanalyse}>
             Update analysis

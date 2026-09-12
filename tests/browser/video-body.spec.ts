@@ -32,8 +32,12 @@ test("upgrading an existing review to 3D keeps the selected lift", async ({
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Jerk.*Review ready/ }).click();
   await expect(dialog.getByText("3D body review is available")).toBeVisible();
-  await dialog.getByRole("button", { name: "Update analysis", exact: true }).click();
-  await expect(dialog.getByRole("status")).toContainText("Waiting to reanalyse");
+  await dialog
+    .getByRole("button", { name: "Update analysis", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText(
+    "Waiting to reanalyse",
+  );
 });
 
 for (const width of [390, 1280]) {
@@ -82,6 +86,9 @@ for (const width of [390, 1280]) {
     await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
     await dialog.getByRole("button", { name: /Jerk.*Review ready/ }).click();
     await dialog
+      .getByText("Observed body reconstruction", { exact: true })
+      .click();
+    await dialog
       .getByRole("button", { name: "Inspect 3D body", exact: true })
       .click();
     const body = dialog.getByRole("img", {
@@ -96,7 +103,7 @@ for (const width of [390, 1280]) {
     await dialog
       .getByRole("button", { name: "Show suggested correction", exact: true })
       .click();
-    await expect(body).toBeVisible();
+    await expect(body).toHaveCount(0);
     await expect(
       dialog.getByRole("img", { name: "Suggested posture correction" }),
     ).toBeVisible();

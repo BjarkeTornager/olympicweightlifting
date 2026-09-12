@@ -104,7 +104,7 @@ test("grounded coaching survives unavailable or malformed optional guides and ne
   assert.equal(tentative?.moments[0].correctionPreview?.status, "unavailable");
 });
 
-test("posture suggestion preserves pixel-space limb lengths, planted lower body and bar contact", () => {
+test("posture suggestion preserves pixel-space limb lengths, planted feet and bar contact", () => {
   const a = correctionAnalysis();
   for (const mirrored of [false, true]) {
     if (mirrored)
@@ -124,7 +124,7 @@ test("posture suggestion preserves pixel-space limb lengths, planted lower body 
             length(suggested.get(from)!, suggested.get(to)!),
         ) < 0.00001,
       );
-    for (const id of [15, 23, 25, 27, 29, 31])
+    for (const id of [11, 13, 15, 27, 29, 31])
       assert.deepEqual(suggested.get(id), observed.get(id));
     assert.ok(Math.abs(suggested.get(11)!.x - suggested.get(23)!.x) < 1e-8);
     assert.equal(ghostAt(result, 1), g);

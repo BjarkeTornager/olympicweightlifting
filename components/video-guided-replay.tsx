@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, Expand, X, RotateCcw, Sparkles } from "./ui/icons";
 import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
@@ -10,6 +10,7 @@ import {
   bodyFrameAt,
   bodyReplayAction,
   evidenceSeekTime,
+  playbackBodyFor,
 } from "@/lib/video/body";
 import { techniqueDrills } from "@/lib/video/technique";
 import {
@@ -48,6 +49,8 @@ export function GuidedReplay({
   const [overlay, setOverlay] = useState(true),
     [outlines, setOutlines] = useState(true),
     [bodyShadow, setBodyShadow] = useState(false),
+    [suggestedMovement, setSuggestedMovement] = useState(true),
+    [shadowVisibility, setShadowVisibility] = useState("0.8"),
     [barTrail, setBarTrail] = useState(false),
     [expanded, setExpanded] = useState(false),
     [error, setError] = useState("");
@@ -57,13 +60,24 @@ export function GuidedReplay({
   const a = review.analysis,
     coaching = currentVideoReview(a) ? a?.coaching : undefined,
     moments = coaching?.moments ?? [];
+  const motionClips =
+    a?.body?.motion?.clips.filter((c) => c.frames.some((f) => f.image)) ?? [];
+  const motionClip =
+    motionClips.find((c) => c.id === selected) ?? motionClips[0];
+  const movement = Boolean(suggestedMovement && motionClip);
+  const playbackBody = useMemo(
+    () => playbackBodyFor(a?.body, selected, suggestedMovement),
+    [a, selected, suggestedMovement],
+  );
+  const showBody = bodyShadow || movement;
+  const motionCue = moments.find((m) => m.id === motionClip?.id);
   const active = overlay
     ? (moments.find(
         (m) => m.id === selected && time >= m.start && time <= m.end,
       ) ?? moments.find((m) => time >= m.start && time <= m.end))
     : undefined;
   const points =
-    a && active && !playing && !seeking
+    a && active && !movement && !playing && !seeking
       ? evidenceFocusPoints(a, active, time)
       : [];
   const ghost =
@@ -75,16 +89,18 @@ export function GuidedReplay({
       ? barTrailSegments(a, playing ? renderTime : time)
       : [];
   const regions =
-    outlines && !playing && !seeking
+    outlines && !movement && !playing && !seeking
       ? segmentationAt(a?.segmentation, time)
       : [];
   const bodyFrame =
-    bodyShadow && !playing && !seeking ? bodyFrameAt(a?.body, time) : undefined;
+    showBody && !playing && !seeking
+      ? bodyFrameAt(playbackBody, time)
+      : undefined;
   const bodyFrames = a?.body?.frames.filter((f) => f.image) ?? [];
 
   useEffect(() => {
     bodyImages.current.clear();
-  }, [url, a?.body]);
+  }, [url, playbackBody]);
 
   useEffect(() => {
     const v = video.current;
@@ -115,7 +131,7 @@ export function GuidedReplay({
       if (
         !v.paused &&
         exactFrame &&
-        (outlines || bodyShadow) &&
+        (outlines || showBody) &&
         canvas &&
         a &&
         v.videoWidth === a.width &&
@@ -123,9 +139,9 @@ export function GuidedReplay({
       ) {
         // Warm only a small window of body textures; a long review must not
         // decode hundreds of full-size images in a phone's memory at once.
-        if (bodyShadow && a.body) {
-          const nearest = a.body.frames.findIndex((f) => f.t >= t - 0.02);
-          const window = a.body.frames.slice(
+        if (showBody && playbackBody) {
+          const nearest = playbackBody.frames.findIndex((f) => f.t >= t - 0.02);
+          const window = playbackBody.frames.slice(
             Math.max(0, nearest - 1),
             Math.max(0, nearest - 1) + 6,
           );
@@ -141,8 +157,8 @@ export function GuidedReplay({
               bodyImages.current.set(key, image);
             }
         }
-        const action = bodyShadow
-          ? bodyReplayAction(a.body, t, capturedTime.current)
+        const action = showBody
+          ? bodyReplayAction(playbackBody, t, capturedTime.current)
           : trackedReplayAction(segmentation, t, capturedTime.current);
         if (action.kind === "clear") hideTracked();
         else if (action.kind === "capture") {
@@ -154,8 +170,8 @@ export function GuidedReplay({
             canvas.width = a.width;
             canvas.height = a.height;
             ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-            if (bodyShadow) {
-              const frame = bodyFrameAt(a.body, action.frame.t);
+            if (showBody) {
+              const frame = bodyFrameAt(playbackBody, action.frame.t);
               const image = frame?.image
                 ? bodyImages.current.get(frame.image)
                 : undefined;
@@ -165,10 +181,12 @@ export function GuidedReplay({
                 onTime(t);
                 return;
               }
+              ctx.globalAlpha = movement ? Number(shadowVisibility) : 1;
               ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+              ctx.globalAlpha = 1;
             }
             ctx.lineWidth = (2.5 * canvas.width) / Math.max(1, v.clientWidth);
-            for (const region of bodyShadow
+            for (const region of showBody
               ? []
               : segmentationAt(segmentation, action.frame.t)) {
               ctx.beginPath();
@@ -184,6 +202,7 @@ export function GuidedReplay({
               ctx.stroke();
             }
             canvas.dataset.frameTime = String(action.frame.t);
+            canvas.dataset.overlayKind = movement ? "suggested" : "observed";
             canvas.hidden = false;
             capturedTime.current = action.frame.t;
           } else hideTracked();
@@ -242,7 +261,16 @@ export function GuidedReplay({
       if (handle) v.cancelVideoFrameCallback(handle);
       if (fallback) cancelAnimationFrame(fallback);
     };
-  }, [url, onTime, outlines, bodyShadow, a]);
+  }, [
+    url,
+    onTime,
+    outlines,
+    showBody,
+    playbackBody,
+    movement,
+    shadowVisibility,
+    a,
+  ]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -332,8 +360,10 @@ export function GuidedReplay({
   function showGuide(moment: CoachingMoment) {
     inspect(moment);
     setOutlines(false);
-    setShowCorrection(true);
-    setBodyShadow(Boolean(bodyFrameAt(a?.body, moment.evidenceTime)?.image));
+    const motion = motionClips.some((c) => c.id === moment.id);
+    setSuggestedMovement(motion);
+    setShowCorrection(!motion);
+    setBodyShadow(false);
   }
 
   function inspectBody(at: number) {
@@ -342,6 +372,7 @@ export function GuidedReplay({
     setPlaying(false);
     stopAt.current = null;
     setBodyShadow(true);
+    setSuggestedMovement(false);
     setOutlines(false);
     setShowCorrection(false);
     seekTo(at);
@@ -413,15 +444,22 @@ export function GuidedReplay({
             className="video-tracked-replay"
             hidden
             role="img"
-            aria-label="Segmented video replay"
+            aria-label={
+              movement ? "Suggested movement replay" : "Segmented video replay"
+            }
           />
           {bodyFrame?.image && (
             // This private, validated PNG is already the exact source-frame projection.
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              className={`video-body-shadow${ghost ? " correction-reference" : ""}`}
+              className="video-body-shadow"
+              style={{ opacity: movement ? Number(shadowVisibility) : 1 }}
               src={bodyFrame.image}
-              alt="Observed 3D body reconstruction"
+              alt={
+                movement
+                  ? "Suggested movement silhouette"
+                  : "Observed 3D body reconstruction"
+              }
               data-frame-time={bodyFrame.t}
             />
           )}
@@ -546,8 +584,109 @@ export function GuidedReplay({
         )}
       </div>
       <div className="video-replay-controls">
+        {motionClip && (
+          <section
+            className="video-movement-compare"
+            aria-label="Compare your movement"
+          >
+            <div>
+              <strong>{motionCue?.title ?? "Compare your movement"}</strong>
+              <p>
+                Your video + the suggested position. Scrub or play to compare.
+              </p>
+            </div>
+            <div className="video-evidence-actions">
+              <Button
+                variant="secondary"
+                aria-pressed={!movement && !bodyShadow && !outlines}
+                onClick={() => {
+                  setSuggestedMovement(false);
+                  setBodyShadow(false);
+                  setOutlines(false);
+                  setShowCorrection(false);
+                  setBarTrail(false);
+                }}
+              >
+                Original video
+              </Button>
+              <Button
+                variant="secondary"
+                aria-pressed={movement}
+                onClick={() => {
+                  setSuggestedMovement(true);
+                  setBodyShadow(false);
+                  setOutlines(false);
+                  setShowCorrection(false);
+                  video.current?.pause();
+                  setPlaying(false);
+                  stopAt.current = null;
+                  const frames = motionClip.frames.filter((f) => f.image);
+                  seekTo(
+                    frames.reduce((best, f) =>
+                      Math.abs(f.t - time) < Math.abs(best.t - time) ? f : best,
+                    ).t,
+                  );
+                }}
+              >
+                Suggested movement
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelected(motionClip.id);
+                  setSuggestedMovement(true);
+                  setBodyShadow(false);
+                  setOutlines(false);
+                  setShowCorrection(false);
+                  setSpeed("0.5");
+                  if (video.current) video.current.playbackRate = 0.5;
+                  const frames = motionClip.frames.filter((f) => f.image);
+                  seekTo(frames[0].t);
+                  video.current?.scrollIntoView({
+                    block: "center",
+                    behavior: "instant",
+                  });
+                  stopAt.current = {
+                    end: motionClip.end,
+                    freeze: frames.at(-1)!.t,
+                  };
+                  play();
+                }}
+              >
+                Play comparison
+              </Button>
+            </div>
+            <details className="video-comparison-options">
+              <summary>Comparison options</summary>
+              <label className="video-shadow-visibility">
+                Shadow visibility
+                <input
+                  aria-label="Shadow visibility"
+                  type="range"
+                  min="0.2"
+                  max="1"
+                  step="0.1"
+                  value={shadowVisibility}
+                  onChange={(e) => setShadowVisibility(e.target.value)}
+                />
+              </label>
+            </details>
+            <p className="fine-print" role="status">
+              {movement &&
+              time >= motionClip.start &&
+              time <= motionClip.end + 0.002
+                ? "Teal: suggested movement for this cue. Uncertain frames stay clear."
+                : `Comparison covers ${motionClip.start.toFixed(2)}–${motionClip.end.toFixed(2)}s. Other phases show your original video.`}
+            </p>
+          </section>
+        )}
+        {!motionClip && a?.body?.motion && (
+          <p className="fine-print" role="status">
+            {a.body.motion.reason}
+          </p>
+        )}
         {bodyFrames.length > 0 && (
-          <div className="video-body-controls">
+          <details className="video-body-controls">
+            <summary>Observed body reconstruction</summary>
             <label className="video-check">
               <input
                 type="checkbox"
@@ -564,11 +703,12 @@ export function GuidedReplay({
                   else setBodyShadow(false);
                 }}
               />
-              3D body shadow
+              Show observed reconstruction
             </label>
             <p className="fine-print">
-              Reconstructed from your lift. Hands and hidden positions are
-              approximate. The shadow stays with its analysed frame.
+              This follows your recorded movement; it is not the correction.
+              Hands and hidden positions are approximate. The shadow stays with
+              its analysed frame.
             </p>
             <div className="video-evidence-actions">
               <Button
@@ -606,7 +746,7 @@ export function GuidedReplay({
                 Next →
               </Button>
             </div>
-          </div>
+          </details>
         )}
         {a?.body?.status === "unavailable" && (
           <p className="fine-print" role="status">
@@ -621,7 +761,10 @@ export function GuidedReplay({
                 checked={outlines}
                 onChange={(e) => {
                   setOutlines(e.target.checked);
-                  if (e.target.checked) setBodyShadow(false);
+                  if (e.target.checked) {
+                    setBodyShadow(false);
+                    setSuggestedMovement(false);
+                  }
                 }}
               />
               Tracked replay
@@ -643,6 +786,7 @@ export function GuidedReplay({
                 setPlaying(false);
                 setOutlines(true);
                 setBodyShadow(false);
+                setSuggestedMovement(false);
                 stopAt.current = null;
                 seekTo(nearest.t);
               }}
@@ -721,51 +865,62 @@ export function GuidedReplay({
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
-      {active?.correctionPreview?.status === "available" && !playing && (
-        <div className="video-correction-compare" aria-label="Compare posture">
-          <div className="video-evidence-actions">
-            <Button
-              variant="secondary"
-              aria-pressed={!showCorrection}
-              onClick={() => {
-                inspect(active);
-                setShowCorrection(false);
-                setBodyShadow(false);
-              }}
-            >
-              Original position
-            </Button>
-            <Button
-              variant="secondary"
-              aria-pressed={showCorrection}
-              onClick={() => showGuide(active)}
-            >
-              Suggested correction
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                inspect(
-                  active,
-                  active.correctionPreview!.status === "available"
-                    ? active.correctionPreview!.ghost.referenceTime
-                    : active.evidenceTime,
-                );
-                setShowCorrection(false);
-              }}
-            >
-              Earlier reference
-            </Button>
+      {active?.correctionPreview?.status === "available" &&
+        !motionClips.some((c) => c.id === active.id) &&
+        !playing && (
+          <div
+            className="video-correction-compare"
+            aria-label="Compare posture"
+          >
+            <div className="video-evidence-actions">
+              <Button
+                variant="secondary"
+                aria-pressed={!showCorrection && !movement}
+                onClick={() => {
+                  inspect(active);
+                  setShowCorrection(false);
+                  setBodyShadow(false);
+                  setSuggestedMovement(false);
+                }}
+              >
+                Original position
+              </Button>
+              <Button
+                variant="secondary"
+                aria-pressed={showCorrection || movement}
+                onClick={() => showGuide(active)}
+              >
+                Suggested correction
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  inspect(
+                    active,
+                    active.correctionPreview!.status === "available"
+                      ? active.correctionPreview!.ghost.referenceTime
+                      : active.evidenceTime,
+                  );
+                  setShowCorrection(false);
+                  setSuggestedMovement(false);
+                }}
+              >
+                Earlier reference
+              </Button>
+            </div>
+            {!movement && (
+              <p className="fine-print">
+                {active.correctionPreview.ghost.explanation}
+              </p>
+            )}
+            {!movement && (
+              <p className="fine-print">
+                White dashes: observed position. Teal: suggested position. The
+                guide appears only on the inspected frame.
+              </p>
+            )}
           </div>
-          <p className="fine-print">
-            {active.correctionPreview.ghost.explanation}
-          </p>
-          <p className="fine-print">
-            White dashes: observed position. Teal: suggested position. The guide
-            appears only on the inspected frame.
-          </p>
-        </div>
-      )}
+        )}
       {!coaching && a?.segmentation?.frames.some((f) => f.objects.length) && (
         <p className="fine-print" role="status">
           {review.status === "failed"

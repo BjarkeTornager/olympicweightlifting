@@ -65,8 +65,8 @@ export async function listVideos(userId: string) {
         ...fields,
         analysis: sql<import("./types").VideoAnalysis | null>`
     CASE WHEN ${liftingVideos.analysis} IS NULL THEN NULL ELSE
-    jsonb_set(jsonb_set(jsonb_set(jsonb_set(${liftingVideos.analysis}, '{tracking}',
-      (${liftingVideos.analysis}->'tracking') - 'points' - 'velocities' || '{"points":[],"velocities":[]}'::jsonb), '{pose,frames}', '[]'::jsonb), '{segmentation,frames}', '[]'::jsonb), '{body,frames}', '[]'::jsonb)
+    jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(${liftingVideos.analysis}, '{tracking}',
+      (${liftingVideos.analysis}->'tracking') - 'points' - 'velocities' || '{"points":[],"velocities":[]}'::jsonb), '{pose,frames}', '[]'::jsonb), '{segmentation,frames}', '[]'::jsonb), '{body,frames}', '[]'::jsonb), '{body,motion,clips}', '[]'::jsonb)
     END`,
       })
       .from(liftingVideos)

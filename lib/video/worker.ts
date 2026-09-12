@@ -51,7 +51,14 @@ async function automaticFeedback(
   refine: (
     analysis: VideoAnalysis,
     attempt: import("./attempts").VideoAttempt,
-  ) => ReturnType<typeof refineVideo>,
+  ) => Promise<
+    Awaited<ReturnType<typeof refineVideo>> & {
+      reviewed?: VideoRefinementCheckpoint["reviewed"];
+      prepareBody: (
+        reviewed: NonNullable<VideoRefinementCheckpoint["reviewed"]>,
+      ) => Promise<VideoAnalysis["body"]>;
+    }
+  >,
   previous: (
     lift: string | null,
   ) => import("./coaching").GuidedCoaching["previousFocus"],
@@ -123,13 +130,6 @@ async function automaticFeedback(
         attempt.end,
       );
     }
-    if (current.body)
-      analysis.body = mergeBody(
-        analysis.body,
-        current.body,
-        attempt.start,
-        attempt.end,
-      );
     if (current.pose?.version === 2) {
       const previous = analysis.pose?.version === 2 ? analysis.pose.frames : [];
       const merged = new Map(previous.map((f) => [f.t, f]));
@@ -156,18 +156,34 @@ async function automaticFeedback(
       instruction:
         "Review only this attempt. Every evidence frame must be within its start/end range. Other attempts are context only.",
     });
-    const reviewed = await reviewWithRecovery(
-      messages,
-      current,
-      input,
-      attempt,
-      model,
-      signal,
-      () => checkpoint(analysis, "Checking Coach’s feedback automatically"),
-    );
+    const reviewed =
+      refined.reviewed?.coaching && refined.reviewed.identification
+        ? {
+            coaching: refined.reviewed.coaching,
+            identification: refined.reviewed.identification,
+          }
+        : await reviewWithRecovery(
+            messages,
+            current,
+            input,
+            attempt,
+            model,
+            signal,
+            () =>
+              checkpoint(analysis, "Checking Coach’s feedback automatically"),
+          );
     const coaching = reviewed.coaching;
     if (focus && reviewed.identification.lift === attempt.identification.lift)
       coaching.previousFocus = focus;
+    const body = await refined.prepareBody(reviewed);
+    signal.throwIfAborted();
+    if (body)
+      analysis.body = mergeBody(
+        analysis.body,
+        body,
+        attempt.start,
+        attempt.end,
+      );
     attempt.identification = reviewed.identification;
     attempt.coaching = coaching;
     await checkpoint(analysis, "Preparing your guided replay", true);
@@ -430,32 +446,62 @@ export async function runVideoJob(
           await save();
           detailed.segmentation = segmentation;
         }
-        if (!saved.body && bodyConfig.endpoint) {
-          await getDb()
-            .update(liftingVideos)
-            .set({ stage: "Preparing your 3D body overlay" })
-            .where(fence);
-          const body = await bodyReconstructor(
-            media!,
-            detailed,
-            signal,
-            bodyConfig,
-            undefined,
-            bodyBudget,
-            {
-              job: saved.bodyJob,
-              saveJob: async (job) => {
-                saved = { ...saved, bodyJob: job };
-                await save();
+        const prepareBody = async (
+          reviewed: NonNullable<VideoRefinementCheckpoint["reviewed"]>,
+        ) => {
+          // Persist feedback before the long GPU stage. A resumed body job must
+          // not spend another model call or change the target beneath its receipt.
+          if (!saved.reviewed) {
+            saved = { ...saved, reviewed };
+            await save();
+          }
+          if (!saved.body && bodyConfig.endpoint) {
+            await getDb()
+              .update(liftingVideos)
+              .set({
+                stage: "Preparing your 3D body overlay and suggested movement",
+              })
+              .where(fence);
+            const body = await bodyReconstructor(
+              media!,
+              { ...detailed, ...reviewed },
+              signal,
+              bodyConfig,
+              undefined,
+              bodyBudget,
+              {
+                job: saved.bodyJob,
+                saveJob: async (job) => {
+                  saved = { ...saved, bodyJob: job };
+                  await save();
+                },
               },
-            },
-          );
-          signal.throwIfAborted();
-          saved = { ...saved, body, bodyJob: undefined };
-          await save();
-          detailed.body = body;
-        }
-        return { analysis: detailed, frames: saved.frames };
+            );
+            signal.throwIfAborted();
+            const named = body?.motion
+              ? {
+                  ...body,
+                  motion: {
+                    ...body.motion,
+                    clips: body.motion.clips.map((c) => ({
+                      ...c,
+                      id: `${attempt.id}-${c.id}`,
+                    })),
+                  },
+                }
+              : body;
+            saved = { ...saved, body: named, bodyJob: undefined };
+            await save();
+            detailed.body = body;
+          }
+          return saved.body;
+        };
+        return {
+          analysis: detailed,
+          frames: saved.frames,
+          reviewed: saved.reviewed,
+          prepareBody,
+        };
       },
       (lift) =>
         previousVideoFocus(priorReviews, {
@@ -470,10 +516,17 @@ export async function runVideoJob(
       (media?.length ?? 0) +
       frames.reduce((n, f) => n + f.length, 0) +
       Buffer.byteLength(JSON.stringify(analysis));
-    if (bytes > MAX_VIDEO_BYTES && analysis.body?.frames.length) {
+    if (bytes > MAX_VIDEO_BYTES && analysis.body) {
       analysis.body = {
         ...analysis.body,
         frames: [],
+        motion: {
+          version: 1,
+          status: "unavailable",
+          clips: [],
+          reason:
+            "This clip's movement comparison exceeded the storage limit. Try a shorter clip; your coaching and video are available.",
+        },
         status: "unavailable",
         reason:
           "This clip's body overlay exceeded the review storage limit. Try a shorter clip for the shadow; your video and coaching are available.",

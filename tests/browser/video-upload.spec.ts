@@ -379,6 +379,34 @@ for (const partial of [false, true])
         duration: 2,
         frameCount: 120,
         sampleTimes: [0, 0.5, 1, 1.5, 1.98],
+        segmentation: {
+          version: 1,
+          model: "sam3.1",
+          revision: "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7",
+          sourceSha256: "0".repeat(64),
+          status: "partial",
+          reason: "Synthetic mask, not model output",
+          width: 320,
+          height: 480,
+          frames: [
+            {
+              t: 0.5,
+              objects: [
+                {
+                  id: "person-1",
+                  kind: "person",
+                  polygon: [
+                    [0.2, 0.1],
+                    [0.8, 0.1],
+                    [0.8, 0.9],
+                    [0.2, 0.9],
+                  ],
+                },
+              ],
+            },
+            { t: 1, objects: [] },
+          ],
+        },
         ...(partial
           ? {
               identification: {
@@ -473,10 +501,13 @@ for (const partial of [false, true])
     await dialog.getByRole("button", { name: "Freeze & inspect" }).click();
     await expect(video).toBeInViewport({ ratio: 0.95 });
     if (partial) {
-      await expect(dialog.getByLabel("Coach focus highlight")).not.toBeVisible();
+      await expect(
+        dialog.getByLabel("Coach focus highlight"),
+      ).not.toBeVisible();
       await video.evaluate((v: HTMLVideoElement) => {
-        (window as Window & { holdVideoReadiness?: boolean })
-          .holdVideoReadiness = false;
+        (
+          window as Window & { holdVideoReadiness?: boolean }
+        ).holdVideoReadiness = false;
         v.dispatchEvent(new Event("loadedmetadata"));
       });
     }
@@ -491,6 +522,14 @@ for (const partial of [false, true])
       .toEqual({ time: 0.5, seeking: false, ready: true });
     await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
     await expect(video).toHaveJSProperty("paused", true);
+    await expect(
+      dialog.locator(".video-review-player svg polygon"),
+    ).toHaveCount(1);
+    await dialog.getByLabel("Object outlines when paused").uncheck();
+    await expect(
+      dialog.locator(".video-review-player svg polygon"),
+    ).toHaveCount(0);
+    await dialog.getByLabel("Object outlines when paused").check();
     expect(
       await video.evaluate((v: HTMLVideoElement) => v.currentTime),
     ).toBeCloseTo(0.5, 2);

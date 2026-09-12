@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { VideoAnalysis, VideoUpload } from "./types";
 import { ApiError } from "../agent/http";
+import { segmentVideo } from "./sam3";
 const exec = promisify(execFile);
 export async function refineVideo(
   media: Buffer,
@@ -61,13 +62,16 @@ export async function refineVideo(
       )
     )
       throw Error("Invalid evidence");
+    const current = {
+      ...analysis,
+      sampleTimes: result.sampleTimes,
+      identification: attempt.identification,
+      pose: result.pose,
+    };
+    // Segment the same evidence frames the detailed Coach pass will inspect.
+    const segmentation = await segmentVideo(media, current, signal);
     return {
-      analysis: {
-        ...analysis,
-        sampleTimes: result.sampleTimes,
-        identification: attempt.identification,
-        pose: result.pose,
-      },
+      analysis: { ...current, ...(segmentation ? { segmentation } : {}) },
       frames: result.frames,
     };
   } finally {
@@ -127,7 +131,8 @@ export async function processVideo(
       analysis: VideoAnalysis;
       frames: string[];
     };
-    return { ...result, media: await readFile(path.join(dir, "media.mp4")) };
+    const media = await readFile(path.join(dir, "media.mp4"));
+    return { ...result, media };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

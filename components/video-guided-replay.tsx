@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Expand, X, RotateCcw, Sparkles } from "./ui/icons";
 import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
+import { segmentationAt } from "@/lib/video/segmentation";
 import {
   barTrailSegments,
   currentVideoReview,
@@ -34,6 +35,7 @@ export function GuidedReplay({
     [seeking, setSeeking] = useState(false),
     [speed, setSpeed] = useState("1");
   const [overlay, setOverlay] = useState(true),
+    [outlines, setOutlines] = useState(true),
     [barTrail, setBarTrail] = useState(false),
     [expanded, setExpanded] = useState(false),
     [error, setError] = useState("");
@@ -52,6 +54,10 @@ export function GuidedReplay({
       ? evidenceFocusPoints(a, active, time)
       : [];
   const trails = a && barTrail ? barTrailSegments(a, time) : [];
+  const regions =
+    outlines && !playing && !seeking
+      ? segmentationAt(a?.segmentation, time)
+      : [];
 
   useEffect(() => {
     const v = video.current;
@@ -258,49 +264,65 @@ export function GuidedReplay({
               )
             }
           />
-          {overlay && a && (points.length > 0 || trails.length > 0) && (
-            <svg
-              viewBox={`0 0 ${a.width} ${a.height}`}
-              role="img"
-              aria-label={
-                points.length
-                  ? "Coach focus highlight"
-                  : "Experimental bar trajectory overlay"
-              }
-            >
-              {trails.map((segment, i) => (
-                <polyline
-                  key={i}
-                  points={segment
-                    .map((p) => `${p.x * a.width},${p.y * a.height}`)
-                    .join(" ")}
-                  fill="none"
-                  stroke="#83d5ea"
-                  strokeWidth="3"
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
-              {points.map((p) => (
-                <g key={p.id}>
-                  <circle
-                    cx={p.x * a.width}
-                    cy={p.y * a.height}
-                    r={Math.max(12, a.width * 0.035)}
-                    fill="#ffde592b"
-                    stroke="#ffde59"
+          {overlay &&
+            a &&
+            (points.length > 0 || trails.length > 0 || regions.length > 0) && (
+              <svg
+                viewBox={`0 0 ${a.width} ${a.height}`}
+                role="img"
+                aria-label={
+                  points.length
+                    ? "Coach focus highlight"
+                    : regions.length
+                      ? "Tracked object outlines"
+                      : "Experimental bar trajectory overlay"
+                }
+              >
+                {regions.map((region) => (
+                  <polygon
+                    key={region.id}
+                    points={region.polygon
+                      .map(([x, y]) => `${x * a.width},${y * a.height}`)
+                      .join(" ")}
+                    fill="none"
+                    stroke={region.kind === "plate" ? "#83d5ea" : "#ffde59"}
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+                {trails.map((segment, i) => (
+                  <polyline
+                    key={i}
+                    points={segment
+                      .map((p) => `${p.x * a.width},${p.y * a.height}`)
+                      .join(" ")}
+                    fill="none"
+                    stroke="#83d5ea"
                     strokeWidth="3"
                     vectorEffect="non-scaling-stroke"
                   />
-                  <circle
-                    cx={p.x * a.width}
-                    cy={p.y * a.height}
-                    r="4"
-                    fill="#ffde59"
-                  />
-                </g>
-              ))}
-            </svg>
-          )}
+                ))}
+                {points.map((p) => (
+                  <g key={p.id}>
+                    <circle
+                      cx={p.x * a.width}
+                      cy={p.y * a.height}
+                      r={Math.max(12, a.width * 0.035)}
+                      fill="#ffde592b"
+                      stroke="#ffde59"
+                      strokeWidth="3"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle
+                      cx={p.x * a.width}
+                      cy={p.y * a.height}
+                      r="4"
+                      fill="#ffde59"
+                    />
+                  </g>
+                ))}
+              </svg>
+            )}
         </div>
         {active && (
           <div className="video-coach-caption" aria-label="Coaching overlay">
@@ -321,6 +343,16 @@ export function GuidedReplay({
         )}
       </div>
       <div className="video-replay-controls">
+        {!!a?.segmentation?.frames.some((f) => f.objects.length) && (
+          <label className="video-check">
+            <input
+              type="checkbox"
+              checked={outlines}
+              onChange={(e) => setOutlines(e.target.checked)}
+            />
+            Object outlines when paused
+          </label>
+        )}
         <div className="video-playback-row">
           <button
             className="video-icon-button"

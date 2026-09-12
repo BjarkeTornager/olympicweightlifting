@@ -13,6 +13,7 @@ import {
   type GuidedCoaching,
 } from "./coaching";
 import { liftingResources } from "../lifting-resources";
+import { segmentationEvidence } from "./segmentation";
 
 export function reviewMessages(
   input: VideoUpload,
@@ -35,6 +36,10 @@ The final response must be ONE JSON object with exactly two keys: {"evidence":<t
     reportedLoad: input.load || "Unknown",
     date: input.date,
     measurements,
+    objectRegions: segmentationEvidence(
+      analysis.segmentation,
+      analysis.sampleTimes,
+    ),
   });
   return messages;
 }

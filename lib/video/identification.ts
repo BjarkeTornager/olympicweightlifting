@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ModelMessage } from "../agent/provider";
 import type { VideoAnalysis } from "./types";
+import { segmentationEvidence } from "./segmentation";
 
 const phaseNames = [
   "pull",
@@ -56,6 +57,10 @@ Definitions: pull = bar being lifted from below the shoulders; front_rack_receiv
         sampleTimes: analysis.sampleTimes,
         sampledFrames: analysis.sampleTimes.length,
         sheetCount: frames.length,
+        objectRegions: segmentationEvidence(
+          analysis.segmentation,
+          analysis.sampleTimes,
+        ),
       }),
       images: frames,
     },

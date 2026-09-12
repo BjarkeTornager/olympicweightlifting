@@ -6,6 +6,7 @@ import { callModel } from "../agent/provider";
 import { ApiError } from "../agent/http";
 import { userAllowed } from "../access";
 import { processVideo, refineVideo } from "./processor";
+import { mergeSegmentation } from "./segmentation";
 import { MAX_VIDEO_BYTES, type VideoAnalysis, type VideoUpload } from "./types";
 import { VIDEO_REVIEW_VERSION, coachingText } from "./coaching";
 import { attemptMessages, identifyAttempts } from "./attempts";
@@ -117,6 +118,14 @@ async function automaticFeedback(
     }
     attempt.identification = reviewed.identification;
     attempt.coaching = coaching;
+    if (current.segmentation) {
+      analysis.segmentation = mergeSegmentation(
+        analysis.segmentation,
+        current.segmentation,
+        attempt.start,
+        attempt.end,
+      );
+    }
     if (current.pose?.version === 2) {
       const previous = analysis.pose?.version === 2 ? analysis.pose.frames : [];
       const merged = new Map(previous.map((f) => [f.t, f]));
@@ -203,7 +212,7 @@ export async function claimVideo() {
     `WITH next AS (
     SELECT user_id,id FROM lifting_videos WHERE (status='queued' OR (status='processing' AND lease_until<now())) AND attempts<3
     ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
-    UPDATE lifting_videos v SET status='processing',stage='Preparing video',lease=$1,lease_until=now()+interval '7 minutes',attempts=attempts+1
+    UPDATE lifting_videos v SET status='processing',stage='Preparing video',lease=$1,lease_until=now()+interval '11 minutes',attempts=attempts+1
     FROM next WHERE v.user_id=next.user_id AND v.id=next.id RETURNING v.user_id,v.id`,
     [token],
   );
@@ -221,7 +230,7 @@ export async function runVideoJob(
     eq(liftingVideos.lease, job.token),
   );
   const abort = new AbortController();
-  const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(360000)]);
+  const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(600000)]);
   const check = async () => {
     const [account] = await getDb()
       .select()

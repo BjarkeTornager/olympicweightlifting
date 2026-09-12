@@ -132,6 +132,11 @@ export default function PrivacyPage() {
           reviews you can replay, download the processed clip, export the
           analysis and delete the clip and feedback. These reviews are separate
           from chat and journal backups; clearing chat does not delete them.
+          When SAM object tracking is enabled, the silent processed clip and
+          motion landmarks are also sent to our authenticated GPU worker on
+          Modal. Temporary frames are removed when that analysis finishes;
+          outlines are saved with your private review. SAM outlines identify
+          image regions and do not establish joint positions or bar speed.
           Optional bar measurements use your marked plate, scale and timing
           confirmation and are experimental. Video review does not log workouts.
           The alternative on-device frame review keeps the source on your device

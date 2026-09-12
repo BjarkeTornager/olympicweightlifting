@@ -299,6 +299,57 @@ test("the dense review independently corrects an earlier snatch guess using a vi
   assert.equal(notLifting.coaching.strength, "");
 });
 
+test("a review with two observations in one pull retains its grounded feedback", () => {
+  const input = videoUploadSchema.parse({
+    id: crypto.randomUUID(),
+    lift: "Identify from video",
+    date: "2026-09-12",
+    start: 0,
+    end: 4,
+  });
+  const partialEvidence = {
+    visibility: "limited",
+    limitation: "The clip ends before the standing recovery.",
+    phases: [
+      evidence.phases[0],
+      {
+        kind: "pull",
+        frame: 2,
+        evidence:
+          "The bar is now above the knees during the same visible pull.",
+      },
+      evidence.phases[1],
+    ],
+  };
+  const result = parseVideoReview(
+    JSON.stringify({ evidence: partialEvidence, coaching: reply }),
+    analysis,
+    input,
+  )!;
+  assert.ok(result);
+  assert.equal(result.identification.lift, null);
+  assert.equal(result.coaching.scope, "visible_phases");
+  assert.equal(result.coaching.moments[0].evidenceTime, 1);
+  assert.equal(result.coaching.strength, reply.strength);
+  assert.equal(
+    parseVideoReview(
+      JSON.stringify({
+        evidence: {
+          ...partialEvidence,
+          phases: [
+            ...partialEvidence.phases,
+            { ...evidence.phases[0], frame: 5 },
+          ],
+        },
+        coaching: reply,
+      }),
+      analysis,
+      input,
+    ),
+    null,
+  );
+});
+
 test("freeze frame is chosen from evidence; one still cannot substantiate movement", () => {
   const atSecond = {
     ...reply,

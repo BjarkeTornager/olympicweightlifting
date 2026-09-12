@@ -1,0 +1,490 @@
+{
+  "date": "2026-09-12",
+  "type": "diagnostic pilot; not a coaching accuracy estimate",
+  "sourceCount": 3,
+  "caseCount": 6,
+  "budgetUsd": 10,
+  "confirmedCostUsd": 1.9875669649999999,
+  "conservativeCostWithUnsettledReservationsUsd": 2.495094085,
+  "unresolvedRequests": [
+    {
+      "id": "clip-01:openai/gpt-5.6-luna:sheets-v1",
+      "reservationUsd": 0.06381344000000001
+    },
+    {
+      "id": "clip-01:qwen/qwen3.6-27b:sheets-v2",
+      "reservationUsd": 0.1385448
+    },
+    {
+      "id": "clip-03:openai/gpt-5.6-luna:sheets-v2",
+      "reservationUsd": 0.06381344000000001
+    },
+    {
+      "id": "clip-04:openai/gpt-5.6-luna:sheets-v2",
+      "reservationUsd": 0.06381344000000001
+    },
+    {
+      "id": "clip-01:google/gemini-3.8-flash:native-v2",
+      "reservationUsd": 0.177542
+    }
+  ],
+  "models": [
+    {
+      "model": "google/gemini-3.8-flash",
+      "completed": 6,
+      "acceptedAfterFix": 5,
+      "unexpectedConfidentLabels": 0,
+      "medianLatencySeconds": 5.426500000000001,
+      "meanCostUsd": 0.008786374999999999
+    },
+    {
+      "model": "openai/gpt-5.6-luna",
+      "completed": 2,
+      "acceptedAfterFix": 2,
+      "unexpectedConfidentLabels": 0,
+      "medianLatencySeconds": 13.902999999999999,
+      "meanCostUsd": 0.0072926075
+    },
+    {
+      "model": "openai/gpt-6-astra",
+      "completed": 6,
+      "acceptedAfterFix": 6,
+      "unexpectedConfidentLabels": 0,
+      "medianLatencySeconds": 18.204,
+      "meanCostUsd": 0.32004391666666665
+    }
+  ],
+  "rows": [
+    {
+      "case": "clip-01",
+      "model": "google/gemini-3.8-flash",
+      "input": "native",
+      "responseReceived": false,
+      "httpStatus": 402,
+      "providerError": 402,
+      "costUsd": null,
+      "latencyMs": 388,
+      "acceptedAtCallTime": false,
+      "acceptedAfterFix": false,
+      "visibleFeedbackPreserved": false,
+      "expectedLift": "Clean & jerk",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [],
+      "requiredPhaseCount": 4,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-01",
+      "model": "google/gemini-3.8-flash",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.0084105,
+      "latencyMs": 4428,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean & jerk",
+      "suggestedLift": "Clean & jerk",
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 4,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-01",
+      "model": "openai/gpt-5.6-luna",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.0070165,
+      "latencyMs": 13171,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean & jerk",
+      "suggestedLift": "Clean & jerk",
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 4,
+      "moments": 2,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-01",
+      "model": "openai/gpt-6-astra",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.330755,
+      "latencyMs": 23878,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean & jerk",
+      "suggestedLift": "Clean & jerk",
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 4,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-02",
+      "model": "google/gemini-3.8-flash",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.00860175,
+      "latencyMs": 4937,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean",
+      "suggestedLift": "Clean",
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive"
+      ],
+      "requiredPhaseCount": 2,
+      "moments": 1,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-02",
+      "model": "openai/gpt-5.6-luna",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.007568715,
+      "latencyMs": 14635,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive"
+      ],
+      "requiredPhaseCount": 2,
+      "moments": 1,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-02",
+      "model": "openai/gpt-6-astra",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.3127665,
+      "latencyMs": 15395,
+      "acceptedAtCallTime": false,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive"
+      ],
+      "requiredPhaseCount": 2,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-03",
+      "model": "google/gemini-3.8-flash",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.00898875,
+      "latencyMs": 5735,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Snatch",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "direct_pull_to_overhead",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 3,
+      "moments": 1,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-03",
+      "model": "openai/gpt-5.6-luna",
+      "input": "sheets",
+      "responseReceived": false,
+      "httpStatus": 200,
+      "providerError": 429,
+      "costUsd": null,
+      "latencyMs": 3090,
+      "acceptedAtCallTime": false,
+      "acceptedAfterFix": false,
+      "visibleFeedbackPreserved": false,
+      "expectedLift": "Snatch",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [],
+      "requiredPhaseCount": 3,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-03",
+      "model": "openai/gpt-6-astra",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.3178165,
+      "latencyMs": 19522,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Snatch",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "direct_pull_to_overhead",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 3,
+      "moments": 1,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-04",
+      "model": "google/gemini-3.8-flash",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.0085845,
+      "latencyMs": 67780,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Jerk",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "front_rack_hold",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 3,
+      "moments": 1,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-04",
+      "model": "openai/gpt-5.6-luna",
+      "input": "sheets",
+      "responseReceived": false,
+      "httpStatus": 200,
+      "providerError": 429,
+      "costUsd": null,
+      "latencyMs": 4626,
+      "acceptedAtCallTime": false,
+      "acceptedAfterFix": false,
+      "visibleFeedbackPreserved": false,
+      "expectedLift": "Jerk",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [],
+      "requiredPhaseCount": 3,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-04",
+      "model": "openai/gpt-6-astra",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.3251175,
+      "latencyMs": 16886,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Jerk",
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "front_rack_hold",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 3,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-05",
+      "model": "google/gemini-3.8-flash",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.00862725,
+      "latencyMs": 5118,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": null,
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "front_rack_hold"
+      ],
+      "requiredPhaseCount": 1,
+      "moments": 1,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-05",
+      "model": "openai/gpt-6-astra",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.3100165,
+      "latencyMs": 15622,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": null,
+      "suggestedLift": null,
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "front_rack_hold"
+      ],
+      "requiredPhaseCount": 1,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-06",
+      "model": "google/gemini-3.8-flash",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.0095055,
+      "latencyMs": 25898,
+      "acceptedAtCallTime": false,
+      "acceptedAfterFix": false,
+      "visibleFeedbackPreserved": false,
+      "expectedLift": "Clean & jerk",
+      "suggestedLift": "Clean & jerk",
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 4,
+      "moments": 0,
+      "independentCoachScore": null
+    },
+    {
+      "case": "clip-06",
+      "model": "openai/gpt-6-astra",
+      "input": "sheets",
+      "responseReceived": true,
+      "httpStatus": 200,
+      "providerError": null,
+      "costUsd": 0.3237915,
+      "latencyMs": 24617,
+      "acceptedAtCallTime": true,
+      "acceptedAfterFix": true,
+      "visibleFeedbackPreserved": true,
+      "expectedLift": "Clean & jerk",
+      "suggestedLift": "Clean & jerk",
+      "unexpectedConfidentLabel": false,
+      "requiredPhasesFound": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "requiredPhaseCount": 4,
+      "moments": 1,
+      "independentCoachScore": null
+    }
+  ],
+  "tracking": [
+    {
+      "case": "clip-01",
+      "seed": {
+        "x": 0.37,
+        "y": 0.802,
+        "diameterRatio": 0.086
+      },
+      "frameCount": 444,
+      "currentCoverage": 0.033783783783783786,
+      "csrtCoverage": 1,
+      "accuracy": "not yet scored against independent point annotations"
+    },
+    {
+      "case": "clip-02",
+      "seed": {
+        "x": 0.291,
+        "y": 0.678,
+        "diameterRatio": 0.23
+      },
+      "frameCount": 204,
+      "currentCoverage": 0.3872549019607843,
+      "csrtCoverage": 1,
+      "accuracy": "not yet scored against independent point annotations"
+    },
+    {
+      "case": "clip-03",
+      "seed": {
+        "x": 0.803,
+        "y": 0.757,
+        "diameterRatio": 0.25
+      },
+      "frameCount": 219,
+      "currentCoverage": 0.091324200913242,
+      "csrtCoverage": 1,
+      "accuracy": "not yet scored against independent point annotations"
+    }
+  ]
+}

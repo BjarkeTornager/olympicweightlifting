@@ -128,17 +128,26 @@ export function identifyLift(
       has("front_rack_receive") ||
       has("front_rack_hold") ||
       has("leg_drive_from_rack");
+  const kinds = phases.map((p) => p.kind);
+  const runs = kinds.filter((kind, i) => i === 0 || kind !== kinds[i - 1]);
   // Contradictory/multiple sequences must never turn into confident coaching.
-  if (
-    new Set(phases.map((p) => p.kind)).size !== phases.length ||
-    (direct && rack)
-  )
+  // Two observations within one pull or rack hold can still support a partial
+  // review. A phase recurring after another phase may be a different repetition.
+  if (new Set(runs).size !== runs.length || (direct && rack))
     return uncertain(
       "The sampled phase observations conflict. A reliable movement review needs another look at the clip.",
     );
   if (parsed.visibility === "not_lifting" || !phases.length)
     return { ...limited, phases: [] };
   limited.reviewScope = "visible_phases";
+  if (runs.length !== kinds.length) {
+    return {
+      ...limited,
+      reason:
+        parsed.limitation ||
+        "Several observations cover the same phase. Feedback is limited to the visible movement; the complete lift has not been confirmed.",
+    };
+  }
   if (parsed.visibility !== "sufficient") return limited;
   let lift: LiftIdentification["lift"] = null;
   if (

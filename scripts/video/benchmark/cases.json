@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "date": "2026-09-12",
+  "purpose": "Public-video diagnostic pilot, not a validated coaching accuracy benchmark",
+  "rights": "Source links and evaluation labels only. Media is kept outside the repository for private evaluation; no redistribution or model training license is asserted.",
+  "sources": [
+    {
+      "id": "bNCXgyosXlc",
+      "url": "https://www.youtube.com/watch?v=bNCXgyosXlc",
+      "title": "Clean & Jerk | Olympic Weightlifting Exercise Library",
+      "creator": "Catalyst Athletics",
+      "reference": "https://www.catalystathletics.com/exercise/76/Clean-Jerk/"
+    },
+    {
+      "id": "EI3wC9ZyOes",
+      "url": "https://www.youtube.com/watch?v=EI3wC9ZyOes",
+      "title": "Technique Review 1 - Clean",
+      "creator": "Catalyst Athletics",
+      "referenceMethod": "Auto-generated YouTube transcript checked against visible footage; provisional labels, not an independent coach annotation"
+    },
+    {
+      "id": "HuLNhAsQY7A",
+      "url": "https://www.youtube.com/watch?v=HuLNhAsQY7A",
+      "title": "Review 2 - Snatch",
+      "creator": "Catalyst Athletics",
+      "reference": "https://www.catalystathletics.com/video/1650/Review-2-Snatch/"
+    }
+  ],
+  "cases": [
+    {
+      "id": "clip-01",
+      "source": "bNCXgyosXlc",
+      "start": 8.0,
+      "end": 15.4,
+      "expectedLift": "Clean & jerk",
+      "requiredPhases": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "notes": "One continuous repetition; front-rack receipt and later split jerk must remain one attempt."
+    },
+    {
+      "id": "clip-02",
+      "source": "EI3wC9ZyOes",
+      "start": 12.0,
+      "end": 15.4,
+      "crop": [318, 0, 664, 720],
+      "mask": [0, 570, 155, 150],
+      "expectedLift": "Clean",
+      "requiredPhases": ["pull", "front_rack_receive"],
+      "referenceThemes": [
+        {
+          "topic": "Backward displacement and receiving balance",
+          "commentaryStart": 52,
+          "commentaryEnd": 160
+        },
+        {
+          "topic": "Turnover separation between bar and shoulders; maintain connection",
+          "commentaryStart": 165,
+          "commentaryEnd": 247
+        }
+      ],
+      "notes": "Initial pull-to-receipt playback, ending before later scrubbing; playback rate is unverified. Crop removes narrator; small lower-left mask covers narrator overlap over empty floor. No audio or subtitles sent."
+    },
+    {
+      "id": "clip-03",
+      "source": "HuLNhAsQY7A",
+      "start": 11.6,
+      "end": 15.25,
+      "crop": [354, 0, 572, 720],
+      "mask": [0, 580, 44, 140],
+      "expectedLift": "Snatch",
+      "requiredPhases": ["pull", "direct_pull_to_overhead", "overhead_receive"],
+      "referenceThemes": [
+        {
+          "topic": "Backward displacement during extension and foot relocation",
+          "commentaryStart": 67,
+          "commentaryEnd": 123
+        },
+        {
+          "topic": "Bar separation during turnover and unstable overhead receipt",
+          "commentaryStart": 126,
+          "commentaryEnd": 217
+        }
+      ],
+      "notes": "Initial pull-to-receipt playback before coach drawings; playback rate is unverified. Keep claims about foot pressure as hypotheses; pressure is not measured by video."
+    },
+    {
+      "id": "clip-04",
+      "source": "bNCXgyosXlc",
+      "start": 11.1,
+      "end": 14.9,
+      "expectedLift": "Jerk",
+      "requiredPhases": [
+        "front_rack_hold",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "notes": "Derived partial clip: starts after the clean. Must not invent a visible pull or call this a complete clean and jerk."
+    },
+    {
+      "id": "clip-05",
+      "source": "bNCXgyosXlc",
+      "start": 11.1,
+      "end": 12.0,
+      "expectedLift": null,
+      "requiredPhases": ["front_rack_hold"],
+      "expectedScope": "visible_phases",
+      "notes": "Rack-only excerpt: retain visible-position observations without inventing a lift or forcing a correction."
+    },
+    {
+      "id": "clip-06",
+      "source": "bNCXgyosXlc",
+      "start": 16.0,
+      "end": 27.2,
+      "expectedLift": "Clean & jerk",
+      "requiredPhases": [
+        "pull",
+        "front_rack_receive",
+        "leg_drive_from_rack",
+        "overhead_receive"
+      ],
+      "notes": "Second athlete and camera angle, with a long rack pause before the jerk. Same source group as clips 01/04/05; not an independent holdout."
+    }
+  ]
+}

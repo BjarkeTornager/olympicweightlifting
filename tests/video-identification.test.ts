@@ -179,10 +179,6 @@ test("partial movement can be coached without claiming the whole lift; invalid e
     identify([phase("front_rack_hold", 1)], "not_lifting"),
     identify([phase("front_rack_hold", 90)], "limited"),
     identify(
-      [phase("front_rack_hold", 1), phase("front_rack_hold", 4)],
-      "limited",
-    ),
-    identify(
       [phase("front_rack_hold", 1), phase("direct_pull_to_overhead", 4)],
       "limited",
     ),
@@ -195,4 +191,51 @@ test("partial movement can be coached without claiming the whole lift; invalid e
   );
   assert.equal(conflictingSelection.lift, null);
   assert.equal(canReviewIdentification(conflictingSelection), true);
+});
+
+test("repeated observations within a phase preserve partial feedback, never a confident lift label", () => {
+  for (const visibility of ["limited", "sufficient"] as const) {
+    const result = identify(
+      [
+        phase("pull", 2),
+        phase("pull", 4),
+        phase("front_rack_receive", 6),
+        phase("front_rack_hold", 8),
+      ],
+      visibility,
+    );
+    assert.equal(result.lift, null);
+    assert.equal(result.status, "uncertain");
+    assert.equal(canReviewIdentification(result), true);
+    assert.equal(result.phases.length, 4);
+  }
+  assert.equal(
+    canReviewIdentification(
+      identify(
+        [phase("front_rack_hold", 1), phase("front_rack_hold", 4)],
+        "limited",
+      ),
+    ),
+    true,
+  );
+  // A new pull after a receipt still indicates repetition ambiguity.
+  assert.equal(
+    canReviewIdentification(
+      identify([
+        phase("pull", 1),
+        phase("front_rack_receive", 3),
+        phase("pull", 5),
+      ]),
+    ),
+    false,
+  );
+  assert.equal(
+    canReviewIdentification(
+      identify(
+        [phase("pull", 1), phase("pull", 2), phase("front_rack_receive", 4)],
+        "not_lifting",
+      ),
+    ),
+    false,
+  );
 });

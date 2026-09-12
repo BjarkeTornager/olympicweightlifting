@@ -7,7 +7,12 @@ import {
   evidenceFocusPoints,
   barTrailSegments,
 } from "../lib/video/coaching";
-import { parseVideoReview, reviewMessages } from "../lib/video/review";
+import {
+  parseVideoReview,
+  reviewMessages,
+  reviewWithRecovery,
+  type ReviewFailure,
+} from "../lib/video/review";
 import { identifyLift } from "../lib/video/identification";
 import { identifyAttempts } from "../lib/video/attempts";
 
@@ -69,6 +74,178 @@ const reply = {
     },
   ],
 };
+
+test("rejected video feedback gets one automatic repair using identical evidence", async () => {
+  const input = videoUploadSchema.parse({
+    id: crypto.randomUUID(),
+    lift: "Identify from video",
+    date: "2026-09-12",
+    start: 0,
+    end: 4,
+  });
+  const messages = reviewMessages(input, analysis, [
+    "private-synthetic-frames",
+  ]);
+  const attempt = {
+    id: "attempt-1",
+    start: 0,
+    end: 4,
+    identification: analysis.identification!,
+  };
+  for (const first of [
+    { content: '{"evidence":', truncated: true },
+    {
+      content: JSON.stringify({
+        evidence,
+        coaching: { ...reply, strength: "x".repeat(261) },
+      }),
+    },
+    {
+      content: JSON.stringify({
+        evidence,
+        coaching: {
+          ...reply,
+          moments: [{ ...reply.moments[0], frames: [999] }],
+        },
+      }),
+    },
+  ]) {
+    let calls = 0,
+      repairs = 0;
+    const result = await reviewWithRecovery(
+      messages,
+      analysis,
+      input,
+      attempt,
+      async (request, tools, signal, onText, options) => {
+        calls++;
+        assert.deepEqual(request[1].images, messages[1].images);
+        assert.deepEqual(tools, []);
+        assert.equal(options?.purpose, "video_review");
+        if (calls === 1) return { role: "assistant", ...first };
+        assert.match(
+          request.at(-1)!.content,
+          /previous response failed validation/,
+        );
+        return {
+          role: "assistant",
+          content: JSON.stringify({ evidence, coaching: reply }),
+        };
+      },
+      new AbortController().signal,
+      async () => {
+        repairs++;
+      },
+    );
+    assert.equal(calls, 2);
+    assert.equal(repairs, 1);
+    assert.equal(result.identification.lift, "Clean & jerk");
+    assert.equal(result.coaching.moments.length, 1);
+  }
+  let calls = 0;
+  await assert.rejects(
+    reviewWithRecovery(
+      messages,
+      analysis,
+      input,
+      attempt,
+      async () => {
+        calls++;
+        return { role: "assistant", content: "invalid" };
+      },
+      new AbortController().signal,
+      async () => {},
+    ),
+    /after an automatic retry/,
+  );
+  assert.equal(
+    calls,
+    2,
+    "invalid evidence never causes an unbounded retry or a fabricated result",
+  );
+  const controller = new AbortController();
+  calls = 0;
+  await assert.rejects(
+    reviewWithRecovery(
+      messages,
+      analysis,
+      input,
+      attempt,
+      async () => {
+        calls++;
+        return { role: "assistant", content: "invalid" };
+      },
+      controller.signal,
+      async () => {
+        controller.abort();
+      },
+    ),
+    /abort/i,
+  );
+  assert.equal(
+    calls,
+    1,
+    "account revocation or cancellation prevents the repair call",
+  );
+});
+
+test("video diagnostics classify invalid content without retaining private response text", () => {
+  const input = videoUploadSchema.parse({
+    id: crypto.randomUUID(),
+    lift: "Identify from video",
+    date: "2026-09-12",
+    start: 0,
+    end: 4,
+  });
+  const cases: [string, ReviewFailure][] = [
+    ["private invalid content", "invalid_json"],
+    [JSON.stringify({ secret: "private" }), "response_schema"],
+    [
+      JSON.stringify({
+        evidence: { ...evidence, limitation: "x".repeat(401) },
+        coaching: reply,
+      }),
+      "phase_schema",
+    ],
+    [
+      JSON.stringify({
+        evidence: {
+          ...evidence,
+          phases: [{ ...evidence.phases[0], frame: 999 }],
+        },
+        coaching: reply,
+      }),
+      "phase_evidence",
+    ],
+    [
+      JSON.stringify({
+        evidence,
+        coaching: { ...reply, strength: "x".repeat(261) },
+      }),
+      "coaching_schema",
+    ],
+    [
+      JSON.stringify({
+        evidence,
+        coaching: {
+          ...reply,
+          moments: [{ ...reply.moments[0], frames: [999] }],
+        },
+      }),
+      "coaching_evidence",
+    ],
+  ];
+  for (const [content, expected] of cases) {
+    const reasons: ReviewFailure[] = [];
+    assert.equal(
+      parseVideoReview(content, analysis, input, (reason) =>
+        reasons.push(reason),
+      ),
+      null,
+    );
+    assert.deepEqual(reasons, [expected]);
+  }
+});
 
 test("automatic upload needs no trim or calibration; explicit timing stays bounded", () => {
   const input = {

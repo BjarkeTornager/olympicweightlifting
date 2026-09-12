@@ -208,6 +208,7 @@ async function queueReview(
                   }
                 : null,
               feedback: null,
+              refinement: null,
             }
           : {}),
         error: null,

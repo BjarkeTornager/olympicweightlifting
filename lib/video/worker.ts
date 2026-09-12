@@ -18,7 +18,8 @@ import {
   respectSelectedLift,
   canReviewIdentification,
 } from "./identification";
-import { reviewMessages, parseVideoReview } from "./review";
+import { reviewMessages, reviewWithRecovery } from "./review";
+import type { VideoRefinementCheckpoint } from "./checkpoint";
 export { reviewMessages } from "./review";
 async function automaticFeedback(
   input: VideoUpload,
@@ -26,7 +27,11 @@ async function automaticFeedback(
   frames: string[],
   model: typeof callModel,
   signal: AbortSignal,
-  checkpoint: (analysis: VideoAnalysis, stage: string) => Promise<void>,
+  checkpoint: (
+    analysis: VideoAnalysis,
+    stage: string,
+    clearRefinement?: boolean,
+  ) => Promise<void>,
   refine: (
     analysis: VideoAnalysis,
     attempt: import("./attempts").VideoAttempt,
@@ -51,6 +56,8 @@ async function automaticFeedback(
         : identificationMessages(analysis, frames),
       [],
       signal,
+      undefined,
+      { purpose: "video_review" },
     );
     signal.throwIfAborted();
     analysis = {
@@ -96,27 +103,16 @@ async function automaticFeedback(
       instruction:
         "Review only this attempt. Every evidence frame must be within its start/end range. Other attempts are context only.",
     });
-    const response = await model(messages, [], signal);
-    signal.throwIfAborted();
-    const reviewed = response.tool_calls?.length
-      ? null
-      : parseVideoReview(response.content, current, input);
-    const coaching = reviewed?.coaching;
-    if (
-      !reviewed ||
-      !coaching ||
-      reviewed.identification.phases.some(
-        (p) => p.time < attempt.start || p.time > attempt.end,
-      ) ||
-      coaching.moments.some((m) =>
-        m.evidenceTimes.some((t) => t < attempt.start || t > attempt.end),
-      )
-    ) {
-      throw new ApiError(
-        "Coach could not link this feedback to the lift. Retry the analysis; your clip is saved.",
-        503,
-      );
-    }
+    const reviewed = await reviewWithRecovery(
+      messages,
+      current,
+      input,
+      attempt,
+      model,
+      signal,
+      () => checkpoint(analysis, "Checking Coach’s feedback automatically"),
+    );
+    const coaching = reviewed.coaching;
     attempt.identification = reviewed.identification;
     attempt.coaching = coaching;
     if (current.segmentation) {
@@ -144,7 +140,7 @@ async function automaticFeedback(
         frames: [...merged.values()].sort((a, b) => a.t - b.t),
       };
     }
-    await checkpoint(analysis, "Preparing your guided replay");
+    await checkpoint(analysis, "Preparing your guided replay", true);
   }
   const attempts = analysis.attempts!;
   const label = (i: number) =>
@@ -257,6 +253,10 @@ export async function runVideoJob(
   try {
     if (!(await check())) return;
     const [row] = await getDb().select().from(liftingVideos).where(fence);
+    let refinement =
+      row.analysis?.reviewVersion === VIDEO_REVIEW_VERSION
+        ? row.refinement
+        : null;
     let analysis = row.analysis,
       frames = row.frames;
     let media = row.media;
@@ -268,11 +268,13 @@ export async function runVideoJob(
       analysis = output.analysis;
       frames = output.frames;
       media = output.media;
+      refinement = null;
       await getDb()
         .update(liftingVideos)
         .set({
           analysis,
           frames,
+          refinement: null,
           media: output.media,
           source: null,
           bytes: MAX_VIDEO_BYTES,
@@ -298,16 +300,40 @@ export async function runVideoJob(
       frames,
       model,
       signal,
-      async (updated, stage) => {
+      async (updated, stage, clearRefinement) => {
         if (!(await check())) signal.throwIfAborted();
         await getDb()
           .update(liftingVideos)
-          .set({ analysis: updated, stage })
+          .set({
+            analysis: updated,
+            stage,
+            ...(clearRefinement ? { refinement: null } : {}),
+          })
           .where(fence);
+        if (clearRefinement) refinement = null;
       },
       async (current, attempt) => {
         if (!(await check())) signal.throwIfAborted();
-        return refiner(
+        if (
+          refinement?.version === 1 &&
+          refinement.reviewVersion === VIDEO_REVIEW_VERSION &&
+          current.reviewVersion === VIDEO_REVIEW_VERSION &&
+          refinement.attemptId === attempt.id &&
+          refinement.start === attempt.start &&
+          refinement.end === attempt.end
+        ) {
+          return {
+            analysis: {
+              ...current,
+              identification: attempt.identification,
+              sampleTimes: refinement.sampleTimes,
+              pose: refinement.pose,
+              segmentation: refinement.segmentation,
+            },
+            frames: refinement.frames,
+          };
+        }
+        const refined = await refiner(
           media!,
           current,
           attempt,
@@ -315,6 +341,35 @@ export async function runVideoJob(
           segmentationBudget,
           segmentationConfig,
         );
+        signal.throwIfAborted();
+        const saved: VideoRefinementCheckpoint = {
+          version: 1,
+          reviewVersion: VIDEO_REVIEW_VERSION,
+          attemptId: attempt.id,
+          start: attempt.start,
+          end: attempt.end,
+          sampleTimes: refined.analysis.sampleTimes,
+          frames: refined.frames,
+          pose: refined.analysis.pose,
+          segmentation: refined.analysis.segmentation,
+        };
+        const bytes =
+          media!.length +
+          frames!.reduce((n, f) => n + f.length, 0) +
+          Buffer.byteLength(JSON.stringify(current)) +
+          Buffer.byteLength(JSON.stringify(saved));
+        if (bytes > MAX_VIDEO_BYTES)
+          throw new ApiError(
+            "This review is too large. Try a shorter clip.",
+            422,
+          );
+        if (!(await check())) signal.throwIfAborted();
+        await getDb()
+          .update(liftingVideos)
+          .set({ refinement: saved })
+          .where(fence);
+        refinement = saved;
+        return refined;
       },
     );
     analysis = result.analysis;
@@ -333,12 +388,23 @@ export async function runVideoJob(
         stage: "Review ready",
         analysis,
         feedback,
+        refinement: null,
         error: null,
         lease: null,
         leaseUntil: null,
       })
       .where(fence);
   } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "video_job_failed",
+        reason: signal.aborted
+          ? "interrupted"
+          : error instanceof ApiError
+            ? "review_error"
+            : "processing_or_provider_error",
+      }),
+    );
     // Media stays available when the model fails, so retry need not reprocess it.
     await getDb()
       .update(liftingVideos)

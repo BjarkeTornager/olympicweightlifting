@@ -9,11 +9,15 @@ import {
 } from "./identification";
 import {
   guidedCoachingInstruction,
+  coachingResponseSchema,
   parseGuidedCoaching,
   type GuidedCoaching,
 } from "./coaching";
 import { liftingResources } from "../lifting-resources";
 import { segmentationEvidence } from "./segmentation";
+import type { callModel, ModelMessage } from "../agent/provider";
+import { ApiError } from "../agent/http";
+import type { VideoAttempt } from "./attempts";
 
 export function reviewMessages(
   input: VideoUpload,
@@ -29,6 +33,7 @@ Then coach only that supported sequence. A front-rack receipt followed by a sepa
 No technique score, competition judging, injury diagnosis, exact joint angles, force, power or invented speed. Use only supplied measurements and treat null as unavailable. No single ideal bar path fits all lifters. Separate visible observations from possible causes; no unsupported certainty or generic praise. Do not log workouts or change programs. ${guidedCoachingInstruction}
 The final response must be ONE JSON object with exactly two keys: {"evidence":<the phase evidence object>,"coaching":<the coaching object above>}. No other text. Coaching references: ${JSON.stringify(liftingResources.filter((r) => r.topic === "technique"))}`;
   const { points, velocities, ...measurements } = analysis.tracking;
+  messages[0].content += `\nKeep the JSON concise and complete. Hard character limits: evidence.phases[].evidence 10–240, evidence.limitation 400, coaching.strength 260, coaching.limitation 300, moment title 3–80, observation 10–360, cue 3–160, check 3–200. At most 12 phases, 3 moments, and 1–4 frames per moment. All frame numbers must be integers from 1 through ${analysis.sampleTimes.length}. Return fewer supported moments if needed; never invent evidence to satisfy the format.`;
   void points;
   void velocities;
   messages[1].content = JSON.stringify({
@@ -47,20 +52,33 @@ The final response must be ONE JSON object with exactly two keys: {"evidence":<t
 const responseSchema = z
   .object({ evidence: z.unknown(), coaching: z.unknown() })
   .strict();
+export type ReviewFailure =
+  | "invalid_json"
+  | "response_schema"
+  | "phase_schema"
+  | "phase_evidence"
+  | "coaching_schema"
+  | "coaching_evidence"
+  | "attempt_range"
+  | "truncated"
+  | "tool_calls";
 export function parseVideoReview(
   content: string,
   analysis: VideoAnalysis,
   input: VideoUpload,
+  onInvalid?: (reason: ReviewFailure) => void,
 ) {
+  let reason: ReviewFailure = "invalid_json";
   try {
-    const raw = responseSchema.parse(
-      JSON.parse(
-        content
-          .trim()
-          .replace(/^```(?:json)?\s*/, "")
-          .replace(/\s*```$/, ""),
-      ),
+    const json = JSON.parse(
+      content
+        .trim()
+        .replace(/^```(?:json)?\s*/, "")
+        .replace(/\s*```$/, ""),
     );
+    reason = "response_schema";
+    const raw = responseSchema.parse(json);
+    reason = "phase_schema";
     const evidence = evidenceSchema.parse(raw.evidence);
     const identification = respectSelectedLift(
       identifyLift(JSON.stringify(raw.evidence), analysis),
@@ -70,8 +88,10 @@ export function parseVideoReview(
       evidence.visibility !== "not_lifting" &&
       evidence.phases.length &&
       !identification.phases.length
-    )
+    ) {
+      onInvalid?.("phase_evidence");
       return null;
+    }
     if (!canReviewIdentification(identification)) {
       const coaching: GuidedCoaching = {
         version: 1,
@@ -81,12 +101,89 @@ export function parseVideoReview(
       };
       return { identification, coaching };
     }
+    reason = "coaching_schema";
+    coachingResponseSchema.parse(raw.coaching);
     const coaching = parseGuidedCoaching(JSON.stringify(raw.coaching), {
       ...analysis,
       identification,
     });
+    if (!coaching) onInvalid?.("coaching_evidence");
     return coaching ? { identification, coaching } : null;
   } catch {
+    onInvalid?.(reason);
     return null;
   }
+}
+
+export async function reviewWithRecovery(
+  messages: ModelMessage[],
+  analysis: VideoAnalysis,
+  input: VideoUpload,
+  attempt: VideoAttempt,
+  model: typeof callModel,
+  signal: AbortSignal,
+  onRepair: () => Promise<void>,
+) {
+  let reason: ReviewFailure = "invalid_json";
+  for (let pass = 0; pass < 2; pass++) {
+    signal.throwIfAborted();
+    const request =
+      pass === 0
+        ? messages
+        : [
+            ...messages,
+            {
+              role: "user" as const,
+              content: `The previous response failed validation (${reason}). Re-inspect the same supplied evidence and return a complete, concise JSON object following the exact structure and character limits. Check phase order, valid frame labels, focusFrame membership and the 2.5-second evidence span. Movement needs two distinct times. Coaching must match the independently supported phases. Do not invent phases, measurements or corrections. If no correction is supported, use an empty moments array and explain the visible limitation. No tools or markdown.`,
+            },
+          ];
+    const response = await model(request, [], signal, undefined, {
+      purpose: "video_review",
+    });
+    signal.throwIfAborted();
+    let reviewed: ReturnType<typeof parseVideoReview> = null;
+    if (response.truncated) reason = "truncated";
+    else if (response.tool_calls?.length) reason = "tool_calls";
+    else
+      reviewed = parseVideoReview(
+        response.content,
+        analysis,
+        input,
+        (failure) => {
+          reason = failure;
+        },
+      );
+    if (
+      reviewed &&
+      (reviewed.identification.phases.some(
+        (p) => p.time < attempt.start || p.time > attempt.end,
+      ) ||
+        reviewed.coaching.moments.some((m) =>
+          m.evidenceTimes.some((t) => t < attempt.start || t > attempt.end),
+        ))
+    ) {
+      reason = "attempt_range";
+      reviewed = null;
+    }
+    if (reviewed) {
+      if (pass)
+        console.info(
+          JSON.stringify({ event: "video_review_repaired", reason }),
+        );
+      return reviewed;
+    }
+    // Fixed reason codes only: never retain or log the model's private response.
+    console.warn(
+      JSON.stringify({
+        event: "video_review_rejected",
+        reason,
+        pass: pass + 1,
+      }),
+    );
+    if (!pass) await onRepair();
+  }
+  throw new ApiError(
+    "Coach could not link this feedback to the lift after an automatic retry. Your video and processing are saved; retry the review shortly.",
+    503,
+  );
 }

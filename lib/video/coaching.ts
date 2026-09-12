@@ -23,7 +23,7 @@ const momentSchema = z
     region: z.enum(focusRegions),
   })
   .strict();
-const responseSchema = z
+export const coachingResponseSchema = z
   .object({
     strength: z.string().trim().max(260),
     limitation: z.string().trim().max(300),
@@ -59,7 +59,7 @@ export function parseGuidedCoaching(
   analysis: VideoAnalysis,
 ): GuidedCoaching | null {
   try {
-    const parsed = responseSchema.parse(
+    const parsed = coachingResponseSchema.parse(
       JSON.parse(
         content
           .trim()

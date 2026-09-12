@@ -66,6 +66,8 @@ export function providerConfig() {
     key: process.env.OLLAMA_API_KEY,
   };
 }
+export type ModelResponse = ModelMessage & { truncated?: boolean };
+export type ModelOptions = { purpose?: "video_review" };
 const messageSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().max(24000).default(""),
@@ -86,10 +88,16 @@ export function modelRequest(
   messages: ModelMessage[],
   tools: ToolDefinition[],
   config: NonNullable<ReturnType<typeof providerConfig>>,
+  options: ModelOptions = {},
 ) {
-  const outputLimit = tools.some((t) => t.function.name === "show_visual")
-    ? 3200
-    : 1800;
+  // Phase evidence plus replay cards need more room than a chat reply. Keep
+  // the ordinary chat budget unchanged and bound the video-specific allowance.
+  const outputLimit =
+    options.purpose === "video_review"
+      ? 4800
+      : tools.some((t) => t.function.name === "show_visual")
+        ? 3200
+        : 1800;
   if (config.kind === "openrouter")
     return {
       url: `${config.base}/chat/completions`,
@@ -165,14 +173,22 @@ export function modelRequest(
 export function parseModelResponse(
   raw: unknown,
   kind: "ollama" | "openrouter",
-): ModelMessage {
-  if (kind === "ollama")
-    return z.object({ message: messageSchema }).parse(raw).message;
+): ModelResponse {
+  if (kind === "ollama") {
+    const response = z
+      .object({ message: messageSchema, done_reason: z.string().optional() })
+      .parse(raw);
+    return {
+      ...response.message,
+      ...(response.done_reason === "length" ? { truncated: true } : {}),
+    };
+  }
   const response = z
     .object({
       choices: z
         .array(
           z.object({
+            finish_reason: z.string().nullish(),
             message: z.object({
               role: z.literal("assistant"),
               content: z.string().max(24000).nullish(),
@@ -196,30 +212,36 @@ export function parseModelResponse(
     })
     .parse(raw);
   const m = response.choices[0].message;
-  return messageSchema.parse({
-    ...m,
-    content: m.content ?? "",
-    tool_calls: m.tool_calls?.map((t) => ({
-      ...t,
-      function: {
-        name: t.function.name,
-        arguments: JSON.parse(t.function.arguments),
-      },
-    })),
-  });
+  return {
+    ...messageSchema.parse({
+      ...m,
+      content: m.content ?? "",
+      tool_calls: m.tool_calls?.map((t) => ({
+        ...t,
+        function: {
+          name: t.function.name,
+          arguments: JSON.parse(t.function.arguments),
+        },
+      })),
+    }),
+    ...(response.choices[0].finish_reason === "length"
+      ? { truncated: true }
+      : {}),
+  };
 }
 export async function callModel(
   messages: ModelMessage[],
   tools: ToolDefinition[],
   signal: AbortSignal,
   onText?: (delta: string) => void,
-): Promise<ModelMessage> {
+  options: ModelOptions = {},
+): Promise<ModelResponse> {
   const config = providerConfig();
   if (!config)
     throw Error(
       "The training assistant is not connected yet. Your journal and manual logging are ready to use.",
     );
-  const request = modelRequest(messages, tools, config);
+  const request = modelRequest(messages, tools, config, options);
   if (onText) request.body.stream = true;
   const response = await fetch(request.url, {
     method: "POST",

@@ -177,7 +177,11 @@ test(
         refiner,
       );
       assert.equal(decodes, 1);
-      assert.equal(modelCalls, 2);
+      assert.equal(
+        modelCalls,
+        3,
+        "one identification plus two bounded review attempts",
+      );
       const guarded = await getVideo(users[0], input.id);
       assert.equal(guarded.status, "failed");
       assert.equal(guarded.feedback, null);
@@ -186,6 +190,16 @@ test(
         "Clean & jerk",
       );
       await reanalyseVideo(users[0], input.id, { lift: "Clean & jerk" });
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT refinement FROM lifting_videos WHERE user_id=$1 AND id=$2",
+            [users[0], input.id],
+          )
+        ).rows[0].refinement,
+        null,
+        "explicit reanalysis must discard evidence from the earlier review",
+      );
       assert.equal((await getVideo(users[0], input.id)).feedback, null);
       assert.equal(
         (await getVideo(users[0], input.id)).analysis?.identification,
@@ -339,6 +353,18 @@ test(
         refiner,
       );
       assert.equal((await getVideo(users[0], automatic.id)).status, "failed");
+      const savedRefinement = await pool.query(
+        "SELECT refinement FROM lifting_videos WHERE user_id=$1 AND id=$2",
+        [users[0], automatic.id],
+      );
+      assert.deepEqual(savedRefinement.rows[0].refinement.frames, [
+        "dense-synthetic",
+      ]);
+      assert.equal(
+        "refinement" in (await getVideo(users[0], automatic.id)),
+        false,
+        "private evidence checkpoint must not appear in the video response",
+      );
       assert.equal(
         (await getVideo(users[0], automatic.id)).analysis?.attempts?.[0]
           .identification.lift,
@@ -363,11 +389,22 @@ test(
         async () => {
           throw Error("Must reuse saved media");
         },
-        refiner,
+        async () => {
+          throw Error("Must reuse checkpointed frame extraction and GPU work");
+        },
       );
       const completed = await getVideo(users[0], automatic.id);
       assert.equal(completed.status, "ready");
-      assert.equal(autoCalls, 3);
+      assert.equal(autoCalls, 4);
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT refinement FROM lifting_videos WHERE user_id=$1 AND id=$2",
+            [users[0], automatic.id],
+          )
+        ).rows[0].refinement,
+        null,
+      );
       assert.equal(completed.analysis?.coaching?.moments[0].evidenceTime, 0.5);
       assert.deepEqual(
         completed.analysis?.coaching?.moments[0].evidenceTimes,

@@ -308,6 +308,10 @@ export const liftingVideos = pgTable(
     source: bytea("source"),
     media: bytea("media"),
     frames: jsonb("frames").$type<string[]>(),
+    refinement:
+      jsonb("refinement").$type<
+        import("../video/checkpoint").VideoRefinementCheckpoint
+      >(),
     analysis: jsonb("analysis").$type<import("../video/types").VideoAnalysis>(),
     feedback: text("feedback"),
     status: text("status").notNull().default("queued"),

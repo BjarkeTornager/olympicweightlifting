@@ -1,6 +1,47 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { modelRequest, parseModelResponse } from "../lib/agent/provider";
+test("video output budget is isolated from chat and truncated replies are flagged", () => {
+  for (const kind of ["openrouter", "ollama"] as const) {
+    const config = {
+      kind,
+      label: "test",
+      base: "https://example.test",
+      model: "openai/gpt-5.6-luna",
+      key: "test",
+    };
+    const budget = (purpose?: "video_review") => {
+      const body = modelRequest([], [], config, { purpose }).body;
+      return (
+        body.options?.num_predict ??
+        ("max_completion_tokens" in body
+          ? body.max_completion_tokens
+          : undefined)
+      );
+    };
+    assert.equal(budget(), 1800);
+    assert.equal(budget("video_review"), 4800);
+    const message = { role: "assistant", content: '{"evidence":' };
+    assert.equal(
+      parseModelResponse(
+        kind === "openrouter"
+          ? { choices: [{ message, finish_reason: "length" }] }
+          : { message, done_reason: "length" },
+        kind,
+      ).truncated,
+      true,
+    );
+    assert.equal(
+      parseModelResponse(
+        kind === "openrouter"
+          ? { choices: [{ message, finish_reason: "stop" }] }
+          : { message, done_reason: "stop" },
+        kind,
+      ).truncated,
+      undefined,
+    );
+  }
+});
 test("provider accepts a bounded large lookup batch for engine recovery, but rejects unbounded tool envelopes", () => {
   const response = (count: number) => ({
     choices: [

@@ -8,7 +8,7 @@ The verified-account video pilot now supports an **observed 3D body shadow** alo
 - **3D body shadow**, **Inspect 3D body**, **Previous body frame** and **Next body frame** controls sit with the video controls. The original video remains available.
 - Playback captures the original frame and matching body projection together. It can briefly retain that complete annotated frame between nearby samples, never a stale mesh on a newer video frame. Missing samples, seeks and gaps clear the shadow. There is no interpolation of hidden poses or invented smooth trajectory.
 - **Show suggested correction** can combine the observed body shadow with the existing limited 2D posture guide. The observed shadow turns grey; the suggested joint positions stay teal. Original/reference comparisons remain available. The correction layer is explicitly labelled as a 2D suggestion.
-- Older pilot reviews offer **Update analysis**. Existing videos are reused; old reviews are not silently reprocessed.
+- Older pilot reviews offer **Update analysis**. Existing videos are reused; old reviews are not silently reprocessed. Adding the body layer to a current review preserves the selected lift; legacy reviews still refresh their old identification.
 
 ## Backend and privacy
 

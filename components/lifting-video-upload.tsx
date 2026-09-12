@@ -915,7 +915,13 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   busy={busy}
                   bodyOverlayEnabled={bodyOverlayEnabled}
                   onReanalyse={() =>
-                    void action(review, "reanalyse", "Identify from video")
+                    void action(
+                      review,
+                      "reanalyse",
+                      currentVideoReview(review.analysis)
+                        ? review.lift
+                        : "Identify from video",
+                    )
                   }
                 />
                 <div className="button-row">

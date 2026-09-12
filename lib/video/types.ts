@@ -42,6 +42,7 @@ export type VideoUpload = z.infer<typeof videoUploadSchema>;
 export type TrackPoint = { t: number; x: number; y: number; score: number };
 export type VideoAnalysis = {
   version: 1;
+  reviewVersion?: number;
   identification?: import("./identification").LiftIdentification;
   width: number;
   height: number;
@@ -49,6 +50,7 @@ export type VideoAnalysis = {
   frameCount: number;
   sampleTimes: number[];
   pose?: {
+    version?: number;
     status: "tracked" | "partial" | "unavailable";
     reason: string;
     frames: { t: number; points: { id: number; x: number; y: number }[] }[];

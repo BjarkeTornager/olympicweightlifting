@@ -20,6 +20,53 @@ function saved(id: string): SavedVideoReview {
     analysis: null,
   };
 }
+test("an older mislabelled review can be updated with fresh identification and no new upload", async ({
+  page,
+  context,
+}) => {
+  let review: SavedVideoReview = {
+    ...saved("00000000-0000-4000-8000-000000000021"),
+    status: "ready",
+    stage: "Review ready",
+    feedback: "This is a clear snatch attempt.",
+  };
+  await context.route("**/api/lifting-videos", (r) =>
+    r.fulfill({ json: { videos: [review] } }),
+  );
+  await context.route(/\/api\/lifting-videos\/[^/]+$/, (r) =>
+    r.fulfill({ json: review }),
+  );
+  let updated = false;
+  await context.route("**/api/lifting-videos/*/reanalyse", (r) => {
+    expect(r.request().headers()["x-journal-account"]).toBe(browserUser.id);
+    expect(r.request().headers()["x-video-lift"]).toBe("Identify from video");
+    expect(r.request().method()).toBe("POST");
+    updated = true;
+    review = {
+      ...review,
+      lift: "Identify from video",
+      status: "queued",
+      stage: "Waiting to reanalyse",
+      feedback: null,
+    };
+    return r.fulfill({ json: review });
+  });
+  await page.goto("/#coach/lifting/video");
+  const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
+  await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
+  await expect(dialog.getByLabel("Coach video feedback")).not.toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Update analysis", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText(
+    "Waiting to reanalyse",
+  );
+  expect(updated).toBe(true);
+  await expect(
+    dialog.getByRole("heading", { name: "Lifting video", exact: true }),
+  ).toBeVisible();
+});
 test("private video upload processes across navigation and exposes playback, feedback, export and deletion", async ({
   page,
   context,
@@ -146,9 +193,13 @@ test("private video upload processes across navigation and exposes playback, fee
   await expect(dialog.getByLabel("Bar measurements")).toContainText(
     "Unavailable",
   );
+  await expect(dialog.getByLabel("Review update available")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Update analysis", exact: true }),
+  ).toBeVisible();
   await expect(
     dialog.getByLabel("Experimental bar trajectory overlay"),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await dialog.getByText("More detail & downloads", { exact: true }).click();
   const download = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Export analysis" }).click();
@@ -273,6 +324,20 @@ for (const partial of [false, true])
     page,
     context,
   }, info) => {
+    await page.addInitScript(() => {
+      const original = HTMLVideoElement.prototype.requestVideoFrameCallback;
+      if (!original) return;
+      HTMLVideoElement.prototype.requestVideoFrameCallback = function (
+        callback,
+      ) {
+        (
+          this as HTMLVideoElement & {
+            testPresentedFrame?: VideoFrameRequestCallback;
+          }
+        ).testPresentedFrame = callback;
+        return original.call(this, callback);
+      };
+    });
     const review: SavedVideoReview = {
       ...saved("00000000-0000-4000-8000-000000000010"),
       lift: partial ? "Identify from video" : "Snatch",
@@ -282,6 +347,7 @@ for (const partial of [false, true])
       feedback: "Synthetic feedback with no real athlete.",
       analysis: {
         version: 1,
+        reviewVersion: 2,
         width: 320,
         height: 480,
         duration: 2,
@@ -317,6 +383,7 @@ for (const partial of [false, true])
           velocities: [],
         },
         pose: {
+          version: 2,
           status: "partial",
           reason: "Synthetic landmarks",
           frames: Array.from({ length: 30 }, (_, i) => ({
@@ -338,8 +405,9 @@ for (const partial of [false, true])
               cue: "Synthetic cue: focus on the highlighted elbow",
               check: "Compare this moment in your next attempt.",
               region: "elbows",
-              evidenceFrames: [2],
-              evidenceTimes: [0.5],
+              evidenceType: "movement",
+              evidenceFrames: [2, 3],
+              evidenceTimes: [0.5, 1],
               evidenceTime: 0.5,
               start: 0.2,
               end: 1.4,
@@ -376,6 +444,19 @@ for (const partial of [false, true])
       await expect(dialog.getByLabel("Guided coaching")).toContainText(
         "Feedback on the visible movement",
       );
+    await dialog.getByRole("button", { name: "Freeze & inspect" }).click();
+    await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
+    await expect(video).toHaveJSProperty("paused", true);
+    expect(
+      await video.evaluate((v: HTMLVideoElement) => v.currentTime),
+    ).toBeCloseTo(0.5, 2);
+    await dialog
+      .getByRole("button", { name: "Inspect evidence frame at 1.00 seconds" })
+      .click();
+    expect(
+      await video.evaluate((v: HTMLVideoElement) => v.currentTime),
+    ).toBeCloseTo(1, 2);
+    await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
     await dialog.getByRole("button", { name: "Watch this moment" }).click();
     await expect(dialog.getByLabel("Playback speed")).toHaveValue("0.5");
     await expect(dialog.getByLabel("Coaching overlay")).toContainText(
@@ -392,7 +473,20 @@ for (const partial of [false, true])
     await expect(
       dialog.getByRole("button", { name: "Reduce video" }),
     ).toBeVisible();
+    // Reproduce a delayed Safari callback from before the paused seek/resize.
+    await video.evaluate(
+      (
+        v: HTMLVideoElement & {
+          testPresentedFrame?: VideoFrameRequestCallback;
+        },
+      ) => {
+        v.testPresentedFrame?.(performance.now(), {
+          mediaTime: 1.95,
+        } as VideoFrameCallbackMetadata);
+      },
+    );
     await expect(dialog.getByLabel("Coaching overlay")).toBeVisible();
+    await expect(dialog.getByLabel("Coaching overlay")).toContainText("0.50s");
     const playerLayout = await dialog.evaluate((el) => {
       const selectors = [
         ".video-replay-stage",

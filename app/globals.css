@@ -3399,7 +3399,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .guided-replay-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:14px;font-weight:600;}
 .guided-replay-heading>span {display:flex;align-items:center;gap:8px;}
 .video-replay-stage {overflow:hidden;border-radius:18px;background:#151515;}
-.video-replay-stage .video-review-player {border-radius:0;max-height:min(64dvh,560px);width:auto;margin:auto;}
+.video-replay-stage .video-review-player {border-radius:0;max-height:min(56dvh,520px);width:auto;margin:auto;}
 .lifting-video-flow .video-replay-stage video {height:100%;width:100%;object-fit:contain;}
 .video-coach-caption {padding:14px 18px;background:#202020;color:#fff;display:grid;gap:6px;border-top:2px solid #ffde59;}
 .video-coach-caption span {font-size:11px;font-weight:700;letter-spacing:.07em;color:#ffde59;}
@@ -3434,3 +3434,12 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 @media(max-width:480px){.video-coaching-card{padding:17px}.video-coaching-card h3{font-size:19px}.video-upload-picker{padding:18px}.video-playback-row{gap:5px}}
 .video-upload-picker {position:relative;cursor:pointer;justify-items:center;}
 .video-upload-picker:focus-within {outline:3px solid #a83056;outline-offset:3px;}
+.video-coach-caption p {font-size:14px;line-height:1.5;margin:0;color:#f3f3f3;}
+.video-coach-caption small {font-size:12px;line-height:1.4;color:#d8d8d8;}
+.video-evidence-actions {display:flex;gap:8px;flex-wrap:wrap;}
+.video-evidence-frames {display:flex;gap:8px;flex-wrap:wrap;}
+.video-evidence-frames button {min-height:44px;padding:8px 12px;border:1px solid #d7c8ce;border-radius:10px;background:#fff;color:#763047;font-size:13px;cursor:pointer;}
+.video-evidence-frames button:focus-visible {outline:3px solid #a83056;outline-offset:2px;}
+.video-review-update {display:grid;gap:12px;padding:20px;background:#f6f3ef;border:1px solid #e3dcd1;border-radius:16px;}
+.video-review-update p {font-size:14px;line-height:1.6;margin:0;}
+.video-review-update button {justify-self:start;}

@@ -91,6 +91,23 @@ test(
           velocities: [],
         },
       };
+      const refiner = async (
+        _media: Buffer,
+        current: VideoAnalysis,
+        attempt: import("../lib/video/attempts").VideoAttempt,
+      ) => ({
+        analysis: {
+          ...current,
+          identification: attempt.identification,
+          pose: {
+            version: 2,
+            status: "partial" as const,
+            reason: "Synthetic exact-frame tracking",
+            frames: [{ t: 0.5, points: [{ id: 13, x: 0.4, y: 0.5 }] }],
+          },
+        },
+        frames: ["dense-synthetic"],
+      });
       let decodes = 0;
       const processor = async () => {
         decodes++;
@@ -102,6 +119,7 @@ test(
           throw Error("synthetic provider unavailable");
         },
         processor,
+        refiner,
       );
       assert.equal((await getVideo(users[0], input.id)).status, "failed");
       assert.deepEqual(await videoMedia(users[0], input.id), source);
@@ -148,8 +166,7 @@ test(
           modelCalls++;
           if (modelCalls === 1)
             assert.equal(messages[1].content.includes('"lift"'), false);
-          else
-            assert.equal(JSON.parse(messages[1].content).lift, "Clean & jerk");
+          else assert.equal(JSON.parse(messages[1].content).lift, undefined);
           return {
             role: "assistant",
             content:
@@ -157,13 +174,17 @@ test(
           };
         },
         processor,
+        refiner,
       );
       assert.equal(decodes, 1);
       assert.equal(modelCalls, 2);
       const guarded = await getVideo(users[0], input.id);
-      assert.match(guarded.feedback!, /withheld/);
-      assert.doesNotMatch(guarded.feedback!, /clear snatch/);
-      assert.equal(guarded.analysis?.identification?.lift, "Clean & jerk");
+      assert.equal(guarded.status, "failed");
+      assert.equal(guarded.feedback, null);
+      assert.equal(
+        guarded.analysis?.attempts?.[0].identification.lift,
+        "Clean & jerk",
+      );
       await reanalyseVideo(users[0], input.id, { lift: "Clean & jerk" });
       assert.equal((await getVideo(users[0], input.id)).feedback, null);
       assert.equal(
@@ -184,9 +205,18 @@ test(
           content:
             ++correctedCalls === 1
               ? phaseReply
-              : "The front-rack position is visible at 0.50s. No correction is justified by these synthetic frames.",
+              : JSON.stringify({
+                  evidence: JSON.parse(phaseReply),
+                  coaching: {
+                    strength: "The front-rack position is visible.",
+                    limitation:
+                      "No correction is justified by these synthetic frames.",
+                    moments: [],
+                  },
+                }),
         }),
         processor,
+        refiner,
       );
       assert.equal(correctedCalls, 2);
       assert.equal(decodes, 1);
@@ -202,6 +232,7 @@ test(
           throw Error("must not be called");
         },
         processor,
+        refiner,
       );
       assert.equal((await getVideo(users[0], input.id)).status, "ready");
       assert.equal((await readJournal(users[0])).revision, 0);
@@ -221,23 +252,19 @@ test(
       const autoAnalysis: VideoAnalysis = {
         ...analysis,
         pose: {
+          version: 2,
           status: "partial",
           reason: "Synthetic",
-          frames: [{ t: 0.5, points: [{ id: 13, x: 0.4, y: 0.5 }] }],
+          frames: [
+            { t: 0.5, points: [{ id: 13, x: 0.1, y: 0.2 }] },
+            { t: 1, points: [{ id: 13, x: 0.8, y: 0.9 }] },
+          ],
         },
       };
       const autoProcessor = async () => ({
         analysis: structuredClone(autoAnalysis),
         media: source,
         frames: ["coarse-synthetic"],
-      });
-      const refiner = async (
-        _media: Buffer,
-        current: VideoAnalysis,
-        attempt: import("../lib/video/attempts").VideoAttempt,
-      ) => ({
-        analysis: { ...current, identification: attempt.identification },
-        frames: ["dense-synthetic"],
       });
       const coaching = {
         strength: "The receiving position is visible.",
@@ -250,6 +277,8 @@ test(
             check: "Compare the next receiving frame.",
             region: "elbows",
             frames: [3],
+            focusFrame: 3,
+            evidenceType: "position",
           },
         ],
       };
@@ -267,7 +296,29 @@ test(
                   {
                     startFrame: 1,
                     endFrame: 9,
-                    evidence: JSON.parse(phaseReply),
+                    evidence: {
+                      visibility: "sufficient",
+                      limitation: "",
+                      phases: [
+                        {
+                          kind: "pull",
+                          frame: 1,
+                          evidence:
+                            "Synthetic incorrect initial pull interpretation.",
+                        },
+                        {
+                          kind: "direct_pull_to_overhead",
+                          frame: 6,
+                          evidence:
+                            "Synthetic incorrect initial direct-overhead interpretation.",
+                        },
+                        {
+                          kind: "overhead_receive",
+                          frame: 8,
+                          evidence: "Synthetic initial overhead observation.",
+                        },
+                      ],
+                    },
                   },
                 ],
               }),
@@ -276,8 +327,11 @@ test(
           return {
             role: "assistant",
             content: JSON.stringify({
-              ...coaching,
-              moments: [{ ...coaching.moments[0], frames: [999] }],
+              evidence: JSON.parse(phaseReply),
+              coaching: {
+                ...coaching,
+                moments: [{ ...coaching.moments[0], frames: [999] }],
+              },
             }),
           };
         },
@@ -288,7 +342,7 @@ test(
       assert.equal(
         (await getVideo(users[0], automatic.id)).analysis?.attempts?.[0]
           .identification.lift,
-        "Clean & jerk",
+        "Snatch",
       );
       await retryVideo(users[0], automatic.id);
       const automaticRetry = await claimVideo();
@@ -298,7 +352,13 @@ test(
         async (messages) => {
           autoCalls++;
           assert.deepEqual(messages[1].images, ["dense-synthetic"]);
-          return { role: "assistant", content: JSON.stringify(coaching) };
+          return {
+            role: "assistant",
+            content: JSON.stringify({
+              evidence: JSON.parse(phaseReply),
+              coaching,
+            }),
+          };
         },
         async () => {
           throw Error("Must reuse saved media");
@@ -313,7 +373,17 @@ test(
         completed.analysis?.coaching?.moments[0].evidenceTimes,
         [0.5],
       );
-      assert.equal(completed.analysis?.pose?.frames.length, 1);
+      assert.equal(completed.analysis?.reviewVersion, 2);
+      assert.equal(completed.analysis?.identification?.lift, "Clean & jerk");
+      assert.equal(completed.analysis?.pose?.version, 2);
+      assert.deepEqual(
+        completed.analysis?.pose?.frames.find((f) => f.t === 0.5)?.points,
+        [{ id: 13, x: 0.4, y: 0.5 }],
+      );
+      assert.deepEqual(
+        completed.analysis?.pose?.frames.find((f) => f.t === 1)?.points,
+        [],
+      );
       assert.deepEqual(
         (await listVideos(users[0]))[0].analysis?.pose?.frames,
         [],
@@ -377,14 +447,17 @@ test(
                 ),
               };
             assert.match(messages[0].content, /PARTIAL MOVEMENT REVIEW/);
-            assert.equal(JSON.parse(messages[1].content).lift, null);
+            assert.equal(JSON.parse(messages[1].content).lift, undefined);
             assert.equal(
-              JSON.parse(messages[1].content).reviewScope,
-              "visible_phases",
+              JSON.parse(messages[1].content).identification,
+              undefined,
             );
             if (mode === "automatic")
               assert.deepEqual(messages[1].images, ["dense-synthetic"]);
-            return { role: "assistant", content: JSON.stringify(coaching) };
+            return {
+              role: "assistant",
+              content: JSON.stringify({ evidence: partialEvidence, coaching }),
+            };
           },
           autoProcessor,
           refiner,
@@ -460,6 +533,7 @@ test(
           };
         },
         processor,
+        refiner,
       );
       assert.equal((await listVideos(users[0])).length, 0);
     } finally {

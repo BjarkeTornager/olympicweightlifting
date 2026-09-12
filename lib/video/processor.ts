@@ -11,7 +11,7 @@ export async function refineVideo(
   analysis: VideoAnalysis,
   attempt: import("./attempts").VideoAttempt,
   signal: AbortSignal,
-) {
+): Promise<{ analysis: VideoAnalysis; frames: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), "lift-video-evidence-"));
   try {
     await writeFile(path.join(dir, "media.mp4"), media, { mode: 0o600 });
@@ -35,6 +35,8 @@ export async function refineVideo(
           NODE_ENV: process.env.NODE_ENV,
           PATH: process.env.PATH,
           FFPROBE_PATH: process.env.FFPROBE_PATH,
+          VIDEO_POSE_MODEL_PATH: process.env.VIDEO_POSE_MODEL_PATH,
+          MPLCONFIGDIR: dir,
           PYTHONDONTWRITEBYTECODE: "1",
           OMP_NUM_THREADS: "2",
         },
@@ -45,6 +47,7 @@ export async function refineVideo(
     const result = JSON.parse(await readFile(file, "utf8")) as {
       sampleTimes: number[];
       frames: string[];
+      pose: VideoAnalysis["pose"];
     };
     if (
       result.sampleTimes.length !== 48 ||
@@ -63,6 +66,7 @@ export async function refineVideo(
         ...analysis,
         sampleTimes: result.sampleTimes,
         identification: attempt.identification,
+        pose: result.pose,
       },
       frames: result.frames,
     };

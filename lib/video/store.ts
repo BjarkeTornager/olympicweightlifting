@@ -201,6 +201,7 @@ async function queueReview(
               analysis: row.analysis
                 ? {
                     ...row.analysis,
+                    reviewVersion: undefined,
                     identification: undefined,
                     coaching: undefined,
                     attempts: undefined,

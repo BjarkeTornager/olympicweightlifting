@@ -9,7 +9,7 @@ import unittest
 import cv2
 import numpy as np
 from types import SimpleNamespace
-from pose import visible_points, deny_network, PoseTracker
+from pose import visible_points, deny_network, PoseTracker, SubjectTracker
 
 SCRIPT = pathlib.Path(__file__).with_name('analyse.py')
 
@@ -49,6 +49,26 @@ def process(directory, fps=60, occluded=False, real=True, track=True, automatic=
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_foreground_tracking_keeps_the_lifter_when_spectators_are_present(self):
+        def person(cx=.5, cy=.5, size=1):
+            result = [SimpleNamespace(x=cx, y=cy, visibility=.99, presence=.99) for _ in range(33)]
+            for i, x, y in [(11,-.14,-.22),(12,.14,-.22),(13,-.18,-.08),(14,.18,-.08),(23,-.1,.05),(24,.1,.05),(25,-.1,.2),(26,.1,.2),(27,-.1,.36),(28,.1,.36)]:
+                result[i].x, result[i].y = cx+x*size, cy+y*size
+            return result
+        tracker = SubjectTracker()
+        lifter, spectator = person(), person(.8, .35, .5)
+        self.assertTrue(tracker.select([lifter, spectator], 0))
+        self.assertTrue(tracker.select([spectator, person(.51)], .05))
+        self.assertEqual(tracker.select([spectator], .1), [])
+        self.assertTrue(tracker.select([person(.52), spectator], .15))
+        # A missing subject cannot silently be replaced by another person.
+        self.assertEqual(tracker.select([spectator], .2), [])
+        self.assertEqual(tracker.select([person(.52)], 1), [])
+        self.assertEqual(SubjectTracker().select([person(.4), person(.6)], 0), [])
+        ambiguous = SubjectTracker()
+        self.assertTrue(ambiguous.select([lifter], 0))
+        self.assertEqual(ambiguous.select([person(.49), person(.51)], .05), [])
+
     @unittest.skipUnless(os.environ.get('VIDEO_POSE_MODEL_PATH'), 'Pose model not configured locally')
     def test_pose_backend_initializes(self):
         tracker = PoseTracker()
@@ -96,6 +116,8 @@ class AnalysisTests(unittest.TestCase):
             self.assertTrue(any(abs(t-.5) < .001 for t in result['sampleTimes']))
             self.assertTrue(any(abs(t-(.5+1/12)) < .002 for t in result['sampleTimes']))
             self.assertTrue(all(0 <= t <= 1.98 for t in result['sampleTimes']))
+            self.assertEqual(result['pose']['version'], 2)
+            self.assertTrue(all(any(abs(f['t']-t) < .00001 for t in result['sampleTimes']) for f in result['pose']['frames']))
 
     def test_known_motion_and_timestamps(self):
         with tempfile.TemporaryDirectory(prefix='lift-motion-test-') as d:

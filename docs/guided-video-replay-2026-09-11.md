@@ -2,6 +2,8 @@
 
 Implementation, 11 September 2026. Builds on the [technology research](video-coaching-simplification-research-2026-09-11.md).
 
+The latest review and overlay behavior is documented in the [12 September evidence-review update](video-evidence-review-2026-09-12.md).
+
 ## User experience
 
 Choose **Upload lift** in the existing video review screen. File selection starts upload and analysis without a required question, lift selector, trim or calibration. Limits remain 50 MB and two minutes. Optional details allow a reported load/date/lift, a manually selected 0.5–20 second clip, or calibrated bar measurements. Upload must finish before closing the screen; acknowledged jobs continue across navigation and restarts.

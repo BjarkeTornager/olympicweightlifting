@@ -4,6 +4,7 @@ import os
 import sys
 import cv2
 from analyse import probe, make_sheets
+from pose import PoseTracker
 
 root = sys.argv[1]
 with open(os.path.join(root, "input.json")) as f:
@@ -39,6 +40,7 @@ while len(picks) < 48:
 picks.sort()
 cap = cv2.VideoCapture(path)
 samples = {}
+tracker = PoseTracker(interval=.099)
 for i, t in enumerate(times):
     ok, frame = cap.read()
     if not ok:
@@ -46,9 +48,17 @@ for i, t in enumerate(times):
     if i in picks:
         samples[t] = frame.copy()
         h, w = frame.shape[:2]
+    if start <= t <= end:
+        # Follow continuity between evidence frames, and also evaluate the exact
+        # frames used by the recommendations instead of reusing older landmarks.
+        tracker.add(frame, t, force=i in picks)
     if i >= picks[-1]:
         break
 cap.release()
+tracker.close()
 frames = make_sheets(samples, times, picks, w, h)
 with open(os.path.join(root, "result.json"), "w") as f:
-    json.dump({"sampleTimes": [times[i] for i in picks], "frames": frames}, f, allow_nan=False)
+    # Only the inspected frame positions are needed by the evidence overlay.
+    pose = tracker.result()
+    pose['frames'] = [f for f in pose['frames'] if any(abs(f['t']-times[i]) < .00001 for i in picks)]
+    json.dump({"sampleTimes": [times[i] for i in picks], "frames": frames, "pose": pose}, f, allow_nan=False)

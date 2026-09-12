@@ -10,7 +10,7 @@ const phaseNames = [
   "overhead_receive",
   "direct_pull_to_overhead",
 ] as const;
-const evidenceSchema = z
+export const evidenceSchema = z
   .object({
     visibility: z.enum(["sufficient", "limited", "not_lifting"]),
     // These are visible events, not a model-selected lift name.

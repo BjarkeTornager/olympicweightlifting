@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { videoUploadSchema, type VideoAnalysis } from "../lib/video/types";
-import { parseGuidedCoaching, focusPoints } from "../lib/video/coaching";
+import {
+  parseGuidedCoaching,
+  focusPoints,
+  evidenceFocusPoints,
+  barTrailSegments,
+} from "../lib/video/coaching";
+import { parseVideoReview, reviewMessages } from "../lib/video/review";
 import { identifyLift } from "../lib/video/identification";
 import { identifyAttempts } from "../lib/video/attempts";
 
@@ -57,6 +63,8 @@ const reply = {
       cue: "Synthetic next-attempt cue",
       check: "Compare the receiving frame next time.",
       frames: [3, 4],
+      focusFrame: 3,
+      evidenceType: "movement",
       region: "elbows",
     },
   ],
@@ -236,4 +244,141 @@ test("automatic attempt boundaries must be ordered and contain the complete phas
     )[0].identification.lift,
     null,
   );
+});
+
+test("the dense review independently corrects an earlier snatch guess using a visible rack and later overhead drive", () => {
+  const wrong = {
+    ...analysis,
+    identification: { ...analysis.identification!, lift: "Snatch" as const },
+  };
+  const input = videoUploadSchema.parse({
+    id: crypto.randomUUID(),
+    lift: "Identify from video",
+    date: "2026-09-12",
+    start: 0,
+    end: 4,
+  });
+  const messages = reviewMessages(input, wrong, ["synthetic-dense-frames"]);
+  const request = JSON.parse(messages[1].content);
+  assert.equal(request.lift, undefined);
+  assert.equal(request.identification, undefined);
+  const reviewed = parseVideoReview(
+    JSON.stringify({ evidence, coaching: reply }),
+    wrong,
+    input,
+  )!;
+  assert.equal(reviewed.identification.lift, "Clean & jerk");
+  assert.equal(reviewed.coaching.moments.length, 1);
+  assert.equal(
+    parseVideoReview(
+      JSON.stringify({
+        evidence: {
+          ...evidence,
+          phases: [{ ...evidence.phases[0], frame: 999 }],
+        },
+        coaching: reply,
+      }),
+      wrong,
+      input,
+    ),
+    null,
+  );
+  const notLifting = parseVideoReview(
+    JSON.stringify({
+      evidence: {
+        visibility: "not_lifting",
+        phases: [],
+        limitation: "No lifter is visible.",
+      },
+      coaching: reply,
+    }),
+    wrong,
+    input,
+  )!;
+  assert.deepEqual(notLifting.coaching.moments, []);
+  assert.equal(notLifting.coaching.strength, "");
+});
+
+test("freeze frame is chosen from evidence; one still cannot substantiate movement", () => {
+  const atSecond = {
+    ...reply,
+    moments: [{ ...reply.moments[0], focusFrame: 4 }],
+  };
+  assert.equal(
+    parseGuidedCoaching(JSON.stringify(atSecond), analysis)?.moments[0]
+      .evidenceTime,
+    1.5,
+  );
+  for (const patch of [
+    { focusFrame: 8 },
+    { frames: [3], focusFrame: 3, evidenceType: "movement" },
+    { frames: [3, 3], focusFrame: 3, evidenceType: "movement" },
+    { frames: [1, 9], focusFrame: 9 },
+  ])
+    assert.equal(
+      parseGuidedCoaching(
+        JSON.stringify({
+          ...reply,
+          moments: [{ ...reply.moments[0], ...patch }],
+        }),
+        analysis,
+      ),
+      null,
+    );
+  assert.ok(
+    parseGuidedCoaching(
+      JSON.stringify({
+        ...reply,
+        moments: [
+          { ...reply.moments[0], frames: [3], evidenceType: "position" },
+        ],
+      }),
+      analysis,
+    ),
+  );
+});
+
+test("inspection highlights use only the exact evidence frame and bar trails do not bridge gaps", () => {
+  const moment = parseGuidedCoaching(JSON.stringify(reply), analysis)!
+    .moments[0];
+  const tracked: VideoAnalysis = {
+    ...analysis,
+    pose: {
+      version: 2,
+      status: "partial",
+      reason: "Synthetic",
+      frames: [
+        { t: 0.95, points: [{ id: 13, x: 0.2, y: 0.2 }] },
+        { t: 1, points: [{ id: 13, x: 0.4, y: 0.5 }] },
+        { t: 1.5, points: [] },
+      ],
+    },
+  };
+  assert.deepEqual(evidenceFocusPoints(tracked, moment, 1), [
+    { id: 13, x: 0.4, y: 0.5 },
+  ]);
+  assert.deepEqual(evidenceFocusPoints(tracked, moment, 0.95), []);
+  assert.deepEqual(evidenceFocusPoints(tracked, moment, 1.5), []);
+  assert.deepEqual(
+    evidenceFocusPoints(
+      { ...tracked, pose: { ...tracked.pose!, version: 1 } },
+      moment,
+      1,
+    ),
+    [],
+  );
+  tracked.tracking.points = [0, 0.05, 0.1, 1, 1.05, 1.1, 4].map((t) => ({
+    t,
+    x: 0.5,
+    y: 0.5,
+    score: 1,
+  }));
+  assert.deepEqual(
+    barTrailSegments(tracked, 1.1).map((s) => s.map((p) => p.t)),
+    [
+      [0, 0.05, 0.1],
+      [1, 1.05, 1.1],
+    ],
+  );
+  assert.deepEqual(barTrailSegments(tracked, 4), []);
 });

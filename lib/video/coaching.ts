@@ -18,6 +18,8 @@ const momentSchema = z
     cue: z.string().trim().min(3).max(160),
     check: z.string().trim().min(3).max(200),
     frames: z.array(z.number().int().min(1)).min(1).max(4),
+    focusFrame: z.number().int().min(1),
+    evidenceType: z.enum(["position", "movement"]),
     region: z.enum(focusRegions),
   })
   .strict();
@@ -28,7 +30,10 @@ const responseSchema = z
     moments: z.array(momentSchema).max(3),
   })
   .strict();
-export type CoachingMoment = Omit<z.infer<typeof momentSchema>, "frames"> & {
+export type CoachingMoment = Omit<
+  z.infer<typeof momentSchema>,
+  "frames" | "focusFrame"
+> & {
   attemptLabel?: string;
   id: string;
   evidenceFrames: number[];
@@ -45,9 +50,9 @@ export type GuidedCoaching = {
   moments: CoachingMoment[];
 };
 
-export const guidedCoachingInstruction = `Return JSON only, with this exact structure:
-{"strength":"one supported strength, or empty","limitation":"what this view cannot establish, or empty","moments":[{"title":"short coaching priority","observation":"what is visibly happening","cue":"one thing to try next","check":"how to check the next attempt","frames":[1,2],"region":"whole_lift|shoulders|elbows|hips|knees|feet|bar"}]}.
-Put the single most useful improvement first. Include at most two supporting moments and never manufacture a fault to fill the list. Use only printed 1-based frame labels from the supplied images as evidence; each moment must refer to one brief event, spanning no more than five seconds. All these frames must visibly support the observation. The replay will highlight the selected body region only where independent pose tracking is available. You cannot supply coordinates, angles, a perfect trajectory, or unobserved movement. Distinguish observations from possible causes. If no correction is justified, return moments=[] and explain why in limitation. Do not ask questions or require the user to choose a lift before providing supported feedback.`;
+export const guidedCoachingInstruction = `The coaching object has this exact structure:
+{"strength":"one supported strength, or empty","limitation":"what this view cannot establish, or empty","moments":[{"title":"short coaching priority","observation":"specific visible evidence, not a generic tip","cue":"one change to try next","check":"what visible difference to look for next time","frames":[1,2],"focusFrame":2,"evidenceType":"position|movement","region":"whole_lift|shoulders|elbows|hips|knees|feet|bar"}]}.
+Put the single most useful improvement first, at most two supporting moments. Do not call identifying the lift a strength. Each recommendation must explain an observed issue, one practicable cue and how to check whether it helped; avoid generic instructions that could fit any clip. Never manufacture a fault to fill the list. Use only printed 1-based frame labels as evidence, spanning no more than 2.5 seconds. A position may use one frame; claims about motion, timing, balance changes, bar travel or elbow turnover require at least two distinct chronological frames showing the change. focusFrame must be one of frames and show the issue most clearly, not just the start of the event. All evidence frames must support the observation. The viewer can freeze this exact frame and compare supporting frames. A tracked region is an observation aid, never a diagram of an ideal position. Do not infer a cause from a still pose or prescribe changes for unseen phases. You cannot supply coordinates, angles, an ideal trajectory or unobserved movement. If no correction is justified, return moments=[] with a specific limitation. Do not ask questions or require lift selection.`;
 
 export function parseGuidedCoaching(
   content: string,
@@ -87,15 +92,20 @@ export function parseGuidedCoaching(
         continue;
       const start = times[0],
         end = times.at(-1)!;
-      if (end - start > 5) continue;
-      const { frames: unused, ...text } = raw;
+      if (
+        end - start > 2.5 ||
+        !frames.includes(raw.focusFrame) ||
+        (raw.evidenceType === "movement" && new Set(times).size < 2)
+      )
+        continue;
+      const { frames: unused, focusFrame, ...text } = raw;
       void unused;
       moments.push({
         ...text,
         id: `moment-${moments.length + 1}`,
         evidenceFrames: frames,
         evidenceTimes: times,
-        evidenceTime: start,
+        evidenceTime: analysis.sampleTimes[focusFrame - 1],
         start: Math.max(0, start - 0.8),
         end: Math.min(analysis.duration, end + 1.2),
       });
@@ -139,6 +149,45 @@ const regionIds: Record<CoachingMoment["region"], number[]> = {
   feet: [27, 28, 29, 30, 31, 32],
   bar: [],
 };
+export const VIDEO_REVIEW_VERSION = 2;
+export function currentVideoReview(analysis?: VideoAnalysis | null) {
+  return analysis?.reviewVersion === VIDEO_REVIEW_VERSION;
+}
+
+// Frame inspection never paints a marker from an earlier/later posture. Dense
+// review decoding produces a pose sample at each actual evidence timestamp.
+export function evidenceFocusPoints(
+  analysis: VideoAnalysis,
+  moment: CoachingMoment,
+  time: number,
+) {
+  if (!moment.evidenceTimes.some((t) => Math.abs(t - time) < 0.025)) return [];
+  if (moment.region === "bar") {
+    const p = analysis.tracking.points.find(
+      (p) => Math.abs(p.t - time) < 0.001,
+    );
+    return p ? [{ id: -1, x: p.x, y: p.y }] : [];
+  }
+  if (analysis.pose?.version !== 2) return [];
+  const frame = analysis.pose.frames.find((f) => Math.abs(f.t - time) < 0.001);
+  return (
+    frame?.points.filter((p) => regionIds[moment.region].includes(p.id)) ?? []
+  );
+}
+
+export function barTrailSegments(analysis: VideoAnalysis, time: number) {
+  const segments: { x: number; y: number; t: number }[][] = [];
+  let previous: (typeof analysis.tracking.points)[number] | undefined;
+  for (const p of analysis.tracking.points) {
+    if (p.t > time) break;
+    if (p.t < time - 1.5) continue;
+    if (!previous || p.t - previous.t > 0.12 || p.t <= previous.t)
+      segments.push([]);
+    segments.at(-1)!.push(p);
+    previous = p;
+  }
+  return segments.filter((s) => s.length > 1);
+}
 // Hide stale tracks and gaps. Do not interpolate over occlusion or across people.
 export function focusPoints(
   analysis: VideoAnalysis,

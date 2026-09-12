@@ -9,6 +9,7 @@ import { AssistantText } from "./assistant-text";
 import { GuidedReplay } from "./video-guided-replay";
 import { privateFetch } from "@/lib/private-fetch";
 import { today } from "@/lib/domain";
+import { currentVideoReview } from "@/lib/video/coaching";
 import {
   MAX_VIDEO_BYTES,
   videoUploadLifts,
@@ -20,9 +21,13 @@ import {
 function ReviewResult({
   review,
   accountId,
+  onReanalyse,
+  busy,
 }: {
   review: SavedVideoReview;
   accountId: string;
+  onReanalyse: () => void;
+  busy: boolean;
 }) {
   const [url, setUrl] = useState(""),
     [error, setError] = useState(""),
@@ -52,6 +57,7 @@ function ReviewResult({
   }, [accountId, review.id, review.hasMedia]);
   const a = review.analysis,
     t = a?.tracking;
+  const outdated = review.status === "ready" && !currentVideoReview(a);
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -64,6 +70,21 @@ function ReviewResult({
   return (
     <div className="video-review-result">
       {error && <p role="alert">{error}</p>}
+      {outdated && (
+        <section
+          className="video-review-update"
+          aria-label="Review update available"
+        >
+          <strong>A better review is available</strong>
+          <p>
+            This saved analysis uses the older review method. Update it to
+            identify the movement afresh and add precise evidence frames.
+          </p>
+          <Button disabled={busy} onClick={onReanalyse}>
+            Update analysis
+          </Button>
+        </section>
+      )}
       {url && (
         <>
           <GuidedReplay review={review} url={url} onTime={setTime} />
@@ -191,8 +212,10 @@ function ReviewResult({
         </details>
       )}
       {review.feedback && (
-        <details open={!a?.coaching}>
-          <summary>Full Coach review</summary>
+        <details open={!outdated && !a?.coaching}>
+          <summary>
+            {outdated ? "Previous analysis" : "Full Coach review"}
+          </summary>
           <section aria-label="Coach video feedback">
             <h3>Coach’s feedback</h3>
             <AssistantText text={review.feedback} />
@@ -873,10 +896,14 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   key={review.id}
                   review={review}
                   accountId={props.accountId}
+                  busy={busy}
+                  onReanalyse={() =>
+                    void action(review, "reanalyse", "Identify from video")
+                  }
                 />
                 <div className="button-row">
                   {review.status === "ready" &&
-                    !review.analysis?.identification?.lift && (
+                    currentVideoReview(review.analysis) && (
                       <Button
                         disabled={busy}
                         onClick={() =>

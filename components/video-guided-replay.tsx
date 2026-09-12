@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Expand, X, RotateCcw, Sparkles } from "./ui/icons";
 import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
-import { focusPoints, type CoachingMoment } from "@/lib/video/coaching";
+import {
+  barTrailSegments,
+  currentVideoReview,
+  evidenceFocusPoints,
+  type CoachingMoment,
+} from "@/lib/video/coaching";
 
 const stamp = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60)
@@ -25,21 +30,27 @@ export function GuidedReplay({
   const stopAt = useRef<{ end: number; freeze: number } | null>(null);
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
+    [seeking, setSeeking] = useState(false),
     [speed, setSpeed] = useState("1");
   const [overlay, setOverlay] = useState(true),
+    [barTrail, setBarTrail] = useState(false),
     [expanded, setExpanded] = useState(false),
     [error, setError] = useState("");
   const [selected, setSelected] = useState<string | null>(null),
     [duration, setDuration] = useState(review.analysis?.duration ?? 0);
   const a = review.analysis,
-    coaching = a?.coaching,
+    coaching = currentVideoReview(a) ? a?.coaching : undefined,
     moments = coaching?.moments ?? [];
   const active = overlay
     ? (moments.find(
         (m) => m.id === selected && time >= m.start && time <= m.end,
       ) ?? moments.find((m) => time >= m.start && time <= m.end))
     : undefined;
-  const points = a && active ? focusPoints(a, active.region, time) : [];
+  const points =
+    a && active && !playing && !seeking
+      ? evidenceFocusPoints(a, active, time)
+      : [];
+  const trails = a && barTrail ? barTrailSegments(a, time) : [];
 
   useEffect(() => {
     const v = video.current;
@@ -47,8 +58,11 @@ export function GuidedReplay({
     let handle = 0,
       fallback = 0,
       closed = false;
-    const sync = (t: number) => {
-      if (closed) return;
+    const sync = (presentedTime: number) => {
+      if (closed || v.seeking) return;
+      // Safari can deliver an older queued presentation callback after a seek
+      // or resize. It must not replace the paused inspection position.
+      const t = v.paused ? v.currentTime : presentedTime;
       setTime(t);
       onTime(t);
       if (stopAt.current !== null && t >= stopAt.current.end - 0.035) {
@@ -134,6 +148,22 @@ export function GuidedReplay({
       behavior: "instant",
     });
   }
+  function inspect(moment: CoachingMoment, at = moment.evidenceTime) {
+    const v = video.current;
+    if (!v) return;
+    stopAt.current = null;
+    v.pause();
+    setPlaying(false);
+    setSelected(moment.id);
+    setOverlay(true);
+    v.currentTime = at;
+    setTime(at);
+    onTime(at);
+    container.current?.scrollIntoView({
+      block: "nearest",
+      behavior: "instant",
+    });
+  }
 
   return (
     <div
@@ -163,7 +193,7 @@ export function GuidedReplay({
           style={{
             aspectRatio: a ? `${a.width} / ${a.height}` : undefined,
             width: a
-              ? `min(100%, calc(min(64dvh, 560px) * ${a.width / a.height}))`
+              ? `min(100%, calc(min(56dvh, 520px) * ${a.width / a.height}))`
               : "100%",
           }}
         >
@@ -177,6 +207,8 @@ export function GuidedReplay({
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
+            onSeeking={() => setSeeking(true)}
+            onSeeked={() => setSeeking(false)}
             onEnded={() => {
               setPlaying(false);
               stopAt.current = null;
@@ -187,56 +219,65 @@ export function GuidedReplay({
               )
             }
           />
-          {overlay &&
-            a &&
-            (points.length > 0 || a.tracking.points.length > 0) && (
-              <svg
-                viewBox={`0 0 ${a.width} ${a.height}`}
-                role="img"
-                aria-label={
-                  points.length
-                    ? "Coach focus highlight"
-                    : "Experimental bar trajectory overlay"
-                }
-              >
-                {a.tracking.points.length > 0 && (
-                  <polyline
-                    points={a.tracking.points
-                      .filter((p) => p.t <= time)
-                      .map((p) => `${p.x * a.width},${p.y * a.height}`)
-                      .join(" ")}
-                    fill="none"
+          {overlay && a && (points.length > 0 || trails.length > 0) && (
+            <svg
+              viewBox={`0 0 ${a.width} ${a.height}`}
+              role="img"
+              aria-label={
+                points.length
+                  ? "Coach focus highlight"
+                  : "Experimental bar trajectory overlay"
+              }
+            >
+              {trails.map((segment, i) => (
+                <polyline
+                  key={i}
+                  points={segment
+                    .map((p) => `${p.x * a.width},${p.y * a.height}`)
+                    .join(" ")}
+                  fill="none"
+                  stroke="#83d5ea"
+                  strokeWidth="3"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+              {points.map((p) => (
+                <g key={p.id}>
+                  <circle
+                    cx={p.x * a.width}
+                    cy={p.y * a.height}
+                    r={Math.max(12, a.width * 0.035)}
+                    fill="#ffde592b"
                     stroke="#ffde59"
                     strokeWidth="3"
                     vectorEffect="non-scaling-stroke"
                   />
-                )}
-                {points.map((p) => (
-                  <g key={p.id}>
-                    <circle
-                      cx={p.x * a.width}
-                      cy={p.y * a.height}
-                      r={Math.max(12, a.width * 0.035)}
-                      fill="#ffde592b"
-                      stroke="#ffde59"
-                      strokeWidth="3"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <circle
-                      cx={p.x * a.width}
-                      cy={p.y * a.height}
-                      r="4"
-                      fill="#ffde59"
-                    />
-                  </g>
-                ))}
-              </svg>
-            )}
+                  <circle
+                    cx={p.x * a.width}
+                    cy={p.y * a.height}
+                    r="4"
+                    fill="#ffde59"
+                  />
+                </g>
+              ))}
+            </svg>
+          )}
         </div>
         {active && (
           <div className="video-coach-caption" aria-label="Coaching overlay">
-            <span>TRY NEXT · {active.title}</span>
-            <strong>{active.cue}</strong>
+            <span>
+              {playing
+                ? "WATCH THE MOVEMENT"
+                : `INSPECT THE FRAME · ${time.toFixed(2)}s`}
+            </span>
+            <p>{active.observation}</p>
+            <strong>Try next: {active.cue}</strong>
+            {!playing && !points.length && active.region !== "whole_lift" && (
+              <small>
+                Body marker unavailable at this frame. Use the visible evidence
+                and cue.
+              </small>
+            )}
           </div>
         )}
       </div>
@@ -276,6 +317,16 @@ export function GuidedReplay({
             {stamp(time)} / {stamp(duration)}
           </span>
         </div>
+        {!!a?.tracking.points.length && (
+          <label className="video-check">
+            <input
+              type="checkbox"
+              checked={barTrail}
+              onChange={(e) => setBarTrail(e.target.checked)}
+            />
+            Experimental bar trail
+          </label>
+        )}
         <div className="video-playback-options">
           <label className="video-check">
             <input
@@ -327,13 +378,35 @@ export function GuidedReplay({
                 <strong>Try next</strong>
                 <p>{m.cue}</p>
               </div>
-              <Button
-                variant={i === 0 ? "default" : "secondary"}
-                onClick={() => replay(m)}
-              >
-                <RotateCcw size={18} aria-hidden="true" />
-                Watch this moment
-              </Button>
+              <div className="video-evidence-actions">
+                <Button
+                  onClick={() => inspect(m)}
+                  variant={i === 0 ? "default" : "secondary"}
+                >
+                  Freeze &amp; inspect
+                </Button>
+                <Button variant="secondary" onClick={() => replay(m)}>
+                  <RotateCcw size={18} aria-hidden="true" />
+                  Watch this moment
+                </Button>
+              </div>
+              {m.evidenceTimes.length > 1 && (
+                <div
+                  className="video-evidence-frames"
+                  aria-label="Supporting frames"
+                >
+                  {m.evidenceTimes.map((t, j) => (
+                    <button
+                      type="button"
+                      key={t}
+                      aria-label={`Inspect evidence frame at ${t.toFixed(2)} seconds`}
+                      onClick={() => inspect(m, t)}
+                    >
+                      {j + 1} · {t.toFixed(2)}s
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="fine-print">{m.check}</p>
             </article>
           ))}

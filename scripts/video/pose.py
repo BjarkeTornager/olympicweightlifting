@@ -3,6 +3,7 @@ import ctypes
 import math
 import os
 import sys
+import statistics
 
 
 def deny_network():
@@ -46,13 +47,67 @@ def visible_points(poses):
             and p.visibility >= .8 and p.presence >= .8]
 
 
-class PoseTracker:
+class SubjectTracker:
+    """Conservative foreground continuity, not face/person identification.
+
+    A dominant, sufficiently large body can be selected with spectators present.
+    After selection, match visible torso anchors and scale; never fall back to
+    the largest remaining person when the selected subject disappears.
+    """
     def __init__(self):
+        self.previous = None
+        self.last = None
+
+    def select(self, poses, time):
+        candidates = []
+        for pose in poses:
+            points = visible_points([pose])
+            anchors = {p['id']: p for p in points if p['id'] in [11, 12, 23, 24]}
+            if not ({11, 23} <= anchors.keys() or {12, 24} <= anchors.keys()):
+                continue
+            xs, ys = [p['x'] for p in points], [p['y'] for p in points]
+            area = (max(xs)-min(xs)) * (max(ys)-min(ys))
+            if area < .025 or max(ys)-min(ys) < .25:
+                continue
+            candidates.append({'points': points, 'anchors': anchors, 'area': area})
+        if not candidates:
+            return []
+        if self.previous is None:
+            candidates.sort(key=lambda c: c['area'], reverse=True)
+            if len(candidates) > 1 and candidates[0]['area'] < candidates[1]['area'] * 1.8:
+                return []
+            chosen = candidates[0]
+            cx = statistics.mean(p['x'] for p in chosen['anchors'].values())
+            if not .15 <= cx <= .85:
+                return []
+        else:
+            dt = time - self.last
+            if dt <= 0 or dt > .5:
+                return []
+            matches = []
+            for candidate in candidates:
+                common = candidate['anchors'].keys() & self.previous['anchors'].keys()
+                if len(common) < 2 or not .5 <= candidate['area']/self.previous['area'] <= 2:
+                    continue
+                distance = statistics.median(math.hypot(candidate['anchors'][i]['x']-self.previous['anchors'][i]['x'],
+                                                         candidate['anchors'][i]['y']-self.previous['anchors'][i]['y']) for i in common)
+                if distance <= min(.18, .04 + dt * .8):
+                    matches.append((distance, candidate))
+            matches.sort(key=lambda m: m[0])
+            if not matches or (len(matches) > 1 and matches[1][0] - matches[0][0] < .04):
+                return []
+            chosen = matches[0][1]
+        self.previous, self.last = chosen, time
+        return chosen['points']
+
+
+class PoseTracker:
+    def __init__(self, interval=.049):
         self.frames = []
         self.model = None
         self.last = -1
-        self.previous = None
-        self.ambiguous = False
+        self.interval = interval
+        self.subject = SubjectTracker()
         self.reason = "Body highlights are unavailable for this clip."
         path = os.environ.get("VIDEO_POSE_MODEL_PATH", "")
         if not path or not os.path.isfile(path):
@@ -72,8 +127,8 @@ class PoseTracker:
             # discard a valid upload or block timestamped coaching.
             self.reason = "Body tracking could not run; timestamped feedback remains available."
 
-    def add(self, frame, time):
-        if self.model is None or time - self.last < .049:
+    def add(self, frame, time, force=False):
+        if self.model is None or time <= self.last or (not force and time - self.last < self.interval):
             return
         self.last = time
         import cv2
@@ -81,17 +136,9 @@ class PoseTracker:
             result = self.model.detect_for_video(
                 self.mp.Image(image_format=self.mp.ImageFormat.SRGB,
                               data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)), round(time * 1000))
-            if len(result.pose_landmarks) > 1:
-                self.ambiguous = True
-                self.reason = "Multiple people make body highlights ambiguous. Use the timestamped feedback."
-            points = [] if self.ambiguous else visible_points(result.pose_landmarks)
-            # Suppress a discontinuity rather than connecting different subjects.
-            if self.previous and points:
-                old = {p["id"]: p for p in self.previous}
-                if any(math.hypot(p["x"] - old[p["id"]]["x"], p["y"] - old[p["id"]]["y"]) > .2
-                       for p in points if p["id"] in old):
-                    points = []
-            self.previous = points
+            points = self.subject.select(result.pose_landmarks, time)
+            if not points:
+                self.reason = "The foreground lifter could not be followed reliably. Inspect the evidence frames without body markers."
             self.frames.append({"t": round(time, 6), "points": points})
         except Exception:
             self.close()
@@ -104,6 +151,6 @@ class PoseTracker:
 
     def result(self):
         visible = sum(bool(f["points"]) for f in self.frames)
-        return {"status": "tracked" if visible and visible == len(self.frames) else "partial" if visible else "unavailable",
+        return {"version": 2, "status": "tracked" if visible and visible == len(self.frames) else "partial" if visible else "unavailable",
                 "reason": "Experimental 2D body highlights. Hidden or ambiguous landmarks are omitted." if visible else self.reason,
                 "frames": self.frames if visible else []}

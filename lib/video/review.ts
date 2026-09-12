@@ -14,6 +14,8 @@ import {
   type GuidedCoaching,
   type CoachingFailure,
 } from "./coaching";
+import { poseReviewEvidence } from "./correction";
+import { techniqueRubric, techniqueDrills } from "./technique";
 import { liftingResources } from "../lifting-resources";
 import { segmentationEvidence } from "./segmentation";
 import type { callModel, ModelMessage } from "../agent/provider";
@@ -24,6 +26,7 @@ export function reviewMessages(
   input: VideoUpload,
   analysis: VideoAnalysis,
   frames: string[],
+  previousFocus?: GuidedCoaching["previousFocus"],
 ) {
   const messages = identificationMessages(analysis, frames);
   const definitions = messages[0].content.slice(
@@ -35,13 +38,23 @@ No technique score, competition judging, injury diagnosis, exact joint angles, f
 The final response must be ONE JSON object with exactly two keys: {"evidence":<the phase evidence object>,"coaching":<the coaching object above>}. No other text. Coaching references: ${JSON.stringify(liftingResources.filter((r) => r.topic === "technique"))}`;
   const { points, velocities, ...measurements } = analysis.tracking;
   messages[0].content += `\nKeep the JSON concise and complete. Hard character limits: evidence.phases[].evidence 10–240, evidence.limitation 400, coaching.strength 260, coaching.limitation 300, moment title 3–80, observation 10–360, cue 3–160, check 3–200. At most 12 phases, 3 moments, and 1–4 frames per moment. All frame numbers must be integers from 1 through ${analysis.sampleTimes.length}. Return fewer supported moments if needed; never invent evidence to satisfy the format.`;
-  void points;
+  messages[0].content += `\nIssue rubric: ${JSON.stringify(techniqueRubric)}\nOptional drill catalogue: ${JSON.stringify(techniqueDrills)}\nAdditional limits: why 8–240, practice 8–260, checks[].observation 8–180. Joints: 11/12 shoulders, 13/14 elbows, 15/16 wrists, 23/24 hips, 25/26 knees, 27/28 ankles, 29/30 heels, 31/32 toes; left/right pairs. Coordinates are normalized to this frame and may be incomplete. Judge the pixels as well as the geometry. Reference-frame numbers belong to THIS attempt only.`;
   void velocities;
   messages[1].content = JSON.stringify({
     sampledTimes: analysis.sampleTimes,
     reportedLoad: input.load || "Unknown",
     date: input.date,
     measurements,
+    poseFrames: poseReviewEvidence(analysis).map((f) => ({
+      frame: f.frame,
+      time: f.time,
+      joints: f.points.map((p) => [p.id, p.x, p.y]),
+    })),
+    barSamples: analysis.sampleTimes.flatMap((t, i) => {
+      const p = points.find((p) => Math.abs(p.t - t) < 0.001);
+      return p ? [{ frame: i + 1, x: p.x, y: p.y }] : [];
+    }),
+    previousFocus,
     objectRegions: segmentationEvidence(
       analysis.segmentation,
       analysis.sampleTimes,
@@ -96,6 +109,19 @@ const diagnosticFields = new Set([
   "focusFrame",
   "evidenceType",
   "region",
+  "issue",
+  "why",
+  "practice",
+  "drill",
+  "certainty",
+  "correction",
+  "kind",
+  "referenceFrame",
+  "view",
+  "checks",
+  "phase",
+  "status",
+  "observation",
 ]);
 export function parseVideoReview(
   content: string,

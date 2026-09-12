@@ -3425,6 +3425,15 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .video-coaching-card button {width:fit-content;display:flex;gap:8px;align-items:center;}
 .video-next-cue {padding-left:13px;border-left:3px solid #ad365c;}
 .video-next-cue strong {font-size:12px;color:#922e4f;}
+.video-practice,.video-previous-focus,.video-correction-compare {display:grid;gap:8px;padding:16px;border-radius:14px;background:#f1f7f5;}
+.video-practice a {color:#175c50;font-size:14px;text-decoration:underline;text-underline-offset:3px;}
+.video-previous-focus {background:#f7f6f3;}
+.video-correction-compare {margin-top:14px;}
+.video-correction-compare button[aria-pressed="true"] {background:#175c50;color:white;border-color:#175c50;}
+.video-coach-caption .video-ghost-label {font-size:12px;color:#7af0d8;}
+.video-phase-checks {font-size:14px;line-height:1.5;}
+.video-phase-checks p {padding:10px 0;border-bottom:1px solid #eee;}
+.video-phase-checks strong {text-transform:capitalize;}
 .video-strength {padding:4px 8px;line-height:1.6;font-size:14px;}
 .video-strength strong {color:#35715b;}
 .video-review-tools summary {font-size:14px;}

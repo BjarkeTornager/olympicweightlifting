@@ -58,6 +58,8 @@ function ReviewResult({
   const a = review.analysis,
     t = a?.tracking;
   const outdated = review.status === "ready" && !currentVideoReview(a);
+  const coachingUpdate =
+    review.status === "ready" && a?.coaching?.version !== 2;
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -70,15 +72,15 @@ function ReviewResult({
   return (
     <div className="video-review-result">
       {error && <p role="alert">{error}</p>}
-      {outdated && (
+      {(outdated || coachingUpdate) && (
         <section
           className="video-review-update"
           aria-label="Review update available"
         >
-          <strong>A better review is available</strong>
+          <strong>Updated coaching is available</strong>
           <p>
-            This saved analysis uses the older review method. Update it to
-            identify the movement afresh and add precise evidence frames.
+            Update this saved review for a coaching priority, a practice task
+            and a suggested posture guide when the visible evidence supports it.
           </p>
           <Button disabled={busy} onClick={onReanalyse}>
             Update analysis

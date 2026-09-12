@@ -1,5 +1,12 @@
 import { z } from "zod";
 import type { VideoAnalysis } from "./types";
+import {
+  buildPostureGhost,
+  correctionRequestSchema,
+  techniqueIssues,
+  type CorrectionPreview,
+} from "./correction";
+import { compatibleDrill, techniqueDrills } from "./technique";
 import { canReviewIdentification, feedbackMatchesLift } from "./identification";
 
 export const focusRegions = [
@@ -14,6 +21,16 @@ export const focusRegions = [
 const momentSchema = z
   .object({
     title: z.string().trim().min(3).max(80),
+    issue: z.enum(techniqueIssues).optional(),
+    why: z.string().trim().min(8).max(240).optional(),
+    practice: z.string().trim().min(8).max(260).optional(),
+    drill: z
+      .enum(["jerk_dip", "snatch_lift_off", "tall_clean"])
+      .nullable()
+      .optional(),
+    certainty: z.enum(["clear", "tentative"]).optional(),
+    // A malformed optional guide must not discard otherwise grounded coaching.
+    correction: correctionRequestSchema.nullable().optional().catch(null),
     observation: z.string().trim().min(10).max(360),
     cue: z.string().trim().min(3).max(160),
     check: z.string().trim().min(3).max(200),
@@ -28,13 +45,32 @@ export const coachingResponseSchema = z
     strength: z.string().trim().max(260),
     limitation: z.string().trim().max(300),
     moments: z.array(momentSchema).max(3),
+    checks: z
+      .array(
+        z
+          .object({
+            phase: z.enum([
+              "pull",
+              "receipt",
+              "dip_drive",
+              "overhead",
+              "recovery",
+            ]),
+            status: z.enum(["reviewed", "not_visible"]),
+            observation: z.string().trim().min(8).max(180),
+          })
+          .strict(),
+      )
+      .max(5)
+      .optional(),
   })
   .strict();
 export type CoachingMoment = Omit<
   z.infer<typeof momentSchema>,
-  "frames" | "focusFrame"
+  "frames" | "focusFrame" | "correction"
 > & {
   attemptLabel?: string;
+  correctionPreview?: CorrectionPreview;
   id: string;
   evidenceFrames: number[];
   evidenceTimes: number[];
@@ -43,16 +79,27 @@ export type CoachingMoment = Omit<
   end: number;
 };
 export type GuidedCoaching = {
-  version: 1;
+  version: 1 | 2;
+  checks?: z.infer<typeof coachingResponseSchema>["checks"];
+  previousFocus?: {
+    reviewId: string;
+    date: string;
+    title: string;
+    cue: string;
+    check: string;
+  };
   scope?: "visible_phases";
   strength: string;
   limitation: string;
   moments: CoachingMoment[];
 };
 
-export const guidedCoachingInstruction = `The coaching object has this exact structure:
-{"strength":"one supported strength, or empty","limitation":"what this view cannot establish, or empty","moments":[{"title":"short coaching priority","observation":"specific visible evidence, not a generic tip","cue":"one change to try next","check":"what visible difference to look for next time","frames":[1,2],"focusFrame":2,"evidenceType":"position|movement","region":"whole_lift|shoulders|elbows|hips|knees|feet|bar"}]}.
-Put the single most useful improvement first, at most two supporting moments. Do not call identifying the lift a strength. Each recommendation must explain an observed issue, one practicable cue and how to check whether it helped; avoid generic instructions that could fit any clip. Never manufacture a fault to fill the list. Use only printed 1-based frame labels as evidence, spanning no more than 2.5 seconds. A position may use one frame; claims about motion, timing, balance changes, bar travel or elbow turnover require at least two distinct chronological frames showing the change. focusFrame must be one of frames and show the issue most clearly, not just the start of the event. All evidence frames must support the observation. The viewer can freeze this exact frame and compare supporting frames. A tracked region is an observation aid, never a diagram of an ideal position. Do not infer a cause from a still pose or prescribe changes for unseen phases. You cannot supply coordinates, angles, an ideal trajectory or unobserved movement. If no correction is justified, return moments=[] with a specific limitation. Do not ask questions or require lift selection.`;
+export const guidedCoachingInstruction = `Return a coaching object with strength, limitation, checks, and moments.
+checks: [{"phase":"pull|receipt|dip_drive|overhead|recovery","status":"reviewed|not_visible","observation":"what was actually assessed, or what evidence is missing"}]. Assess each applicable visible phase before selecting a priority; do not substitute movement identification for a technique assessment. Check chronology and body/bar relationships using images and the supplied 2D landmarks. Landmarks are imperfect image-plane observations, not biomechanical measurements.
+moments: [{"title":"short priority","issue":"early_pull_posture|bar_separation|clean_turnover|jerk_dip_posture|overhead_control|split_recovery|other","why":"why addressing this observed issue is useful; no unsupported causal diagnosis","observation":"specific visible evidence","cue":"one practical change for the next attempt","check":"the visible difference to look for on the next comparable attempt","practice":"one brief, low-load practice task matched to this issue; no workout prescription","drill":null,"certainty":"clear|tentative","frames":[1,2],"focusFrame":2,"evidenceType":"position|movement","region":"whole_lift|shoulders|elbows|hips|knees|feet|bar","correction":null}].
+Pick ONE main improvement first, at most two supporting moments. Include a cue, a practice task, why it matters and a checkable result. Use the supplied issue rubric and compatible drill catalogue. drill is a catalogue ID or null; never create URLs. If a previous focus is supplied, assess that issue in the NEW images without assuming it recurs. Prior text alone cannot establish improvement or deterioration; do not claim a before/after result without paired evidence.
+Use only printed 1-based frame labels as evidence, spanning no more than 2.5 seconds. Motion, timing, balance changes, bar travel or turnover require at least two distinct chronological frames. focusFrame must be one of frames and clearly show the issue. Do not prescribe changes to unseen phases, invent a fault to fill a list, or use a generic cue that could fit any clip. If no correction is justified, moments=[] with a precise limitation and the actual phase checks.
+Optional correction: {"kind":"preserve_torso","referenceFrame":1,"view":"side"}. Only request this for a CLEAR early_pull_posture or jerk_dip_posture issue in a fixed side view. referenceFrame must be an earlier frame in frames, showing this athlete's suitable starting torso position in the SAME early pull (both frames before the bar passes the knees) or jerk dip. focusFrame must show a later loss of that posture, before receipt or drive. Do not request it for front/oblique views, normal extension above the knees, a moving camera, an unsuitable start posture, or uncertain faults. The application may omit the ghost when geometry is unreliable. correction=null for all other cases. This is an illustrative posture adjustment, never perfect form. Do not supply coordinates, angles, an ideal trajectory or generated missing movement.`;
 
 export function parseGuidedCoaching(
   content: string,
@@ -116,17 +163,29 @@ export function parseGuidedCoaching(
         failure = "movement_frames";
         continue;
       }
-      const { frames: unused, focusFrame, ...text } = raw;
+      const { frames: unused, focusFrame, correction, ...text } = raw;
       void unused;
-      moments.push({
+      const drill = compatibleDrill(text.drill ?? undefined, text.issue, lift);
+      const moment: CoachingMoment = {
         ...text,
+        ...(text.drill && !drill ? { drill: null } : {}),
         id: `moment-${moments.length + 1}`,
         evidenceFrames: frames,
         evidenceTimes: times,
         evidenceTime: analysis.sampleTimes[focusFrame - 1],
         start: Math.max(0, start - 0.8),
         end: Math.min(analysis.duration, end + 1.2),
-      });
+      };
+      if (correction)
+        moment.correctionPreview =
+          raw.certainty === "clear"
+            ? buildPostureGhost(analysis, moment, correction)
+            : {
+                status: "unavailable",
+                reason:
+                  "Coach needs clearer evidence of this adjustment before showing a body guide.",
+              };
+      moments.push(moment);
     }
     // Invalid evidence never turns into a plausible-looking replay card.
     if (parsed.moments.length && !moments.length) {
@@ -134,7 +193,8 @@ export function parseGuidedCoaching(
       return null;
     }
     return {
-      version: 1,
+      version: 2,
+      checks: parsed.checks,
       ...(!lift ? { scope: "visible_phases" as const } : {}),
       strength: parsed.strength,
       // Keep the validated first-pass boundary on partial coaching. A model
@@ -158,9 +218,19 @@ export type CoachingFailure =
 export function coachingText(coaching: GuidedCoaching) {
   return [
     coaching.strength ? `**What went well**\n\n${coaching.strength}` : "",
-    ...coaching.moments.map(
-      (m, i) =>
-        `**${i ? m.title : `Main improvement: ${m.title}`}**\n\n${m.observation} (${m.evidenceTime.toFixed(2)}s)\n\n**Try next:** ${m.cue}\n\n${m.check}`,
+    ...coaching.moments.map((m, i) =>
+      [
+        `**${i ? m.title : `Main improvement: ${m.title}`}**\n\n${m.observation} (${m.evidenceTime.toFixed(2)}s)`,
+        m.why ? `**Why this matters:** ${m.why}` : "",
+        `**Try next:** ${m.cue}`,
+        m.practice ? `**Practice:** ${m.practice}` : "",
+        m.drill
+          ? `[Drill demonstration: ${techniqueDrills[m.drill].name}](${techniqueDrills[m.drill].url})`
+          : "",
+        `**Check next time:** ${m.check}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
     ),
     coaching.limitation,
   ]

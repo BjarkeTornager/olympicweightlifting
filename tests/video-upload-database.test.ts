@@ -795,6 +795,33 @@ test(
         refiner,
       );
       assert.equal((await listVideos(users[0])).length, 0);
+      // The cross-upload focus uses the same owner-scoped read as the worker.
+      const { correctionReview } = await import("./fixtures/correction");
+      const { previousVideoFocus } = await import("../lib/video/focus");
+      const prior = correctionReview();
+      const ownId = crypto.randomUUID(),
+        otherId = crypto.randomUUID();
+      for (const [owner, id] of [
+        [users[0], ownId],
+        [users[1], otherId],
+      ]) {
+        await saveVideo(owner, { ...input, id }, source);
+        const coaching = structuredClone(prior.analysis!);
+        coaching.coaching!.moments[0].title =
+          owner === users[0] ? "My prior focus" : "Other account private focus";
+        await pool.query(
+          "UPDATE lifting_videos SET status='ready',analysis=$3,created_at=$4 WHERE user_id=$1 AND id=$2",
+          [owner, id, JSON.stringify(coaching), prior.createdAt],
+        );
+      }
+      const focus = previousVideoFocus(await listVideos(users[0]), {
+        id: crypto.randomUUID(),
+        lift: "Jerk",
+        createdAt: "2026-09-13T12:00:00Z",
+      });
+      assert.equal(focus?.reviewId, ownId);
+      assert.equal(focus?.title, "My prior focus");
+      assert.equal(JSON.stringify(focus).includes("Other account"), false);
     } finally {
       for (const id of users)
         await pool.query("DELETE FROM users WHERE id=$1", [id]);

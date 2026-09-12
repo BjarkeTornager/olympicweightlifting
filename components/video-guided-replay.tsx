@@ -5,6 +5,8 @@ import { Play, Pause, Expand, X, RotateCcw, Sparkles } from "./ui/icons";
 import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
 import { segmentationAt, trackedReplayAction } from "@/lib/video/segmentation";
+import { ghostAt } from "@/lib/video/correction";
+import { techniqueDrills } from "@/lib/video/technique";
 import {
   barTrailSegments,
   currentVideoReview,
@@ -43,6 +45,7 @@ export function GuidedReplay({
     [expanded, setExpanded] = useState(false),
     [error, setError] = useState("");
   const [selected, setSelected] = useState<string | null>(null),
+    [showCorrection, setShowCorrection] = useState(false),
     [duration, setDuration] = useState(review.analysis?.duration ?? 0);
   const a = review.analysis,
     coaching = currentVideoReview(a) ? a?.coaching : undefined,
@@ -56,6 +59,10 @@ export function GuidedReplay({
     a && active && !playing && !seeking
       ? evidenceFocusPoints(a, active, time)
       : [];
+  const ghost =
+    active && showCorrection && !playing && !seeking
+      ? ghostAt(active.correctionPreview, time)
+      : null;
   const trails =
     a && barTrail && !seeking
       ? barTrailSegments(a, playing ? renderTime : time)
@@ -247,6 +254,7 @@ export function GuidedReplay({
     if (!v) return;
     v.scrollIntoView({ block: "center", behavior: "instant" });
     setSelected(moment.id);
+    setShowCorrection(false);
     setOverlay(true);
     setSpeed("0.5");
     v.playbackRate = 0.5;
@@ -267,6 +275,12 @@ export function GuidedReplay({
     setSelected(moment.id);
     setOverlay(true);
     seekTo(at);
+  }
+
+  function showGuide(moment: CoachingMoment) {
+    inspect(moment);
+    setOutlines(false);
+    setShowCorrection(true);
   }
 
   return (
@@ -338,18 +352,55 @@ export function GuidedReplay({
             aria-label="Segmented video replay"
           />
           {a &&
-            (points.length > 0 || trails.length > 0 || regions.length > 0) && (
+            (points.length > 0 ||
+              trails.length > 0 ||
+              regions.length > 0 ||
+              ghost) && (
               <svg
                 viewBox={`0 0 ${a.width} ${a.height}`}
                 role="img"
                 aria-label={
-                  points.length
-                    ? "Coach focus highlight"
-                    : regions.length
-                      ? "Tracked object outlines"
-                      : "Experimental bar trajectory overlay"
+                  ghost
+                    ? "Suggested posture correction"
+                    : points.length
+                      ? "Coach focus highlight"
+                      : regions.length
+                        ? "Tracked object outlines"
+                        : "Experimental bar trajectory overlay"
                 }
               >
+                {ghost &&
+                  ["observed", "suggested"].map((kind) => {
+                    const guide = kind === "suggested";
+                    const joints = new Map(
+                      (guide ? ghost.suggested : ghost.observed).map((p) => [
+                        p.id,
+                        p,
+                      ]),
+                    );
+                    return (
+                      <g key={kind} opacity={guide ? 0.8 : 0.5}>
+                        {ghost.connections.map(([from, to]) => {
+                          const p = joints.get(from)!,
+                            q = joints.get(to)!;
+                          return (
+                            <line
+                              key={`${from}-${to}`}
+                              x1={p.x * a.width}
+                              y1={p.y * a.height}
+                              x2={q.x * a.width}
+                              y2={q.y * a.height}
+                              stroke={guide ? "#53ead0" : "#ffffff"}
+                              strokeWidth={guide ? 12 : 3}
+                              strokeLinecap="round"
+                              strokeDasharray={guide ? undefined : "5 5"}
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
                 {regions.map((region) => (
                   <polygon
                     key={region.id}
@@ -374,25 +425,26 @@ export function GuidedReplay({
                     vectorEffect="non-scaling-stroke"
                   />
                 ))}
-                {points.map((p) => (
-                  <g key={p.id}>
-                    <circle
-                      cx={p.x * a.width}
-                      cy={p.y * a.height}
-                      r={Math.max(12, a.width * 0.035)}
-                      fill="#ffde592b"
-                      stroke="#ffde59"
-                      strokeWidth="3"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <circle
-                      cx={p.x * a.width}
-                      cy={p.y * a.height}
-                      r="4"
-                      fill="#ffde59"
-                    />
-                  </g>
-                ))}
+                {!ghost &&
+                  points.map((p) => (
+                    <g key={p.id}>
+                      <circle
+                        cx={p.x * a.width}
+                        cy={p.y * a.height}
+                        r={Math.max(12, a.width * 0.035)}
+                        fill="#ffde592b"
+                        stroke="#ffde59"
+                        strokeWidth="3"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <circle
+                        cx={p.x * a.width}
+                        cy={p.y * a.height}
+                        r="4"
+                        fill="#ffde59"
+                      />
+                    </g>
+                  ))}
               </svg>
             )}
         </div>
@@ -403,6 +455,11 @@ export function GuidedReplay({
                 ? "WATCH THE MOVEMENT"
                 : `INSPECT THE FRAME · ${time.toFixed(2)}s`}
             </span>
+            {ghost && (
+              <strong className="video-ghost-label">
+                Suggested posture · 2D guide
+              </strong>
+            )}
             <p>{active.observation}</p>
             <strong>Try next: {active.cue}</strong>
             {!playing && !points.length && active.region !== "whole_lift" && (
@@ -519,6 +576,50 @@ export function GuidedReplay({
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {active?.correctionPreview?.status === "available" && !playing && (
+        <div className="video-correction-compare" aria-label="Compare posture">
+          <div className="video-evidence-actions">
+            <Button
+              variant="secondary"
+              aria-pressed={!showCorrection}
+              onClick={() => {
+                inspect(active);
+                setShowCorrection(false);
+              }}
+            >
+              Original position
+            </Button>
+            <Button
+              variant="secondary"
+              aria-pressed={showCorrection}
+              onClick={() => showGuide(active)}
+            >
+              Suggested correction
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                inspect(
+                  active,
+                  active.correctionPreview!.status === "available"
+                    ? active.correctionPreview!.ghost.referenceTime
+                    : active.evidenceTime,
+                );
+                setShowCorrection(false);
+              }}
+            >
+              Earlier reference
+            </Button>
+          </div>
+          <p className="fine-print">
+            {active.correctionPreview.ghost.explanation}
+          </p>
+          <p className="fine-print">
+            White dashes: observed position. Teal: suggested position. The guide
+            appears only on the inspected frame.
+          </p>
+        </div>
+      )}
       {!coaching && a?.segmentation?.frames.some((f) => f.objects.length) && (
         <p className="fine-print" role="status">
           {review.status === "failed"
@@ -536,6 +637,20 @@ export function GuidedReplay({
         )}
       {coaching && (
         <section className="video-coaching-cards" aria-label="Guided coaching">
+          {coaching.previousFocus && (
+            <aside className="video-previous-focus">
+              <span className="eyebrow">
+                YOUR PREVIOUS FOCUS · {coaching.previousFocus.date}
+              </span>
+              <strong>{coaching.previousFocus.title}</strong>
+              <p>{coaching.previousFocus.cue}</p>
+              <p className="fine-print">
+                A reminder from your last comparable lift. This review assesses
+                today’s footage; it does not establish a before-and-after
+                change.
+              </p>
+            </aside>
+          )}
           {!moments.length && (
             <p className="fine-print">
               <strong>No supported correction markers</strong>
@@ -564,11 +679,29 @@ export function GuidedReplay({
               </span>
               <h3>{m.title}</h3>
               <p>{m.observation}</p>
+              {m.certainty === "tentative" && (
+                <span className="fine-print">
+                  Possible improvement · check this on another comparable
+                  attempt
+                </span>
+              )}
+              {m.why && (
+                <p>
+                  <strong>Why it matters</strong>
+                  <br />
+                  {m.why}
+                </p>
+              )}
               <div className="video-next-cue">
                 <strong>Try next</strong>
                 <p>{m.cue}</p>
               </div>
               <div className="video-evidence-actions">
+                {m.correctionPreview?.status === "available" && (
+                  <Button onClick={() => showGuide(m)}>
+                    Show suggested correction
+                  </Button>
+                )}
                 <Button
                   onClick={() => inspect(m)}
                   variant={i === 0 ? "default" : "secondary"}
@@ -580,6 +713,9 @@ export function GuidedReplay({
                   Watch this moment
                 </Button>
               </div>
+              {m.correctionPreview?.status === "unavailable" && (
+                <p className="fine-print">{m.correctionPreview.reason}</p>
+              )}
               {m.evidenceTimes.length > 1 && (
                 <div
                   className="video-evidence-frames"
@@ -597,7 +733,26 @@ export function GuidedReplay({
                   ))}
                 </div>
               )}
-              <p className="fine-print">{m.check}</p>
+              {m.practice && (
+                <div className="video-practice">
+                  <strong>Practise this</strong>
+                  <p>{m.practice}</p>
+                  {m.drill && techniqueDrills[m.drill] && (
+                    <a
+                      href={techniqueDrills[m.drill].url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Watch: {techniqueDrills[m.drill].name} ↗
+                    </a>
+                  )}
+                </div>
+              )}
+              <p>
+                <strong>On your next attempt</strong>
+                <br />
+                {m.check}
+              </p>
             </article>
           ))}
           {coaching.strength && (
@@ -613,6 +768,21 @@ export function GuidedReplay({
           )}
           {coaching.limitation && (
             <p className="fine-print">{coaching.limitation}</p>
+          )}
+          {!!coaching.checks?.length && (
+            <details className="video-phase-checks">
+              <summary>What Coach reviewed</summary>
+              {coaching.checks.map((check, i) => (
+                <p key={i}>
+                  <strong>
+                    {check.phase.replaceAll("_", " ")}
+                    {check.status === "not_visible" ? " · not visible" : ""}
+                  </strong>
+                  <br />
+                  {check.observation}
+                </p>
+              ))}
+            </details>
           )}
         </section>
       )}

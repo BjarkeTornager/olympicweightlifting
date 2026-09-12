@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 6 September 2026.</p>
+        <p className="lead">Last updated 11 September 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -23,14 +23,22 @@ export default function PrivacyPage() {
           Lift Journal is an invitation-only training journal. When you sign in
           with Google, we receive your name, email address, profile picture and
           account identifier to create your account and keep you signed in. We
-          do not receive your Google password or display your Google name in
-          the journal interface.
+          do not receive your Google password. Your name and email are shown
+          only to you in the iPhone account screen, and are not included in
+          Coach model requests.
         </p>
         <p>
-          We store the profile details, workouts, weights, personal records and
-          notes you enter so you can keep a training history and synchronize it
-          across your devices. Your journal is available to your signed-in
-          account. Other athletes do not have access to it.
+          The site owner can invite a specific Google email and revoke its
+          access. We store invited email addresses and invitation dates for this
+          purpose. Only the owner can see and manage that invitation list;
+          inviting someone does not share either person’s journal.
+        </p>
+        <p>
+          We store the profile details, strength and cardio activities, weights,
+          personal records and notes you enter so you can keep a training
+          history and synchronize it across your devices. Your journal is
+          available to your signed-in account. Other athletes do not have access
+          to it.
         </p>
       </section>
       <section className="space-y-3">
@@ -43,11 +51,172 @@ export default function PrivacyPage() {
           policy.
         </p>
         <p>
-          Your browser also keeps a local copy for offline training. Signing out
-          hides this copy in the app but does not erase it from the device.
-          Export anything you want to keep before clearing the website&apos;s
-          browser data. Guest training stays on the device until you explicitly
-          bring it into a signed-in account.
+          Your browser keeps a device copy to protect edits until they sync. The
+          app requires an online session check before opening your profile or
+          records; a cached identity cannot unlock the journal. Signing out or
+          losing authorization clears confirmed account copies from this
+          browser. Unsynced edits are retained for recovery after the owner
+          signs in again. Revoking a session cannot remotely erase a
+          disconnected device or an exported backup. Clear this website’s
+          browser data on shared devices after saving anything you need to keep.
+        </p>
+        <p>
+          The native iPhone app keeps its separate sign-in credential in iOS
+          Keychain. Confirmed journal entries and images are held in memory, and
+          access is checked with the server before opening them. A prepared but
+          unacknowledged save is kept in an account-specific file using iOS file
+          protection and excluded from device backups, so it can be retried
+          without duplication. Private screens are covered while inactive or
+          awaiting access verification. User-requested JSON exports are separate
+          copies; they are not remotely erased by sign-out or revocation.
+        </p>
+      </section>
+      <section className="space-y-3">
+        <h2>Your training assistant</h2>
+        <p>
+          When enabled, the assistant sends your messages, recent conversation
+          and relevant training records to the provider named in Coach.
+          OpenRouter routes requests to a model provider; this app requires tool
+          support, no data collection and zero data retention routing. These
+          filters reflect provider policies and do not guarantee processing in
+          the EU. OpenRouter and Ollama Cloud operate outside this Railway
+          database and may process data outside the Netherlands. A private
+          Ollama installation processes requests on its configured host. Your
+          Google account name, email, password and database credentials are not
+          included in model requests.
+        </p>
+        <p>
+          Conversation is stored with your account. The app removes conversation
+          older than 90 days when you next use the assistant. Proposals
+          temporarily include journal snapshots for safe save and undo; they
+          expire after 24 hours and are removed on subsequent assistant use.
+          Clear conversation removes its messages and proposals immediately,
+          while keeping saved workouts. Journal backup exports do not include
+          chat; use your browser to copy any conversation you want to keep.
+        </p>
+        <p>
+          Your optional coaching focus, approved memories, agreed plans,
+          favourite meals and complete food days are saved in your private
+          profile, synchronized and included in journal exports. Coach receives
+          that context and up to eight recent completed exchanges when you send
+          a message. Edit or delete saved memories and plans in Coach options.
+          They are only saved after your approval and are included in journal
+          exports. Deleting them does not delete earlier chat messages.
+          Follow-up happens on a visit, without scheduled notifications. Clear
+          or change your focus in Coach options; clearing conversation keeps
+          this saved preference. Opening suggestions are generated on your
+          device from journal records, without a model request. Hiding one
+          stores only today’s date under your account on this browser until you
+          sign out or clear site data.
+        </p>
+        <p>
+          Your optional lifting brief stores the goals, experience,
+          availability, equipment and constraints you choose to share. It is
+          private to your account, synchronized and included in journal exports.
+          Coach can retrieve it with your training evidence for lifting advice,
+          sharing those details with your assistant provider. Edit or clear it
+          in Train → Lifting coach. Clearing the brief keeps earlier chats,
+          approved memories and training records. Coach-proposed brief changes
+          require your review before saving.
+        </p>
+        <p>
+          Upload & analyse lift privately stores your video for background
+          processing. The selected section is re-encoded without audio or
+          location metadata; the original upload is removed after processing
+          succeeds. Failed source uploads remain private until you retry or
+          delete the review. Up to 20 reviews or 500 MB are kept per account.
+          The configured Coach provider receives 48 sampled frames for new
+          uploads (24 in older reviews) and supplied lift details, with the same
+          provider privacy filters as chat. It does not receive the original
+          video. Processing can continue when you close the page. In Your
+          reviews you can replay, download the processed clip, export the
+          analysis and delete the clip and feedback. These reviews are separate
+          from chat and journal backups; clearing chat does not delete them.
+          Optional bar measurements use your marked plate, scale and timing
+          confirmation and are experimental. Video review does not log workouts.
+          The alternative on-device frame review keeps the source on your device
+          and saves four Activity image sheets, which can be deleted in Images.
+        </p>
+        <p>
+          The assistant can read only your journal through limited tools. It
+          saves meals, sleep, check-ins, cardio and training that you report or
+          ask it to log, including requested corrections. Each save has a
+          receipt and Undo, available for 24 hours if no later journal change
+          has been saved. You can ask for a preview instead. Deletions, targets,
+          personal bests, memories and plans still require review. Uploading or
+          categorising an image alone does not log an entry. Food estimates
+          remain labelled as estimates and can be corrected. See{" "}
+          <a href="https://openrouter.ai/privacy" className="underline">
+            OpenRouter’s privacy policy
+          </a>{" "}
+          and{" "}
+          <a href="https://ollama.com/privacy" className="underline">
+            Ollama’s privacy policy
+          </a>{" "}
+          for their own data handling.
+        </p>
+      </section>
+      <section className="space-y-3">
+        <h2>Food journal and private images</h2>
+        <p>
+          Coach can find saved images and display them in private chat
+          galleries. Showing a gallery does not send image pixels to the AI
+          provider. If you ask Coach to read, compare or analyse a saved image,
+          the selected pixels and relevant labels are sent to your configured
+          provider for that request. Gallery references are kept with the
+          conversation; image access is checked again when displayed. Deleted or
+          inaccessible images cannot be loaded from an old gallery. Retrieved
+          pixels are not copied into conversation storage, and viewing an image
+          does not log a meal or measurement.
+        </p>
+        <p>
+          Meals, portions, nutrition estimates and diet targets are saved to
+          your account alongside your training, and included in journal backups.
+          The browser keeps a device copy behind the sign-in gate. The assistant
+          can read your own logged nutrition when answering food questions.
+        </p>
+        <p>
+          Uploaded food, sleep, activity and other images are stored privately
+          in the account database on Railway. We resize and re-encode photos,
+          removing embedded location and camera metadata. They require sign-in
+          and internet to view; photos are not stored in the offline cache.
+          Choosing Send in Coach shares the attached images with the configured
+          assistant provider for analysis. With automatic tagging enabled,
+          uploading also sends the image to that provider to identify its
+          category and descriptive tags. You can turn automatic tagging off
+          before uploading (in the attachment menu on iPhone), or choose Retag
+          automatically on the web later. Existing uploads are not sent for
+          tagging without that action. Uncertain images stay in Needs review.
+          Categories and tags are editable; tagging does not create meal or
+          health records.
+        </p>
+        <p>
+          Food lets you edit or delete meals, download individual photos and
+          delete photos after removing their meal links. Deleting a meal or
+          clearing chat keeps its catalog photos. Photos are retained until you
+          delete them or your account; recovery backups may retain deleted data
+          until they expire. Journal JSON backups contain meal photo references,
+          not image files or category metadata. Download images from the image
+          library; operational database backups include images and their tags.
+          Calorie and macro estimates can be inaccurate; you can correct them
+          before or after saving.
+        </p>
+      </section>
+      <section className="space-y-3">
+        <h2>Daily health check-ins</h2>
+        <p>
+          You can choose to record sleep, energy, muscle soreness, water,
+          bodyweight and personal notes. These are sensitive, self-reported
+          health details. They are stored in your account journal, kept in your
+          browser’s device copy and included in journal backups. You can edit or
+          delete them in Health history.
+        </p>
+        <p>
+          When you ask Coach for a daily plan or health guidance, relevant
+          check-ins, meals and training records are sent to the configured
+          assistant provider. The overview also displays simple suggestions
+          based on your entries. The app does not collect wearable or clinical
+          data, monitor you in the background, or diagnose conditions.
         </p>
       </section>
       <section className="space-y-3">
@@ -64,8 +233,8 @@ export default function PrivacyPage() {
         <p>
           You can edit your profile and workouts, and export a journal backup
           from Settings. To request an account export, correction or deletion,
-          contact the person who invited you to Lift Journal. We will verify
-          the account before acting on a request.
+          contact the person who invited you to Lift Journal. We will verify the
+          account before acting on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

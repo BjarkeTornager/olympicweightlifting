@@ -1,10 +1,5 @@
 import { canonicalJson } from "./json";
-import {
-  APP_META,
-  EXERCISES,
-  PROGRAM_DEFINITION,
-  PR_DEFINITIONS,
-} from "../js/data.js";
+import { APP_META, EXERCISES, PROGRAM_DEFINITION } from "../js/public-data.js";
 import {
   planExercise,
   PROGRESSION_VERSION,
@@ -20,7 +15,19 @@ import {
   type Entry,
   type ProgramExercise,
 } from "./model";
-export { EXERCISES, PR_DEFINITIONS, APP_META };
+export { EXERCISES, APP_META };
+export const PR_DEFINITIONS = [
+  { exerciseId: "snatch", label: "Snatch" },
+  { exerciseId: "clean_and_jerk", label: "Clean & jerk" },
+  { exerciseId: "back_squat", label: "Back squat" },
+  { exerciseId: "front_squat", label: "Front squat" },
+  { exerciseId: "power_snatch", label: "Power snatch" },
+  { exerciseId: "power_clean", label: "Power clean" },
+  { exerciseId: "snatch_balance", label: "Snatch balance" },
+  { exerciseId: "push_press", label: "Push press" },
+  { exerciseId: "clean", label: "Clean" },
+  { exerciseId: "clean_pull", label: "Clean pull / deadlift" },
+] as const;
 export const program = PROGRAM_DEFINITION;
 export const days = PROGRAM_DEFINITION.days as ProgramDay[];
 export const today = () => {
@@ -29,7 +36,8 @@ export const today = () => {
 };
 export const uid = () => crypto.randomUUID();
 export const exerciseName = (id: string) =>
-  EXERCISES.find((e) => e.id === id)?.name ?? id.replaceAll("_", " ");
+  EXERCISES.find((e) => e.id === id)?.name ??
+  (id.startsWith("custom:") ? id.slice(7) : id.replaceAll("_", " "));
 export function emptyJournal(): JournalState {
   const now = new Date().toISOString();
   return {
@@ -40,6 +48,19 @@ export function emptyJournal(): JournalState {
     prs: Object.fromEntries(PR_DEFINITIONS.map((p) => [p.exerciseId, 0])),
     sessions: [],
     activeWorkout: null,
+    templates: [],
+    health: { checkins: [] },
+    cardio: { sessions: [] },
+    nutrition: {
+      meals: [],
+      targets: {
+        goal: "maintain",
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
     program: {
       activeProgramId: program.id,
       programRevision: program.revision,
@@ -226,9 +247,131 @@ export function mergeImport(
       "Both accounts have an unfinished workout. Finish or export the current one before importing.",
     );
   const fresh =
+    !current.templates.length &&
+    !current.program.customPrograms.length &&
     !current.sessions.length &&
+    !current.cardio.sessions.length &&
+    !current.nutrition.meals.length &&
+    !current.health.checkins.length &&
+    !current.profile.coaching?.memories?.length &&
+    !current.profile.coaching?.plans?.length &&
+    !current.nutrition.favourites?.length &&
+    !current.nutrition.completeDays?.length &&
+    current.nutrition.targets.goal === "maintain" &&
+    ["calories", "protein", "carbs", "fat"].every(
+      (key) =>
+        current.nutrition.targets[
+          key as "calories" | "protein" | "carbs" | "fat"
+        ] == null,
+    ) &&
     !current.activeWorkout &&
     Object.values(current.prs).every((v) => v === 0);
+  const templates = new Map((current.templates ?? []).map((t) => [t.id, t]));
+  const cardio = new Map(current.cardio.sessions.map((s) => [s.id, s]));
+  for (const activity of incoming.cardio.sessions) {
+    const old = cardio.get(activity.id);
+    if (old && canonicalJson(old) !== canonicalJson(activity))
+      throw Error(
+        `A different version of cardio activity on ${activity.date} already exists. Review both backups before importing.`,
+      );
+    cardio.set(activity.id, activity);
+  }
+  const meals = new Map(current.nutrition.meals.map((m) => [m.id, m]));
+  const checkins = new Map(current.health.checkins.map((c) => [c.date, c]));
+  for (const checkin of incoming.health.checkins) {
+    const old = checkins.get(checkin.date);
+    if (old && canonicalJson(old) !== canonicalJson(checkin))
+      throw Error(
+        `A different check-in for ${checkin.date} already exists. Review both backups before importing.`,
+      );
+    checkins.set(checkin.date, checkin);
+  }
+  for (const meal of incoming.nutrition.meals) {
+    const old = meals.get(meal.id);
+    if (old && canonicalJson(old) !== canonicalJson(meal))
+      throw Error(`A different version of meal “${meal.name}” already exists.`);
+    meals.set(meal.id, meal);
+  }
+  for (const template of incoming.templates ?? []) {
+    const old = templates.get(template.id);
+    if (old && canonicalJson(old) !== canonicalJson(template))
+      throw Error(
+        `A different version of template “${template.name}” already exists.`,
+      );
+    templates.set(template.id, template);
+  }
+  const mergeRecords = <T extends { id: string }>(
+    a: T[] | undefined,
+    b: T[] | undefined,
+    label: string,
+  ): T[] | undefined => {
+    if (!a && !b) return undefined;
+    const records = new Map((a ?? []).map((r) => [r.id, r]));
+    for (const record of b ?? []) {
+      const old = records.get(record.id);
+      if (old && canonicalJson(old) !== canonicalJson(record))
+        throw Error(
+          `A different ${label} already exists. Review both backups before importing.`,
+        );
+      records.set(record.id, record);
+    }
+    return [...records.values()];
+  };
+  const memories = mergeRecords(
+    current.profile.coaching?.memories,
+    incoming.profile.coaching?.memories,
+    "Coach memory",
+  );
+  const plans = mergeRecords(
+    current.profile.coaching?.plans,
+    incoming.profile.coaching?.plans,
+    "agreed plan",
+  );
+  const favourites = mergeRecords(
+    current.nutrition.favourites,
+    incoming.nutrition.favourites,
+    "favourite meal",
+  );
+  const profile = fresh ? incoming.profile : current.profile;
+  const customPrograms = [...current.program.customPrograms];
+  for (const value of incoming.program.customPrograms) {
+    const getId = (v: unknown) =>
+      v && typeof v === "object" && "id" in v ? v.id : undefined;
+    const old = customPrograms.find(
+      (p) => getId(value) != null && getId(p) === getId(value),
+    );
+    if (old && canonicalJson(old) !== canonicalJson(value))
+      throw Error(
+        "A different version of a training program already exists. Review both backups before importing.",
+      );
+    if (!customPrograms.some((p) => canonicalJson(p) === canonicalJson(value)))
+      customPrograms.push(value);
+  }
+  const coaching = profile.coaching ?? incoming.profile.coaching;
+  const completeDays =
+    current.nutrition.completeDays || incoming.nutrition.completeDays
+      ? [
+          ...new Set([
+            ...(current.nutrition.completeDays ?? []),
+            ...(incoming.nutrition.completeDays ?? []),
+          ]),
+        ].filter((date) => {
+          const mergedIds = [...meals.values()]
+            .filter((m) => m.date === date)
+            .map((m) => m.id)
+            .sort()
+            .join(",");
+          return [current, incoming].some(
+            (source) =>
+              source.nutrition.completeDays?.includes(date) &&
+              source.nutrition.meals
+                .filter((m) => m.date === date)
+                .map((m) => m.id)
+                .sort()
+                .join(",") === mergedIds,
+          );
+        })
+      : undefined;
   return journalSchema.parse({
     ...current,
     ...(fresh
@@ -239,7 +382,32 @@ export function mergeImport(
           preferences: incoming.preferences,
         }
       : {}),
+    profile: {
+      ...profile,
+      ...(coaching
+        ? {
+            coaching: {
+              ...coaching,
+              ...(memories ? { memories } : {}),
+              ...(plans ? { plans } : {}),
+            },
+          }
+        : {}),
+    },
     sessions: [...sessions.values()],
+    program: {
+      ...(fresh ? incoming.program : current.program),
+      customPrograms,
+    },
+    templates: [...templates.values()],
+    health: { checkins: [...checkins.values()] },
+    cardio: { sessions: [...cardio.values()] },
+    nutrition: {
+      ...(favourites ? { favourites } : {}),
+      ...(completeDays ? { completeDays } : {}),
+      meals: [...meals.values()],
+      targets: fresh ? incoming.nutrition.targets : current.nutrition.targets,
+    },
     activeWorkout: current.activeWorkout ?? incoming.activeWorkout,
   });
 }

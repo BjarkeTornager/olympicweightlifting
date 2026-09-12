@@ -7,7 +7,7 @@ import {
   Dumbbell,
   Flame,
   TrendingUp,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import type { JournalState } from "@/lib/model";
 import { days, today, exerciseName, program } from "@/lib/domain";
 import { planProgramDay } from "@/js/progression.js";

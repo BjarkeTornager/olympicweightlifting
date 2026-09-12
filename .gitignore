@@ -15,3 +15,8 @@ playwright-report/
 public/offline.html
 public/sw.js
 .deployment/
+
+# Native Xcode user state and local builds
+ios/**/xcuserdata/
+*.xcuserstate
+ios/DerivedData/

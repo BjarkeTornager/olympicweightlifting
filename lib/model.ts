@@ -1,4 +1,13 @@
 import { z } from "zod";
+import { nutritionSchema } from "./nutrition";
+import { cardioSchema } from "./cardio";
+import { healthSchema } from "./health";
+import { coachingSchema } from "./coaching";
+import { liftingBriefSchema } from "./lifting-brief";
+import {
+  storedCustomProgramSchema,
+  isTrainingProgram,
+} from "./training-program-schema";
 
 const id = z.string().min(1).max(160);
 const text = z.string().max(10000);
@@ -98,6 +107,23 @@ export const workoutSchema = z
     exercises: z.array(entrySchema).max(50),
   })
   .passthrough();
+export const templateSchema = z.object({
+  id,
+  name: z.string().trim().min(1).max(120),
+  exercises: z
+    .array(
+      z.object({
+        exerciseId: id,
+        sets: z
+          .array(z.object({ weight: numberText, reps: numberText }))
+          .min(1)
+          .max(100),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type WorkoutTemplate = z.infer<typeof templateSchema>;
 export const journalSchema = z
   .object({
     schemaVersion: z.literal(2),
@@ -110,24 +136,42 @@ export const journalSchema = z
         unit: z.literal("kg").default("kg"),
         name: z.string().max(120).optional(),
         timezone: z.string().max(100).optional(),
+        coaching: coachingSchema.optional(),
+        lifting: liftingBriefSchema.nullable().optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),
     sessions: z.array(workoutSchema).max(5000),
     activeWorkout: workoutSchema.nullable(),
+    templates: z.array(templateSchema).max(100).default([]),
+    nutrition: nutritionSchema.default(() => nutritionSchema.parse({})),
+    health: healthSchema.default(() => healthSchema.parse({})),
+    cardio: cardioSchema.default(() => cardioSchema.parse({})),
     program: z
       .object({
         activeProgramId: z.string(),
         programRevision: z.string(),
-        customPrograms: z.array(z.unknown()).max(100),
+        customPrograms: z.array(storedCustomProgramSchema).max(100),
       })
       .passthrough(),
     preferences: z
-      .object({ installHintDismissed: z.boolean().optional() })
+      .object({
+        installHintDismissed: z.boolean().optional(),
+        largeText: z.boolean().optional(),
+        restSeconds: z.number().int().min(15).max(600).optional(),
+      })
       .passthrough(),
   })
   .passthrough()
   .superRefine((v, ctx) => {
+    const programs = v.program.customPrograms.filter(isTrainingProgram);
+    if (new Set(programs.map((p) => p.id)).size !== programs.length)
+      ctx.addIssue({
+        code: "custom",
+        message: "Duplicate training program IDs",
+      });
+    if (new Set(v.templates.map((t) => t.id)).size !== v.templates.length)
+      ctx.addIssue({ code: "custom", message: "Duplicate routine IDs" });
     if (new Set(v.sessions.map((s) => s.id)).size !== v.sessions.length)
       ctx.addIssue({ code: "custom", message: "Duplicate workout IDs" });
     for (const w of [

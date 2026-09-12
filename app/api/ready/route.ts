@@ -7,6 +7,7 @@ export async function GET() {
     if (process.env.NODE_ENV === "production" && !googleEnabled())
       throw Error("Configure Google sign-in");
     await getPool().query("SELECT 1 FROM journals LIMIT 1");
+    await getPool().query("SELECT 1 FROM journal_invitations LIMIT 1");
     return Response.json({ status: "ready" });
   } catch {
     return Response.json({ status: "not_ready" }, { status: 503 });

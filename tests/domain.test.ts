@@ -5,6 +5,8 @@ import {
   createWorkout,
   days,
   emptyJournal,
+  program,
+  PR_DEFINITIONS,
   finishWorkout,
   mergeImport,
   parseLegacyBackup,
@@ -15,6 +17,12 @@ test("new athletes do not inherit the owner's personal records", () => {
   const s = emptyJournal();
   assert.equal(s.prs.snatch, 0);
   assert.equal(s.profile.bodyweight, 0);
+  for (const definition of PR_DEFINITIONS)
+    assert.deepEqual(Object.keys(definition).sort(), ["exerciseId", "label"]);
+  for (const day of days)
+    for (const exercise of day.exercises)
+      assert.ok(exercise.initialWeight === "" || exercise.initialWeight === 0);
+  assert.doesNotMatch(JSON.stringify(program), /coach Tim|Alfa Omega|70 kg PR|60–65 kg/);
 });
 test("finishing saves explicit work and keeps the prescription snapshot", () => {
   const s = emptyJournal();
@@ -24,6 +32,8 @@ test("finishing saves explicit work and keeps the prescription snapshot", () => 
     "2026-09-05",
   );
   const set = s.activeWorkout.exercises[0].sets[0];
+  // A historical prescription must remain exact even when catalogue defaults change.
+  s.activeWorkout.exercises[0].prescribed.targetWeight = 45;
   set.weight = "47.5";
   set.logged = true;
   set.result = "success";

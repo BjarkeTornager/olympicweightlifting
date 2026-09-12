@@ -16,6 +16,7 @@ export default defineRailway(() => {
     // Values are provisioned directly in Railway, never stored in this repo.
     env: {
       ALLOWED_EMAILS: preserve(),
+      OWNER_EMAIL: preserve(),
       BETTER_AUTH_SECRET: preserve(),
       BETTER_AUTH_URL: preserve(),
       DATABASE_URL: preserve(),
@@ -23,6 +24,12 @@ export default defineRailway(() => {
       GOOGLE_CLIENT_SECRET: preserve(),
       MIGRATION_DATABASE_URL: preserve(),
       PORT: preserve(),
+      OLLAMA_BASE_URL: preserve(),
+      OLLAMA_MODEL: preserve(),
+      OLLAMA_API_KEY: preserve(),
+      AGENT_PROVIDER: preserve(),
+      AGENT_MODEL: preserve(),
+      OPENROUTER_API_KEY: preserve(),
     },
   });
   return project("olympicweightlifting", {

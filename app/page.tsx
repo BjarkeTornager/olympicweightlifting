@@ -1,4 +1,4 @@
-import { Journal } from "@/components/journal";
+import { AccessGate } from "@/components/access-gate";
 export default function Page() {
-  return <Journal />;
+  return <AccessGate />;
 }

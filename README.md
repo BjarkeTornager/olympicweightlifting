@@ -1,10 +1,16 @@
 # Lift Journal
 
-An Olympic weightlifting journal with a Next.js/React interface, PostgreSQL persistence, personal accounts and offline workout logging. The new application runs on Railway alongside the original GitHub Pages PWA.
+A private health journal for strength training, cardio, nutrition and recovery, with a conversational Coach, a Next.js/React interface and PostgreSQL persistence. The application runs on Railway alongside the original GitHub Pages weightlifting PWA.
 
 **Live private pilot:** [Lift Journal](https://lift-journal-production.up.railway.app). Google sign-in and PostgreSQL persistence were verified on 6 September 2026. Access is restricted to invited accounts. See the [deployment record](docs/deployment-2026-09-06.md) for verification and remaining operational work. Existing training data must be exported from the original GitHub Pages app and imported into the new account.
 
+## Native iPhone app
+
+The repository now includes a real SwiftUI app with native Coach, Today, Train, Journal and account screens. Open `ios/LiftJournal.xcodeproj` in Xcode. Simulator testing and personal-device installation can use a free Apple account; TestFlight requires membership. See [iPhone setup, privacy and verification](ios/README.md).
+
 ## Run the new app
+
+Latest release: [native iPhone app and private sign-in support](docs/ios-deployment-2026-09-06.md). The backend is live on Railway; the native app passed simulator tests and an unsigned physical-device build. Verification includes 180 local checks and six focused live browser checks.
 
 Use Node 22 and Docker. Copy `.env.example` to `.env.local`, set a local database password in both database variables, generate a random authentication secret, and enter your email in `ALLOWED_EMAILS`. Never commit this file.
 
@@ -15,7 +21,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>. Guest logging, programmes and backups work without OAuth. For local account testing, set `LOCAL_PASSWORD_AUTH=true` and use disposable test passwords. This login method is disabled in production. Use Google OAuth for the hosted pilot.
+Open <http://127.0.0.1:3000>. The landing page is public; all journal screens require a verified session. For local account testing, set `LOCAL_PASSWORD_AUTH=true`, create an invited disposable account through Better Auth, and use disposable test passwords. This login method is disabled in production. Use Google OAuth for the hosted pilot.
 
 ```sh
 npm run check:production
@@ -30,9 +36,12 @@ npm run test:browser
 ## Included
 
 - Responsive Home, Train, History, Progress, Exercises and Settings screens.
+- Cardio and movement logging for running, cycling, walking, swimming, rowing, hiking and other activities, manually or through Coach text/activity screenshots. Track duration, distance, pace/speed and optional reported measurements. See [cardio tracking](docs/cardio.md).
+- Food journal with manual or assistant text/photo meal entry, calories and macros, chosen daily diet targets, seven-day summaries and a private per-account photo catalog.
+- A daily Coach overview with contextual next steps, on-demand daily plans and private sleep, energy, soreness, water and bodyweight check-ins. See [health coach](docs/health-coach.md).
 - All five existing programmes and 23 exercise guides; programme previews remain available during a workout.
 - Exact manual loads, made/miss logging, recovery adjustments, prescription snapshots, history editing and PR prompts.
-- Google sign-in through Better Auth with a private-pilot email allowlist.
+- Google sign-in through Better Auth, restricted to the server-configured owner and accounts the owner invites. Online session verification gates every journal screen, including deep links and saved device copies.
 - PostgreSQL transactions, account ownership, runtime validation, duplicate-save protection and explicit conflict recovery.
 - IndexedDB drafts and a persistent pending-save queue; a versioned public offline shell excludes API/auth responses.
 - Previewed v1/v2 backup imports preserving existing IDs, drafts and training history.
@@ -53,6 +62,8 @@ The application uses pinned Next.js 16.3, React 19.2, Tailwind 4 and strict Type
 | `Dockerfile`, `.railway/railway.ts` | Standalone Railway build and application infrastructure settings |
 | `tests/` | Domain, PostgreSQL, browser, offline and accessibility checks |
 
+Read [private access boundaries](docs/private-access.md) for the public surface, account isolation and device-storage limits.
+
 Read [Railway setup and operations](docs/production-operations.md) for configuration, backups, migration and release procedures. [Implementation status](docs/implementation-status.md) records the pilot's scope and remaining launch gates. The [original plan](docs/production-readiness-plan.md) includes the larger production roadmap.
 
 The current pilot uses one revision for each account's complete journal. PostgreSQL stores a lossless JSONB snapshot plus relational workout/set projections in the same transaction. Concurrent changes require a choice between preserved copies. This is designed for a small personal pilot; entity-level sync, coach permissions, comprehensive audit trails and public registration remain future work.
@@ -62,3 +73,11 @@ The current pilot uses one revision for each account's complete journal. Postgre
 The static app in `index.html`, `styles.css` and `js/` remains available for migration and recovery. Run `npm run serve` and open <http://localhost:4173> to use it locally. `npm run check` retains its 23 progression tests. The Pages workflow still publishes the static app from `main`.
 
 Use the original app's JSON export, then sign into the new origin and import through Settings. Website storage cannot transfer automatically between domains. Keep the original export until counts, exact loads, notes, next-session targets and the active draft have been verified. See the [legacy documentation](docs/legacy-app.md) for its original workflows and limitations.
+
+## Training assistant and daily tools
+
+Coach is the conversational home for training history, programme questions and reviewed workout changes. OpenRouter runs on the hosted server; Ollama is available for local development. See [assistant operations](docs/agent-operations.md) for setup, privacy controls, spending limits and real-provider tests.
+
+Train includes personal routines, exercise reordering and a rest timer. History can repeat a session or save it as a routine. Progress adds weekly volume, rep records and session comparisons. Settings includes larger text, device sign-out and storage controls. Local saves can be undone while they remain the latest change.
+
+Image uploads are automatically sorted into Food, Sleep, Activity, Health, Other or Needs review, with editable tags and a private account library. See [image classification and storage](docs/images.md).

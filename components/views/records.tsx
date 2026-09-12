@@ -1,4 +1,8 @@
 "use client";
+import { CombineSessions } from "../combine-sessions";
+import { CardioProgress } from "../cardio";
+import { Invitations } from "../invitations";
+import { privateFetch } from "@/lib/private-fetch";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -12,7 +16,7 @@ import {
   Search,
   Trash2,
   TrendingUp,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import {
   backup,
   EXERCISES,
@@ -22,13 +26,19 @@ import {
   PR_DEFINITIONS,
   today,
 } from "@/lib/domain";
-import { getLocal } from "@/lib/local";
 import { isValidLoggedSet } from "@/js/progression.js";
 import type { JournalState, Workout } from "@/lib/model";
 import type { JournalController } from "../journal";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Technique } from "./workouts";
+import {
+  searchExercises,
+  exerciseMuscles,
+  exerciseEquipment,
+} from "@/lib/exercises";
+import { formatSet, startTemplate, templateFromWorkout } from "@/lib/training";
+import { TrainingInsights } from "../training-insights";
 type Props = {
   state: JournalState;
   update: JournalController["update"];
@@ -50,9 +60,12 @@ export function HistoryView({
   update,
   go,
   notify,
-}: Props & { go: (route: string) => void }) {
+  sessionId,
+}: Props & { go: (route: string) => void; sessionId?: string }) {
   const [filter, setFilter] = useState("all"),
-    [date, setDate] = useState(""),
+    [date, setDate] = useState(
+      () => state.sessions.find((s) => s.id === sessionId)?.date ?? "",
+    ),
     [remove, setRemove] = useState<Workout | null>(null);
   const sessions = [...state.sessions]
     .filter(
@@ -66,53 +79,85 @@ export function HistoryView({
       <div className="page-heading compact">
         <div>
           <div className="eyebrow">YOUR TRAINING STORY</div>
-          <h1>Work you can build on.</h1>
+          <h1>Training history</h1>
           <p className="lead">
-            {state.sessions.length} saved sessions. Every one counts.
+            {state.sessions.length} saved strength sessions. Every one counts.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => downloadBackup(backup(state))}
-        >
-          <Download size={17} />
-          Export journal
-        </Button>
       </div>
-      <div className="picker-bar">
-        <label>
-          Exercise
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="all">All exercises</option>
-            {EXERCISES.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Training date
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </label>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setDate("");
-            setFilter("all");
-          }}
-        >
-          Clear filters
-        </Button>
+      {state.activeWorkout && (
+        <div className="history-resume">
+          <Button onClick={() => go("workout")}>
+            Resume ongoing workout <ArrowRight size={17} />
+          </Button>
+        </div>
+      )}
+      <div className="history-toolbar">
+        <CombineSessions
+          state={state}
+          update={update}
+          go={go}
+          notify={notify}
+        />
+        <details className="history-filters">
+          <summary>
+            Filter history{date || filter !== "all" ? " •" : ""}
+          </summary>
+          <div className="picker-bar">
+            <label>
+              Exercise
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                <option value="all">All exercises</option>
+                {EXERCISES.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Training date
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </label>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setDate("");
+                setFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+          <div className="button-row">
+            <Button
+              variant="ghost"
+              onClick={() => downloadBackup(backup(state))}
+            >
+              <Download size={17} />
+              Export journal
+            </Button>
+            <a className="text-link" href="#cardio">
+              Cardio activity history <ArrowRight size={16} />
+            </a>
+          </div>
+        </details>
       </div>
       {sessions.length ? (
         <div className="history-list">
           {sessions.map((s) => (
-            <details className="panel history-detail" key={s.id}>
+            <details
+              className="panel history-detail"
+              key={s.id}
+              open={s.id === sessionId || undefined}
+            >
               <summary>
                 <span className="date-tile">
                   <strong>{s.date.slice(8)}</strong>
@@ -145,7 +190,7 @@ export function HistoryView({
                           key={set.id}
                           className={set.result === "miss" ? "missed" : ""}
                         >
-                          {set.weight} kg × {set.reps}
+                          {formatSet(set.weight, set.reps)}
                           {set.result === "miss" ? " · miss" : ""}
                           {set.rpe ? ` · RPE ${set.rpe}` : ""}
                         </span>
@@ -188,6 +233,47 @@ export function HistoryView({
                     }}
                   >
                     Edit session
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        await update((current) => {
+                          if (current.activeWorkout)
+                            throw Error(
+                              "Resume your unfinished workout first.",
+                            );
+                          current.activeWorkout = startTemplate(
+                            templateFromWorkout(s),
+                          );
+                        });
+                        go("workout");
+                      } catch (e) {
+                        notify(
+                          e instanceof Error
+                            ? e.message
+                            : "Could not repeat session.",
+                        );
+                      }
+                    }}
+                  >
+                    Repeat session
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      await update((current) => {
+                        current.templates = [
+                          ...(current.templates ?? []),
+                          templateFromWorkout(s),
+                        ];
+                      });
+                      notify(
+                        "Routine saved. Find it in Train → Your routines.",
+                      );
+                    }}
+                  >
+                    Save as routine
                   </Button>
                   <Button variant="danger" onClick={() => setRemove(s)}>
                     <Trash2 size={16} />
@@ -279,15 +365,17 @@ export function ProgressView({ state, update, notify }: Props) {
       <div className="page-heading compact">
         <div>
           <div className="eyebrow">PROGRESS, SESSION BY SESSION</div>
-          <h1>See your strength grow.</h1>
+          <h1>See your progress.</h1>
           <p className="lead">
-            Your recorded lifts, personal bests and next milestones.
+            Your strength records and cardio activity, in one place.
           </p>
         </div>
         <Button variant="secondary" onClick={() => setEditing(true)}>
           Edit personal bests
         </Button>
       </div>
+      <CardioProgress state={state} compact />
+      <TrainingInsights state={state} />
       <div className="stats-grid">
         {[
           { label: "SNATCH", value: state.prs.snatch },
@@ -432,9 +520,6 @@ export function ProgressView({ state, update, notify }: Props) {
               {state.prs[p.exerciseId] || "—"}
               <small> kg</small>
             </strong>
-            {p.target && (
-              <span className="muted">Next target: {p.target} kg</span>
-            )}
           </div>
         ))}
       </div>
@@ -480,13 +565,19 @@ export function ProgressView({ state, update, notify }: Props) {
   );
 }
 export function LibraryView() {
-  const [query, setQuery] = useState(""),
-    [category, setCategory] = useState("all");
-  const items = EXERCISES.filter(
-    (e) =>
-      (category === "all" || e.category === category) &&
-      `${e.name} ${e.purpose}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const [query, setQuery] = useState("");
+  const [discipline, setDiscipline] = useState("all");
+  const [muscle, setMuscle] = useState("all");
+  const [equipment, setEquipment] = useState("all");
+  const items = searchExercises(query, { discipline, muscle, equipment });
+  const filtered =
+    query || discipline !== "all" || muscle !== "all" || equipment !== "all";
+  const clear = () => {
+    setQuery("");
+    setDiscipline("all");
+    setMuscle("all");
+    setEquipment("all");
+  };
   return (
     <>
       <div className="page-heading compact">
@@ -494,32 +585,69 @@ export function LibraryView() {
           <div className="eyebrow">MOVE WITH INTENT</div>
           <h1>Your technique library.</h1>
           <p className="lead">
-            Demonstrations and cues for every part of your training.
+            Gym essentials and Olympic lifts. Find your movement, learn the
+            technique and make it part of your routine.
           </p>
         </div>
       </div>
-      <div className="picker-bar">
+      <div className="segmented" role="group" aria-label="Training style">
+        {[
+          ["all", "All exercises"],
+          ["gym", "Gym training"],
+          ["olympic", "Olympic lifting"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            aria-pressed={discipline === id}
+            className={discipline === id ? "active" : ""}
+            onClick={() => setDiscipline(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="picker-bar library-filters">
         <label className="search-field">
           <Search size={19} />
           <input
+            type="search"
             aria-label="Search exercises"
-            placeholder="Find an exercise…"
+            placeholder="Name, muscle or equipment…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <label>
-          Category
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="all">All exercises</option>
-            {[...new Set(EXERCISES.map((e) => e.category))].map((c) => (
-              <option key={c}>{c}</option>
+          Muscle group
+          <select value={muscle} onChange={(e) => setMuscle(e.target.value)}>
+            <option value="all">All muscles</option>
+            {exerciseMuscles.map((m) => (
+              <option key={m}>{m}</option>
             ))}
           </select>
         </label>
+        <label>
+          Equipment
+          <select
+            value={equipment}
+            onChange={(e) => setEquipment(e.target.value)}
+          >
+            <option value="all">All equipment</option>
+            {exerciseEquipment.map((e) => (
+              <option key={e}>{e}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="section-top library-results">
+        <p className="muted" role="status">
+          {items.length} of {EXERCISES.length} exercises
+        </p>
+        {filtered && (
+          <Button variant="ghost" onClick={clear}>
+            Clear filters
+          </Button>
+        )}
       </div>
       <div className="library-grid">
         {items.map((e, i) => (
@@ -531,6 +659,9 @@ export function LibraryView() {
               <span className="pill">{e.category}</span>
             </div>
             <h2>{e.name}</h2>
+            <p className="fine-print">
+              {e.equipment.join(" · ") || "Choose a variation"}
+            </p>
             <p className="muted">{e.purpose}</p>
             <ul className="cues">
               {e.cues.map((c) => (
@@ -546,7 +677,7 @@ export function LibraryView() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Source <ArrowUpRight size={16} />
+                  {e.sourceName} <ArrowUpRight size={16} />
                 </a>
               )}
             </div>
@@ -556,14 +687,9 @@ export function LibraryView() {
       {!items.length && (
         <div className="empty">
           <h2>No exercises found.</h2>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setQuery("");
-              setCategory("all");
-            }}
-          >
-            Clear search
+          <p>Try a different name or clear a filter to see more movements.</p>
+          <Button variant="secondary" onClick={clear}>
+            Show all exercises
           </Button>
         </div>
       )}
@@ -601,10 +727,13 @@ export function SettingsView({
         <div>
           <div className="eyebrow">YOUR JOURNAL, YOURS TO KEEP</div>
           <h1>Make yourself at home.</h1>
-          <p className="lead">Your profile, account and training backups.</p>
+          <p className="lead">
+            Your profile, account and health journal backups.
+          </p>
         </div>
       </div>
       <div className="settings-grid">
+        {journal.auth.canInvite && <Invitations accountId={identity.id} />}
         <section className="panel">
           <h2>Your account</h2>
           <p>
@@ -636,10 +765,20 @@ export function SettingsView({
           )}
           <p className="fine-print">
             {identity
-              ? `Last saved: ${new Date(state.updatedAt).toLocaleString()}`
+              ? `Saved on device: ${new Date(state.updatedAt).toLocaleString()}`
               : "Export a backup before clearing browser data or changing devices."}
           </p>
-          <a href="/privacy" className="fine-print underline underline-offset-4">
+          <p className="fine-print">
+            {journal.record?.lastSyncedAt
+              ? `Last cloud check: ${new Date(journal.record.lastSyncedAt).toLocaleString()}`
+              : "Cloud sync has not been confirmed on this device."}
+            {journal.record?.dirty ? " Changes are waiting to sync." : ""}
+          </p>
+          {identity && <DeviceSettings journal={journal} notify={notify} />}
+          <a
+            href="/privacy"
+            className="fine-print underline underline-offset-4"
+          >
             Privacy and your data
           </a>
         </section>
@@ -705,14 +844,51 @@ export function SettingsView({
             </Button>
           </form>
         </section>
+        <section className="panel form-stack">
+          <h2>Reading & rest</h2>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={Boolean(state.preferences.largeText)}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                void update((s) => {
+                  s.preferences.largeText = checked;
+                });
+              }}
+            />
+            Larger text
+          </label>
+          <label>
+            Default rest timer
+            <select
+              value={state.preferences.restSeconds ?? 90}
+              onChange={(e) => {
+                const seconds = Number(e.currentTarget.value);
+                void update((s) => {
+                  s.preferences.restSeconds = seconds;
+                });
+              }}
+            >
+              {[60, 90, 120, 180, 300].map((n) => (
+                <option value={n} key={n}>
+                  {n / 60} minutes
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">
+            You can also use your browser’s text size and zoom settings.
+          </p>
+        </section>
         <section className="panel backup-panel">
           <span className="program-index">
             <Download size={24} />
           </span>
           <h2>A copy you can keep.</h2>
           <p className="muted">
-            Export your sessions, personal bests, notes and unfinished workout
-            in one portable JSON file.
+            Export your strength training, cardio, food, health check-ins and
+            unfinished workout in one portable JSON file.
           </p>
           <Button
             variant="secondary"
@@ -752,14 +928,6 @@ export function SettingsView({
               }}
             />
           </label>
-          {identity && (
-            <Button
-              variant="ghost"
-              onClick={async () => prepare((await getLocal("guest")).state)}
-            >
-              Import this device’s unsigned journal
-            </Button>
-          )}
           {importError && (
             <p className="error-text" role="alert">
               {importError}
@@ -767,11 +935,11 @@ export function SettingsView({
           )}
         </section>
         <section className="panel">
-          <h2>App & offline access</h2>
+          <h2>App & device storage</h2>
           <p className="muted">
             On iPhone, open this site in Safari and choose Share → Add to Home
-            Screen. Open it online once before training offline. Technique
-            videos need an internet connection.
+            Screen. An online session check is required to open your journal.
+            Device storage keeps pending edits safe until they sync.
           </p>
           <Button
             variant="secondary"
@@ -864,5 +1032,85 @@ export function SettingsView({
         </div>
       </Dialog>
     </>
+  );
+}
+
+function DeviceSettings({
+  journal,
+  notify,
+}: {
+  journal: JournalController;
+  notify: (s: string) => void;
+}) {
+  const [clear, setClear] = useState(false),
+    [busy, setBusy] = useState(false);
+  return (
+    <div className="device-settings">
+      <p className="fine-print">
+        Sign-out clears the confirmed copy after syncing. Unsynced edits stay
+        locked until you sign in again.
+      </p>
+      <div className="button-row">
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const r = await privateFetch("/api/devices/revoke", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Journal-Account": journal.identity?.id ?? "",
+                },
+                body: "{}",
+              });
+              if (!r.ok)
+                throw Error(
+                  "Could not sign out other devices. Try again online.",
+                );
+              notify(
+                "Other sessions signed out. Those devices must sign in again to open the journal.",
+              );
+            } catch (e) {
+              notify(
+                e instanceof Error ? e.message : "Could not update sessions.",
+              );
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Sign out other devices
+        </Button>
+        <Button variant="ghost" onClick={() => setClear(true)}>
+          Sign out & clear this device
+        </Button>
+      </div>
+      <Dialog
+        open={clear}
+        onOpenChange={setClear}
+        title="Clear the offline copy?"
+        description="Your synced journal stays in your account. This browser’s account journal, chat cache and timer will be removed. Pending changes must sync first."
+      >
+        <Button
+          variant="danger"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await journal.signOut();
+              setClear(false);
+            } catch (e) {
+              notify(e instanceof Error ? e.message : "Sign-out failed.");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Sign out & clear
+        </Button>
+      </Dialog>
+    </div>
   );
 }

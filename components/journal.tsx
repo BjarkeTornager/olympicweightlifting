@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BarChart3,
@@ -12,14 +12,30 @@ import {
   House,
   LogIn,
   Settings,
+  Sparkles,
+  Undo2,
   WifiOff,
-} from "lucide-react";
+  Utensils,
+  HeartPulse,
+  Images,
+  SquaresFour,
+  PersonSimpleRun,
+} from "@/components/ui/icons";
+import { trackKeyboardViewport } from "@/lib/keyboard-viewport";
 import { useJournal } from "@/lib/use-journal";
+import type { PrivateSessionProps } from "./access-gate";
 import { backup, days, today, createWorkout } from "@/lib/domain";
+import { liftingPrompt } from "@/lib/lifting-coach";
+import { trainingPrograms } from "@/lib/training-programs";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { Dashboard } from "./views/dashboard";
 import { Workouts } from "./views/workouts";
+import { TrainingAgent } from "./agent";
+import { FoodView } from "./views/food";
+import { CardioView } from "./cardio";
+import { HealthView } from "./health";
+import { ImageLibrary } from "./image-library";
 import {
   HistoryView,
   ProgressView,
@@ -29,13 +45,29 @@ import {
 } from "./views/records";
 export type JournalController = ReturnType<typeof useJournal>;
 const navigation = [
-  { id: "dashboard", label: "Home", icon: House },
+  { id: "coach", label: "Coach", icon: Sparkles },
   { id: "workout", label: "Train", icon: Dumbbell },
+  { id: "food", label: "Food", icon: Utensils },
+  { id: "health", label: "Health", icon: HeartPulse },
   { id: "history", label: "History", icon: History },
   { id: "progress", label: "Progress", icon: BarChart3 },
+  { id: "images", label: "Images", icon: Images },
+  { id: "cardio", label: "Cardio", icon: PersonSimpleRun },
   { id: "library", label: "Exercises", icon: BookOpen },
+  { id: "dashboard", label: "Home", icon: House },
   { id: "data", label: "Settings", icon: Settings },
 ];
+const primaryNavigation = navigation.slice(0, 4);
+const journalNavigation = navigation.slice(4);
+const navigationDescriptions: Record<string, string> = {
+  history: "Your logged workouts",
+  progress: "Trends and personal bests",
+  images: "Your private photo library",
+  cardio: "Runs, rides and movement",
+  library: "Exercise guides and videos",
+  dashboard: "Your training overview",
+  data: "Profile, preferences and access",
+};
 const labels = {
   loading: "Opening journal",
   local: "Saved on this device",
@@ -47,17 +79,29 @@ const labels = {
   signin: "Sign in to sync",
   error: "Storage unavailable",
 };
-export function Journal() {
-  const journal = useJournal();
+export function Journal(props: PrivateSessionProps) {
+  const journal = useJournal(
+    props.identity,
+    props.auth,
+    props.onSessionInvalid,
+  );
   const { state, identity, status, auth, error } = journal;
-  const [route, setRoute] = useState("dashboard"),
+  const [route, setRoute] = useState("coach"),
     [login, setLogin] = useState(false),
     [message, setMessage] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Navigation changes the Coach view, never the lifetime of its active run.
+  // Keep entry intents stable while using other sections, including photo loads.
+  const [coachEntry, setCoachEntry] = useState({ route: "coach", id: 0 });
+  const moreButton = useRef<HTMLButtonElement>(null);
   const [updateReady, setUpdateReady] = useState(false),
     [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   useEffect(() => {
     const changed = () => {
-      setRoute(location.hash.slice(1) || "dashboard");
+      const next = location.hash.slice(1) || "coach";
+      setRoute(next);
+      if (next.split("/")[0] === "coach")
+        setCoachEntry((entry) => ({ route: next, id: entry.id + 1 }));
       window.scrollTo({ top: 0, behavior: "instant" });
     };
     const activated = () => setUpdateReady(false);
@@ -89,6 +133,7 @@ export function Journal() {
         );
     };
   }, []);
+  useEffect(trackKeyboardViewport, []);
   const go = (target: string) => {
     location.hash = target;
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -110,7 +155,9 @@ export function Journal() {
   };
   const section = route.split("/")[0];
   return (
-    <div className="journal">
+    <div
+      className={`journal ${section === "coach" ? "coach-mode" : ""} ${state?.preferences.largeText ? "large-text" : ""}`}
+    >
       <a
         className="skip-link"
         href="#content"
@@ -122,27 +169,36 @@ export function Journal() {
         Skip to content
       </a>
       <aside className="sidebar">
-        <a className="brand" href="#dashboard">
+        <a className="brand" href="#coach">
           <span className="brand-icon">
             <Dumbbell size={22} />
           </span>
           <span>
-            LIFT<span className="brand-light">JOURNAL</span>
+            Lift<span className="brand-light">Journal</span>
           </span>
         </a>
-        <span className="sidebar-label">TRAINING SPACE</span>
-        <nav aria-label="Primary">
-          {navigation.map(({ id, label, icon: Icon }) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              className={`nav-item ${section === id ? "active" : ""}`}
-              aria-current={section === id ? "page" : undefined}
-            >
-              <Icon size={20} />
-              <span>{label}</span>
-              {section === id && <span className="nav-dot" />}
-            </a>
+        <nav aria-label="Primary" className="sidebar-navigation">
+          {[primaryNavigation, journalNavigation].map((group, index) => (
+            <div className="sidebar-nav-group" key={index}>
+              <span className="sidebar-label">
+                {index === 0 ? "Your day" : "Your journal"}
+              </span>
+              {group.map(({ id, label, icon: Icon }) => (
+                <a
+                  key={id}
+                  href={`#${id}`}
+                  className={`nav-item ${section === id ? "active" : ""}`}
+                  aria-current={section === id ? "page" : undefined}
+                >
+                  <Icon
+                    size={22}
+                    weight={section === id ? "fill" : "regular"}
+                    aria-hidden="true"
+                  />
+                  <span>{label}</span>
+                </a>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -150,13 +206,15 @@ export function Journal() {
             className="account-button"
             onClick={() => (identity ? go("data") : setLogin(true))}
           >
-            <span className="avatar">L</span>
+            <span className="avatar" aria-hidden="true">
+              {identity?.name?.trim().slice(0, 1).toUpperCase() || "L"}
+            </span>
             <span>
-              <strong>Your journal</strong>
+              <strong>
+                {identity?.name?.trim().split(/\s+/)[0] || "Your journal"}
+              </strong>
               <small>
-                {identity
-                  ? "Personal training space"
-                  : "Sign in for device sync"}
+                {identity ? "Your private space" : "Sign in for device sync"}
               </small>
             </span>
             <ArrowUpRight size={16} />
@@ -195,6 +253,36 @@ export function Journal() {
             <span>{labels[status]}</span>
           </button>
         </header>
+        {state && (journal.record?.dirty || journal.record?.undo) && (
+          <div className="save-detail">
+            <span>
+              {journal.record?.dirty
+                ? "Changes waiting to sync"
+                : identity && journal.record?.lastSyncedAt
+                  ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                  : "This browser holds your offline copy"}{" "}
+              · Device saved{" "}
+              {new Date(state.updatedAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+            {journal.record?.undo && !journal.record.conflict && (
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  void journal
+                    .undo()
+                    .then(() => setMessage("Last change undone."))
+                    .catch((e) => setMessage(e.message))
+                }
+              >
+                <Undo2 size={15} />
+                Undo last change
+              </Button>
+            )}
+          </div>
+        )}
         {updateReady && (
           <div className="notice">
             <span>
@@ -279,11 +367,97 @@ export function Journal() {
           </div>
         ) : (
           <>
+            <TrainingAgent
+              key={identity?.id ?? "guest"}
+              visible={section === "coach"}
+              entryId={coachEntry.id}
+              initialVideoReview={/^coach\/lifting\/(video|technique)$/.test(
+                coachEntry.route,
+              )}
+              initialTrainingPrompt={
+                /^coach\/lifting\/(video|technique)$/.test(coachEntry.route)
+                  ? undefined
+                  : coachEntry.route.startsWith("coach/lifting/")
+                    ? liftingPrompt(coachEntry.route.split("/")[2])
+                    : coachEntry.route === "coach/training/new"
+                      ? "Help me build a reusable training program in Train. My goal is "
+                      : coachEntry.route.startsWith("coach/training/")
+                        ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
+                        : undefined
+              }
+              initialCardioLog={
+                coachEntry.route === "coach/cardio" ||
+                /^coach\/photo\/[^/]+\/cardio$/.test(coachEntry.route)
+              }
+              initialSleepLog={
+                coachEntry.route === "coach/sleep" ||
+                /^coach\/photo\/[^/]+\/sleep$/.test(coachEntry.route)
+              }
+              initialPhotoId={
+                coachEntry.route.startsWith("coach/photo/")
+                  ? coachEntry.route.split("/")[2]
+                  : undefined
+              }
+              journal={journal}
+              onLogin={() => setLogin(true)}
+              go={go}
+            />
             {section === "dashboard" && (
               <Dashboard state={state} onStart={start} go={go} />
             )}
+            {["workout", "history", "cardio"].includes(section) && (
+              <nav
+                className="activity-switch training-tabs"
+                aria-label="Training navigation"
+              >
+                <a
+                  href="#workout"
+                  aria-current={
+                    section === "workout" && route === "workout"
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  Ongoing{state.activeWorkout ? " •" : ""}
+                </a>
+                <a
+                  href="#workout/choose"
+                  aria-current={
+                    section === "workout" &&
+                    route !== "workout" &&
+                    route !== "workout/coaching"
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  Programs
+                </a>
+                <a
+                  href="#workout/coaching"
+                  aria-current={
+                    route === "workout/coaching" ? "page" : undefined
+                  }
+                >
+                  Lifting coach
+                </a>
+                <a
+                  href="#history"
+                  aria-current={section === "history" ? "page" : undefined}
+                >
+                  History
+                </a>
+                <a
+                  href="#cardio"
+                  aria-current={section === "cardio" ? "page" : undefined}
+                >
+                  Cardio
+                </a>
+              </nav>
+            )}
+            {section === "cardio" && <CardioView journal={journal} go={go} />}
             {section === "workout" && (
               <Workouts
+                accountId={identity?.id ?? "guest"}
                 state={state}
                 update={journal.update}
                 route={route}
@@ -294,6 +468,8 @@ export function Journal() {
             )}
             {section === "history" && (
               <HistoryView
+                key={route}
+                sessionId={route.split("/")[1]}
                 state={state}
                 update={journal.update}
                 go={go}
@@ -308,6 +484,30 @@ export function Journal() {
               />
             )}
             {section === "library" && <LibraryView />}
+            {section === "health" && (
+              <HealthView
+                key={identity?.id ?? "guest"}
+                journal={journal}
+                go={go}
+                onLogin={() => setLogin(true)}
+              />
+            )}
+            {section === "images" && (
+              <ImageLibrary
+                key={identity?.id ?? "guest"}
+                accountId={identity?.id}
+                onLogin={() => setLogin(true)}
+                go={go}
+              />
+            )}
+            {section === "food" && (
+              <FoodView
+                key={identity?.id ?? "guest"}
+                journal={journal}
+                onLogin={() => setLogin(true)}
+                go={go}
+              />
+            )}
             {section === "data" && (
               <SettingsView
                 journal={journal}
@@ -325,18 +525,89 @@ export function Journal() {
         )}
       </main>
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {navigation.map(({ id, label, icon: Icon }) => (
+        {primaryNavigation.map(({ id, label, icon: Icon }) => (
           <a
             key={id}
             href={`#${id}`}
-            className={section === id ? "active" : ""}
-            aria-current={section === id ? "page" : undefined}
+            className={
+              section === id ||
+              (["cardio", "history"].includes(section) && id === "workout")
+                ? "active"
+                : ""
+            }
+            aria-current={
+              section === id ||
+              (["cardio", "history"].includes(section) && id === "workout")
+                ? "page"
+                : undefined
+            }
           >
-            <Icon size={20} />
+            <Icon
+              size={25}
+              weight={
+                section === id ||
+                (["cardio", "history"].includes(section) && id === "workout")
+                  ? "fill"
+                  : "regular"
+              }
+              aria-hidden="true"
+            />
             <span>{label}</span>
           </a>
         ))}
+        <button
+          className={
+            journalNavigation.some(
+              (item) =>
+                item.id === section && !["cardio", "history"].includes(section),
+            )
+              ? "active"
+              : ""
+          }
+          aria-label="More"
+          ref={moreButton}
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen(true)}
+        >
+          <SquaresFour
+            size={25}
+            aria-hidden="true"
+            weight={moreOpen ? "fill" : "regular"}
+          />
+          <span>More</span>
+        </button>
       </nav>
+      <Dialog
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        title="Your journal"
+        description="Everything you’ve saved, in one place."
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          moreButton.current?.focus({ preventScroll: true });
+        }}
+      >
+        <nav className="journal-menu" aria-label="More destinations">
+          {journalNavigation.map(({ id, label, icon: Icon }) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              aria-current={section === id ? "page" : undefined}
+              onClick={() => setMoreOpen(false)}
+            >
+              <span className="journal-menu-icon">
+                <Icon size={24} weight="duotone" aria-hidden="true" />
+              </span>
+              <span>
+                <strong>{label}</strong>
+                <small>{navigationDescriptions[id]}</small>
+              </span>
+              <ArrowUpRight size={18} aria-hidden="true" />
+            </a>
+          ))}
+        </nav>
+      </Dialog>
       <Dialog
         open={login}
         onOpenChange={setLogin}

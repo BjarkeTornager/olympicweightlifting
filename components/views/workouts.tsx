@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   Check,
@@ -12,7 +14,7 @@ import {
   Play,
   Trash2,
   X,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import {
   days,
   today,
@@ -32,10 +34,26 @@ import {
 import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { Templates } from "../templates";
+import { RestTimer } from "../rest-timer";
+import { LiftingCoach } from "../lifting-coach";
+import { TrainingPrograms } from "../training-programs";
+import { ExercisePicker } from "../exercise-picker";
+import { exerciseLoggingNotes } from "@/lib/exercises";
+import { formatSet } from "@/lib/training";
+import { ActivityForm } from "../cardio";
+import {
+  cardioActivitySchema,
+  cardioLabels,
+  cardioTitle,
+  formatDuration,
+  type CardioActivity,
+} from "@/lib/cardio";
 type Update = (
   fn: (state: JournalState) => JournalState | void,
 ) => Promise<void>;
 type Props = {
+  accountId: string;
   state: JournalState;
   update: Update;
   route: string;
@@ -101,21 +119,29 @@ export function Technique({ exerciseId }: { exerciseId: string }) {
         title={ex.name}
         description={ex.purpose}
       >
+        <p className="fine-print">
+          Instruction by {ex.sourceName}
+          {ex.videoTitle ? ` · ${ex.videoTitle}` : ""}
+        </p>
         <div className="video-frame">
           {open && (
             <iframe
               title={`${ex.name} technique demonstration`}
-              src={`https://www.youtube-nocookie.com/embed/${ex.videoId}`}
+              src={`https://www.youtube-nocookie.com/embed/${ex.videoId}?rel=0&playsinline=1`}
               allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
           )}
         </div>
+        {ex.videoNote && <p className="fine-print">{ex.videoNote}</p>}
         <ul className="cues">
           {ex.cues.map((c) => (
             <li key={c}>{c}</li>
           ))}
         </ul>
+        <p className="exercise-logging-note">
+          <strong>How to log</strong> {ex.loggingNotes}
+        </p>
         <div className="button-row">
           <Button asChild variant="secondary">
             <a
@@ -133,7 +159,7 @@ export function Technique({ exerciseId }: { exerciseId: string }) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Exercise notes <ArrowUpRight size={16} />
+              {ex.sourceName} guide <ArrowUpRight size={16} />
             </a>
           )}
         </div>
@@ -147,6 +173,8 @@ export function Workouts(props: Props) {
     [filter, setFilter] = useState("all");
   const parameter = route.split("/")[1];
   const day = days.find((d) => d.id === parameter);
+  if (parameter === "coaching")
+    return <LiftingCoach state={state} update={props.update} go={go} />;
   if (state.activeWorkout && !parameter)
     return <ActiveWorkout key={state.activeWorkout.id} {...props} />;
   if (day) {
@@ -267,22 +295,72 @@ export function Workouts(props: Props) {
           <div className="eyebrow">YOUR TRAINING</div>
           <h1>Choose your session.</h1>
           <p className="lead">
-            Your programme fits your day. Train any session on any date.
+            Build a gym routine, start an open workout or follow your programme.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => void onStart("open", date)}>
-          <Plus size={18} />
-          Open workout
-        </Button>
-      </div>
-      {state.activeWorkout && (
-        <div className="notice">
-          <span>
-            Saved workout: <strong>{state.activeWorkout.title}</strong>
-          </span>
-          <Button onClick={() => go("workout")}>Resume workout</Button>
+        <div className="button-row">
+          <Button asChild variant="ghost">
+            <a href="#library">
+              Exercise library <ArrowUpRight size={18} />
+            </a>
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void onStart("open", date)}
+          >
+            <Plus size={18} /> Open workout
+          </Button>
         </div>
+      </div>
+      {state.activeWorkout ? (
+        <div className="notice ongoing-workout-card">
+          <div>
+            <span className="eyebrow">ONGOING WORKOUT</span>
+            <strong>{state.activeWorkout.title}</strong>
+            <p>
+              {state.activeWorkout.date} ·{" "}
+              {state.activeWorkout.exercises.reduce(
+                (n, e) => n + e.sets.filter((s) => s.logged || s.result).length,
+                0,
+              )}{" "}
+              sets logged
+            </p>
+          </div>
+          <Button onClick={() => go("workout")}>
+            Resume workout <ArrowRight size={17} />
+          </Button>
+        </div>
+      ) : (
+        !parameter && (
+          <div className="notice ongoing-workout-card">
+            <div>
+              <strong>No workout in progress</strong>
+              <p>
+                Start a session below or tell Coach what you are doing. Your
+                ongoing workout will stay here until you finish.
+              </p>
+            </div>
+            <a className="text-link" href="#history">
+              View training history <ArrowRight size={17} />
+            </a>
+          </div>
+        )
       )}
+      <Templates
+        state={state}
+        update={props.update}
+        date={date}
+        go={go}
+        notify={props.notify}
+      />
+      <TrainingPrograms
+        state={state}
+        update={props.update}
+        date={date}
+        go={go}
+        notify={props.notify}
+      />
+
       <div className="picker-bar">
         <label>
           Training date
@@ -380,15 +458,25 @@ export function Workouts(props: Props) {
     </>
   );
 }
-function ActiveWorkout({ state, update, go, notify }: Props) {
+function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
   const draft = state.activeWorkout!;
   const [expanded, setExpanded] = useState(
       draft.activeExerciseId ?? draft.exercises[0]?.id ?? "",
     ),
     [finish, setFinish] = useState(false),
     [discard, setDiscard] = useState(false),
-    [add, setAdd] = useState(EXERCISES[0].id),
+    [add, setAdd] = useState(""),
+    [loggingActivity, setLoggingActivity] = useState<CardioActivity | null>(
+      null,
+    ),
     [candidates, setCandidates] = useState<[string, number][]>([]);
+  const activityChoice = cardioActivitySchema.safeParse(
+    add.startsWith("activity:") ? add.slice("activity:".length) : undefined,
+  );
+  const selectedActivity = activityChoice.success ? activityChoice.data : null;
+  const dayActivities = state.cardio.sessions.filter(
+    (s) => s.date === draft.date,
+  );
   const save = (fn: (s: JournalState) => void) =>
     void update(fn).catch((e) => notify(e.message));
   const changeEntry = (id: string, fn: (e: Entry) => void) =>
@@ -448,7 +536,7 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
     <>
       <div className="page-heading compact workout-heading">
         <div>
-          <div className="eyebrow">ON THE PLATFORM</div>
+          <div className="eyebrow">ONGOING WORKOUT</div>
           <h1>{draft.title}</h1>
           <p className="lead">
             {logged} of {total} sets logged · {draft.date}
@@ -461,6 +549,11 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
       <div className="session-progress">
         <span style={{ width: `${total ? (logged / total) * 100 : 0}%` }} />
       </div>
+      <RestTimer
+        key={accountId}
+        accountId={accountId}
+        duration={state.preferences.restSeconds ?? 90}
+      />
       <details className="panel session-details">
         <summary>
           Session details & programmes <ChevronDown size={17} />
@@ -557,16 +650,53 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
               </button>
               {active && (
                 <div className="exercise-body">
+                  <div className="button-row exercise-order">
+                    {[-1, 1].map((direction) => (
+                      <Button
+                        key={direction}
+                        variant="ghost"
+                        disabled={
+                          index + direction < 0 ||
+                          index + direction >= draft.exercises.length
+                        }
+                        aria-label={`Move ${exerciseName(entry.exerciseId)} ${direction < 0 ? "up" : "down"}`}
+                        onClick={() =>
+                          save((s) => {
+                            const entries = s.activeWorkout!.exercises;
+                            const from = entries.findIndex(
+                                (e) => e.id === entry.id,
+                              ),
+                              to = from + direction;
+                            if (from >= 0 && to >= 0 && to < entries.length)
+                              [entries[from], entries[to]] = [
+                                entries[to],
+                                entries[from],
+                              ];
+                          })
+                        }
+                      >
+                        {direction < 0 ? (
+                          <ArrowUp size={17} />
+                        ) : (
+                          <ArrowDown size={17} />
+                        )}
+                        Move {direction < 0 ? "up" : "down"}
+                      </Button>
+                    ))}
+                  </div>
                   <p className="muted">{entry.prescribed.notes}</p>
                   {previous && (
                     <p className="previous">
                       Last session:{" "}
                       {previous.sets
                         .filter(isValidLoggedSet)
-                        .map((s) => `${s.weight} kg × ${s.reps}`)
+                        .map((s) => formatSet(s.weight, s.reps))
                         .join(" · ") || "No logged sets"}
                     </p>
                   )}
+                  <p className="exercise-logging-note">
+                    {exerciseLoggingNotes(entry.exerciseId)}
+                  </p>
                   <div className="set-labels">
                     <span>SET</span>
                     <span>WEIGHT · KG</span>
@@ -818,19 +948,20 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
         })}
       </div>
       <div className="panel add-exercise">
-        <label>
-          Add an exercise
-          <select value={add} onChange={(e) => setAdd(e.target.value)}>
-            {EXERCISES.map((e) => (
-              <option value={e.id} key={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ExercisePicker
+          label="Add an exercise or activity"
+          value={add}
+          onChange={setAdd}
+          includeActivities
+        />
         <Button
           variant="secondary"
-          onClick={() =>
+          disabled={!add}
+          onClick={() => {
+            if (selectedActivity) {
+              setLoggingActivity(selectedActivity);
+              return;
+            }
             save((s) => {
               const ex: ProgramExercise = {
                 exerciseId: add,
@@ -851,13 +982,63 @@ function ActiveWorkout({ state, update, go, notify }: Props) {
               );
               s.activeWorkout!.exercises.push(entry);
               setExpanded(entry.id);
-            })
-          }
+            });
+          }}
         >
           <Plus size={18} />
-          Add exercise
+          {selectedActivity
+            ? `Log ${cardioLabels[selectedActivity]}`
+            : "Add exercise"}
         </Button>
       </div>
+      {dayActivities.length > 0 && (
+        <section className="panel" aria-label="Movement on this training day">
+          <h2>Movement · {draft.date}</h2>
+          <ul className="cardio-breakdown">
+            {dayActivities.map((activity) => (
+              <li key={activity.id}>
+                <strong>{cardioTitle(activity)}</strong>
+                <span>
+                  {formatDuration(activity.durationSeconds)}
+                  {activity.distanceKm == null
+                    ? ""
+                    : ` · ${activity.distanceKm} km`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <a className="text-link" href="#cardio">
+            View activity history <ArrowRight size={16} />
+          </a>
+        </section>
+      )}
+      <Dialog
+        open={loggingActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setLoggingActivity(null);
+        }}
+        title={
+          loggingActivity
+            ? `Log ${cardioLabels[loggingActivity]}`
+            : "Log activity"
+        }
+      >
+        {loggingActivity && (
+          <ActivityForm
+            journal={{ update }}
+            entry={null}
+            initialActivity={loggingActivity}
+            initialDate={draft.date > today() ? today() : draft.date}
+            onClose={() => setLoggingActivity(null)}
+            onSaved={(activity) => {
+              setAdd("");
+              notify(
+                `${cardioLabels[activity]} saved to your activity history.`,
+              );
+            }}
+          />
+        )}
+      </Dialog>
       <details className="panel notes">
         <summary>Session notes</summary>
         <div className="form-grid">

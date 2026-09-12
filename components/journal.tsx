@@ -387,8 +387,11 @@ export function Journal(props: PrivateSessionProps) {
               }
               initialCardioLog={
                 coachEntry.route === "coach/cardio" ||
-                /^coach\/photo\/[^/]+\/cardio$/.test(coachEntry.route)
+                /^coach\/photo\/[^/]+\/cardio(?:\/log)?$/.test(coachEntry.route)
               }
+              initialActivityPhotoLog={/^coach\/photo\/[^/]+\/cardio\/log$/.test(
+                coachEntry.route,
+              )}
               initialSleepLog={
                 coachEntry.route === "coach/sleep" ||
                 /^coach\/photo\/[^/]+\/sleep$/.test(coachEntry.route)

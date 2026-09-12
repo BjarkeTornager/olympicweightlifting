@@ -6,6 +6,13 @@ export function foodSnapshotForClient<T extends Snapshot>(
   snapshot: T,
 ): T {
   if (
+    request.headers.get("x-activity-photos-version") !== "1" &&
+    snapshot.state.cardio.sessions.some((entry) => entry.photoIds !== undefined)
+  ) {
+    snapshot = structuredClone(snapshot);
+    for (const entry of snapshot.state.cardio.sessions) delete entry.photoIds;
+  }
+  if (
     request.headers.get("x-coach-journal-version") !== "1" &&
     (snapshot.state.profile.coaching?.memories !== undefined ||
       snapshot.state.profile.coaching?.plans !== undefined ||

@@ -12,6 +12,7 @@ export async function privateFetch(
   headers.set("X-Training-Programs-Version", "2");
   headers.set("X-Lifting-Coach-Version", "1");
   headers.set("X-Food-Tags-Version", "1");
+  headers.set("X-Activity-Photos-Version", "1");
   const response = await fetch(input, { ...init, headers, cache: "no-store" });
   if (response.status === 401 && typeof window !== "undefined")
     window.dispatchEvent(new Event("lift-session-invalid"));

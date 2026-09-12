@@ -57,6 +57,13 @@ const fields = {
   elevationGainM: z.number().finite().min(0).max(30000).nullable(),
   caloriesKcal: z.number().finite().min(0).max(50000).nullable(),
   notes: z.string().trim().max(2000),
+  photoIds: z
+    .array(z.string().uuid())
+    .max(4)
+    .optional()
+    .describe(
+      "Source activity image IDs whose pixels you read. Include these when logging from a photo; omit on text-only logging and preserve links on corrections.",
+    ),
 };
 const heartRatesValid = (v: {
   averageHeartRate?: number | null;
@@ -128,6 +135,16 @@ export function saveCardio(
   if (input.date > currentDate)
     throw Error("Completed activities cannot be dated in the future.");
   const now = new Date().toISOString();
+  if (
+    input.photoIds?.some((photoId) =>
+      state.cardio.sessions.some(
+        (session) => session.id !== id && session.photoIds?.includes(photoId),
+      ),
+    )
+  )
+    throw Error(
+      "This activity photo is already linked to a saved activity. Read and update that activity instead of logging it again.",
+    );
   const entry = cardioEntrySchema.parse({
     ...input,
     id: existing?.id ?? crypto.randomUUID(),

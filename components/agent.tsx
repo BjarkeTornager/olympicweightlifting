@@ -34,8 +34,10 @@ import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
 import { exerciseName, today } from "@/lib/domain";
 import { uploadUserImage } from "@/lib/food-client";
+import { consumeActivityPhoto } from "@/lib/activity-photo-client";
 import {
   imageCoachPrompt,
+  activityLoggingPrompt,
   sleepLoggingPrompt,
   type UserImage,
 } from "@/lib/images";
@@ -82,6 +84,7 @@ export function TrainingAgent({
   initialPhotoId,
   initialSleepLog = false,
   initialCardioLog = false,
+  initialActivityPhotoLog = false,
   initialTrainingPrompt,
   initialVideoReview = false,
 }: {
@@ -93,13 +96,14 @@ export function TrainingAgent({
   initialPhotoId?: string;
   initialSleepLog?: boolean;
   initialCardioLog?: boolean;
+  initialActivityPhotoLog?: boolean;
   initialTrainingPrompt?: string;
   initialVideoReview?: boolean;
 }) {
   const entryPrompt = initialSleepLog
     ? sleepLoggingPrompt(Boolean(initialPhotoId))
-    : initialCardioLog
-      ? "Help me log a cardio activity. I’ll describe what I did or attach an activity screenshot. Ask for any missing activity, date or duration, then save the entry."
+    : initialCardioLog && !initialActivityPhotoLog
+      ? activityLoggingPrompt(Boolean(initialPhotoId))
       : (initialTrainingPrompt ?? "");
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(entryPrompt),
@@ -123,6 +127,11 @@ export function TrainingAgent({
   // A submitted draft cannot be accepted twice before React clears the composer.
   const submittedDraft = useRef<string | null>(null);
   const submittedVideoReviews = useRef(new Set<string>());
+  const submittedActivityPhotos = useRef(new Set<string>());
+  const queueSize = useRef(queue.length);
+  useEffect(() => {
+    queueSize.current = queue.length;
+  }, [queue.length]);
   // Account changes/sign-out still unmount this controller and cancel the run.
   // Internal navigation only removes the view below, preserving work and drafts.
   useEffect(
@@ -236,10 +245,50 @@ export function TrainingAgent({
         const image: UserImage & { error?: string } = await r.json();
         if (!r.ok) throw Error(image.error ?? "Image unavailable.");
         if (!abort.signal.aborted) {
+          if (
+            initialActivityPhotoLog &&
+            submittedActivityPhotos.current.has(image.id)
+          )
+            return;
+          if (
+            initialActivityPhotoLog &&
+            consumeActivityPhoto(accountId, image.id)
+          ) {
+            if (queueSize.current >= MAX_QUEUED_MESSAGES) {
+              setPhotoIds((ids) => [...new Set([...ids, image.id])]);
+              setImageDetails((details) => ({ ...details, [image.id]: image }));
+              setMessage((current) => current || activityLoggingPrompt(true));
+              throw Error(
+                "Your photo is saved and attached. Send it once Coach has room in the queue.",
+              );
+            }
+            submittedActivityPhotos.current.add(image.id);
+            setQueue((waiting) => [
+              ...waiting,
+              {
+                id: image.id,
+                question: activityLoggingPrompt(true),
+                photoIds: [image.id],
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                submittedAt: new Date().toISOString(),
+              },
+            ]);
+            setView("conversation");
+            setNotice(
+              "Activity photo queued. Coach will log the visible details with Undo.",
+            );
+            return;
+          }
           submittedDraft.current = null;
           setPhotoIds((ids) => [...new Set([...ids, image.id])]);
           setImageDetails((details) => ({ ...details, [image.id]: image }));
-          setMessage((current) => current || imageCoachPrompt(image.category));
+          setMessage(
+            (current) =>
+              current ||
+              (initialCardioLog
+                ? activityLoggingPrompt(true)
+                : imageCoachPrompt(image.category)),
+          );
         }
       })
       .catch((e) => {
@@ -249,7 +298,13 @@ export function TrainingAgent({
         if (!abort.signal.aborted) setLoadingImage(false);
       });
     return () => abort.abort();
-  }, [entryId, initialPhotoId, accountId]);
+  }, [
+    entryId,
+    initialPhotoId,
+    accountId,
+    initialActivityPhotoLog,
+    initialCardioLog,
+  ]);
   const headers = useCallback(
     () => ({
       "Content-Type": "application/json",
@@ -388,7 +443,11 @@ export function TrainingAgent({
               ? "food"
               : photoIds.every((id) => imageDetails[id]?.category === "sleep")
                 ? "sleep"
-                : "unclassified",
+                : photoIds.every(
+                      (id) => imageDetails[id]?.category === "activity",
+                    )
+                  ? "activity"
+                  : "unclassified",
           )
         : "");
     if (!question || uploading || !ready || photoIds.length > 4) return;
@@ -1057,7 +1116,10 @@ export function TrainingAgent({
                                       <p className="fine-print">
                                         {entry.detail}
                                       </p>
-                                      <CoachEntryDetails entry={entry} />
+                                      <CoachEntryDetails
+                                        entry={entry}
+                                        accountId={accountId}
+                                      />
                                     </div>
                                   </details>
                                 ))}
@@ -1079,7 +1141,12 @@ export function TrainingAgent({
                                 }}
                               />
                             )}
-                            {p.cardio && <CardioDetails entry={p.cardio} />}
+                            {p.cardio && (
+                              <CardioDetails
+                                entry={p.cardio}
+                                accountId={accountId}
+                              />
+                            )}
                             {p.checkin && (
                               <>
                                 <p className="proposal-date">
@@ -1493,6 +1560,16 @@ export function TrainingAgent({
                 className="coach-image-tools"
                 hidden={!toolsOpen}
               >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={uploading || loadingImage}
+                  onClick={() =>
+                    draft(activityLoggingPrompt(photoIds.length > 0))
+                  }
+                >
+                  Log walk, run or ride
+                </Button>
                 <div className="food-attachments">
                   <label className="food-upload">
                     <Camera size={17} />{" "}

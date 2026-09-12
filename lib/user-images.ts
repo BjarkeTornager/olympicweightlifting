@@ -204,6 +204,11 @@ export async function deleteUserImage(userId: string, id: string) {
         "This photo is linked to a meal. Edit that meal and remove its photo first, then sync.",
         409,
       );
+    if (journal?.state.cardio?.sessions.some((s) => s.photoIds?.includes(id)))
+      throw new ApiError(
+        "This photo is linked to an activity. Edit the activity and remove its photo first, then sync.",
+        409,
+      );
     const deleted = await tx
       .delete(foodPhotos)
       .where(and(eq(foodPhotos.userId, userId), eq(foodPhotos.id, id)))
@@ -242,6 +247,14 @@ async function updateCategory(
     )
       throw new ApiError(
         "This image is linked to a meal. Remove its photo link in Food and sync before changing the category.",
+        409,
+      );
+    if (
+      !["activity", "health", "unclassified"].includes(category) &&
+      journal?.state.cardio?.sessions.some((s) => s.photoIds?.includes(id))
+    )
+      throw new ApiError(
+        "This image is linked to an activity. Remove its activity photo link and sync before changing the category.",
         409,
       );
     const [photo] = await tx

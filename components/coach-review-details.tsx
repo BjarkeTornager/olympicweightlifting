@@ -24,7 +24,13 @@ export function coachEntrySummary(entry: PreviewEntry) {
     ? `${entry.workout.date} · ${entry.workout.exercises.length} exercises`
     : "";
 }
-export function CoachEntryDetails({ entry }: { entry: PreviewEntry }) {
+export function CoachEntryDetails({
+  entry,
+  accountId,
+}: {
+  entry: PreviewEntry;
+  accountId?: string;
+}) {
   return (
     <>
       {entry.liftingBrief !== undefined && (
@@ -38,7 +44,9 @@ export function CoachEntryDetails({ entry }: { entry: PreviewEntry }) {
           <CheckinDetails checkin={entry.checkin} />
         </>
       )}
-      {entry.cardio && <CardioDetails entry={entry.cardio} />}
+      {entry.cardio && (
+        <CardioDetails entry={entry.cardio} accountId={accountId} />
+      )}
       {entry.workout && (
         <>
           <p>

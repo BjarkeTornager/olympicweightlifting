@@ -1569,3 +1569,18 @@ button,
     column-gap: 16px;
   }
 }
+.activity-photo-upload {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.activity-photo-upload h2 {
+  font-size: 1.1rem;
+}
+.activity-photo-upload p {
+  margin: 0;
+}
+.activity-photo-upload .muted {
+  margin-top: 6px;
+  font-size: 0.95rem;
+}

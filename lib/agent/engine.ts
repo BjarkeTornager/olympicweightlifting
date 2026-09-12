@@ -31,7 +31,7 @@ import { coachingContext } from "../coaching";
 import { prepareFoodTags } from "./food-tags";
 import { listFoodPhotos, readFoodPhoto } from "../food-photos";
 import { listUserImages, readUserImage, imageMetadata } from "../user-images";
-import { imageCategorySchema } from "../images";
+import { activityLoggingPrompt, imageCategorySchema } from "../images";
 import {
   actionSchema,
   actionToolSchema,
@@ -121,7 +121,7 @@ const specifications = {
       .object({ imageIds: z.array(z.string().uuid()).min(1).max(4) })
       .strict(),
     description:
-      "Retrieve saved library image pixels for this turn when the person asks you to read, compare, explain, analyse or log from the image contents. First find the relevant IDs with the journal/catalog tools. Up to four distinct images total including current attachments. This sends the selected images to the model provider, so don't use it merely to show a gallery. After reading the returned pixels, Food-category images can be linked in meal.photoIds in a requested record_meal or update_meal review, without re-uploading. It doesn't display photos or save measurements; use show_images for display and the appropriate logging tool for requested logging. Metadata is only a hint. An unreadable image does not block saving independently reported foods; keep unknown photo contents out of the entry.",
+      "Retrieve saved library image pixels for this turn when the person asks you to read, compare, explain, analyse or log from the image contents. First find the relevant IDs with the journal/catalog tools. Up to four distinct images total including current attachments. This sends the selected images to the model provider, so don't use it merely to show a gallery. After reading the returned pixels, Activity/Health/unclassified images can be linked in cardio.photoIds when logging readable activity measurements; Food-category images can be linked in meal.photoIds in a requested record_meal or update_meal review, without re-uploading. It doesn't display photos or save measurements; use show_images for display and the appropriate logging tool for requested logging. Metadata is only a hint. An unreadable image does not block saving independently reported foods; keep unknown photo contents out of the entry.",
   },
   image_library: {
     schema: z
@@ -1081,6 +1081,49 @@ export async function runTurn(
                 !readCardio.has(action.cardioId)
               )
                 throw Error("Read the full original cardio activity first.");
+              if (
+                action.kind === "record_cardio" ||
+                action.kind === "update_cardio"
+              ) {
+                const original =
+                  action.kind === "update_cardio"
+                    ? snapshot.state.cardio.sessions.find(
+                        (entry) => entry.id === action.cardioId,
+                      )
+                    : undefined;
+                const sources =
+                  (action.kind === "record_cardio"
+                    ? action.cardio.photoIds
+                    : action.changes.photoIds) ??
+                  original?.photoIds ??
+                  [];
+                const allowed = new Set([
+                  ...viewedImageIds,
+                  ...(original?.photoIds ?? []),
+                ]);
+                if (
+                  !sources.length &&
+                  input.message === activityLoggingPrompt(true)
+                )
+                  throw Error(
+                    "This is a photo logging request. Include the inspected source image in cardio.photoIds; ask for clarification if it does not show a readable completed activity.",
+                  );
+                if (sources.some((id) => !allowed.has(id)))
+                  throw Error(
+                    "Read this activity photo with inspect_images before logging its measurements. Catalog metadata alone is not visual evidence.",
+                  );
+                for (const id of sources) {
+                  const image = await readUserImage(userId, id);
+                  if (
+                    !["activity", "health", "unclassified"].includes(
+                      image.category,
+                    )
+                  )
+                    throw Error(
+                      "Use an activity screenshot, not a food, sleep or unrelated image, as the source of an activity.",
+                    );
+                }
+              }
               if (
                 action.kind === "update_meal" &&
                 !readMeals.has(action.mealId)

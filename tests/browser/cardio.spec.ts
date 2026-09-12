@@ -306,7 +306,7 @@ for (const source of ["text", "screenshot"] as const) {
         .getByRole("button", { name: "Log activity with Coach", exact: true })
         .click();
       await expect(page.getByLabel("Message your coach")).toHaveValue(
-        /Help me log a cardio activity/,
+        /Log my completed activity/,
       );
       await page
         .getByLabel("Message your coach")

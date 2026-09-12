@@ -47,6 +47,7 @@ export async function writeJournal(
     mutationId: string;
     preserveMissingFoodTags?: boolean;
     preserveMissingCoachData?: boolean;
+    preserveMissingActivityPhotos?: boolean;
   },
   transaction?: JournalTransaction,
 ): Promise<Snapshot> {
@@ -157,6 +158,48 @@ export async function writeJournal(
       );
     }
     const revision = row.revision + 1;
+    // Old clients omit photoIds; explicit [] is the supported unlink operation.
+    state.cardio.sessions = state.cardio.sessions.map((entry) => {
+      const previous = row.state.cardio?.sessions.find(
+        (s) => s.id === entry.id,
+      );
+      return input.preserveMissingActivityPhotos &&
+        entry.photoIds === undefined &&
+        previous?.photoIds
+        ? { ...entry, photoIds: previous.photoIds }
+        : entry;
+    });
+    const activityPhotoIds = [
+      ...new Set(state.cardio.sessions.flatMap((s) => s.photoIds ?? [])),
+    ];
+    if (activityPhotoIds.length) {
+      const owned = await tx
+        .select({ id: foodPhotos.id, category: foodPhotos.category })
+        .from(foodPhotos)
+        .where(
+          and(
+            eq(foodPhotos.userId, userId),
+            inArray(foodPhotos.id, activityPhotoIds),
+          ),
+        );
+      if (
+        owned.length !== activityPhotoIds.length ||
+        owned.some(
+          (image) =>
+            !["activity", "health", "unclassified"].includes(image.category),
+        )
+      )
+        throw new MissingMealPhoto(
+          "An activity photo is unavailable or has the wrong category. Edit the activity and remove the unavailable photo link before syncing.",
+        );
+      const linked = state.cardio.sessions.flatMap((s) => [
+        ...new Set(s.photoIds ?? []),
+      ]);
+      if (linked.length !== activityPhotoIds.length)
+        throw new MutationConflict(
+          "An activity photo is already linked to another activity. Update the existing activity instead.",
+        );
+    }
     const photoIds = [
       ...new Set(state.nutrition.meals.flatMap((m) => m.photoIds)),
     ];

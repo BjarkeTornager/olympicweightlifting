@@ -52,11 +52,18 @@ export const imagePatchSchema = z
   })
   .strict();
 export function imageCoachPrompt(category: ImageCategory) {
+  if (category === "activity") return activityLoggingPrompt(true);
   if (category === "food")
     return "Log the food I ate in this image now using its catalog date and estimated nutrition. Use the visible serving as the initial portion estimate, label assumptions, and let me correct details after saving.";
   if (category === "sleep")
     return "Help me read this sleep screenshot. Explain only clearly visible information and ask about anything unclear. The upload date may differ from the sleep date. Do not save a check-in unless I ask.";
   return "Help me understand this image in the context of my journal. Identify what it shows first; do not assume it is food. Do not save an entry unless I ask.";
+}
+
+export function activityLoggingPrompt(hasImage = false) {
+  return hasImage
+    ? "Log my completed activity from this photo or screenshot now. Identify whether I walked, ran, cycled or did another activity. Read the visible duration, date and optional measurements; use today if no activity date is shown and say so. Link this image to the activity. Check for an existing entry first and save with Undo. Do not guess unreadable measurements or log a planned workout, daily step total or unrelated image as a completed session."
+    : "Help me log a cardio activity. I can describe my walk, run or ride, or attach an activity screenshot. Save the reported activity with Undo; ask only for missing activity or duration.";
 }
 
 export function sleepLoggingPrompt(hasImage = false) {

@@ -3,11 +3,8 @@ import { useState } from "react";
 import {
   Activity,
   ArrowRight,
-  Bike,
   Check,
-  Footprints,
   Plus,
-  Sparkles,
   Trash2,
 } from "@/components/ui/icons";
 import { today } from "@/lib/domain";
@@ -27,8 +24,16 @@ import type { JournalState } from "@/lib/model";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
+import { ActivityPhotoUpload } from "./activity-photo-upload";
+import { FoodPhotoImage } from "./food-photo";
 
-export function CardioDetails({ entry }: { entry: CardioEntry }) {
+export function CardioDetails({
+  entry,
+  accountId,
+}: {
+  entry: CardioEntry;
+  accountId?: string;
+}) {
   const rate = cardioRate(entry);
   const values = [
     ["Duration", formatDuration(entry.durationSeconds)],
@@ -77,6 +82,18 @@ export function CardioDetails({ entry }: { entry: CardioEntry }) {
         ))}
       </dl>
       {entry.notes && <p className="cardio-notes">{entry.notes}</p>}
+      {accountId && Boolean(entry.photoIds?.length) && (
+        <div className="food-photo-grid" aria-label="Activity source photos">
+          {entry.photoIds!.map((id) => (
+            <FoodPhotoImage
+              key={id}
+              id={id}
+              accountId={accountId}
+              label={`${cardioTitle(entry)} activity photo`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -87,6 +104,7 @@ export function ActivityForm({
   initialActivity = "running",
   initialDate = today(),
   onSaved,
+  accountId,
 }: {
   journal: Pick<JournalController, "update">;
   entry: CardioEntry | null;
@@ -94,12 +112,14 @@ export function ActivityForm({
   initialActivity?: CardioActivity;
   initialDate?: string;
   onSaved?: (activity: CardioActivity) => void;
+  accountId?: string;
 }) {
   const [activity, setActivity] = useState<CardioActivity>(
     entry?.activity ?? initialActivity,
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [photoIds, setPhotoIds] = useState(entry?.photoIds ?? []);
   const seconds = entry?.durationSeconds ?? 0;
   return (
     <form
@@ -141,6 +161,7 @@ export function ActivityForm({
           elevationGainM: number("elevationGainM"),
           caloriesKcal: number("caloriesKcal"),
           notes: String(data.get("notes") ?? ""),
+          photoIds,
         };
         try {
           if (!input.durationSeconds)
@@ -161,6 +182,30 @@ export function ActivityForm({
         }
       }}
     >
+      {photoIds.length > 0 && (
+        <div className="food-photo-grid" aria-label="Linked activity photos">
+          {photoIds.map((id) => (
+            <div key={id}>
+              {accountId && (
+                <FoodPhotoImage
+                  id={id}
+                  accountId={accountId}
+                  label="Activity source photo"
+                />
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() =>
+                  setPhotoIds((ids) => ids.filter((photoId) => photoId !== id))
+                }
+              >
+                Remove photo link
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="form-grid">
         <label>
           Activity
@@ -489,24 +534,11 @@ export function CardioView({
           Log activity
         </Button>
       </div>
-      <div className="cardio-start panel">
-        <div className="cardio-start-icons" aria-hidden="true">
-          <Footprints size={24} />
-          <Bike size={25} />
-          <Activity size={24} />
-        </div>
-        <div>
-          <h2>Tell Coach what you did.</h2>
-          <p>
-            “I ran 5 km in 28 minutes today.” Add an activity screenshot or
-            describe the session, then review before saving.
-          </p>
-        </div>
-        <Button variant="secondary" onClick={() => go("coach/cardio")}>
-          <Sparkles size={17} />
-          Log with Coach
-        </Button>
-      </div>
+      <ActivityPhotoUpload
+        accountId={journal.identity?.id}
+        go={go}
+        showCoachLink
+      />
       <CardioProgress state={state} />
       <section aria-label="Activity history">
         <div className="cardio-section-heading">
@@ -581,7 +613,7 @@ export function CardioView({
                     {cardioRate(entry) ?? "Details"}
                   </span>
                 </summary>
-                <CardioDetails entry={entry} />
+                <CardioDetails entry={entry} accountId={journal.identity?.id} />
                 <div className="button-row">
                   <Button variant="secondary" onClick={() => setEditing(entry)}>
                     Edit activity
@@ -618,6 +650,7 @@ export function CardioView({
       >
         {editing && (
           <ActivityForm
+            accountId={journal.identity?.id}
             key={editing === "new" ? "new" : editing.id}
             journal={journal}
             entry={editing === "new" ? null : editing}

@@ -42,6 +42,7 @@ import { ExercisePicker } from "../exercise-picker";
 import { exerciseLoggingNotes } from "@/lib/exercises";
 import { formatSet } from "@/lib/training";
 import { ActivityForm } from "../cardio";
+import { ActivityPhotoUpload } from "../activity-photo-upload";
 import {
   cardioActivitySchema,
   cardioLabels,
@@ -346,6 +347,7 @@ export function Workouts(props: Props) {
           </div>
         )
       )}
+      <ActivityPhotoUpload accountId={props.accountId} go={go} />
       <Templates
         state={state}
         update={props.update}
@@ -549,6 +551,7 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
       <div className="session-progress">
         <span style={{ width: `${total ? (logged / total) * 100 : 0}%` }} />
       </div>
+      <ActivityPhotoUpload accountId={accountId} go={go} />
       <RestTimer
         key={accountId}
         accountId={accountId}

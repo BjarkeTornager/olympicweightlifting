@@ -23,14 +23,12 @@ test("gym library filters, aliases and attributed technique guides work on a nar
     .getByRole("searchbox", { name: "Search exercises" })
     .fill("DB bench");
   await expect(page.locator(".library-card")).toHaveCount(2);
-  const card = page
-    .locator(".library-card")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Dumbbell bench press",
-        exact: true,
-      }),
-    });
+  const card = page.locator(".library-card").filter({
+    has: page.getByRole("heading", {
+      name: "Dumbbell bench press",
+      exact: true,
+    }),
+  });
   await expect(card.getByRole("heading")).toHaveText("Dumbbell bench press");
   expect(embeds).toEqual([]);
   await card.getByRole("button", { name: "Technique" }).click();
@@ -101,19 +99,19 @@ test("a gym routine retains new exercises and logs after reload; changing search
     .click();
   await page.getByLabel("Set 1 made", { exact: true }).click();
   await page
-    .getByRole("searchbox", { name: "Find an exercise" })
+    .getByRole("searchbox", { name: "Find an exercise or activity" })
     .fill("lat pull down");
   await page
-    .getByRole("combobox", { name: "Add an exercise", exact: true })
+    .getByRole("combobox", { name: "Add an exercise or activity", exact: true })
     .selectOption("lat_pulldown");
   const addButton = page.locator(".add-exercise").getByRole("button");
   await expect(addButton).toBeEnabled();
   await page
-    .getByRole("searchbox", { name: "Find an exercise" })
+    .getByRole("searchbox", { name: "Find an exercise or activity" })
     .fill("hamstring curl");
   await expect(addButton).toBeDisabled();
   await page
-    .getByRole("combobox", { name: "Add an exercise", exact: true })
+    .getByRole("combobox", { name: "Add an exercise or activity", exact: true })
     .selectOption("seated_leg_curl");
   const workoutSynced = page.waitForResponse(
     (r) =>

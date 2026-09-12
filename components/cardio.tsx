@@ -80,17 +80,23 @@ export function CardioDetails({ entry }: { entry: CardioEntry }) {
     </div>
   );
 }
-function ActivityForm({
+export function ActivityForm({
   journal,
   entry,
   onClose,
+  initialActivity = "running",
+  initialDate = today(),
+  onSaved,
 }: {
-  journal: JournalController;
+  journal: Pick<JournalController, "update">;
   entry: CardioEntry | null;
   onClose: () => void;
+  initialActivity?: CardioActivity;
+  initialDate?: string;
+  onSaved?: (activity: CardioActivity) => void;
 }) {
   const [activity, setActivity] = useState<CardioActivity>(
-    entry?.activity ?? "running",
+    entry?.activity ?? initialActivity,
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -98,6 +104,9 @@ function ActivityForm({
   return (
     <form
       className="form-stack cardio-form"
+      onChange={() => {
+        if (error) setError("");
+      }}
       onSubmit={async (e) => {
         e.preventDefault();
         setError("");
@@ -139,6 +148,7 @@ function ActivityForm({
           await journal.update((state) => {
             saveCardio(state, input, today(), entry?.id);
           });
+          onSaved?.(activity);
           onClose();
         } catch (e) {
           setError(
@@ -172,7 +182,7 @@ function ActivityForm({
             name="date"
             required
             max={today()}
-            defaultValue={entry?.date ?? today()}
+            defaultValue={entry?.date ?? initialDate}
           />
         </label>
       </div>

@@ -41,6 +41,14 @@ import { TrainingPrograms } from "../training-programs";
 import { ExercisePicker } from "../exercise-picker";
 import { exerciseLoggingNotes } from "@/lib/exercises";
 import { formatSet } from "@/lib/training";
+import { ActivityForm } from "../cardio";
+import {
+  cardioActivitySchema,
+  cardioLabels,
+  cardioTitle,
+  formatDuration,
+  type CardioActivity,
+} from "@/lib/cardio";
 type Update = (
   fn: (state: JournalState) => JournalState | void,
 ) => Promise<void>;
@@ -458,7 +466,17 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
     [finish, setFinish] = useState(false),
     [discard, setDiscard] = useState(false),
     [add, setAdd] = useState(""),
+    [loggingActivity, setLoggingActivity] = useState<CardioActivity | null>(
+      null,
+    ),
     [candidates, setCandidates] = useState<[string, number][]>([]);
+  const activityChoice = cardioActivitySchema.safeParse(
+    add.startsWith("activity:") ? add.slice("activity:".length) : undefined,
+  );
+  const selectedActivity = activityChoice.success ? activityChoice.data : null;
+  const dayActivities = state.cardio.sessions.filter(
+    (s) => s.date === draft.date,
+  );
   const save = (fn: (s: JournalState) => void) =>
     void update(fn).catch((e) => notify(e.message));
   const changeEntry = (id: string, fn: (e: Entry) => void) =>
@@ -930,11 +948,20 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
         })}
       </div>
       <div className="panel add-exercise">
-        <ExercisePicker label="Add an exercise" value={add} onChange={setAdd} />
+        <ExercisePicker
+          label="Add an exercise or activity"
+          value={add}
+          onChange={setAdd}
+          includeActivities
+        />
         <Button
           variant="secondary"
           disabled={!add}
-          onClick={() =>
+          onClick={() => {
+            if (selectedActivity) {
+              setLoggingActivity(selectedActivity);
+              return;
+            }
             save((s) => {
               const ex: ProgramExercise = {
                 exerciseId: add,
@@ -955,13 +982,63 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
               );
               s.activeWorkout!.exercises.push(entry);
               setExpanded(entry.id);
-            })
-          }
+            });
+          }}
         >
           <Plus size={18} />
-          Add exercise
+          {selectedActivity
+            ? `Log ${cardioLabels[selectedActivity]}`
+            : "Add exercise"}
         </Button>
       </div>
+      {dayActivities.length > 0 && (
+        <section className="panel" aria-label="Movement on this training day">
+          <h2>Movement · {draft.date}</h2>
+          <ul className="cardio-breakdown">
+            {dayActivities.map((activity) => (
+              <li key={activity.id}>
+                <strong>{cardioTitle(activity)}</strong>
+                <span>
+                  {formatDuration(activity.durationSeconds)}
+                  {activity.distanceKm == null
+                    ? ""
+                    : ` · ${activity.distanceKm} km`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <a className="text-link" href="#cardio">
+            View activity history <ArrowRight size={16} />
+          </a>
+        </section>
+      )}
+      <Dialog
+        open={loggingActivity !== null}
+        onOpenChange={(open) => {
+          if (!open) setLoggingActivity(null);
+        }}
+        title={
+          loggingActivity
+            ? `Log ${cardioLabels[loggingActivity]}`
+            : "Log activity"
+        }
+      >
+        {loggingActivity && (
+          <ActivityForm
+            journal={{ update }}
+            entry={null}
+            initialActivity={loggingActivity}
+            initialDate={draft.date > today() ? today() : draft.date}
+            onClose={() => setLoggingActivity(null)}
+            onSaved={(activity) => {
+              setAdd("");
+              notify(
+                `${cardioLabels[activity]} saved to your activity history.`,
+              );
+            }}
+          />
+        )}
+      </Dialog>
       <details className="panel notes">
         <summary>Session notes</summary>
         <div className="form-grid">

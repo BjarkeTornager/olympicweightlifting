@@ -1,9 +1,105 @@
 import { test, expect, browserUser } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
-import { emptyJournal, today, createWorkout } from "../../lib/domain";
+import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
 import { saveCardio } from "../../lib/cardio";
 import type { UserImage } from "../../lib/images";
 import sharp from "sharp";
+
+test("Walking is discoverable in an ongoing workout and logs duration without changing strength sets", async ({
+  page,
+  context,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let state = emptyJournal(),
+    revision = 0;
+  state.activeWorkout = createWorkout(state, days[0], today());
+  const originalWorkout = structuredClone(state.activeWorkout);
+  await context.route("**/api/journal", (r) => {
+    if (r.request().method() === "PUT") {
+      expect(r.request().headers()["x-journal-account"]).toBe(browserUser.id);
+      state = r.request().postDataJSON().state;
+      revision++;
+    }
+    return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
+  });
+  await page.goto("/#workout");
+  const search = page.getByRole("searchbox", {
+    name: "Find an exercise or activity",
+  });
+  const picker = page.getByRole("combobox", {
+    name: "Add an exercise or activity",
+  });
+  for (const [query, activity] of [
+    ["jog", "running"],
+    ["bike", "cycling"],
+    ["walk", "walking"],
+  ]) {
+    await search.fill(query);
+    await expect(
+      picker.locator(`option[value="activity:${activity}"]`),
+    ).toHaveCount(1);
+  }
+  await search.fill("Walking");
+  await picker.selectOption("activity:walking");
+  await page.getByRole("button", { name: "Log Walking", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Log Walking", exact: true });
+  await expect(
+    dialog.getByRole("combobox", { name: "Activity", exact: true }),
+  ).toHaveValue("walking");
+  await expect(dialog.getByLabel("Activity date")).toHaveValue(
+    originalWorkout.date,
+  );
+  await expect(dialog.getByLabel("Distance · optional")).toHaveValue("");
+  await dialog
+    .getByRole("button", { name: "Save activity", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "Enter the activity duration.",
+  );
+  expect(state.cardio.sessions).toHaveLength(0);
+  await dialog.getByLabel("Minutes", { exact: true }).fill("30");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await dialog.getByLabel("Distance · optional", { exact: true }).fill("2.5");
+  expect(
+    (await new AxeBuilder({ page }).include('[role="dialog"]').analyze())
+      .violations,
+  ).toEqual([]);
+  await dialog.screenshot({
+    path: info.outputPath("walking-from-workout.png"),
+  });
+  await dialog
+    .getByRole("button", { name: "Save activity", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/#workout$/);
+  await expect(
+    page.getByRole("region", { name: "Movement on this training day" }),
+  ).toContainText("Walking");
+  await expect(
+    page.getByRole("region", { name: "Movement on this training day" }),
+  ).toContainText("30 min · 2.5 km");
+  await expect.poll(() => state.cardio.sessions.length).toBe(1);
+  expect(state.cardio.sessions[0]).toMatchObject({
+    activity: "walking",
+    durationSeconds: 1800,
+    distanceKm: 2.5,
+    caloriesKcal: null,
+  });
+  expect(state.activeWorkout).toEqual(originalWorkout);
+  expect(state.sessions).toHaveLength(0);
+  expect(state.nutrition.meals).toHaveLength(0);
+  await page.reload();
+  await expect(
+    page.getByRole("region", { name: "Movement on this training day" }),
+  ).toContainText("Walking");
+  await page.getByRole("link", { name: "View activity history" }).click();
+  await expect(page.locator(".cardio-history")).toContainText("Walking");
+  await expect(page.locator(".cardio-history")).toContainText("12:00 /km");
+  await page
+    .getByRole("combobox", { name: "Activity type", exact: true })
+    .selectOption("walking");
+  await expect(page.locator(".cardio-history")).toHaveCount(1);
+});
 
 test("Cardio on a phone: add, correct, filter, reload and delete while preserving strength and food", async ({
   page,

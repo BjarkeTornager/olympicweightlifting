@@ -24,6 +24,26 @@ export const cardioLabels: Record<CardioActivity, string> = {
   elliptical: "Elliptical",
   other: "Other activity",
 };
+const activitySearchTerms: Record<CardioActivity, string> = {
+  walking: "walk walking brisk walk stroll treadmill walk",
+  running: "run running jog jogging treadmill run",
+  cycling: "cycle cycling bike biking bicycle spin indoor cycling",
+  swimming: "swim swimming pool",
+  rowing: "row rowing rower erg",
+  hiking: "hike hiking trek trekking",
+  elliptical: "elliptical cross trainer crosstrainer",
+  other: "other activity cardio movement",
+};
+export function searchCardioActivities(query = "") {
+  const words = query
+    .toLowerCase()
+    .trim()
+    .split(/[\s_-]+/)
+    .filter(Boolean);
+  return cardioActivities.filter((activity) =>
+    words.every((word) => activitySearchTerms[activity].includes(word)),
+  );
+}
 const fields = {
   activity: cardioActivitySchema,
   date: foodDate,
@@ -192,12 +212,10 @@ export function cardioSummary(
         ...total(sessions.filter((s) => s.activity === activity)),
       }))
       .filter((s) => s.sessions),
-    daily: [...new Set(sessions.map((s) => s.date))]
-      .sort()
-      .map((date) => ({
-        date,
-        ...total(sessions.filter((s) => s.date === date)),
-      })),
+    daily: [...new Set(sessions.map((s) => s.date))].sort().map((date) => ({
+      date,
+      ...total(sessions.filter((s) => s.date === date)),
+    })),
     entries: sessions,
     dataLimits:
       "Logged activities only. Missing entries or metrics are unmeasured. Pace/speed uses the supplied duration and distance. Activity calories are reported values, not calculated expenditure, and are separate from food intake.",

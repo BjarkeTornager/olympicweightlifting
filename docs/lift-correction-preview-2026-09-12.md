@@ -32,7 +32,7 @@ The app's short practice instructions are original summaries. These sources info
 
 ## SAM 3D Body prototype status
 
-`facebook/sam-3d-body-dinov3` is a separate gated model from SAM 3.1. On 12 September, a CPU-only check using Modal's existing `lift-journal-sam31-hf` secret returned HTTP 403 for the checkpoint, with the account not on the authorized-access list. Granting repository permissions to a token is separate from model access approval. No token value was read locally or exposed.
+`facebook/sam-3d-body-dinov3` is a separate gated model from SAM 3.1. On 12 September, a CPU-only check using Modal's existing `lift-journal-sam31-hf` secret returned HTTP 403 for the checkpoint, with the account not on the authorized-access list. After the user submitted the model terms, the status specifically confirmed **awaiting repository-author review**. Granting repository permissions to a token is separate from model access approval. No token value was read locally or exposed.
 
 `scripts/video/sam3d/modal_probe.py` prepares an isolated feasibility probe:
 
@@ -51,4 +51,5 @@ The [official estimator](https://github.com/facebookresearch/sam-3d-body/blob/ma
 - Production checks passed: TypeScript, ESLint, legacy checks and 180 tests, including the synthetic database tenant-isolation scenario. The final additional malformed-guide regression passed in the focused suite.
 - 22 Chromium/WebKit browser checks passed: phone and desktop guide toggles, exact evidence seeking, replay/pause, suppression during playback, private video access, retries and existing segmented replay.
 - Reviewed the phone WebKit screenshot using synthetic video/geometry. This verifies interface layout and timing, not real-lift recommendation quality.
-- No paid LLM comparison, private clip reanalysis, 3D inference or expert technique validation is claimed by these checks.
+- Two further public-clip Luna requests cost US$0.016858947. The shared benchmark ledger now totals US$2.519783782 committed against the existing US$10 cap. Both initially failed because the provider echoed an optional references catalogue; the parser now drops that metadata, retains the validated coaching, and never renders model-supplied source URLs. Replaying those exact responses through the corrected parser correctly identifies clean & jerk and snatch, each with one tentative priority and no unsupported body guide.
+- This is a structural/model-output check, not independent confirmation of the technique advice. No private clip reanalysis, 3D inference or expert technique validation is claimed. The final compiled Railway app was also checked for the new controls, with six live Chromium/WebKit checks and anonymous private APIs returning 401/no-store.

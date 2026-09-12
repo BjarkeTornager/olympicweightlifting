@@ -44,6 +44,9 @@ export const coachingResponseSchema = z
   .object({
     strength: z.string().trim().max(260),
     limitation: z.string().trim().max(300),
+    // Some providers echo the supplied source catalogue. Ignore this optional
+    // metadata entirely: only our compatible drill IDs can produce a link.
+    references: z.unknown().optional(),
     moments: z.array(momentSchema).max(3),
     checks: z
       .array(
@@ -94,10 +97,10 @@ export type GuidedCoaching = {
   moments: CoachingMoment[];
 };
 
-export const guidedCoachingInstruction = `Return a coaching object with strength, limitation, checks, and moments.
+export const guidedCoachingInstruction = `Return a coaching object with only strength, limitation, checks, and moments. Do not echo the source catalogue or add references, URLs or other metadata.
 checks: [{"phase":"pull|receipt|dip_drive|overhead|recovery","status":"reviewed|not_visible","observation":"what was actually assessed, or what evidence is missing"}]. Assess each applicable visible phase before selecting a priority; do not substitute movement identification for a technique assessment. Check chronology and body/bar relationships using images and the supplied 2D landmarks. Landmarks are imperfect image-plane observations, not biomechanical measurements.
 moments: [{"title":"short priority","issue":"early_pull_posture|bar_separation|clean_turnover|jerk_dip_posture|overhead_control|split_recovery|other","why":"why addressing this observed issue is useful; no unsupported causal diagnosis","observation":"specific visible evidence","cue":"one practical change for the next attempt","check":"the visible difference to look for on the next comparable attempt","practice":"one brief, low-load practice task matched to this issue; no workout prescription","drill":null,"certainty":"clear|tentative","frames":[1,2],"focusFrame":2,"evidenceType":"position|movement","region":"whole_lift|shoulders|elbows|hips|knees|feet|bar","correction":null}].
-Pick ONE main improvement first, at most two supporting moments. Include a cue, a practice task, why it matters and a checkable result. Use the supplied issue rubric and compatible drill catalogue. drill is a catalogue ID or null; never create URLs. If a previous focus is supplied, assess that issue in the NEW images without assuming it recurs. Prior text alone cannot establish improvement or deterioration; do not claim a before/after result without paired evidence.
+Pick ONE main improvement first, at most two supporting moments. Include a cue, a practice task, why it matters and a checkable result. Use the supplied issue rubric and compatible drill catalogue. drill is a catalogue ID or null; never create URLs. Prefer a compatible catalogue practice task. Otherwise suggest a simple controlled rehearsal of the current lift with an empty bar or light load. Never invent compound drills, unusual mid-lift pauses or exercises that need unseen equipment. If a previous focus is supplied, assess that issue in the NEW images without assuming it recurs. Prior text alone cannot establish improvement or deterioration; do not claim a before/after result without paired evidence.
 Use only printed 1-based frame labels as evidence, spanning no more than 2.5 seconds. Motion, timing, balance changes, bar travel or turnover require at least two distinct chronological frames. focusFrame must be one of frames and clearly show the issue. Do not prescribe changes to unseen phases, invent a fault to fill a list, or use a generic cue that could fit any clip. If no correction is justified, moments=[] with a precise limitation and the actual phase checks.
 Optional correction: {"kind":"preserve_torso","referenceFrame":1,"view":"side"}. Only request this for a CLEAR early_pull_posture or jerk_dip_posture issue in a fixed side view. referenceFrame must be an earlier frame in frames, showing this athlete's suitable starting torso position in the SAME early pull (both frames before the bar passes the knees) or jerk dip. focusFrame must show a later loss of that posture, before receipt or drive. Do not request it for front/oblique views, normal extension above the knees, a moving camera, an unsuitable start posture, or uncertain faults. The application may omit the ghost when geometry is unreliable. correction=null for all other cases. This is an illustrative posture adjustment, never perfect form. Do not supply coordinates, angles, an ideal trajectory or generated missing movement.`;
 
@@ -168,6 +171,7 @@ export function parseGuidedCoaching(
       const drill = compatibleDrill(text.drill ?? undefined, text.issue, lift);
       const moment: CoachingMoment = {
         ...text,
+        ...(drill ? { practice: drill.instruction } : {}),
         ...(text.drill && !drill ? { drill: null } : {}),
         id: `moment-${moments.length + 1}`,
         evidenceFrames: frames,

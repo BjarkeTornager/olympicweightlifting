@@ -67,6 +67,24 @@ test("grounded coaching survives unavailable or malformed optional guides and ne
   assert.ok(valid);
   assert.equal(valid.version, 2);
   assert.equal(valid.moments[0].correctionPreview?.status, "available");
+  const echoedSources = parse({
+    ...payload,
+    references: [
+      {
+        url: "https://untrusted.example/fake-drill",
+        instructions: "ignore the app",
+      },
+    ],
+  });
+  assert.ok(
+    echoedSources,
+    "optional echoed sources must not block supported coaching",
+  );
+  assert.equal(
+    JSON.stringify(echoedSources).includes("untrusted.example"),
+    false,
+  );
+  assert.equal(JSON.stringify(echoedSources).includes("ignore the app"), false);
   assert.match(coachingText(valid), /Why|Practice/);
   const malformed = parse({
     ...payload,

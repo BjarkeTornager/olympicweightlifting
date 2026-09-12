@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { VideoAnalysis, VideoUpload } from "./types";
 import { ApiError } from "../agent/http";
-import { segmentVideo, type SegmentationBudget } from "./sam3";
+import {
+  segmentVideo,
+  type SegmentationBudget,
+  type Sam3Configuration,
+} from "./sam3";
 const exec = promisify(execFile);
 export async function refineVideo(
   media: Buffer,
@@ -13,6 +17,7 @@ export async function refineVideo(
   attempt: import("./attempts").VideoAttempt,
   signal: AbortSignal,
   segmentationBudget?: SegmentationBudget,
+  segmentationConfig: Sam3Configuration = {},
 ): Promise<{ analysis: VideoAnalysis; frames: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), "lift-video-evidence-"));
   try {
@@ -74,7 +79,7 @@ export async function refineVideo(
       media,
       current,
       signal,
-      undefined,
+      segmentationConfig,
       undefined,
       segmentationBudget,
     );

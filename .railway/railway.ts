@@ -30,6 +30,9 @@ export default defineRailway(() => {
       AGENT_PROVIDER: preserve(),
       AGENT_MODEL: preserve(),
       OPENROUTER_API_KEY: preserve(),
+      VIDEO_SAM3_URL: preserve(),
+      VIDEO_SAM3_TOKEN: preserve(),
+      VIDEO_SAM3_PILOT_EMAIL: preserve(),
     },
   });
   return project("olympicweightlifting", {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { segmentVideo } from "../lib/video/sam3";
+import { segmentVideo, sam3ConfigurationForAccount } from "../lib/video/sam3";
 import {
   mergeSegmentation,
   segmentationAt,
@@ -373,4 +373,55 @@ test("mismatched and oversized receipts cannot redirect polls or expose another 
     assert.equal(result?.status, "unavailable");
     assert.equal(calls, 1);
   }
+});
+
+test("SAM rollout is restricted to the configured verified account and fails closed", async () => {
+  const env = {
+    VIDEO_SAM3_URL: config.endpoint,
+    VIDEO_SAM3_TOKEN: config.token,
+    VIDEO_SAM3_PILOT_EMAIL: " Owner@Example.Test ",
+  };
+  const selected = sam3ConfigurationForAccount(
+    { email: "owner@example.test", emailVerified: true },
+    env,
+  );
+  assert.deepEqual(selected, config);
+  for (const account of [
+    { email: "invited@example.test", emailVerified: true },
+    { email: "owner@example.test", emailVerified: false },
+    { email: "owner@example.test.attacker.invalid", emailVerified: true },
+  ]) {
+    const blocked = sam3ConfigurationForAccount(account, env);
+    assert.deepEqual(blocked, {});
+    const result = await segmentVideo(
+      media,
+      analysis,
+      new AbortController().signal,
+      blocked,
+      async () => {
+        throw Error("An excluded account must not dispatch media");
+      },
+    );
+    assert.equal(result, undefined);
+  }
+  assert.deepEqual(
+    sam3ConfigurationForAccount(
+      { email: "owner@example.test", emailVerified: true },
+      { ...env, VIDEO_SAM3_PILOT_EMAIL: "" },
+    ),
+    {},
+  );
+  // No implicit global-environment fallback when a caller lacks account context.
+  assert.equal(
+    await segmentVideo(
+      media,
+      analysis,
+      new AbortController().signal,
+      undefined,
+      async () => {
+        throw Error("A caller without an account must not dispatch media");
+      },
+    ),
+    undefined,
+  );
 });

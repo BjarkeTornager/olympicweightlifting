@@ -4,15 +4,28 @@ import type { VideoAnalysis } from "./types";
 
 const MAX_RESPONSE = 2_000_000;
 export type SegmentationBudget = { remainingMs: number; deadlineMs?: number };
-type Configuration = { endpoint?: string; token?: string };
+export type Sam3Configuration = { endpoint?: string; token?: string };
+
+// Called only with the account read from the fenced video job, never upload
+// fields. An empty pilot setting disables dispatch even when secrets exist.
+export function sam3ConfigurationForAccount(
+  account: { email: string; emailVerified: boolean },
+  env: Record<string, string | undefined> = process.env,
+): Sam3Configuration {
+  const pilot = (env.VIDEO_SAM3_PILOT_EMAIL ?? "").trim().toLowerCase();
+  if (
+    !pilot ||
+    !account.emailVerified ||
+    account.email.trim().toLowerCase() !== pilot
+  )
+    return {};
+  return { endpoint: env.VIDEO_SAM3_URL, token: env.VIDEO_SAM3_TOKEN };
+}
 export async function segmentVideo(
   media: Buffer,
   analysis: VideoAnalysis,
   signal: AbortSignal,
-  config: Configuration = {
-    endpoint: process.env.VIDEO_SAM3_URL,
-    token: process.env.VIDEO_SAM3_TOKEN,
-  },
+  config: Sam3Configuration = {},
   request: typeof fetch = fetch,
   budget: SegmentationBudget = { remainingMs: 300_000 },
 ): Promise<VideoSegmentation | undefined> {

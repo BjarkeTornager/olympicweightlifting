@@ -6,6 +6,7 @@ import { callModel } from "../agent/provider";
 import { ApiError } from "../agent/http";
 import { userAllowed } from "../access";
 import { processVideo, refineVideo } from "./processor";
+import { sam3ConfigurationForAccount, type Sam3Configuration } from "./sam3";
 import { mergeSegmentation } from "./segmentation";
 import { MAX_VIDEO_BYTES, type VideoAnalysis, type VideoUpload } from "./types";
 import { VIDEO_REVIEW_VERSION, coachingText } from "./coaching";
@@ -229,6 +230,7 @@ export async function runVideoJob(
     eq(liftingVideos.id, job.id),
     eq(liftingVideos.lease, job.token),
   );
+  let segmentationConfig: Sam3Configuration = {};
   const jobStarted = Date.now();
   const abort = new AbortController();
   const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(600000)]);
@@ -245,6 +247,7 @@ export async function runVideoJob(
       abort.abort();
       return false;
     }
+    segmentationConfig = sam3ConfigurationForAccount(account);
     return true;
   };
   const monitor = setInterval(() => {
@@ -302,8 +305,17 @@ export async function runVideoJob(
           .set({ analysis: updated, stage })
           .where(fence);
       },
-      (current, attempt) =>
-        refiner(media!, current, attempt, signal, segmentationBudget),
+      async (current, attempt) => {
+        if (!(await check())) signal.throwIfAborted();
+        return refiner(
+          media!,
+          current,
+          attempt,
+          signal,
+          segmentationBudget,
+          segmentationConfig,
+        );
+      },
     );
     analysis = result.analysis;
     const feedback = result.feedback;

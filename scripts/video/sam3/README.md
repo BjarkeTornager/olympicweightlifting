@@ -1,8 +1,10 @@
 # SAM 3.1 video integration
 
 This integration adds object-region evidence to the existing private lift-review
-pipeline. It is disabled until `VIDEO_SAM3_URL` and `VIDEO_SAM3_TOKEN` are set on
-the application server. Real GPU tests now retain plate outlines on both public
+pipeline. It is disabled until `VIDEO_SAM3_URL`, `VIDEO_SAM3_TOKEN` and
+`VIDEO_SAM3_PILOT_EMAIL` are set on the application server. Only the matching
+verified account can dispatch SAM jobs; blank pilot email fails closed. The
+account is read from the fenced database job, never from upload fields. Real GPU tests now retain plate outlines on both public
 fixtures, and requests use queued submission/polling. See the
 [fixes and measured results](../../../docs/sam31-tracking-queue-fixes-2026-09-12.md).
 This small debugging set does not establish general segmentation accuracy.
@@ -61,6 +63,8 @@ The checkpoint is manually gated by Meta on
    latency fit the limits. Synthetic tests do not prove model accuracy.
 4. Deploy `modal deploy scripts/video/sam3/modal_app.py::app`. Set
    `VIDEO_SAM3_URL` to the returned HTTPS ASGI endpoint with `/segment` appended.
+   Set `VIDEO_SAM3_PILOT_EMAIL` to the single verified pilot account. Removing
+   that email disables new SAM dispatches without changing normal coaching.
    Do not expose this URL or either credential via `NEXT_PUBLIC_*` variables.
 5. Deploy the tested website changes, verify anonymous requests are rejected
    before GPU work, and test an authenticated upload with an isolated test

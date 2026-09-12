@@ -43,6 +43,9 @@ export function GuidedReplay({
   const stopAt = useRef<{ end: number; freeze: number } | null>(null);
   const pendingSeek = useRef<number | null>(null);
   const presentedVideoTime = useRef<number | null>(null);
+  const frameSync = useRef<((time: number, exact: boolean) => void) | null>(
+    null,
+  );
   const [renderTime, setRenderTime] = useState(0);
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
@@ -111,8 +114,7 @@ export function GuidedReplay({
   useEffect(() => {
     const v = video.current;
     if (!v) return;
-    let handle = 0,
-      fallback = 0,
+    let fallback = 0,
       closed = false;
     const hideTracked = () => {
       if (trackedCanvas.current) trackedCanvas.current.hidden = true;
@@ -238,17 +240,26 @@ export function GuidedReplay({
       onTime(t);
       if (stopAt.current !== null && t >= stopAt.current.end - 0.035) {
         const freeze = stopAt.current.freeze;
-        v.pause();
         stopAt.current = null;
         const target = evidenceSeekTime(freeze, v.duration);
         pendingSeek.current = target;
         setSeeking(true);
-        v.currentTime = target;
+        const freezeFrame = () => {
+          if (pendingSeek.current === target) v.currentTime = target;
+        };
+        // WebKit can swallow the presentation notification when pause and
+        // seek are submitted together. Let its pause finish before seeking.
+        if (v.paused) freezeFrame();
+        else {
+          v.addEventListener("pause", freezeFrame, { once: true });
+          v.pause();
+        }
         setTime(freeze);
         onTime(freeze);
       }
     };
     const seek = () => sync(v.currentTime);
+    frameSync.current = sync;
     const ready = () => {
       const target = pendingSeek.current;
       if (
@@ -263,14 +274,7 @@ export function GuidedReplay({
     v.addEventListener("loadedmetadata", ready);
     v.addEventListener("loadeddata", ready);
     v.addEventListener("canplay", ready);
-    if (typeof v.requestVideoFrameCallback === "function") {
-      const frame: VideoFrameRequestCallback = (_now, metadata) => {
-        presentedVideoTime.current = metadata.mediaTime;
-        sync(metadata.mediaTime, true);
-        if (!closed) handle = v.requestVideoFrameCallback(frame);
-      };
-      handle = v.requestVideoFrameCallback(frame);
-    } else {
+    if (typeof v.requestVideoFrameCallback !== "function") {
       const tick = () => {
         if (!v.paused) sync(v.currentTime);
         fallback = requestAnimationFrame(tick);
@@ -279,12 +283,12 @@ export function GuidedReplay({
     }
     return () => {
       closed = true;
+      if (frameSync.current === sync) frameSync.current = null;
       hideTracked();
       v.removeEventListener("seeked", seek);
       v.removeEventListener("loadedmetadata", ready);
       v.removeEventListener("loadeddata", ready);
       v.removeEventListener("canplay", ready);
-      if (handle) v.cancelVideoFrameCallback(handle);
       if (fallback) cancelAnimationFrame(fallback);
     };
   }, [
@@ -297,6 +301,26 @@ export function GuidedReplay({
     shadowVisibility,
     a,
   ]);
+
+  useEffect(() => {
+    const v = video.current;
+    if (!v || typeof v.requestVideoFrameCallback !== "function") return;
+    let closed = false;
+    let handle = 0;
+    const frame: VideoFrameRequestCallback = (_now, metadata) => {
+      if (closed) return;
+      // Subscribe before sync can pause/seek. This listener belongs to the
+      // media source, so changing a cue or overlay cannot cancel its delivery.
+      handle = v.requestVideoFrameCallback(frame);
+      presentedVideoTime.current = metadata.mediaTime;
+      frameSync.current?.(metadata.mediaTime, true);
+    };
+    handle = v.requestVideoFrameCallback(frame);
+    return () => {
+      closed = true;
+      v.cancelVideoFrameCallback(handle);
+    };
+  }, [url]);
 
   useEffect(() => {
     if (!expanded) return;

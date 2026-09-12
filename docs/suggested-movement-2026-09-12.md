@@ -74,6 +74,10 @@ unreachable geometry, malformed/cross-side plans, stale-result replacement,
 private lists, tenant isolation and a queued restart without repeating coaching.
 Browser checks exercise original/suggested comparison, missing frames, playback,
 scrubbing and visibility on phone/desktop Chromium and WebKit.
+Paused evidence waits for the browser's presented frame, not just `seeked` or
+`currentTime`. The frame listener survives overlay changes, and playback pauses
+before seeking to its final evidence frame. Pixel checks cover Safari's dropped
+presentation notification when pause and seek are submitted together.
 
 Public Catalyst Athletics benchmark footage is used with explicitly synthetic
 test targets to inspect the GPU geometry and compositor. Such a target is a

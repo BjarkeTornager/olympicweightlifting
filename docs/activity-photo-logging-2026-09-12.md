@@ -56,3 +56,19 @@ scores do not evaluate the revised activity-photo prompt.
 The release uses an exact tracked-source archive through Railway CLI. Untracked
 drafts, credentials, build caches and private artifacts are excluded. No new
 GitHub-hosted CI result is claimed for the direct release.
+
+## Live release
+
+Source `c4d5c9e71905fe0396c7768a92e606edfb3bc6f2` was deployed successfully to
+the existing Lift Journal Railway service as
+`4257e88e-265d-44ff-b530-d3c4a4da9de1` on 12 September 2026.
+`/api/ready` returned 200. Anonymous journal, image collection, individual image
+and Coach requests returned 401 with `private, no-store`. The running server
+contains the activity evidence guard, account/category validation and cached
+client response adapter (the last is in the compiled API route files).
+
+All four activity-photo browser cases passed against the hosted bundle in
+Chromium and WebKit, including uploading from a workout, sending via Coach,
+finishing during navigation, enlarging the saved photo, retaining the lifting
+draft, and opening a copied URL without another automatic save. These checks
+used synthetic API responses and did not change real users' journals.

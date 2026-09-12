@@ -57,6 +57,16 @@ class SubjectTracker:
     def __init__(self):
         self.previous = None
         self.last = None
+        self.pending = None
+
+    @staticmethod
+    def distance(first, second, ids):
+        a = {p['id']: p for p in first['points'] if p['id'] in ids}
+        b = {p['id']: p for p in second['points'] if p['id'] in ids}
+        common = a.keys() & b.keys()
+        if len(common) < 2:
+            return math.inf
+        return statistics.median(math.hypot(a[i]['x']-b[i]['x'], a[i]['y']-b[i]['y']) for i in common)
 
     def select(self, poses, time):
         candidates = []
@@ -71,6 +81,7 @@ class SubjectTracker:
                 continue
             candidates.append({'points': points, 'anchors': anchors, 'area': area})
         if not candidates:
+            self.pending = None
             return []
         if self.previous is None:
             candidates.sort(key=lambda c: c['area'], reverse=True)
@@ -82,21 +93,55 @@ class SubjectTracker:
                 return []
         else:
             dt = time - self.last
-            if dt <= 0 or dt > .5:
+            if dt <= 0:
                 return []
+            recovering = dt > .5
+            reference = self.previous
+            if recovering and self.pending and 0 < time-self.pending['time'] <= .25:
+                # Confirm a moving candidate against its most recent observation,
+                # rather than requiring it to remain frozen in the old posture.
+                reference = self.pending['candidate']
             matches = []
             for candidate in candidates:
-                common = candidate['anchors'].keys() & self.previous['anchors'].keys()
-                if len(common) < 2 or not .5 <= candidate['area']/self.previous['area'] <= 2:
+                common = candidate['anchors'].keys() & reference['anchors'].keys()
+                if len(common) < 2 or not .5 <= candidate['area']/reference['area'] <= 2:
                     continue
-                distance = statistics.median(math.hypot(candidate['anchors'][i]['x']-self.previous['anchors'][i]['x'],
-                                                         candidate['anchors'][i]['y']-self.previous['anchors'][i]['y']) for i in common)
-                if distance <= min(.18, .04 + dt * .8):
+                distance = statistics.median(math.hypot(candidate['anchors'][i]['x']-reference['anchors'][i]['x'],
+                                                         candidate['anchors'][i]['y']-reference['anchors'][i]['y']) for i in common)
+                if recovering:
+                    # A brief detector gap must not disable the remainder of a
+                    # clip. Reacquire only near the previously observed body or
+                    # feet, with independent confirmation in consecutive frames.
+                    # Never paint the missing interval or fall back to a spectator.
+                    feet = self.distance(candidate, reference, {27, 28, 29, 30, 31, 32})
+                    near = distance <= .10 or feet <= .08
+                    if dt > 5:
+                        # Time alone cannot recover identity. Across a longer
+                        # gap require agreement of both torso and foot geometry,
+                        # rather than accepting whichever body is now largest.
+                        same_side = {11, 23} <= common or {12, 24} <= common
+                        near = same_side and distance <= .06 and feet <= .05
+                    if near:
+                        matches.append((min(distance, feet), candidate))
+                elif distance <= min(.18, .04 + dt * .8):
                     matches.append((distance, candidate))
             matches.sort(key=lambda m: m[0])
             if not matches or (len(matches) > 1 and matches[1][0] - matches[0][0] < .04):
+                self.pending = None
                 return []
             chosen = matches[0][1]
+            if recovering:
+                pending = self.pending
+                consistent = (pending and 0 < time-pending['time'] <= .25
+                              and self.distance(chosen, pending['candidate'], {11, 12, 23, 24}) <= .06
+                              and .7 <= chosen['area']/pending['candidate']['area'] <= 1.4)
+                self.pending = {'candidate': chosen, 'time': time,
+                                'start': pending['start'] if consistent else time,
+                                'count': pending['count']+1 if consistent else 1}
+                if (self.pending['count'] < (3 if dt > 5 else 2)
+                        or time-self.pending['start'] < .09):
+                    return []
+        self.pending = None
         self.previous, self.last = chosen, time
         return chosen['points']
 

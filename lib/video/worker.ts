@@ -19,7 +19,10 @@ import {
   canReviewIdentification,
 } from "./identification";
 import { reviewMessages, reviewWithRecovery } from "./review";
-import type { VideoRefinementCheckpoint } from "./checkpoint";
+import {
+  VIDEO_REFINEMENT_VERSION,
+  type VideoRefinementCheckpoint,
+} from "./checkpoint";
 export { reviewMessages } from "./review";
 async function automaticFeedback(
   input: VideoUpload,
@@ -315,7 +318,7 @@ export async function runVideoJob(
       async (current, attempt) => {
         if (!(await check())) signal.throwIfAborted();
         if (
-          refinement?.version === 1 &&
+          refinement?.version === VIDEO_REFINEMENT_VERSION &&
           refinement.reviewVersion === VIDEO_REVIEW_VERSION &&
           current.reviewVersion === VIDEO_REVIEW_VERSION &&
           refinement.attemptId === attempt.id &&
@@ -343,7 +346,7 @@ export async function runVideoJob(
         );
         signal.throwIfAborted();
         const saved: VideoRefinementCheckpoint = {
-          version: 1,
+          version: VIDEO_REFINEMENT_VERSION,
           reviewVersion: VIDEO_REVIEW_VERSION,
           attemptId: attempt.id,
           start: attempt.start,

@@ -397,14 +397,16 @@ export function GuidedReplay({
           </label>
         )}
         <div className="video-playback-options">
-          <label className="video-check">
-            <input
-              type="checkbox"
-              checked={overlay}
-              onChange={(e) => setOverlay(e.target.checked)}
-            />
-            Coach overlay
-          </label>
+          {!!moments.length && (
+            <label className="video-check">
+              <input
+                type="checkbox"
+                checked={overlay}
+                onChange={(e) => setOverlay(e.target.checked)}
+              />
+              Coach overlay
+            </label>
+          )}
           <select
             aria-label="Playback speed"
             value={speed}
@@ -421,8 +423,23 @@ export function GuidedReplay({
         </div>
       </div>
       {error && <p role="alert">{error}</p>}
+      {a?.segmentation &&
+        !a.segmentation.frames.some((f) => f.objects.length) && (
+          <p className="fine-print" role="status">
+            Object tracking was unavailable for this clip. No outlines will be
+            shown.
+          </p>
+        )}
       {coaching && (
         <section className="video-coaching-cards" aria-label="Guided coaching">
+          {!moments.length && (
+            <p className="fine-print">
+              <strong>No correction markers in this review</strong>
+              <br />
+              Coach’s observations are below. No specific technique correction
+              was identified.
+            </p>
+          )}
           {coaching.scope === "visible_phases" && (
             <p className="fine-print">
               <strong>Feedback on the visible movement</strong>
@@ -488,9 +505,6 @@ export function GuidedReplay({
           )}
           {coaching.limitation && (
             <p className="fine-print">{coaching.limitation}</p>
-          )}
-          {!moments.length && !coaching.limitation && (
-            <p>No specific correction is supported by this view.</p>
           )}
         </section>
       )}

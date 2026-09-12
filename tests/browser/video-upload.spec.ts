@@ -5,6 +5,81 @@ import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { SavedVideoReview } from "../../lib/video/types";
 const fixture = path.resolve("tests/fixtures/lifting-motion.mp4");
+test("a limited review explains missing corrections and outlines without offering an empty overlay toggle", async ({
+  page,
+  context,
+}) => {
+  const review: SavedVideoReview = {
+    ...saved("00000000-0000-4000-8000-000000000022"),
+    status: "ready",
+    stage: "Review ready",
+    hasMedia: true,
+    analysis: {
+      version: 1,
+      reviewVersion: 2,
+      width: 320,
+      height: 480,
+      duration: 2,
+      frameCount: 60,
+      sampleTimes: [0, 1, 2],
+      tracking: {
+        status: "not_requested",
+        reason: "",
+        points: [],
+        coverage: 0,
+        horizontalRangeCm: null,
+        riseCm: null,
+        peakUpwardVelocity: null,
+        velocities: [],
+      },
+      coaching: {
+        version: 1,
+        strength: "Synthetic visible observation.",
+        limitation: "The view is limited.",
+        moments: [],
+      },
+      segmentation: {
+        version: 1,
+        model: "sam3.1",
+        revision: "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7",
+        sourceSha256: "a".repeat(64),
+        status: "unavailable",
+        reason: "No reliable subject match.",
+        width: 320,
+        height: 480,
+        frames: [{ t: 0, objects: [] }],
+      },
+    },
+  };
+  await context.route("**/api/lifting-videos", (r) =>
+    r.fulfill({ json: { videos: [review] } }),
+  );
+  await context.route(/\/api\/lifting-videos\/[^/]+$/, (r) =>
+    r.fulfill({ json: review }),
+  );
+  await context.route("**/api/lifting-videos/*/media", async (r) =>
+    r.fulfill({ contentType: "video/mp4", body: await readFile(fixture) }),
+  );
+  await page.goto("/#coach/lifting/video");
+  const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
+  await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
+  await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
+  await expect(
+    dialog.getByText("No correction markers in this review"),
+  ).toBeVisible();
+  await expect(dialog.getByRole("status")).toContainText(
+    "Object tracking was unavailable",
+  );
+  await expect(dialog.getByLabel("Coach overlay", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    dialog.getByText("Synthetic visible observation."),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Play video", exact: true }),
+  ).toBeVisible();
+});
 function saved(id: string): SavedVideoReview {
   return {
     id,

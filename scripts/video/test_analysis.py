@@ -64,6 +64,33 @@ class AnalysisTests(unittest.TestCase):
         # A missing subject cannot silently be replaced by another person.
         self.assertEqual(tracker.select([spectator], .2), [])
         self.assertEqual(tracker.select([person(.52)], 1), [])
+        self.assertTrue(tracker.select([person(.52), spectator], 1.1),
+                        'two consistent observations should recover after a brief detector gap')
+        self.assertTrue(tracker.select([person(.53), spectator], 1.15))
+        lost = SubjectTracker()
+        self.assertTrue(lost.select([lifter], 0))
+        for time in [.6,.7,.8]:
+            self.assertEqual(lost.select([spectator], time), [])
+        self.assertEqual(lost.select([person(.51)], .9), [])
+        self.assertEqual(lost.select([], 1), [])
+        self.assertEqual(lost.select([person(.51)], 1.1), [], 'a missing confirmation restarts reacquisition')
+        self.assertTrue(lost.select([person(.51)], 1.2))
+        self.assertEqual(lost.select([person(.51)], 10), [], 'a long gap needs three close body-and-foot observations')
+        self.assertEqual(lost.select([person(.51)], 10.1), [])
+        self.assertTrue(lost.select([person(.51)], 10.2))
+        displaced = SubjectTracker()
+        self.assertTrue(displaced.select([lifter], 0))
+        for time in [6,6.1,6.2]:
+            self.assertEqual(displaced.select([person(.58)], time), [], 'a displaced body cannot replace the subject after a long gap')
+        moving = SubjectTracker()
+        self.assertTrue(moving.select([lifter], 0))
+        self.assertEqual(moving.select([person(.51)], 6), [])
+        self.assertEqual(moving.select([person(.55)], 6.1), [])
+        self.assertTrue(moving.select([person(.59)], 6.2), 'confirmation follows observed movement instead of requiring a frozen old posture')
+        ambiguous_recovery = SubjectTracker()
+        self.assertTrue(ambiguous_recovery.select([lifter], 0))
+        for time in [6,6.1,6.2]:
+            self.assertEqual(ambiguous_recovery.select([person(.49),person(.51)], time), [])
         self.assertEqual(SubjectTracker().select([person(.4), person(.6)], 0), [])
         ambiguous = SubjectTracker()
         self.assertTrue(ambiguous.select([lifter], 0))

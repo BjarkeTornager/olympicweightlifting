@@ -732,6 +732,103 @@ test(
       );
       await deleteVideo(users[0], queuedInput.id);
 
+      // Body reconstruction waits durably in its own checkpoint. Its images
+      // are owner-only details, never journal/list payloads or queue receipts.
+      const priorBodyUrl = process.env.VIDEO_BODY_URL,
+        priorPilot = process.env.VIDEO_SAM3_PILOT_EMAIL;
+      process.env.VIDEO_BODY_URL = "https://synthetic-body.example.test/body";
+      process.env.VIDEO_SAM3_PILOT_EMAIL = `${users[0]}@example.test`;
+      const bodyInput = { ...input, id: crypto.randomUUID() };
+      try {
+        await saveVideo(users[0], bodyInput, source);
+        queueModels = 0;
+        let bodyCalls = 0;
+        const bodyReconstructor: typeof import("../lib/video/body-server").reconstructBody =
+          async (
+            _media,
+            _analysis,
+            _signal,
+            config,
+            _request,
+            _budget,
+            resume,
+          ) => {
+            assert.equal(config?.endpoint, process.env.VIDEO_BODY_URL);
+            assert.ok(resume);
+            if (++bodyCalls === 1) {
+              await resume.saveJob({
+                requestId: crypto.randomUUID(),
+                receipt: "private-body-receipt",
+                binding: "b".repeat(64),
+                expiresAt: Date.now() + 900000,
+              });
+              throw new SegmentationPending();
+            }
+            assert.equal(resume.job?.receipt, "private-body-receipt");
+            return {
+              version: 1,
+              model: "sam-3d-body",
+              revision: "11aaa346c7204874a1cbafe3d39a979080b2c55a",
+              sourceSha256: "a".repeat(64),
+              width: 320,
+              height: 480,
+              status: "tracked",
+              reason: "Synthetic body",
+              frames: [
+                { t: 0.5, image: "data:image/png;base64,iVBORw0KGgoAAA" },
+              ],
+            };
+          };
+        const first = await claimVideo();
+        assert.ok(first);
+        await runVideoJob(
+          first,
+          queuedModel,
+          processor,
+          refiner,
+          undefined,
+          bodyReconstructor,
+        );
+        const waiting = await getVideo(users[0], bodyInput.id);
+        assert.equal(waiting.status, "queued");
+        assert.match(waiting.stage, /3D body overlay/);
+        assert.doesNotMatch(
+          JSON.stringify(waiting),
+          /private-body-receipt|bodyJob/,
+        );
+        await pool.query(
+          "UPDATE lifting_videos SET lease_until=now()-interval '1 second' WHERE user_id=$1 AND id=$2",
+          [users[0], bodyInput.id],
+        );
+        const second = await claimVideo();
+        assert.ok(second);
+        await runVideoJob(
+          second,
+          queuedModel,
+          processor,
+          refiner,
+          undefined,
+          bodyReconstructor,
+        );
+        const bodyReview = await getVideo(users[0], bodyInput.id);
+        assert.equal(bodyReview.status, "ready");
+        assert.equal(bodyCalls, 2);
+        assert.equal(bodyReview.analysis?.body?.frames.length, 1);
+        assert.deepEqual(
+          (await listVideos(users[0])).find((v) => v.id === bodyInput.id)
+            ?.analysis?.body?.frames,
+          [],
+        );
+        await assert.rejects(getVideo(users[1], bodyInput.id), /not found/);
+        await deleteVideo(users[0], bodyInput.id);
+        await assert.rejects(getVideo(users[0], bodyInput.id), /not found/);
+      } finally {
+        if (priorBodyUrl === undefined) delete process.env.VIDEO_BODY_URL;
+        else process.env.VIDEO_BODY_URL = priorBodyUrl;
+        if (priorPilot === undefined) delete process.env.VIDEO_SAM3_PILOT_EMAIL;
+        else process.env.VIDEO_SAM3_PILOT_EMAIL = priorPilot;
+      }
+
       // A non-lifting clip still never receives fabricated coaching.
       const emptyInput = { ...automatic, id: crypto.randomUUID() };
       await saveVideo(users[0], emptyInput, source);

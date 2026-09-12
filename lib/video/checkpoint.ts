@@ -15,5 +15,7 @@ export type VideoRefinementCheckpoint = {
   pose?: VideoAnalysis["pose"];
   segmentation?: VideoAnalysis["segmentation"];
   sam3Job?: import("./sam3").Sam3Job;
+  body?: VideoAnalysis["body"];
+  bodyJob?: import("./gpu-job").GpuJob;
   failure?: import("./review").ReviewDiagnostic;
 };

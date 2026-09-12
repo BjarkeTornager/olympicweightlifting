@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import type { SavedVideoReview } from "@/lib/video/types";
 import { segmentationAt, trackedReplayAction } from "@/lib/video/segmentation";
 import { ghostAt } from "@/lib/video/correction";
+import { bodyFrameAt, bodyReplayAction } from "@/lib/video/body";
 import { techniqueDrills } from "@/lib/video/technique";
 import {
   barTrailSegments,
@@ -32,6 +33,7 @@ export function GuidedReplay({
     container = useRef<HTMLDivElement>(null);
   const trackedCanvas = useRef<HTMLCanvasElement>(null);
   const capturedTime = useRef<number | null>(null);
+  const bodyImages = useRef(new Map<string, HTMLImageElement>());
   const stopAt = useRef<{ end: number; freeze: number } | null>(null);
   const pendingSeek = useRef<number | null>(null);
   const [renderTime, setRenderTime] = useState(0);
@@ -41,6 +43,7 @@ export function GuidedReplay({
     [speed, setSpeed] = useState("1");
   const [overlay, setOverlay] = useState(true),
     [outlines, setOutlines] = useState(true),
+    [bodyShadow, setBodyShadow] = useState(false),
     [barTrail, setBarTrail] = useState(false),
     [expanded, setExpanded] = useState(false),
     [error, setError] = useState("");
@@ -71,6 +74,13 @@ export function GuidedReplay({
     outlines && !playing && !seeking
       ? segmentationAt(a?.segmentation, time)
       : [];
+  const bodyFrame =
+    bodyShadow && !playing && !seeking ? bodyFrameAt(a?.body, time) : undefined;
+  const bodyFrames = a?.body?.frames.filter((f) => f.image) ?? [];
+
+  useEffect(() => {
+    bodyImages.current.clear();
+  }, [url, a?.body]);
 
   useEffect(() => {
     const v = video.current;
@@ -101,17 +111,35 @@ export function GuidedReplay({
       if (
         !v.paused &&
         exactFrame &&
-        outlines &&
+        (outlines || bodyShadow) &&
         canvas &&
-        segmentation &&
-        v.videoWidth === segmentation.width &&
-        v.videoHeight === segmentation.height
+        a &&
+        v.videoWidth === a.width &&
+        v.videoHeight === a.height
       ) {
-        const action = trackedReplayAction(
-          segmentation,
-          t,
-          capturedTime.current,
-        );
+        // Warm only a small window of body textures; a long review must not
+        // decode hundreds of full-size images in a phone's memory at once.
+        if (bodyShadow && a.body) {
+          const nearest = a.body.frames.findIndex((f) => f.t >= t - 0.02);
+          const window = a.body.frames.slice(
+            Math.max(0, nearest - 1),
+            Math.max(0, nearest - 1) + 6,
+          );
+          const wanted = new Set(
+            window.flatMap((f) => (f.image ? [f.image] : [])),
+          );
+          for (const key of bodyImages.current.keys())
+            if (!wanted.has(key)) bodyImages.current.delete(key);
+          for (const key of wanted)
+            if (!bodyImages.current.has(key)) {
+              const image = new Image();
+              image.src = key;
+              bodyImages.current.set(key, image);
+            }
+        }
+        const action = bodyShadow
+          ? bodyReplayAction(a.body, t, capturedTime.current)
+          : trackedReplayAction(segmentation, t, capturedTime.current);
         if (action.kind === "clear") hideTracked();
         else if (action.kind === "capture") {
           const ctx = canvas.getContext("2d");
@@ -119,11 +147,26 @@ export function GuidedReplay({
             // Capture pixels and polygons from the SAME presented source frame.
             // Between samples we retain this complete annotated frame, not a
             // stale polygon over the independently moving original video.
-            canvas.width = segmentation.width;
-            canvas.height = segmentation.height;
+            canvas.width = a.width;
+            canvas.height = a.height;
             ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            if (bodyShadow) {
+              const frame = bodyFrameAt(a.body, action.frame.t);
+              const image = frame?.image
+                ? bodyImages.current.get(frame.image)
+                : undefined;
+              if (!image?.complete || !image.naturalWidth) {
+                hideTracked();
+                setTime(t);
+                onTime(t);
+                return;
+              }
+              ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            }
             ctx.lineWidth = (2.5 * canvas.width) / Math.max(1, v.clientWidth);
-            for (const region of action.frame.objects) {
+            for (const region of bodyShadow
+              ? []
+              : segmentationAt(segmentation, action.frame.t)) {
               ctx.beginPath();
               region.polygon.forEach(([x, y], i) => {
                 if (i) ctx.lineTo(x * canvas.width, y * canvas.height);
@@ -194,7 +237,7 @@ export function GuidedReplay({
       if (handle) v.cancelVideoFrameCallback(handle);
       if (fallback) cancelAnimationFrame(fallback);
     };
-  }, [url, onTime, outlines, a?.segmentation]);
+  }, [url, onTime, outlines, bodyShadow, a]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -281,6 +324,18 @@ export function GuidedReplay({
     inspect(moment);
     setOutlines(false);
     setShowCorrection(true);
+    setBodyShadow(Boolean(bodyFrameAt(a?.body, moment.evidenceTime)?.image));
+  }
+
+  function inspectBody(at: number) {
+    video.current?.scrollIntoView({ block: "center", behavior: "instant" });
+    video.current?.pause();
+    setPlaying(false);
+    stopAt.current = null;
+    setBodyShadow(true);
+    setOutlines(false);
+    setShowCorrection(false);
+    seekTo(at);
   }
 
   return (
@@ -351,6 +406,16 @@ export function GuidedReplay({
             role="img"
             aria-label="Segmented video replay"
           />
+          {bodyFrame?.image && (
+            // This private, validated PNG is already the exact source-frame projection.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className={`video-body-shadow${ghost ? " correction-reference" : ""}`}
+              src={bodyFrame.image}
+              alt="Observed 3D body reconstruction"
+              data-frame-time={bodyFrame.t}
+            />
+          )}
           {a &&
             (points.length > 0 ||
               trails.length > 0 ||
@@ -472,13 +537,81 @@ export function GuidedReplay({
         )}
       </div>
       <div className="video-replay-controls">
+        {bodyFrames.length > 0 && (
+          <div className="video-body-controls">
+            <label className="video-check">
+              <input
+                type="checkbox"
+                checked={bodyShadow}
+                onChange={(e) => {
+                  if (e.target.checked)
+                    inspectBody(
+                      bodyFrames.reduce((best, f) =>
+                        Math.abs(f.t - time) < Math.abs(best.t - time)
+                          ? f
+                          : best,
+                      ).t,
+                    );
+                  else setBodyShadow(false);
+                }}
+              />
+              3D body shadow
+            </label>
+            <p className="fine-print">
+              Reconstructed from your lift. Hands and hidden positions are
+              approximate. The shadow stays with its analysed frame.
+            </p>
+            <div className="video-evidence-actions">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  inspectBody(
+                    bodyFrames.reduce((best, f) =>
+                      Math.abs(f.t - time) < Math.abs(best.t - time) ? f : best,
+                    ).t,
+                  )
+                }
+              >
+                Inspect 3D body
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!bodyFrames.some((f) => f.t < time - 0.02)}
+                onClick={() =>
+                  inspectBody(
+                    bodyFrames.filter((f) => f.t < time - 0.02).at(-1)!.t,
+                  )
+                }
+              >
+                Previous body frame
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!bodyFrames.some((f) => f.t > time + 0.02)}
+                onClick={() =>
+                  inspectBody(bodyFrames.find((f) => f.t > time + 0.02)!.t)
+                }
+              >
+                Next body frame
+              </Button>
+            </div>
+          </div>
+        )}
+        {a?.body?.status === "unavailable" && (
+          <p className="fine-print" role="status">
+            {a.body.reason}
+          </p>
+        )}
         {!!a?.segmentation?.frames.some((f) => f.objects.length) && (
           <div>
             <label className="video-check">
               <input
                 type="checkbox"
                 checked={outlines}
-                onChange={(e) => setOutlines(e.target.checked)}
+                onChange={(e) => {
+                  setOutlines(e.target.checked);
+                  if (e.target.checked) setBodyShadow(false);
+                }}
               />
               Tracked replay
             </label>
@@ -498,6 +631,7 @@ export function GuidedReplay({
                 video.current?.pause();
                 setPlaying(false);
                 setOutlines(true);
+                setBodyShadow(false);
                 stopAt.current = null;
                 seekTo(nearest.t);
               }}
@@ -585,6 +719,7 @@ export function GuidedReplay({
               onClick={() => {
                 inspect(active);
                 setShowCorrection(false);
+                setBodyShadow(false);
               }}
             >
               Original position

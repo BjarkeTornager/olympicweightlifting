@@ -2,13 +2,20 @@ import { requireAthlete, apiFailure, ApiError } from "@/lib/agent/http";
 import { listVideos, saveVideo } from "@/lib/video/store";
 import { MAX_VIDEO_BYTES, videoUploadSchema } from "@/lib/video/types";
 import { allowRequest } from "@/lib/server";
+import { bodyConfigurationForAccount } from "@/lib/video/body-server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   try {
     const user = await requireAthlete(request);
-    return Response.json({ videos: await listVideos(user.id) }, { headers });
+    return Response.json(
+      {
+        videos: await listVideos(user.id),
+        bodyOverlayEnabled: Boolean(bodyConfigurationForAccount(user).endpoint),
+      },
+      { headers },
+    );
   } catch (error) {
     return apiFailure(error);
   }

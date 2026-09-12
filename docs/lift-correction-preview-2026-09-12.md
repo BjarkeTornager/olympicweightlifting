@@ -32,6 +32,8 @@ The app's short practice instructions are original summaries. These sources info
 
 ## SAM 3D Body prototype status
 
+The feasibility work below has now been followed by a separate [production body-overlay integration](sam3d-live-overlay-2026-09-12.md). The isolated probe remains available for testing; the website uses the authenticated queued service documented there.
+
 `facebook/sam-3d-body-dinov3` is a separate gated model from SAM 3.1. Access was granted on 12 September and verified through Modal's existing `lift-journal-sam31-hf` secret: checkpoint metadata was readable and the checkpoint/config/rig were successfully downloaded. No token value was read locally or exposed. The previous access-review blocker is resolved.
 
 `scripts/video/sam3d/modal_probe.py` prepares an isolated feasibility probe:

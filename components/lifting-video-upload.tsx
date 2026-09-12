@@ -23,11 +23,13 @@ function ReviewResult({
   accountId,
   onReanalyse,
   busy,
+  bodyOverlayEnabled,
 }: {
   review: SavedVideoReview;
   accountId: string;
   onReanalyse: () => void;
   busy: boolean;
+  bodyOverlayEnabled: boolean;
 }) {
   const [url, setUrl] = useState(""),
     [error, setError] = useState(""),
@@ -60,6 +62,8 @@ function ReviewResult({
   const outdated = review.status === "ready" && !currentVideoReview(a);
   const coachingUpdate =
     review.status === "ready" && a?.coaching?.version !== 2;
+  const bodyUpdate =
+    review.status === "ready" && bodyOverlayEnabled && !a?.body;
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -72,15 +76,21 @@ function ReviewResult({
   return (
     <div className="video-review-result">
       {error && <p role="alert">{error}</p>}
-      {(outdated || coachingUpdate) && (
+      {(outdated || coachingUpdate || bodyUpdate) && (
         <section
           className="video-review-update"
           aria-label="Review update available"
         >
-          <strong>Updated coaching is available</strong>
+          <strong>
+            {bodyUpdate
+              ? "3D body review is available"
+              : "Updated coaching is available"}
+          </strong>
           <p>
             Update this saved review for a coaching priority, a practice task
             and a suggested posture guide when the visible evidence supports it.
+            {bodyUpdate &&
+              " This also adds an observed 3D body shadow when the lifter can be reconstructed clearly."}
           </p>
           <Button disabled={busy} onClick={onReanalyse}>
             Update analysis
@@ -236,6 +246,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     [tab, setTab] = useState<"upload" | "reviews">("upload");
   const [reviews, setReviews] = useState<SavedVideoReview[]>([]),
     [selected, setSelected] = useState<string | null>(null);
+  const [bodyOverlayEnabled, setBodyOverlayEnabled] = useState(false);
   const [file, setFile] = useState<File | null>(null),
     [url, setUrl] = useState("");
   const [lift, setLift] = useState<VideoUpload["lift"]>("Identify from video"),
@@ -281,7 +292,10 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
             "Could not load saved video reviews. Reopen this window to retry.",
           );
         const data = await r.json();
-        if (!abort.signal.aborted) setReviews(data.videos);
+        if (!abort.signal.aborted) {
+          setReviews(data.videos);
+          setBodyOverlayEnabled(data.bodyOverlayEnabled === true);
+        }
       } catch (e) {
         if (!abort.signal.aborted) setError((e as Error).message);
       }
@@ -899,6 +913,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                   review={review}
                   accountId={props.accountId}
                   busy={busy}
+                  bodyOverlayEnabled={bodyOverlayEnabled}
                   onReanalyse={() =>
                     void action(review, "reanalyse", "Identify from video")
                   }

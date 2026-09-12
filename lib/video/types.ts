@@ -50,6 +50,7 @@ export type VideoAnalysis = {
   frameCount: number;
   sampleTimes: number[];
   segmentation?: import("./segmentation").VideoSegmentation;
+  body?: import("./body").VideoBody;
   pose?: {
     version?: number;
     status: "tracked" | "partial" | "unavailable";

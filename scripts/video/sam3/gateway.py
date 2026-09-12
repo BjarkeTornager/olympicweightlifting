@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse
 from engine import MAX_BYTES, validate_manifest
 
 
-def create_app(spawn, lookup, token=None, clock=time.time):
+def create_app(spawn, lookup, token=None, clock=time.time, *, path="/segment",
+               content_type="video/mp4", decode_payload=None, max_bytes=MAX_BYTES):
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     expected = token if token is not None else os.environ.get("SAM3_SERVICE_TOKEN", "")
     if len(expected) < 32:
@@ -40,14 +41,16 @@ def create_app(spawn, lookup, token=None, clock=time.time):
         value = json.loads(base64.urlsafe_b64decode(payload))
         if value["request"] != request.headers.get("x-sam3-request"):
             raise ValueError("Wrong request")
+        if value.get("path", "/segment") != path:
+            raise ValueError("Wrong service")
         return value
 
-    @app.post("/segment")
+    @app.post(path)
     async def submit(request: Request):
         if not authenticated(request):
             return response({"error": "Unauthorized"}, 401)
-        if request.headers.get("content-type") != "video/mp4":
-            return response({"error": "Expected MP4"}, 415)
+        if request.headers.get("content-type") != content_type:
+            return response({"error": "Unsupported content type"}, 415)
         try:
             request_id = request.headers.get("x-sam3-request", "")
             if not re.fullmatch(r"[a-f0-9-]{36}", request_id):
@@ -58,12 +61,14 @@ def create_app(spawn, lookup, token=None, clock=time.time):
             raw = request.headers.get("x-sam3-manifest", "")
             if len(raw) > 20000:
                 raise ValueError("Oversize manifest")
-            manifest = validate_manifest(json.loads(raw))
+            manifest = None if decode_payload else validate_manifest(json.loads(raw))
             data = bytearray()
             async for chunk in request.stream():
-                if len(data) + len(chunk) > MAX_BYTES:
+                if len(data) + len(chunk) > max_bytes:
                     return response({"error": "Video too large"}, 413)
                 data.extend(chunk)
+            if decode_payload:
+                data, manifest = decode_payload(bytes(data))
             if not data or hashlib.sha256(data).hexdigest() != manifest["sha256"]:
                 raise ValueError("Invalid media")
         except (ValueError, TypeError, KeyError):
@@ -72,12 +77,12 @@ def create_app(spawn, lookup, token=None, clock=time.time):
             expires = clock() + lifetime
             call = await spawn(bytes(data), manifest, expires)
             job = sign({"id": call.object_id, "sha256": manifest["sha256"],
-                        "request": request_id, "expires": expires})
+                        "request": request_id, "expires": expires, "path": path})
             return response({"job": job, "sourceSha256": manifest["sha256"]}, 202)
         except Exception:
             return response({"error": "Segmentation unavailable"}, 503)
 
-    @app.api_route("/segment", methods=["GET", "DELETE"])
+    @app.api_route(path, methods=["GET", "DELETE"])
     async def poll(request: Request):
         if not authenticated(request):
             return response({"error": "Unauthorized"}, 401)

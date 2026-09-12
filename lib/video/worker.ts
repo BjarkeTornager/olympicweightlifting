@@ -13,6 +13,8 @@ import {
   type Sam3Configuration,
 } from "./sam3";
 import { mergeSegmentation } from "./segmentation";
+import { mergeBody } from "./body";
+import { bodyConfigurationForAccount, reconstructBody } from "./body-server";
 import { listVideos } from "./store";
 import { previousVideoFocus } from "./focus";
 import { MAX_VIDEO_BYTES, type VideoAnalysis, type VideoUpload } from "./types";
@@ -121,6 +123,13 @@ async function automaticFeedback(
         attempt.end,
       );
     }
+    if (current.body)
+      analysis.body = mergeBody(
+        analysis.body,
+        current.body,
+        attempt.start,
+        attempt.end,
+      );
     if (current.pose?.version === 2) {
       const previous = analysis.pose?.version === 2 ? analysis.pose.frames : [];
       const merged = new Map(previous.map((f) => [f.t, f]));
@@ -245,6 +254,7 @@ export async function runVideoJob(
   processor = processVideo,
   refiner = refineVideo,
   segmenter = segmentVideo,
+  bodyReconstructor = reconstructBody,
 ) {
   const fence = and(
     eq(liftingVideos.userId, job.user_id),
@@ -252,6 +262,7 @@ export async function runVideoJob(
     eq(liftingVideos.lease, job.token),
   );
   let segmentationConfig: Sam3Configuration = {};
+  let bodyConfig: Sam3Configuration = {};
   const jobStarted = Date.now();
   const abort = new AbortController();
   const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(600000)]);
@@ -269,6 +280,7 @@ export async function runVideoJob(
       return false;
     }
     segmentationConfig = sam3ConfigurationForAccount(account);
+    bodyConfig = bodyConfigurationForAccount(account);
     return true;
   };
   const monitor = setInterval(() => {
@@ -317,6 +329,10 @@ export async function runVideoJob(
     // and process restarts; the remote job has its own bounded lifetime.
     const segmentationBudget = {
       remainingMs: 90_000,
+      deadlineMs: jobStarted + 480_000,
+    };
+    const bodyBudget = {
+      remainingMs: 60_000,
       deadlineMs: jobStarted + 480_000,
     };
     const priorReviews = await listVideos(row.userId);
@@ -391,6 +407,7 @@ export async function runVideoJob(
           sampleTimes: saved.sampleTimes,
           pose: saved.pose,
           segmentation: saved.segmentation,
+          body: saved.body,
         };
         if (!saved.segmentation) {
           const segmentation = await segmenter(
@@ -413,6 +430,31 @@ export async function runVideoJob(
           await save();
           detailed.segmentation = segmentation;
         }
+        if (!saved.body && bodyConfig.endpoint) {
+          await getDb()
+            .update(liftingVideos)
+            .set({ stage: "Preparing your 3D body overlay" })
+            .where(fence);
+          const body = await bodyReconstructor(
+            media!,
+            detailed,
+            signal,
+            bodyConfig,
+            undefined,
+            bodyBudget,
+            {
+              job: saved.bodyJob,
+              saveJob: async (job) => {
+                saved = { ...saved, bodyJob: job };
+                await save();
+              },
+            },
+          );
+          signal.throwIfAborted();
+          saved = { ...saved, body, bodyJob: undefined };
+          await save();
+          detailed.body = body;
+        }
         return { analysis: detailed, frames: saved.frames };
       },
       (lift) =>
@@ -424,10 +466,23 @@ export async function runVideoJob(
     );
     analysis = result.analysis;
     const feedback = result.feedback;
-    const bytes =
+    let bytes =
       (media?.length ?? 0) +
       frames.reduce((n, f) => n + f.length, 0) +
       Buffer.byteLength(JSON.stringify(analysis));
+    if (bytes > MAX_VIDEO_BYTES && analysis.body?.frames.length) {
+      analysis.body = {
+        ...analysis.body,
+        frames: [],
+        status: "unavailable",
+        reason:
+          "This clip's body overlay exceeded the review storage limit. Try a shorter clip for the shadow; your video and coaching are available.",
+      };
+      bytes =
+        media.length +
+        frames.reduce((n, f) => n + f.length, 0) +
+        Buffer.byteLength(JSON.stringify(analysis));
+    }
     if (bytes > MAX_VIDEO_BYTES)
       throw new ApiError("This review is too large. Try a shorter clip.", 422);
     await getDb()
@@ -456,7 +511,9 @@ export async function runVideoJob(
         .update(liftingVideos)
         .set({
           status: "queued",
-          stage: "Preparing object outlines · continuing automatically",
+          stage: saved.refinement?.bodyJob
+            ? "Preparing your 3D body overlay · continuing automatically"
+            : "Preparing object outlines · continuing automatically",
           error: null,
           lease: null,
           leaseUntil: new Date(Date.now() + 15_000),

@@ -10,6 +10,7 @@ import {
   bodyFrameAt,
   bodyReplayAction,
   evidenceSeekTime,
+  isEvidenceFrameTime,
   playbackBodyFor,
 } from "@/lib/video/body";
 import { techniqueDrills } from "@/lib/video/technique";
@@ -41,6 +42,7 @@ export function GuidedReplay({
   const bodyImages = useRef(new Map<string, HTMLImageElement>());
   const stopAt = useRef<{ end: number; freeze: number } | null>(null);
   const pendingSeek = useRef<number | null>(null);
+  const presentedVideoTime = useRef<number | null>(null);
   const [renderTime, setRenderTime] = useState(0);
   const [time, setTime] = useState(0),
     [playing, setPlaying] = useState(false),
@@ -103,6 +105,10 @@ export function GuidedReplay({
   }, [url, playbackBody]);
 
   useEffect(() => {
+    presentedVideoTime.current = null;
+  }, [url]);
+
+  useEffect(() => {
     const v = video.current;
     if (!v) return;
     let handle = 0,
@@ -118,6 +124,25 @@ export function GuidedReplay({
         if (
           v.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
           Math.abs(v.currentTime - pendingSeek.current) > 0.025
+        )
+          return;
+        const evidence =
+          bodyFrameAt(playbackBody, pendingSeek.current) ||
+          a?.sampleTimes.some((t) =>
+            isEvidenceFrameTime(t, pendingSeek.current!),
+          );
+        // Safari may update currentTime and dispatch seeked before presenting
+        // the new pixels. Keep the shadow hidden until that evidence frame has
+        // actually reached the compositor. A cached presentation also handles
+        // a seek within the already decoded frame, which emits no new callback.
+        if (
+          evidence &&
+          typeof v.requestVideoFrameCallback === "function" &&
+          (presentedVideoTime.current === null ||
+            !isEvidenceFrameTime(
+              presentedVideoTime.current,
+              pendingSeek.current,
+            ))
         )
           return;
         pendingSeek.current = null;
@@ -240,6 +265,7 @@ export function GuidedReplay({
     v.addEventListener("canplay", ready);
     if (typeof v.requestVideoFrameCallback === "function") {
       const frame: VideoFrameRequestCallback = (_now, metadata) => {
+        presentedVideoTime.current = metadata.mediaTime;
         sync(metadata.mediaTime, true);
         if (!closed) handle = v.requestVideoFrameCallback(frame);
       };

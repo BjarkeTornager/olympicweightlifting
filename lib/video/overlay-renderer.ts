@@ -1,4 +1,5 @@
 import type { VideoAnalysis } from "./types";
+import { timedObservations } from "./observations";
 import { barTrailSegments, currentVideoReview } from "./coaching";
 import {
   bodyBones,
@@ -21,6 +22,7 @@ export type OverlayOptions = {
   outline: boolean;
   bar: boolean;
   cues: boolean;
+  body?: boolean;
 };
 export function createOverlayTrack(analysis: VideoAnalysis | null) {
   const outlines = compileOutlines(analysis?.segmentation);
@@ -42,7 +44,23 @@ export function createOverlayTrack(analysis: VideoAnalysis | null) {
   const moments = currentVideoReview(analysis)
     ? (analysis?.coaching?.moments ?? [])
     : [];
-  return { analysis, outlines, guide, poses, moments, motion, formAvailable };
+  const bodyAvailable = Boolean(
+    analysis?.body?.frames.some(
+      (f, i, frames) =>
+        i > 0 && f.image && frames[i - 1].image && f.t - frames[i - 1].t <= 0.5,
+    ),
+  );
+  return {
+    analysis,
+    outlines,
+    guide,
+    poses,
+    moments,
+    motion,
+    formAvailable,
+    bodyAvailable,
+    observations: timedObservations(analysis),
+  };
 }
 export type OverlayTrack = ReturnType<typeof createOverlayTrack>;
 
@@ -176,6 +194,71 @@ export function renderOverlays(
   if (!a) return { count: 0, phase: "" };
   let count = 0;
   const regions = outlinesAt(track.outlines, time);
+  if (options.body && track.bodyAvailable) {
+    const person = regions.find((r) => r.kind === "person");
+    if (person) {
+      // Grey always means recorded geometry. It must never stand in for a
+      // corrected target, including while a mesh texture is loading.
+      ctx.fillStyle = "#c8d5ed55";
+      polygon(ctx, person.polygon, w, h);
+      ctx.fill();
+      const frames = a.body?.frames ?? [];
+      let pair = bracket(frames, time, 0.5);
+      if (pair?.a === pair?.b)
+        pair =
+          bracket(frames, time + 0.00002, 0.5) ??
+          bracket(frames, time - 0.00002, 0.5);
+      if (pair && pair.a !== pair.b && pair.a.image && pair.b.image) {
+        const targetPose = poseAt(track.poses, time);
+        const bounds = (p: XY[]) => ({
+          x: Math.min(...p.map(([x]) => x)),
+          y: Math.min(...p.map(([, y]) => y)),
+          w: Math.max(...p.map(([x]) => x)) - Math.min(...p.map(([x]) => x)),
+          h:
+            Math.max(...p.map(([, y]) => y)) - Math.min(...p.map(([, y]) => y)),
+        });
+        const target = bounds(person.polygon);
+        for (const [frame, weight] of [
+          [pair.a, 1 - pair.u],
+          [pair.b, pair.u],
+        ] as const) {
+          const texture = frame.image ? images.get(frame.image) : undefined;
+          const source = outlinesAt(track.outlines, frame.t).find(
+            (p) => p.id === person.id,
+          );
+          if (
+            !texture?.complete ||
+            !texture.naturalWidth ||
+            !source ||
+            weight <= 0.01
+          )
+            continue;
+          const from = bounds(source.polygon);
+          if (from.w <= 0 || from.h <= 0) continue;
+          const sx = target.w / from.w,
+            sy = target.h / from.h;
+          if (sx < 0.7 || sx > 1.4 || sy < 0.7 || sy > 1.4) continue;
+          ctx.save();
+          polygon(ctx, person.polygon, w, h);
+          ctx.clip();
+          ctx.globalAlpha = weight * 0.65;
+          const sourcePose = poseAt(track.poses, frame.t);
+          if (sourcePose.length >= 8 && targetPose.length >= 8)
+            warpMesh(ctx, texture, sourcePose, targetPose, w, h);
+          else {
+            ctx.translate(
+              (target.x - from.x * sx) * w,
+              (target.y - from.y * sy) * h,
+            );
+            ctx.scale(sx, sy);
+            ctx.drawImage(texture, 0, 0, w, h);
+          }
+          ctx.restore();
+        }
+      }
+      count++;
+    }
+  }
   const form = options.form ? formGuideAt(track.guide, time) : null;
   const correctionClip = options.form
     ? track.motion.find((c) => time >= c.start && time <= c.end)
@@ -335,6 +418,24 @@ export function renderOverlays(
   }
   if (options.cues) {
     const moment = track.moments.find((m) => time >= m.start && time <= m.end);
+    const observation = moment
+      ? undefined
+      : track.observations.find((o) => time >= o.start && time < o.end);
+    if (observation || moment) {
+      const size = Math.max(13, w * 0.026);
+      ctx.font = `600 ${size}px system-ui, sans-serif`;
+      const text = moment
+        ? `Try · ${moment.title}`
+        : `Observed · ${observation!.title}`;
+      const label = text.length > 44 ? `${text.slice(0, 41)}…` : text;
+      const width = Math.min(w - 24, ctx.measureText(label).width + 24);
+      ctx.fillStyle = "#17252ed9";
+      ctx.fillRect(12, 12, width, size + 20);
+      ctx.fillStyle = "#ffffff";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, 24, 22 + size / 2, width - 24);
+      count++;
+    }
     const ids: Record<string, number[]> = {
       shoulders: [11, 12],
       elbows: [13, 14],

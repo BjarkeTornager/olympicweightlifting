@@ -286,7 +286,13 @@ export function barTrailSegments(analysis: VideoAnalysis, time: number) {
   for (const p of analysis.tracking.points) {
     if (p.t > time) break;
     if (p.t < time - 1.5) continue;
-    if (!previous || p.t - previous.t > 0.12 || p.t <= previous.t)
+    if (
+      !previous ||
+      p.t - previous.t > 0.12 ||
+      p.t <= previous.t ||
+      p.segment !== previous.segment ||
+      Math.hypot(p.x - previous.x, p.y - previous.y) > 0.2
+    )
       segments.push([]);
     segments.at(-1)!.push(p);
     previous = p;

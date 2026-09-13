@@ -5,7 +5,7 @@ import { liftingVideos, user } from "../db/schema";
 import { callModel, ProviderError } from "../agent/provider";
 import { ApiError } from "../agent/http";
 import { userAllowed } from "../access";
-import { processVideo, refineVideo } from "./processor";
+import { processVideo, refineVideo, recoverVideoOverlays } from "./processor";
 import {
   sam3ConfigurationForAccount,
   segmentVideo,
@@ -134,6 +134,9 @@ async function automaticFeedback(
     if (current.pose?.version === 2) {
       const previous = analysis.pose?.version === 2 ? analysis.pose.frames : [];
       const merged = new Map(previous.map((f) => [f.t, f]));
+      for (const frame of current.pose.frames)
+        if (frame.t >= attempt.start && frame.t <= attempt.end)
+          merged.set(frame.t, frame);
       // A failed exact-frame track must erase any older marker at that time.
       // Otherwise a new review could display a stale, plausible-looking point.
       for (const t of current.sampleTimes)
@@ -148,6 +151,22 @@ async function automaticFeedback(
         frames: [...merged.values()].sort((a, b) => a.t - b.t),
       };
     }
+    if (current.tracking.source === "automatic_plate") {
+      const points = [
+        ...analysis.tracking.points.filter(
+          (p) => p.t < attempt.start || p.t > attempt.end,
+        ),
+        ...current.tracking.points
+          .filter((p) => p.t >= attempt.start && p.t <= attempt.end)
+          .map((p) => ({ ...p, segment: attempt.id })),
+      ].sort((a, b) => a.t - b.t);
+      analysis.tracking = {
+        ...current.tracking,
+        points,
+        status: points.length ? "partial" : "unavailable",
+      };
+    }
+    analysis.overlayVersion = 1;
     await checkpoint(analysis, "Coach is reviewing the tracked movement");
     const focus = previous(attempt.identification.lift);
     const messages = reviewMessages(input, current, refined.frames, focus);
@@ -197,6 +216,7 @@ async function automaticFeedback(
   analysis = {
     ...analysis,
     reviewVersion: VIDEO_REVIEW_VERSION,
+    overlayVersion: 1,
     identification: attempts[0].identification,
     coaching: {
       version: 2,
@@ -277,6 +297,7 @@ export async function runVideoJob(
   refiner = refineVideo,
   segmenter = segmentVideo,
   bodyReconstructor = reconstructBody,
+  overlayRecoverer = recoverVideoOverlays,
 ) {
   const fence = and(
     eq(liftingVideos.userId, job.user_id),
@@ -500,6 +521,55 @@ export async function runVideoJob(
           await save();
           detailed.segmentation = segmentation;
         }
+        if (!saved.overlayRecovery) {
+          await getDb()
+            .update(liftingVideos)
+            .set({
+              stage: "Following your body and the bar through the lift",
+              progress: advance("tracking", current),
+            })
+            .where(fence);
+          const merged = new Map(
+            (current.pose?.frames ?? [])
+              .filter((f) => f.t >= attempt.start && f.t <= attempt.end)
+              .map((f) => [f.t, f]),
+          );
+          for (const frame of detailed.pose?.frames ?? [])
+            merged.set(frame.t, frame);
+          for (const t of saved.sampleTimes)
+            merged.set(t, {
+              t,
+              points:
+                detailed.pose?.frames.find((f) => Math.abs(f.t - t) < 0.00001)
+                  ?.points ?? [],
+            });
+          const pose = detailed.pose
+            ? {
+                ...detailed.pose,
+                frames: [...merged.values()].sort((a, b) => a.t - b.t),
+              }
+            : current.pose;
+          const recovered = await overlayRecoverer(
+            media!,
+            { ...detailed, pose },
+            signal,
+          );
+          signal.throwIfAborted();
+          // Explicit calibrated tracking retains its measured path and scale.
+          saved = {
+            ...saved,
+            overlayRecovery: {
+              pose: recovered.pose,
+              tracking: row.input.calibration
+                ? current.tracking
+                : recovered.tracking,
+            },
+          };
+          await save();
+        }
+        detailed.pose = saved.overlayRecovery!.pose;
+        detailed.tracking = saved.overlayRecovery!.tracking;
+        detailed.overlayVersion = 1;
         const prepareBody = async (
           reviewed: NonNullable<VideoRefinementCheckpoint["reviewed"]>,
         ) => {

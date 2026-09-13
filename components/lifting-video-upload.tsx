@@ -66,6 +66,7 @@ function ReviewResult({
     review.status === "ready" && a?.coaching?.version !== 2;
   const bodyUpdate =
     review.status === "ready" && bodyOverlayEnabled && !a?.body;
+  const overlayUpdate = review.status === "ready" && a?.overlayVersion !== 1;
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -78,23 +79,32 @@ function ReviewResult({
   return (
     <div className="video-review-result">
       {error && <p role="alert">{error}</p>}
-      {(outdated || coachingUpdate) && (
+      {(outdated || coachingUpdate || overlayUpdate) && (
         <section
           className="video-review-update"
           aria-label="Review update available"
         >
           <strong>
-            {bodyUpdate
-              ? a?.body
-                ? "Suggested movement is available"
-                : "3D body review is available"
-              : "Updated coaching is available"}
+            {overlayUpdate
+              ? "Complete your video overlays"
+              : bodyUpdate
+                ? a?.body
+                  ? "Suggested movement is available"
+                  : "3D body review is available"
+                : "Updated coaching is available"}
           </strong>
           <p>
-            Update this saved review for a coaching priority, a practice task
-            and a suggested posture guide when the visible evidence supports it.
-            {bodyUpdate &&
-              " This adds a suggested movement comparison when Coach can establish a supported posture adjustment. Your original clip is reused."}
+            {overlayUpdate ? (
+              "Update your saved clip to run automatic bar and foreground body tracking. Available layers appear together in the player; corrected form still needs clear supporting evidence."
+            ) : (
+              <>
+                Update this saved review for a coaching priority, a practice
+                task and a suggested posture guide when the visible evidence
+                supports it.
+                {bodyUpdate &&
+                  " This adds a suggested movement comparison when Coach can establish a supported posture adjustment. Your original clip is reused."}
+              </>
+            )}
           </p>
           <Button disabled={busy} onClick={onReanalyse}>
             Update analysis
@@ -106,7 +116,7 @@ function ReviewResult({
           <GuidedReplay review={review} url={url} onTime={setTime} />
           <details className="video-review-tools">
             <summary>Review details & downloads</summary>
-            {bodyUpdate && (
+            {bodyUpdate && !overlayUpdate && (
               <div className="video-review-update">
                 <strong>3D body review is available</strong>
                 <p>

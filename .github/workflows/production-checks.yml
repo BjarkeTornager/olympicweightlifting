@@ -38,6 +38,7 @@ jobs:
       - run: npm ci
       - run: npm run db:migrate
       - run: /tmp/lift-video-env/bin/python scripts/video/test_analysis.py
+      - run: /tmp/lift-video-env/bin/python scripts/video/test_overlay_recovery.py
       - run: npm run check:production
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build

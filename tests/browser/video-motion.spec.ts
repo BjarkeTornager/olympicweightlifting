@@ -4,11 +4,102 @@ import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import AxeBuilder from "@axe-core/playwright";
 
+test("recorded body, bar path and observations work without a fabricated form correction", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(60000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const review = formGuideReview(),
+    a = review.analysis!;
+  a.overlayVersion = 1;
+  a.pose = undefined;
+  a.coaching!.moments = [];
+  const png = await sharp(
+    Buffer.from(
+      '<svg width="320" height="480"><path d="M160 140L180 300L160 410" stroke="#91aedb" stroke-width="24" fill="none"/></svg>',
+    ),
+  )
+    .png()
+    .toBuffer();
+  const image = `data:image/png;base64,${png.toString("base64")}`;
+  a.body = {
+    version: 1,
+    model: "sam-3d-body",
+    revision: "11aaa346c7204874a1cbafe3d39a979080b2c55a",
+    sourceSha256: "a".repeat(64),
+    width: 320,
+    height: 480,
+    status: "partial",
+    reason: "Recorded reconstruction",
+    frames: Array.from({ length: 20 }, (_, i) => ({ t: i / 10, image })),
+  };
+  await context.route("**/api/lifting-videos", (r) =>
+    r.fulfill({ json: { videos: [review] } }),
+  );
+  await context.route(/\/api\/lifting-videos\/[^/]+$/, (r) =>
+    r.fulfill({ json: review }),
+  );
+  await context.route("**/api/lifting-videos/*/media", async (r) =>
+    r.fulfill({
+      contentType: "video/mp4",
+      body: await readFile("tests/fixtures/lifting-motion.mp4"),
+    }),
+  );
+  await page.goto("/#coach/lifting/video");
+  const d = page.getByRole("dialog", { name: "Review a lifting video" });
+  await d.getByRole("button", { name: "Your reviews (1)" }).click();
+  await d.getByRole("button", { name: /Jerk.*Review ready/ }).click();
+  await expect(d.locator("video")).toHaveCount(1);
+  const video = d.locator("video");
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
+    .toBeGreaterThanOrEqual(2);
+  await video.evaluate((v) =>
+    v.scrollIntoView({ block: "center", behavior: "instant" }),
+  );
+  await expect(
+    d.getByRole("button", { name: "Form guide", exact: true }),
+  ).toBeDisabled();
+  for (const name of ["Body outline", "3D body", "Bar path", "Coach cues"])
+    await expect(d.getByRole("button", { name, exact: true })).toBeEnabled();
+  await d.getByRole("button", { name: "Body outline", exact: true }).click();
+  await d.getByRole("button", { name: "3D body", exact: true }).click();
+  await d.getByRole("button", { name: "Bar path", exact: true }).click();
+  await d.getByLabel("Video position").fill("0.501");
+  await video.evaluate((v) =>
+    v.scrollIntoView({ block: "center", behavior: "instant" }),
+  );
+  await expect(d.getByLabel("Coaching observation")).toBeVisible();
+  await expect(d.getByLabel("Coaching overlay", { exact: true })).toHaveCount(
+    0,
+  );
+  const canvas = d.getByRole("img", { name: "Synchronized video overlays" });
+  await expect(canvas).toHaveAttribute("data-frame-time", "0.500000");
+  await expect.poll(() => canvas.getAttribute("data-layers")).toBe("3");
+  await page.screenshot({
+    path: "/private/tmp/lift-overlay-availability-mobile.png",
+    fullPage: false,
+  });
+  for (const t of ["1.201", "0.201", "1.201"]) {
+    await d.getByLabel("Video position").fill(t);
+    await expect
+      .poll(async () => Number(await canvas.getAttribute("data-layers")))
+      .toBeGreaterThan(0);
+  }
+  await expect(
+    d.getByText(
+      "3D body shows your recorded position. Form guide shows supported adjustments.",
+    ),
+  ).toBeVisible();
+});
+
 for (const width of [390, 1280]) {
   test(`one player keeps overlays continuous on every decoded frame, replay and seek at ${width}px`, async ({
     page,
     context,
   }) => {
+    test.setTimeout(60000);
     await page.setViewportSize({ width, height: 900 });
     const review = formGuideReview();
     if (width === 1280) {
@@ -68,9 +159,15 @@ for (const width of [390, 1280]) {
     await expect(
       d.getByRole("button", { name: "Form guide", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
+    // Canvas readback below is deliberately expensive. Half speed provides
+    // enough decoded samples on loaded runners without weakening assertions
+    // about source timestamps, gaps, reverse seeks or overlay pixels.
+    await d.getByLabel("Playback speed").selectOption("0.5");
     const canvas = d.getByLabel("Synchronized video overlays"),
       video = d.getByLabel("Saved lifting video");
-    await video.scrollIntoViewIfNeeded();
+    await video.evaluate((v) =>
+      v.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
     for (let pass = 0; pass < 3; pass++) {
       await d
         .getByLabel("Playback speed")

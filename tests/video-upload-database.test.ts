@@ -22,7 +22,15 @@ test(
       reanalyseVideo,
       videoMedia,
     } = await import("../lib/video/store");
-    const { claimVideo, runVideoJob } = await import("../lib/video/worker");
+    const { claimVideo, runVideoJob: executeVideoJob } =
+      await import("../lib/video/worker");
+    const runVideoJob: typeof executeVideoJob = (...args) => {
+      args[6] ??= async (_media, analysis) => ({
+        pose: analysis.pose,
+        tracking: analysis.tracking,
+      });
+      return executeVideoJob(...args);
+    };
     const { readJournal } = await import("../lib/server");
     const pool = getPool(),
       users = [crypto.randomUUID(), crypto.randomUUID()];
@@ -442,7 +450,7 @@ test(
       assert.equal("checkpoint" in legacyCheckpoint, false);
       assert.equal("failure" in legacyCheckpoint, false);
       await pool.query(
-        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','4') WHERE user_id=$1 AND id=$2",
+        "UPDATE lifting_videos SET refinement=jsonb_set(refinement,'{version}','5') WHERE user_id=$1 AND id=$2",
         [users[0], automatic.id],
       );
       assert.equal(
@@ -480,6 +488,11 @@ test(
         },
         async () => {
           throw Error("Must reuse checkpointed frame extraction and GPU work");
+        },
+        undefined,
+        undefined,
+        async () => {
+          throw Error("Must reuse checkpointed overlay recovery");
         },
       );
       const completed = await getVideo(users[0], automatic.id);
@@ -592,10 +605,45 @@ test(
           },
           autoProcessor,
           refiner,
+          undefined,
+          undefined,
+          async (_media, detailed) => ({
+            pose: {
+              ...detailed.pose!,
+              frames: [
+                ...detailed.pose!.frames,
+                { t: 0.625, points: [{ id: 13, x: 0.42, y: 0.51 }] },
+              ].sort((a, b) => a.t - b.t),
+            },
+            tracking: {
+              ...detailed.tracking,
+              source: "automatic_plate",
+              status: "partial",
+              points: [0.5, 0.55, 0.6].map((t) => ({
+                t,
+                x: 0.4,
+                y: 0.7,
+                score: 0.85,
+              })),
+              coverage: 0.3,
+            },
+          }),
         );
         const partial = await getVideo(users[0], partialInput.id);
         assert.equal(calls, 2);
         assert.equal(partial.status, "ready");
+        assert.equal(partial.analysis?.overlayVersion, 1);
+        assert.equal(partial.analysis?.tracking.source, "automatic_plate");
+        assert.equal(partial.analysis?.tracking.points.length, 3);
+        assert(
+          partial.analysis?.tracking.points.every(
+            (p) => p.segment === "attempt-1",
+          ),
+        );
+        assert.deepEqual(
+          partial.analysis?.pose?.frames.find((f) => f.t === 0.625)?.points,
+          [{ id: 13, x: 0.42, y: 0.51 }],
+        );
         assert.equal(partial.analysis?.identification?.lift, null);
         assert.equal(partial.analysis?.coaching?.scope, "visible_phases");
         assert.equal(partial.analysis?.coaching?.moments[0].evidenceTime, 0.5);

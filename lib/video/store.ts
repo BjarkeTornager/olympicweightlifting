@@ -257,6 +257,7 @@ async function queueReview(
                 ? {
                     ...row.analysis,
                     reviewVersion: undefined,
+                    overlayVersion: undefined,
                     identification: undefined,
                     coaching: undefined,
                     attempts: undefined,

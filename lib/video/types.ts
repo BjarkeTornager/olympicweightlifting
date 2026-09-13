@@ -39,9 +39,16 @@ export const videoUploadSchema = z
     "Upload the whole video automatically, or choose between 0.5 and 20 seconds.",
   );
 export type VideoUpload = z.infer<typeof videoUploadSchema>;
-export type TrackPoint = { t: number; x: number; y: number; score: number };
+export type TrackPoint = {
+  t: number;
+  x: number;
+  y: number;
+  score: number;
+  segment?: string;
+};
 export type VideoAnalysis = {
   version: 1;
+  overlayVersion?: number;
   reviewVersion?: number;
   identification?: import("./identification").LiftIdentification;
   width: number;
@@ -60,6 +67,7 @@ export type VideoAnalysis = {
   coaching?: import("./coaching").GuidedCoaching;
   attempts?: import("./attempts").VideoAttempt[];
   tracking: {
+    source?: "automatic_plate";
     status: "not_requested" | "partial" | "tracked" | "unavailable";
     reason: string;
     points: TrackPoint[];

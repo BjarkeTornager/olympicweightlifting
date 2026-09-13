@@ -49,17 +49,22 @@ export function GuidedReplay({
     outline: !track.formAvailable,
     bar: false,
     cues: true,
+    body: false,
   }));
   const a = review.analysis;
   const available = {
     form: track.formAvailable,
+    body: track.bodyAvailable,
     outline: track.outlines.some((f) => f.objects.length),
     bar: Boolean(a?.tracking.points.length),
-    cues: Boolean(track.moments.length),
+    cues: Boolean(track.moments.length || track.observations.length),
   };
   const selectedCue = track.moments.find(
     (m) => time >= m.start && time <= m.end,
   );
+  const selectedObservation =
+    !selectedCue &&
+    track.observations.find((o) => time >= o.start && time < o.end);
 
   useEffect(() => {
     const v = video.current,
@@ -114,7 +119,7 @@ export function GuidedReplay({
       );
       for (const key of images.current.keys())
         if (!wanted.has(key)) images.current.delete(key);
-      if (options.form)
+      if (options.form || options.body)
         for (const key of wanted)
           if (!images.current.has(key)) {
             const image = new Image();
@@ -261,7 +266,7 @@ export function GuidedReplay({
           style={{
             aspectRatio: a ? `${a.width} / ${a.height}` : undefined,
             width: a
-              ? `min(100%, calc(min(56dvh, 520px) * ${a.width / a.height}))`
+              ? `min(100%, calc(min(${expanded ? 56 : 48}dvh, 520px) * ${a.width / a.height}))`
               : "100%",
           }}
         >
@@ -346,6 +351,7 @@ export function GuidedReplay({
           [
             ["form", "Form guide"],
             ["outline", "Body outline"],
+            ["body", "3D body"],
             ["bar", "Bar path"],
             ["cues", "Coach cues"],
           ] as const
@@ -377,10 +383,22 @@ export function GuidedReplay({
           <strong>Try this</strong> {selectedCue.cue}
         </p>
       )}
+      {options.cues && selectedObservation && (
+        <p className="video-live-cue" aria-label="Coaching observation">
+          <strong>{selectedObservation.title}</strong>{" "}
+          {selectedObservation.observation}
+        </p>
+      )}
+      {options.body && available.body && (
+        <p className="fine-print">
+          3D body shows your recorded position. Form guide shows supported
+          adjustments.
+        </p>
+      )}
       {error && <p role="alert">{error}</p>}
       {!available.form && (
         <p className="fine-print video-overlay-availability">
-          Form guide unavailable for this review. See overlay details below.
+          {track.guide.reason}
         </p>
       )}
       {!!track.moments.length && (
@@ -487,6 +505,16 @@ export function GuidedReplay({
               ? "Outline processing did not finish. Update the analysis to retry."
               : a.segmentation.reason}
           </p>
+        )}
+        {!available.bar && (
+          <p className="fine-print">
+            {a?.tracking.status === "not_requested"
+              ? "This older review did not run automatic bar tracking. Update the analysis to add it."
+              : a?.tracking.reason}
+          </p>
+        )}
+        {!available.body && a?.body && (
+          <p className="fine-print">{a.body.reason}</p>
         )}
       </details>
     </div>

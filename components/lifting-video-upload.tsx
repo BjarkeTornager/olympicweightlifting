@@ -63,7 +63,7 @@ function ReviewResult({
   const coachingUpdate =
     review.status === "ready" && a?.coaching?.version !== 2;
   const bodyUpdate =
-    review.status === "ready" && bodyOverlayEnabled && !a?.body?.motion;
+    review.status === "ready" && bodyOverlayEnabled && !a?.body;
   const velocities = t?.velocities ?? [],
     min = Math.min(0, ...velocities.map((v) => v.value)),
     max = Math.max(0.1, ...velocities.map((v) => v.value));
@@ -76,7 +76,7 @@ function ReviewResult({
   return (
     <div className="video-review-result">
       {error && <p role="alert">{error}</p>}
-      {(outdated || coachingUpdate || bodyUpdate) && (
+      {(outdated || coachingUpdate) && (
         <section
           className="video-review-update"
           aria-label="Review update available"
@@ -103,7 +103,19 @@ function ReviewResult({
         <>
           <GuidedReplay review={review} url={url} onTime={setTime} />
           <details className="video-review-tools">
-            <summary>More detail & downloads</summary>
+            <summary>Review details & downloads</summary>
+            {bodyUpdate && (
+              <div className="video-review-update">
+                <strong>3D body review is available</strong>
+                <p>
+                  Update this review to add reconstructed body detail to the
+                  form guide. Your saved clip is reused.
+                </p>
+                <Button disabled={busy} onClick={onReanalyse}>
+                  Update analysis
+                </Button>
+              </div>
+            )}
             {a && (
               <p className="fine-print">
                 Coach reviewed {a.sampleTimes.length} sampled frames. Fast
@@ -450,20 +462,26 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
       }}
     >
       <div className="lifting-video-flow video-upload-flow">
-        <div className="video-review-tabs" aria-label="Video review views">
-          <Button
-            variant={tab === "upload" ? "default" : "ghost"}
-            onClick={() => setTab("upload")}
-          >
-            Upload video
+        {tab === "reviews" && review ? (
+          <Button variant="ghost" onClick={() => setSelected(null)}>
+            ← All reviews
           </Button>
-          <Button
-            variant={tab === "reviews" ? "default" : "ghost"}
-            onClick={() => setTab("reviews")}
-          >
-            Your reviews{reviews.length ? ` (${reviews.length})` : ""}
-          </Button>
-        </div>
+        ) : (
+          <div className="video-review-tabs" aria-label="Video review views">
+            <Button
+              variant={tab === "upload" ? "default" : "ghost"}
+              onClick={() => setTab("upload")}
+            >
+              Upload video
+            </Button>
+            <Button
+              variant={tab === "reviews" ? "default" : "ghost"}
+              onClick={() => setTab("reviews")}
+            >
+              Your reviews{reviews.length ? ` (${reviews.length})` : ""}
+            </Button>
+          </div>
+        )}
         {notice && <p role="status">{notice}</p>}
         {error && (
           <p role="alert" className="error-text">
@@ -868,32 +886,34 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                 started.
               </p>
             )}
-            <div className="video-review-list">
-              {reviews.map((r) => (
-                <button
-                  key={r.id}
-                  className={r.id === selected ? "selected" : ""}
-                  onClick={() => {
-                    setSelected(r.id);
-                    setNotice("");
-                  }}
-                >
-                  <span>
-                    <strong>
-                      {r.analysis?.identification?.lift ??
-                        (r.lift === "Identify from video"
-                          ? "Lifting video"
-                          : r.lift)}
-                    </strong>
-                    <small>
-                      {r.date}
-                      {r.load ? ` · ${r.load}` : ""}
-                    </small>
-                  </span>
-                  <span>{r.stage} →</span>
-                </button>
-              ))}
-            </div>
+            {!review && (
+              <div className="video-review-list">
+                {reviews.map((r) => (
+                  <button
+                    key={r.id}
+                    className={r.id === selected ? "selected" : ""}
+                    onClick={() => {
+                      setSelected(r.id);
+                      setNotice("");
+                    }}
+                  >
+                    <span>
+                      <strong>
+                        {r.analysis?.identification?.lift ??
+                          (r.lift === "Identify from video"
+                            ? "Lifting video"
+                            : r.lift)}
+                      </strong>
+                      <small>
+                        {r.date}
+                        {r.load ? ` · ${r.load}` : ""}
+                      </small>
+                    </span>
+                    <span>{r.stage} →</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {review && (
               <section className="video-review-detail">
                 <h3>

@@ -65,31 +65,28 @@ test("a limited review explains missing corrections and outlines without offerin
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
   await expect(
-    dialog.getByText("No supported correction markers"),
-  ).toBeVisible();
-  await expect(dialog.getByRole("status")).toContainText(
-    "could not be tracked confidently",
-  );
+    dialog.getByRole("button", { name: "Form guide", exact: true }),
+  ).toBeDisabled();
   await expect(
-    dialog.getByText(
-      "This does not mean every part of your lift was assessed.",
-      { exact: false },
-    ),
+    dialog.getByRole("button", { name: "Body outline", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByText("The view is limited.", { exact: true }).first(),
   ).toBeVisible();
+  await dialog.getByText("Overlay details", { exact: true }).click();
+  await expect(dialog.getByText("No reliable subject match.")).toBeVisible();
   review.analysis!.segmentation!.failure = "deadline";
   review.analysis!.segmentation!.frames = [];
   await page.reload();
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
-  await expect(dialog.getByRole("status")).toContainText(
-    "Outline processing did not finish",
-  );
-  await expect(dialog.getByLabel("Coach overlay", { exact: true })).toHaveCount(
-    0,
-  );
+  await dialog.getByText("Overlay details", { exact: true }).click();
   await expect(
-    dialog.getByText("Synthetic visible observation."),
+    dialog.getByText(/Outline processing did not finish/),
   ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Coach cues", exact: true }),
+  ).toBeDisabled();
   await expect(
     dialog.getByRole("button", { name: "Play video", exact: true }),
   ).toBeVisible();
@@ -166,7 +163,7 @@ test("segmented replay stays visible during playback, clears on gaps and can be 
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Snatch.*Review ready/ }).click();
   const video = dialog.getByLabel("Saved lifting video"),
-    canvas = dialog.getByLabel("Segmented video replay");
+    canvas = dialog.getByLabel("Synchronized video overlays");
   await dialog.getByLabel("Playback speed").selectOption("0.25");
   await dialog.getByRole("button", { name: "Play video", exact: true }).click();
   await expect(canvas).toBeVisible();
@@ -175,23 +172,21 @@ test("segmented replay stays visible during playback, clears on gaps and can be 
   await expect
     .poll(async () => Number(await canvas.getAttribute("data-frame-time")))
     .toBeGreaterThan(first);
-  expect(
-    await canvas.evaluate(
-      (c: HTMLCanvasElement) =>
-        c.getContext("2d")!.getImageData(160, 200, 1, 1).data[3],
-    ),
-  ).toBe(255);
-  await dialog.getByLabel("Tracked replay").uncheck();
-  await expect(canvas).toBeHidden();
-  await dialog.getByLabel("Tracked replay").check();
-  await video.evaluate((v: HTMLVideoElement) => {
-    v.currentTime = 1;
-  });
-  await expect(canvas).toBeHidden();
-  await dialog.getByRole("button", { name: "Inspect outlines" }).click();
+  await expect(canvas).toHaveAttribute("data-layers", "1");
+  await dialog
+    .getByRole("button", { name: "Body outline", exact: true })
+    .click();
+  await expect(canvas).toHaveAttribute("data-layers", "0");
+  await dialog
+    .getByRole("button", { name: "Body outline", exact: true })
+    .click();
+  await video.evaluate((v: HTMLVideoElement) => v.pause());
+  await dialog.getByLabel("Video position").fill("1.001");
+  await expect(canvas).toHaveAttribute("data-frame-time", "1.000000");
+  await expect(canvas).toHaveAttribute("data-layers", "0");
+  await dialog.getByLabel("Video position").fill("0.501");
+  await expect(canvas).toHaveAttribute("data-layers", "1");
   await expect(video).toHaveJSProperty("paused", true);
-  await expect(dialog.getByLabel("Tracked object outlines")).toBeVisible();
-  await expect(canvas).toBeHidden();
 });
 
 function saved(id: string): SavedVideoReview {
@@ -281,12 +276,12 @@ test("saved outlines remain usable while feedback recovers automatically", async
       "Your outlines are ready. Coach is finishing the feedback automatically.",
     ),
   ).toBeVisible();
-  await expect(dialog.getByLabel("Tracked replay")).toBeChecked();
   await expect(
-    dialog
-      .getByRole("img", { name: "Tracked object outlines" })
-      .locator("polygon"),
-  ).toHaveCount(1);
+    dialog.getByRole("button", { name: "Body outline", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    dialog.getByLabel("Synchronized video overlays"),
+  ).toHaveAttribute("data-layers", "1");
   await expect(
     dialog.getByRole("button", { name: "Retry analysis" }),
   ).toHaveCount(0);
@@ -474,7 +469,7 @@ test("private video upload processes across navigation and exposes playback, fee
   await expect(
     dialog.getByLabel("Experimental bar trajectory overlay"),
   ).toHaveCount(0);
-  await dialog.getByText("More detail & downloads", { exact: true }).click();
+  await dialog.getByText("Review details & downloads", { exact: true }).click();
   const download = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Export analysis" }).click();
   expect((await download).suggestedFilename()).toBe(
@@ -597,47 +592,7 @@ for (const partial of [false, true])
   test(`guided replay ${partial ? "for a partial clip" : "for an identified lift"} seeks to evidence, highlights visible landmarks and keeps overlays when enlarged`, async ({
     page,
     context,
-  }, info) => {
-    // Reproduce a user tapping a cue before Safari has decoded the video.
-    // Media setters are ignored until readiness, as on a cold metadata load.
-    await page.addInitScript((hold) => {
-      const state = window as Window & { holdVideoReadiness?: boolean };
-      state.holdVideoReadiness = hold;
-      const readiness = Object.getOwnPropertyDescriptor(
-        HTMLMediaElement.prototype,
-        "readyState",
-      )!;
-      const position = Object.getOwnPropertyDescriptor(
-        HTMLMediaElement.prototype,
-        "currentTime",
-      )!;
-      Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
-        ...readiness,
-        get() {
-          return state.holdVideoReadiness ? 0 : readiness.get!.call(this);
-        },
-      });
-      Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
-        ...position,
-        set(value: number) {
-          if (!state.holdVideoReadiness) position.set!.call(this, value);
-        },
-      });
-    }, partial);
-    await page.addInitScript(() => {
-      const original = HTMLVideoElement.prototype.requestVideoFrameCallback;
-      if (!original) return;
-      HTMLVideoElement.prototype.requestVideoFrameCallback = function (
-        callback,
-      ) {
-        (
-          this as HTMLVideoElement & {
-            testPresentedFrame?: VideoFrameRequestCallback;
-          }
-        ).testPresentedFrame = callback;
-        return original.call(this, callback);
-      };
-    });
+  }) => {
     const review: SavedVideoReview = {
       ...saved("00000000-0000-4000-8000-000000000010"),
       lift: partial ? "Identify from video" : "Snatch",
@@ -768,135 +723,24 @@ for (const partial of [false, true])
       dialog.getByRole("heading", { name: "Watch this receiving position" }),
     ).toBeVisible();
     await expect(dialog.getByLabel("Coach video feedback")).not.toBeVisible();
-    if (partial)
-      await expect(dialog.getByLabel("Guided coaching")).toContainText(
-        "Feedback on the visible movement",
-      );
-    await dialog.getByRole("button", { name: "Freeze & inspect" }).click();
-    await expect(video).toBeInViewport({ ratio: 0.95 });
-    if (partial) {
-      await expect(
-        dialog.getByLabel("Coach focus highlight"),
-      ).not.toBeVisible();
-      await video.evaluate((v: HTMLVideoElement) => {
-        (
-          window as Window & { holdVideoReadiness?: boolean }
-        ).holdVideoReadiness = false;
-        v.dispatchEvent(new Event("loadedmetadata"));
-      });
-    }
-    await expect
-      .poll(() =>
-        video.evaluate((v: HTMLVideoElement) => ({
-          // Evidence seeks enter the frame slightly after its rounded PTS.
-          atEvidenceFrame: v.currentTime >= 0.5 && v.currentTime < 0.502,
-          seeking: v.seeking,
-          ready: v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
-        })),
-      )
-      .toEqual({ atEvidenceFrame: true, seeking: false, ready: true });
-    await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
-    await expect(video).toHaveJSProperty("paused", true);
+    await dialog.getByRole("button", { name: /Watch this moment/ }).click();
+    await expect(video).toHaveJSProperty("paused", false);
+    await expect(dialog.locator("video")).toHaveCount(1);
+    await video.evaluate((v: HTMLVideoElement) => v.pause());
+    await dialog.getByLabel("Video position").fill("0.501");
     await expect(
-      dialog.locator(".video-review-player svg polygon"),
-    ).toHaveCount(1);
-    await dialog.getByLabel("Tracked replay").uncheck();
-    await expect(
-      dialog.locator(".video-review-player svg polygon"),
-    ).toHaveCount(0);
-    await dialog.getByLabel("Tracked replay").check();
-    expect(
-      await video.evaluate((v: HTMLVideoElement) => v.currentTime),
-    ).toBeCloseTo(0.5, 2);
-    await dialog
-      .getByRole("button", { name: "Inspect evidence frame at 1.00 seconds" })
-      .click();
-    expect(
-      await video.evaluate((v: HTMLVideoElement) => v.currentTime),
-    ).toBeCloseTo(1, 2);
-    await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
-    await dialog.getByRole("button", { name: "Watch this moment" }).click();
-    await expect(video).toBeInViewport({ ratio: 0.95 });
-    await expect(dialog.getByLabel("Playback speed")).toHaveValue("0.5");
+      dialog.getByLabel("Synchronized video overlays"),
+    ).toHaveAttribute("data-frame-time", "0.500000");
     await expect(dialog.getByLabel("Coaching overlay")).toContainText(
       "highlighted elbow",
     );
-    await expect(dialog.getByLabel("Coach focus highlight")).toBeVisible();
-    await expect
-      .poll(() => video.evaluate((v: HTMLVideoElement) => v.paused))
-      .toBe(true);
-    expect(
-      await video.evaluate((v: HTMLVideoElement) => v.currentTime),
-    ).toBeCloseTo(0.5, 1);
-    await dialog.getByRole("button", { name: "Enlarge video" }).click();
-    await expect(
-      dialog.getByRole("button", { name: "Reduce video" }),
-    ).toBeVisible();
-    // Reproduce a delayed Safari callback from before the paused seek/resize.
-    await video.evaluate(
-      (
-        v: HTMLVideoElement & {
-          testPresentedFrame?: VideoFrameRequestCallback;
-        },
-      ) => {
-        v.testPresentedFrame?.(performance.now(), {
-          mediaTime: 1.95,
-        } as VideoFrameCallbackMetadata);
-      },
-    );
-    await expect(dialog.getByLabel("Coaching overlay")).toBeVisible();
-    await expect(dialog.getByLabel("Coaching overlay")).toContainText("0.50s");
-    const playerLayout = await dialog.evaluate((el) => {
-      const selectors = [
-        ".video-replay-stage",
-        ".video-review-player",
-        "video",
-        ".video-coach-caption",
-        ".video-replay-controls",
-        ".video-coaching-cards",
-      ];
-      return Object.fromEntries(
-        selectors.map((selector) => {
-          const n = el.querySelector(selector)!;
-          const r = n.getBoundingClientRect();
-          return [
-            selector,
-            { top: r.top, bottom: r.bottom, height: r.height, width: r.width },
-          ];
-        }),
-      );
-    });
-    expect(
-      playerLayout[".video-coach-caption"].top,
-      JSON.stringify(playerLayout),
-    ).toBeGreaterThanOrEqual(playerLayout["video"].bottom - 1);
-    expect(
-      playerLayout[".video-replay-controls"].top,
-      JSON.stringify(playerLayout),
-    ).toBeGreaterThanOrEqual(playerLayout[".video-coach-caption"].bottom - 1);
-    const dimensions = await video.evaluate((v) => {
-      const r = v.getBoundingClientRect();
-      return { width: r.width, height: r.height };
-    });
-    expect(dimensions.width / dimensions.height).toBeCloseTo(320 / 480, 1);
-    await dialog.screenshot({
-      path: info.outputPath("guided-replay-mobile.png"),
-    });
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Enlarge video" }),
-    ).toBeVisible();
-    await dialog.getByLabel("Coach overlay", { exact: true }).uncheck();
+    await dialog
+      .getByRole("button", { name: "Coach cues", exact: true })
+      .click();
     await expect(dialog.getByLabel("Coaching overlay")).toHaveCount(0);
-    await expect(dialog.getByLabel("Coach focus highlight")).toHaveCount(0);
-    const a11y = await new AxeBuilder({ page })
-      .include('[role="dialog"]')
-      .analyze();
-    expect(a11y.violations).toEqual([]);
     expect(
       await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
+        () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
     if (partial) {

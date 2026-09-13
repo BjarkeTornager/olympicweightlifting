@@ -7,6 +7,8 @@ import { Button } from "./ui/button";
 import { FileUp } from "./ui/icons";
 import { AssistantText } from "./assistant-text";
 import { GuidedReplay } from "./video-guided-replay";
+import { VideoProcessingProgress, VideoUploadProgress } from "./video-progress";
+import { uploadLiftingVideo, type UploadProgress } from "@/lib/video/upload";
 import { privateFetch } from "@/lib/private-fetch";
 import { today } from "@/lib/domain";
 import { currentVideoReview } from "@/lib/video/coaching";
@@ -260,6 +262,11 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     [tab, setTab] = useState<"upload" | "reviews">("upload");
   const [reviews, setReviews] = useState<SavedVideoReview[]>([]),
     [selected, setSelected] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(
+    null,
+  );
+  const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
+  const [connectionIssue, setConnectionIssue] = useState(false);
   const [bodyOverlayEnabled, setBodyOverlayEnabled] = useState(false);
   const [file, setFile] = useState<File | null>(null),
     [url, setUrl] = useState("");
@@ -285,7 +292,17 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     upload = useRef<AbortController | null>(null),
     id = useRef(crypto.randomUUID());
   const auth = { "X-Journal-Account": props.accountId };
+  const uploading = Boolean(uploadProgress);
   useEffect(() => () => upload.current?.abort(), []);
+  useEffect(() => {
+    if (!uploading) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [uploading]);
   useEffect(
     () => () => {
       if (url) URL.revokeObjectURL(url);
@@ -295,11 +312,14 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
   useEffect(() => {
     if (legacy) return;
     const abort = new AbortController();
+    let refreshing = false;
     const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
       try {
         const r = await privateFetch("/api/lifting-videos", {
           headers: { "X-Journal-Account": props.accountId },
-          signal: abort.signal,
+          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]),
         });
         if (!r.ok)
           throw Error(
@@ -309,48 +329,74 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
         if (!abort.signal.aborted) {
           setReviews(data.videos);
           setBodyOverlayEnabled(data.bodyOverlayEnabled === true);
+          setLastCheckedAt(Date.now());
+          setConnectionIssue(false);
         }
-      } catch (e) {
-        if (!abort.signal.aborted) setError((e as Error).message);
+      } catch {
+        if (!abort.signal.aborted) setConnectionIssue(true);
+      } finally {
+        refreshing = false;
       }
+    };
+    const resume = () => {
+      if (document.visibilityState === "visible") void refresh();
     };
     void refresh();
     const timer = setInterval(() => void refresh(), 5000);
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
     return () => {
       clearInterval(timer);
       abort.abort();
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
     };
   }, [props.accountId, legacy]);
   const summary = reviews.find((r) => r.id === selected);
   const [detail, setDetail] = useState<SavedVideoReview | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
+  const [detailIssue, setDetailIssue] = useState(false);
   useEffect(() => {
     if (!selected) return;
     const abort = new AbortController();
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
       const response = await privateFetch(`/api/lifting-videos/${selected}`, {
         headers: { "X-Journal-Account": props.accountId },
-        signal: abort.signal,
+        signal: AbortSignal.any([abort.signal, AbortSignal.timeout(30000)]),
       });
       if (!response.ok)
         throw Error("Could not open this review. Reopen it to retry.");
       const data = await response.json();
-      if (!abort.signal.aborted) setDetail(data);
-    })().catch((e) => {
-      if (!abort.signal.aborted) setError(e.message);
+      if (!abort.signal.aborted) {
+        setDetail(data);
+        setDetailIssue(false);
+      }
+    })().catch(() => {
+      if (!abort.signal.aborted) {
+        setDetailIssue(true);
+        retryTimer = setTimeout(() => setDetailRetry((n) => n + 1), 5000);
+      }
     });
-    return () => abort.abort();
+    return () => {
+      abort.abort();
+      clearTimeout(retryTimer);
+    };
   }, [
     selected,
     summary?.status,
     summary?.stage,
     summary?.hasMedia,
+    summary?.progress?.updatedAt,
     props.accountId,
+    detailRetry,
   ]);
   if (legacy) return <FrameReview {...props} />;
   const review = detail?.id === selected ? detail : summary;
   async function submit(chosenFile = file, automatic = !manual) {
     if (!chosenFile || submitting.current || busy) return;
     setError("");
+    setNotice("");
     let input;
     try {
       input = videoUploadSchema.parse({
@@ -386,28 +432,22 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
     upload.current = new AbortController();
     setBusy(true);
     try {
-      const r = await privateFetch("/api/lifting-videos", {
-        method: "POST",
-        headers: {
-          ...auth,
-          "Content-Type": "application/octet-stream",
-          "X-Video-Metadata": encodeURIComponent(JSON.stringify(input)),
-        },
-        body: chosenFile,
-        signal: upload.current.signal,
-      });
-      const data = await r.json();
-      if (!r.ok)
-        throw Error(data.error ?? "Upload failed. Retry with the same clip.");
+      const data = await uploadLiftingVideo(
+        chosenFile,
+        input,
+        props.accountId,
+        upload.current.signal,
+        setUploadProgress,
+      );
       setReviews((current) => [
         data,
         ...current.filter((v) => v.id !== data.id),
       ]);
       setSelected(data.id);
+      setDetail(data);
+      setLastCheckedAt(Date.now());
+      setConnectionIssue(false);
       setTab("reviews");
-      setNotice(
-        "Video saved. Analysis continues when you close this window or use another part of the app.",
-      );
       setFile(null);
       setUrl("");
       setFrame("");
@@ -416,7 +456,8 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
       if (!upload.current.signal.aborted) setError((e as Error).message);
     } finally {
       submitting.current = false;
-      if (!upload.current.signal.aborted) setBusy(false);
+      setBusy(false);
+      setUploadProgress(null);
     }
   }
   async function action(
@@ -458,7 +499,11 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
       title="Review a lifting video"
       className="guided-video-dialog"
       onOpenChange={(open) => {
-        if (!open) props.onClose();
+        if (!open && uploadProgress)
+          setNotice(
+            "Your upload is still in progress. Keep this window open, or choose Cancel upload.",
+          );
+        else if (!open) props.onClose();
       }}
     >
       <div className="lifting-video-flow video-upload-flow">
@@ -470,12 +515,14 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
           <div className="video-review-tabs" aria-label="Video review views">
             <Button
               variant={tab === "upload" ? "default" : "ghost"}
+              disabled={Boolean(uploadProgress)}
               onClick={() => setTab("upload")}
             >
               Upload video
             </Button>
             <Button
               variant={tab === "reviews" ? "default" : "ghost"}
+              disabled={Boolean(uploadProgress)}
               onClick={() => setTab("reviews")}
             >
               Your reviews{reviews.length ? ` (${reviews.length})` : ""}
@@ -495,37 +542,69 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
               Upload your lift. Coach will find the movement and show you what
               to work on, with feedback on the replay.
             </p>
-            <label className="video-upload-picker">
-              <FileUp size={30} aria-hidden="true" />
-              <span>{busy ? "Uploading your lift…" : "Upload lift"}</span>
-              <input
-                className="sr-only"
-                aria-label="Upload lifting video"
-                type="file"
-                accept="video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm"
-                disabled={busy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  if (f.size > MAX_VIDEO_BYTES) {
-                    setError("Choose a video under 50 MB.");
-                    return;
-                  }
-                  setFile(f);
-                  setUrl(URL.createObjectURL(f));
-                  setError("");
-                  setFrame("");
-                  setStart("0");
-                  setDuration(0);
-                  id.current = crypto.randomUUID();
-                  if (!advanced) void submit(f, true);
+            {!uploadProgress &&
+              reviews.some(
+                (r) => r.status === "queued" || r.status === "processing",
+              ) && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setTab("reviews");
+                    setSelected(
+                      reviews.find(
+                        (r) =>
+                          r.status === "queued" || r.status === "processing",
+                      )!.id,
+                    );
+                  }}
+                >
+                  View analysis in progress →
+                </Button>
+              )}
+            {uploadProgress && (
+              <VideoUploadProgress
+                progress={uploadProgress}
+                onCancel={() => {
+                  upload.current?.abort();
+                  setNotice(
+                    "Upload cancelled. You can retry with the same clip.",
+                  );
                 }}
               />
-            </label>
-            <p className="fine-print">
-              Private to you · MP4, MOV or WebM · Up to 2 minutes / 50 MB
-            </p>
-            {url && (
+            )}
+            <div hidden={Boolean(uploadProgress)}>
+              <label className="video-upload-picker">
+                <FileUp size={30} aria-hidden="true" />
+                <span>{busy ? "Uploading your lift…" : "Upload lift"}</span>
+                <input
+                  className="sr-only"
+                  aria-label="Upload lifting video"
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm,.mov,.mp4,.webm"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    if (f.size > MAX_VIDEO_BYTES) {
+                      setError("Choose a video under 50 MB.");
+                      return;
+                    }
+                    setFile(f);
+                    setUrl(URL.createObjectURL(f));
+                    setError("");
+                    setFrame("");
+                    setStart("0");
+                    setDuration(0);
+                    id.current = crypto.randomUUID();
+                    if (!advanced) void submit(f, true);
+                  }}
+                />
+              </label>
+              <p className="fine-print">
+                Private to you · MP4, MOV or WebM · Up to 2 minutes / 50 MB
+              </p>
+            </div>
+            {url && !uploadProgress && (
               <video
                 ref={player}
                 src={url}
@@ -855,7 +934,7 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                 )}
               </details>
             </details>
-            {file && (
+            {file && !uploadProgress && (
               <Button disabled={busy} onClick={() => void submit()}>
                 {busy ? "Uploading video…" : "Upload & analyse lift"}
               </Button>
@@ -882,8 +961,11 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
           <>
             {!reviews.length && (
               <p>
-                No saved video reviews yet. Upload your first lift to get
-                started.
+                {connectionIssue
+                  ? "Could not load your reviews. Check your connection; we’ll keep trying."
+                  : !lastCheckedAt
+                    ? "Loading your reviews…"
+                    : "No saved video reviews yet. Upload your first lift to get started."}
               </p>
             )}
             {!review && (
@@ -909,7 +991,20 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                         {r.load ? ` · ${r.load}` : ""}
                       </small>
                     </span>
-                    <span>{r.stage} →</span>
+                    <span
+                      className="video-review-state"
+                      data-active={
+                        r.status === "queued" || r.status === "processing"
+                      }
+                    >
+                      {(r.status === "queued" || r.status === "processing") && (
+                        <span
+                          className="video-review-pulse"
+                          aria-hidden="true"
+                        />
+                      )}
+                      {r.stage} →
+                    </span>
                   </button>
                 ))}
               </div>
@@ -923,12 +1018,13 @@ export function LiftingVideoDialog(props: ComponentProps<typeof FrameReview>) {
                       : review.lift)}
                   {review.load ? ` · ${review.load}` : ""}
                 </h3>
-                {(review.status === "queued" ||
-                  review.status === "processing") && (
-                  <p role="status">
-                    {review.stage}… You can leave and come back here.
-                  </p>
-                )}
+                <VideoProcessingProgress
+                  review={review}
+                  history={reviews}
+                  lastCheckedAt={lastCheckedAt}
+                  connectionIssue={connectionIssue || detailIssue}
+                  onLeave={props.onClose}
+                />
                 {review.error && <p role="alert">{review.error}</p>}
                 <ReviewResult
                   key={review.id}

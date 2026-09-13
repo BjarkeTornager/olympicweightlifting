@@ -48,6 +48,10 @@ test(
       const source = await readFile("tests/fixtures/lifting-motion.mp4");
       await saveVideo(users[0], input, source);
       await saveVideo(users[0], input, source);
+      const queuedProgress = (await getVideo(users[0], input.id)).progress;
+      assert.equal(queuedProgress?.phase, "queued");
+      assert.ok(queuedProgress?.queuedAt);
+      assert.equal(queuedProgress?.startedAt, undefined);
       assert.equal((await listVideos(users[0])).length, 1);
       assert.equal((await listVideos(users[1])).length, 0);
       await assert.rejects(getVideo(users[1], input.id), /not found/);
@@ -155,6 +159,9 @@ test(
       );
       assert.equal(stored.rows[0].source, null);
       await retryVideo(users[0], input.id);
+      const retryProgress = (await getVideo(users[0], input.id)).progress;
+      assert.equal(retryProgress?.phase, "queued");
+      assert.equal(retryProgress?.startedAt, undefined);
       const retry = await claimVideo();
       assert.ok(retry);
       let modelCalls = 0;
@@ -676,6 +683,9 @@ test(
         const visible = await getVideo(users[0], queuedInput.id);
         assert.equal(visible.status, "queued");
         assert.match(visible.stage, /continuing automatically/);
+        assert.equal(visible.progress?.phase, "tracking");
+        assert.ok(visible.progress?.startedAt);
+        assert.equal(visible.progress?.completedAt, undefined);
         assert.doesNotMatch(
           JSON.stringify(visible),
           /private-fixture-job|sam3Job|receipt/,
@@ -811,6 +821,7 @@ test(
         const waiting = await getVideo(users[0], bodyInput.id);
         assert.equal(waiting.status, "queued");
         assert.match(waiting.stage, /3D body overlay/);
+        assert.equal(waiting.progress?.phase, "body");
         assert.doesNotMatch(
           JSON.stringify(waiting),
           /private-body-receipt|bodyJob/,
@@ -832,6 +843,13 @@ test(
         );
         const bodyReview = await getVideo(users[0], bodyInput.id);
         assert.equal(bodyReview.status, "ready");
+        assert.equal(bodyReview.progress?.phase, "ready");
+        assert.equal(
+          bodyReview.progress?.startedAt,
+          waiting.progress?.startedAt,
+          "GPU resumes preserve the real start time",
+        );
+        assert.ok(bodyReview.progress?.completedAt);
         assert.equal(bodyCalls, 2);
         assert.equal(
           queueModels,

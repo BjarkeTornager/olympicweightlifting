@@ -1,0 +1,1 @@
+ALTER TABLE "lifting_videos" ADD COLUMN "progress" jsonb;

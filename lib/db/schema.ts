@@ -316,6 +316,8 @@ export const liftingVideos = pgTable(
     feedback: text("feedback"),
     status: text("status").notNull().default("queued"),
     stage: text("stage").notNull().default("Waiting to analyse"),
+    progress:
+      jsonb("progress").$type<import("../video/progress").VideoProgress>(),
     error: text("error"),
     attempts: integer("attempts").notNull().default(0),
     lease: text("lease"),

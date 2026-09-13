@@ -72,6 +72,7 @@ export type VideoAnalysis = {
   };
 };
 export type SavedVideoReview = {
+  progress?: import("./progress").VideoProgress | null;
   settings?: VideoUpload;
   id: string;
   lift: string;

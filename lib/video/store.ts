@@ -7,6 +7,7 @@ import { ApiError } from "../agent/http";
 import { canonicalJson } from "../json";
 import { mergeSegmentation, segmentationSchema } from "./segmentation";
 import type { VideoRefinementCheckpoint } from "./checkpoint";
+import { queuedVideoProgress } from "./progress";
 import {
   MAX_VIDEO_BYTES,
   videoUploadSchema,
@@ -21,6 +22,7 @@ const fields = {
   input: liftingVideos.input,
   status: liftingVideos.status,
   stage: liftingVideos.stage,
+  progress: liftingVideos.progress,
   createdAt: liftingVideos.createdAt,
   error: liftingVideos.error,
   feedback: liftingVideos.feedback,
@@ -182,6 +184,7 @@ export async function saveVideo(userId: string, raw: unknown, source: Buffer) {
       digest,
       source,
       bytes: MAX_VIDEO_BYTES,
+      progress: queuedVideoProgress(),
     });
   });
   return getVideo(userId, input.id);
@@ -245,6 +248,7 @@ async function queueReview(
       .set({
         status: "queued",
         stage: correctedLift ? "Waiting to reanalyse" : "Waiting to retry",
+        progress: queuedVideoProgress(),
         ...(correctedLift
           ? {
               // Keep the original upload digest: a repeated upload remains idempotent.

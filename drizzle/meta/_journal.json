@@ -57,6 +57,13 @@
       "when": 1789216719100,
       "tag": "0007_video_review_checkpoint",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789283459606,
+      "tag": "0008_video_processing_progress",
+      "breakpoints": true
     }
   ]
 }

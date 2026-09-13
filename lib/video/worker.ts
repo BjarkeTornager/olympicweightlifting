@@ -17,6 +17,7 @@ import { mergeBody } from "./body";
 import { bodyConfigurationForAccount, reconstructBody } from "./body-server";
 import { listVideos } from "./store";
 import { previousVideoFocus } from "./focus";
+import { queuedVideoProgress, type VideoProgress } from "./progress";
 import { MAX_VIDEO_BYTES, type VideoAnalysis, type VideoUpload } from "./types";
 import { VIDEO_REVIEW_VERSION, coachingText } from "./coaching";
 import { attemptMessages, identifyAttempts } from "./attempts";
@@ -258,9 +259,14 @@ export async function claimVideo() {
     `WITH next AS (
     SELECT user_id,id FROM lifting_videos WHERE ((status='queued' AND (lease_until IS NULL OR lease_until<=now())) OR (status='processing' AND lease_until<now())) AND attempts<3
     ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
-    UPDATE lifting_videos v SET status='processing',stage='Preparing video',lease=$1,lease_until=now()+interval '11 minutes',attempts=attempts+1
+    UPDATE lifting_videos v SET status='processing',
+    stage=CASE WHEN progress->>'startedAt' IS NULL THEN 'Preparing video' ELSE stage END,
+    progress=COALESCE(progress,jsonb_build_object('queuedAt',$2::text)) ||
+      jsonb_build_object('startedAt',COALESCE(progress->>'startedAt',$2::text),
+        'updatedAt',$2::text,'phase',CASE WHEN progress->>'startedAt' IS NULL THEN 'preparing' ELSE progress->>'phase' END),
+    lease=$1,lease_until=now()+interval '11 minutes',attempts=attempts+1
     FROM next WHERE v.user_id=next.user_id AND v.id=next.id RETURNING v.user_id,v.id`,
-    [token],
+    [token, new Date().toISOString()],
   );
   return rows[0] ? { ...rows[0], token } : null;
 }
@@ -306,6 +312,34 @@ export async function runVideoJob(
   try {
     if (!(await check())) return;
     const [row] = await getDb().select().from(liftingVideos).where(fence);
+    let progress: VideoProgress = {
+      ...(row.progress ?? queuedVideoProgress()),
+      bodyRequested: Boolean(bodyConfig.endpoint),
+    };
+    const advance = (
+      phase: VideoProgress["phase"],
+      updated?: VideoAnalysis,
+    ) => {
+      const now = new Date().toISOString();
+      const pending = updated?.attempts?.findIndex((a) => !a.coaching);
+      progress = {
+        ...progress,
+        phase,
+        startedAt: progress.startedAt ?? now,
+        updatedAt: now,
+        ...(updated?.attempts?.length
+          ? {
+              attemptCount: updated.attempts.length,
+              attempt:
+                pending !== undefined && pending >= 0
+                  ? pending + 1
+                  : updated.attempts.length,
+            }
+          : {}),
+        ...(phase === "ready" ? { completedAt: now } : {}),
+      };
+      return progress;
+    };
     let refinement =
       row.analysis?.reviewVersion === VIDEO_REVIEW_VERSION
         ? row.refinement
@@ -332,6 +366,7 @@ export async function runVideoJob(
           source: null,
           bytes: MAX_VIDEO_BYTES,
           stage: "Identifying the movement phases",
+          progress: advance("preparing"),
         })
         .where(fence);
     }
@@ -364,7 +399,19 @@ export async function runVideoJob(
           .update(liftingVideos)
           .set({
             analysis: updated,
-            stage,
+            stage: refinement?.bodyJob
+              ? "Preparing your 3D body overlay and suggested movement"
+              : stage,
+            progress: advance(
+              refinement?.bodyJob
+                ? "body"
+                : /tracked movement/.test(stage)
+                  ? "coaching"
+                  : /^Reviewing/.test(stage)
+                    ? "tracking"
+                    : "preparing",
+              updated,
+            ),
             ...(clearRefinement ? { refinement: null } : {}),
           })
           .where(fence);
@@ -426,6 +473,13 @@ export async function runVideoJob(
           body: saved.body,
         };
         if (!saved.segmentation) {
+          await getDb()
+            .update(liftingVideos)
+            .set({
+              stage: "Tracking your movement and preparing object outlines",
+              progress: advance("tracking", current),
+            })
+            .where(fence);
           const segmentation = await segmenter(
             media!,
             detailed,
@@ -460,6 +514,7 @@ export async function runVideoJob(
               .update(liftingVideos)
               .set({
                 stage: "Preparing your 3D body overlay and suggested movement",
+                progress: advance("body", current),
               })
               .where(fence);
             const body = await bodyReconstructor(
@@ -542,6 +597,7 @@ export async function runVideoJob(
       .update(liftingVideos)
       .set({
         status: "ready",
+        progress: advance("ready", analysis),
         bytes,
         stage: analysis.segmentation?.failure
           ? "Partial review · outlines unavailable"
@@ -564,6 +620,10 @@ export async function runVideoJob(
         .update(liftingVideos)
         .set({
           status: "queued",
+          progress: {
+            ...(saved.progress ?? queuedVideoProgress()),
+            updatedAt: new Date().toISOString(),
+          },
           stage: saved.refinement?.bodyJob
             ? "Preparing your 3D body overlay · continuing automatically"
             : "Preparing object outlines · continuing automatically",
@@ -601,6 +661,10 @@ export async function runVideoJob(
       .update(liftingVideos)
       .set({
         status: retry ? "queued" : "failed",
+        progress: {
+          ...(saved.progress ?? queuedVideoProgress()),
+          updatedAt: new Date().toISOString(),
+        },
         stage: retry
           ? "Finishing Coach’s feedback automatically"
           : "Feedback needs attention",

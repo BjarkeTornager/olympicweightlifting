@@ -343,22 +343,21 @@ test("private video upload processes across navigation and exposes playback, fee
   let reviews: SavedVideoReview[] = [];
   let uploads = 0;
   await page.addInitScript(() => {
-    const original = window.fetch.bind(window);
-    window.fetch = async (input, init) => {
-      if (
-        String(input) === "/api/lifting-videos" &&
-        init?.body instanceof Blob
-      ) {
-        const digest = await crypto.subtle.digest(
-          "SHA-256",
-          await init.body.arrayBuffer(),
-        );
-        (window as Window & { videoUploadDigest?: string }).videoUploadDigest =
-          Array.from(new Uint8Array(digest))
+    const original = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function (body) {
+      if (body instanceof Blob) {
+        void body.arrayBuffer().then(async (bytes) => {
+          const digest = await crypto.subtle.digest("SHA-256", bytes);
+          (
+            window as Window & { videoUploadDigest?: string }
+          ).videoUploadDigest = Array.from(new Uint8Array(digest))
             .map((v) => v.toString(16).padStart(2, "0"))
             .join("");
+          original.call(this, body);
+        });
+        return;
       }
-      return original(input, init);
+      return original.call(this, body);
     };
   });
   await context.route("**/api/lifting-videos", async (r) => {
@@ -373,7 +372,7 @@ test("private video upload processes across navigation and exposes playback, fee
       expect(input.mode).toBe("automatic");
       expect(input.calibration).toBeUndefined();
       // WebKit's inspector omits File-backed request bodies. Independently
-      // verify the exact Blob passed to fetch, rather than weakening the check.
+      // verify the exact Blob passed to XHR, rather than weakening the check.
       if (r.request().postDataBuffer())
         expect(r.request().postDataBuffer()).toEqual(await readFile(fixture));
       expect(
@@ -514,7 +513,7 @@ test("private video upload processes across navigation and exposes playback, fee
     dialog.getByRole("heading", { name: "Clean & jerk", exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText("Waiting to reanalyse…", { exact: false }),
+    dialog.getByRole("status").filter({ hasText: "Waiting to reanalyse" }),
   ).toBeVisible();
   expect(corrections).toBe(1);
   expect(uploads).toBe(1);

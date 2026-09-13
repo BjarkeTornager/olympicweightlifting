@@ -1,6 +1,45 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { modelRequest, parseModelResponse } from "../lib/agent/provider";
+import {
+  modelRequest,
+  parseModelResponse,
+  providerResponseError,
+} from "../lib/agent/provider";
+
+test("monthly key exhaustion is a non-retryable budget error without leaking provider metadata", async () => {
+  const error = await providerResponseError(
+    Response.json(
+      {
+        error: {
+          code: 403,
+          message:
+            "Key limit exceeded (monthly limit). Manage secret-account-key here.",
+        },
+      },
+      { status: 403 },
+    ),
+  );
+  assert.equal(error.status, 402);
+  assert.match(error.message, /monthly AI allowance/);
+  assert.doesNotMatch(error.message, /secret-account-key/);
+  const forbidden = await providerResponseError(
+    Response.json(
+      { error: { message: "Restricted credentials secret-account-key" } },
+      { status: 403 },
+    ),
+  );
+  assert.equal(forbidden.status, 403);
+  assert.match(forbidden.message, /permissions/);
+  assert.doesNotMatch(forbidden.message, /secret-account-key/);
+  const oversized = await providerResponseError(
+    new Response("x".repeat(9000), { status: 403 }),
+  );
+  assert.equal(oversized.status, 403);
+  assert.equal(
+    (await providerResponseError(new Response(null, { status: 503 }))).status,
+    503,
+  );
+});
 test("video output budget is isolated from chat and truncated replies are flagged", () => {
   for (const kind of ["openrouter", "ollama"] as const) {
     const config = {

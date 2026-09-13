@@ -229,6 +229,68 @@ export function parseModelResponse(
       : {}),
   };
 }
+export async function providerResponseError(
+  response: Response,
+  hasImages = false,
+) {
+  let monthlyLimit = false;
+  if (response.status === 403) {
+    // OpenRouter uses 403 for exhausted key budgets as well as permissions.
+    // Inspect only a small error envelope; never expose or log provider text.
+    const reader = response.body?.getReader();
+    if (reader) {
+      const timer = setTimeout(() => {
+        void reader.cancel().catch(() => {});
+      }, 1500);
+      timer.unref?.();
+      try {
+        const chunks: Uint8Array[] = [];
+        let bytes = 0;
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          bytes += chunk.value.byteLength;
+          if (bytes > 8192) break;
+          chunks.push(chunk.value);
+        }
+        if (bytes <= 8192) {
+          const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          monthlyLimit =
+            typeof data?.error?.message === "string" &&
+            /key limit exceeded|monthly limit|spending (?:cap|limit)/i.test(
+              data.error.message,
+            );
+        }
+      } catch {
+        /* A malformed envelope remains a non-retryable permission error. */
+      } finally {
+        clearTimeout(timer);
+        await reader.cancel().catch(() => {});
+      }
+    }
+  }
+  return new ProviderError(
+    monthlyLimit
+      ? "Coach’s monthly AI allowance has been reached. The app owner can increase the limit, or you can wait for the monthly reset. Your saved data is safe."
+      : response.status === 429
+        ? "The assistant has reached its provider limit. Try again shortly."
+        : response.status === 402
+          ? "The assistant’s provider credit or spending cap has been reached. Add OpenRouter credit or wait for the monthly cap to reset; manual logging is still available."
+          : response.status === 403
+            ? "The assistant provider denied this request. The app owner needs to check the provider key’s permissions. Your saved data is safe."
+            : response.status === 400 && hasImages
+              ? "The provider could not process this image request. Try a text description or ask the host to check that the configured model supports images and tools. Your uploads are saved in Images."
+              : "The assistant provider is unavailable. Try again shortly.",
+    monthlyLimit || response.status === 402
+      ? 402
+      : response.status === 403
+        ? 403
+        : response.status === 429
+          ? 429
+          : 503,
+  );
+}
+
 export async function callModel(
   messages: ModelMessage[],
   tools: ToolDefinition[],
@@ -254,15 +316,9 @@ export async function callModel(
     redirect: "error",
   });
   if (!response.ok)
-    throw new ProviderError(
-      response.status === 429
-        ? "The assistant has reached its provider limit. Try again shortly."
-        : response.status === 402
-          ? "The assistant’s provider credit or spending cap has been reached. Add OpenRouter credit or wait for the monthly cap to reset; manual logging is still available."
-          : response.status === 400 && messages.some((m) => m.images?.length)
-            ? "The provider could not process this image request. Try a text description or ask the host to check that the configured model supports images and tools. Your uploads are saved in Images."
-            : "The assistant provider is unavailable. Try again shortly.",
-      response.status === 402 ? 402 : response.status === 429 ? 429 : 503,
+    throw await providerResponseError(
+      response,
+      messages.some((m) => m.images?.length),
     );
   if (onText)
     return parseModelResponse(

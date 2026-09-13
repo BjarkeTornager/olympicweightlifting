@@ -737,10 +737,12 @@ export async function runVideoJob(
         },
         stage: retry
           ? "Finishing Coach’s feedback automatically"
-          : "Feedback needs attention",
+          : error instanceof ProviderError && error.status === 402
+            ? "Coach’s AI allowance is used up"
+            : "Feedback needs attention",
         error: retry
           ? null
-          : error instanceof ApiError
+          : error instanceof ApiError || error instanceof ProviderError
             ? error.message
             : "Coach could not finish this review. Your saved video is safe; retry shortly.",
         lease: null,

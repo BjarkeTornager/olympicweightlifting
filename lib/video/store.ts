@@ -261,7 +261,12 @@ async function queueReview(
                     identification: undefined,
                     coaching: undefined,
                     attempts: undefined,
-                    body: undefined,
+                    // The recorded body belongs to these same source pixels.
+                    // Keep it usable if coaching is unavailable; old correction
+                    // targets must not survive a corrected lift label.
+                    body: row.analysis.body
+                      ? { ...row.analysis.body, motion: undefined }
+                      : undefined,
                   }
                 : null,
               feedback: null,

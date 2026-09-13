@@ -916,6 +916,50 @@ test(
           [],
         );
         await assert.rejects(getVideo(users[1], bodyInput.id), /not found/);
+        await reanalyseVideo(users[0], bodyInput.id, { lift: "Snatch" });
+        const retained = await getVideo(users[0], bodyInput.id);
+        assert.deepEqual(
+          retained.analysis?.body?.frames,
+          bodyReview.analysis?.body?.frames,
+          "reanalysis preserves recorded geometry for the same source clip",
+        );
+        assert.equal(
+          retained.analysis?.body?.motion,
+          undefined,
+          "a corrected lift label must discard earlier correction targets",
+        );
+        const budgetJob = await claimVideo();
+        assert.ok(budgetJob);
+        const { providerResponseError } = await import("../lib/agent/provider");
+        let budgetCalls = 0;
+        await runVideoJob(
+          budgetJob,
+          async () => {
+            budgetCalls++;
+            throw await providerResponseError(
+              Response.json(
+                { error: { message: "Key limit exceeded (monthly limit)" } },
+                { status: 403 },
+              ),
+            );
+          },
+          processor,
+          refiner,
+        );
+        const blocked = await getVideo(users[0], bodyInput.id);
+        assert.equal(budgetCalls, 1);
+        assert.equal(blocked.status, "failed");
+        assert.match(blocked.stage, /AI allowance/);
+        assert.match(blocked.error!, /monthly AI allowance/);
+        assert.deepEqual(
+          blocked.analysis?.body?.frames,
+          retained.analysis?.body?.frames,
+        );
+        assert.equal(
+          await claimVideo(),
+          null,
+          "an exhausted budget must not retry automatically",
+        );
         await deleteVideo(users[0], bodyInput.id);
         await assert.rejects(getVideo(users[0], bodyInput.id), /not found/);
       } finally {

@@ -12,7 +12,11 @@ The single player offers recorded 3D body independently of the form guide. Grey 
 
 - Synthetic tracker checks cover moving plates, off-axis background plates, missing hand observations, occlusion, decoder gaps, identity retention and source-coordinate remapping.
 - Pipeline regression covers automatic tracking without calibration, retaining recovered frames between evidence samples, private checkpoints, retries, and owner isolation.
-- Browser checks cover one video, independent overlay availability, recorded-body rendering without a correction, source-frame timing, reverse seeks and replay on Chromium and WebKit.
+- The focused Chromium check passed for one video, independent overlay availability, recorded-body rendering without a correction and repeated seeks. Twelve related Chromium workflow checks also passed. The decoded-frame stress checks and WebKit runs have not passed reliably in this environment; Safari validation remains outstanding.
 - Local public-clip check used the existing Catalyst Athletics clean-and-jerk benchmark (`bNCXgyosXlc`, source interval 8.0–15.4 s), SHA-256 `146ec2dbfe567a2a3d99ca2191abfca7607c98190e55eecf3fcef8b86a6e8e81`. Foreground recovery retained at least ten landmarks in 226 of 234 sampled frames (141 without crop recovery). Automatic tracking retained 68 plate-centre observations from 0.417 to 2.55 s. A contact sheet was visually inspected; the marker followed the foreground plate through the pull and clean receipt. The later jerk path remained unavailable. This is an engineering check, not a coaching-accuracy benchmark or evidence of full-video coverage.
 
 No private athlete video was downloaded for these development checks. Source overlays remain account scoped. Recorded reconstruction and partial bar paths must not be described as validated ideal form or physical measurements.
+
+## Provider budget recovery
+
+Live reprocessing exposed a separate failure: OpenRouter returns HTTP 403 when the app key's monthly allowance is exhausted. The provider adapter previously treated this as a transient server error. A bounded, private error-envelope check now distinguishes exhausted budgets and permission failures; neither consumes three automatic retries. The displayed message explains the action required without including provider response metadata. Reanalysis retains recorded body images for the same clip while discarding correction targets associated with the previous lift label. Database regressions verify both retention and a terminal budget error after one provider attempt.

@@ -52,12 +52,13 @@ test("recorded body, bar path and observations work without a fabricated form co
   await d.getByRole("button", { name: /Jerk.*Review ready/ }).click();
   await expect(d.locator("video")).toHaveCount(1);
   const video = d.locator("video");
-  await expect
-    .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
-    .toBeGreaterThanOrEqual(2);
+  // Safari may defer decoding until the media is inside the visible dialog.
   await video.evaluate((v) =>
     v.scrollIntoView({ block: "center", behavior: "instant" }),
   );
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
+    .toBeGreaterThanOrEqual(2);
   await expect(
     d.getByRole("button", { name: "Form guide", exact: true }),
   ).toBeDisabled();

@@ -42,10 +42,30 @@ jobs:
       - run: npm run check:production
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
-      - run: npx playwright install --with-deps chromium firefox webkit
-      - run: npm run test:browser
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:browser -- --project=chromium --project=firefox
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
-          name: browser-report
+          name: browser-report-linux
+          path: playwright-report/
+  safari:
+    # Linux WebKit's GStreamer decoder reports different paused-frame media
+    # timestamps for the H.264 fixture. Use native WebKit for Safari coverage
+    # so source-pixel and frame-alignment assertions remain strict.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install webkit
+      - run: npm run test:browser -- --project=webkit
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: browser-report-safari
           path: playwright-report/

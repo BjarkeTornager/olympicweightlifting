@@ -31,7 +31,7 @@ test("upgrading an existing review to 3D keeps the selected lift", async ({
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Jerk.*Review ready/ }).click();
   await dialog.getByText("Review details & downloads", { exact: true }).click();
-  await expect(dialog.getByText("3D body review is available")).toBeVisible();
+  await expect(dialog.getByText("Complete your video overlays")).toBeVisible();
   await dialog
     .getByRole("button", { name: "Update analysis", exact: true })
     .click();

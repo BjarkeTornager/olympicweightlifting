@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import type { SavedVideoReview } from "../../lib/video/types";
+import { expectOverlayFrame } from "./video-assertions";
 const fixture = path.resolve("tests/fixtures/lifting-motion.mp4");
 test("a limited review explains missing corrections and outlines without offering an empty overlay toggle", async ({
   page,
@@ -182,9 +183,15 @@ test("segmented replay stays visible during playback, clears on gaps and can be 
     .click();
   await video.evaluate((v: HTMLVideoElement) => v.pause());
   await dialog.getByLabel("Video position").fill("1.001");
-  await expect(canvas).toHaveAttribute("data-frame-time", "1.000000");
+  await video.evaluate((v) =>
+    v.scrollIntoView({ block: "center", behavior: "instant" }),
+  );
+  await expectOverlayFrame(canvas, 1);
   await expect(canvas).toHaveAttribute("data-layers", "0");
   await dialog.getByLabel("Video position").fill("0.501");
+  await video.evaluate((v) =>
+    v.scrollIntoView({ block: "center", behavior: "instant" }),
+  );
   await expect(canvas).toHaveAttribute("data-layers", "1");
   await expect(video).toHaveJSProperty("paused", true);
 });
@@ -271,6 +278,11 @@ test("saved outlines remain usable while feedback recovers automatically", async
   const dialog = page.getByRole("dialog", { name: "Review a lifting video" });
   await dialog.getByRole("button", { name: "Your reviews (1)" }).click();
   await dialog.getByRole("button", { name: /Snatch.*Finishing/ }).click();
+  await dialog
+    .getByLabel("Saved lifting video")
+    .evaluate((v) =>
+      v.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
   await expect(
     dialog.getByText(
       "Your outlines are ready. Coach is finishing the feedback automatically.",
@@ -727,9 +739,13 @@ for (const partial of [false, true])
     await expect(dialog.locator("video")).toHaveCount(1);
     await video.evaluate((v: HTMLVideoElement) => v.pause());
     await dialog.getByLabel("Video position").fill("0.501");
-    await expect(
+    await video.evaluate((v) =>
+      v.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
+    await expectOverlayFrame(
       dialog.getByLabel("Synchronized video overlays"),
-    ).toHaveAttribute("data-frame-time", "0.500000");
+      0.5,
+    );
     await expect(dialog.getByLabel("Coaching overlay")).toContainText(
       "highlighted elbow",
     );

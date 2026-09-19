@@ -3,6 +3,7 @@ import { formGuideReview } from "../fixtures/form-guide";
 import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import AxeBuilder from "@axe-core/playwright";
+import { expectOverlayFrame } from "./video-assertions";
 
 test("recorded body, bar path and observations work without a fabricated form correction", async ({
   page,
@@ -76,10 +77,10 @@ test("recorded body, bar path and observations work without a fabricated form co
     0,
   );
   const canvas = d.getByRole("img", { name: "Synchronized video overlays" });
-  await expect(canvas).toHaveAttribute("data-frame-time", "0.500000");
+  await expectOverlayFrame(canvas, 0.5);
   await expect.poll(() => canvas.getAttribute("data-layers")).toBe("3");
   await page.screenshot({
-    path: "/private/tmp/lift-overlay-availability-mobile.png",
+    path: test.info().outputPath("lift-overlay-availability-mobile.png"),
     fullPage: false,
   });
   for (const t of ["1.201", "0.201", "1.201"]) {
@@ -174,7 +175,10 @@ for (const width of [390, 1280]) {
         .getByLabel("Playback speed")
         .selectOption(pass === 1 ? "0.5" : "1");
       await d.getByLabel("Video position").fill("0.101");
-      await expect(canvas).toHaveAttribute("data-frame-time", "0.100000");
+      await video.evaluate((v) =>
+        v.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      await expectOverlayFrame(canvas, 0.1);
       // Sample AFTER the application's decoder callback. No timers tied to
       // React rerenders; every decoded frame must have a matching overlay.
       const collection = video.evaluate(async (v: HTMLVideoElement) => {
@@ -224,7 +228,7 @@ for (const width of [390, 1280]) {
     }
     // Toggle without changing the playback position, then seek backwards.
     await d.getByLabel("Video position").fill("0.734");
-    await expect(canvas).toHaveAttribute("data-frame-time", "0.733333");
+    await expectOverlayFrame(canvas, 0.733333);
     const before = await video.evaluate((v: HTMLVideoElement) => v.currentTime);
     for (const name of ["Body outline", "Bar path", "Coach cues"])
       await d.getByRole("button", { name, exact: true }).click();
@@ -237,7 +241,7 @@ for (const width of [390, 1280]) {
     await expect(canvas).toHaveAttribute("data-layers", "0");
     await d.getByRole("button", { name: "Form guide", exact: true }).click();
     await d.getByLabel("Video position").fill("0.501");
-    await expect(canvas).toHaveAttribute("data-frame-time", "0.500000");
+    await expectOverlayFrame(canvas, 0.5);
     // White synthetic bar moves five pixels/frame. Verify the underlying frame
     // is not a stale captured still hidden beneath a correct timestamp.
     const top = await video.evaluate((v: HTMLVideoElement) => {
@@ -263,7 +267,7 @@ for (const width of [390, 1280]) {
       ),
     ).toBe(true);
     await page.screenshot({
-      path: `/private/tmp/lift-form-${width}-${test.info().project.name}.png`,
+      path: test.info().outputPath(`lift-form-${width}.png`),
     });
     const a11y = await new AxeBuilder({ page })
       .include('[role="dialog"]')

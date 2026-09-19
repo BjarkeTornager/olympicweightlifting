@@ -156,7 +156,7 @@ export function Journal(props: PrivateSessionProps) {
   const section = route.split("/")[0];
   return (
     <div
-      className={`journal ${section === "coach" ? "coach-mode" : ""} ${state?.preferences.largeText ? "large-text" : ""}`}
+      className={`journal ${section === "coach" ? "coach-mode" : ""} ${section === "workout" ? "training-mode" : ""} ${state?.preferences.largeText ? "large-text" : ""}`}
     >
       <a
         className="skip-link"
@@ -256,16 +256,26 @@ export function Journal(props: PrivateSessionProps) {
         {state && (journal.record?.dirty || journal.record?.undo) && (
           <div className="save-detail">
             <span>
-              {journal.record?.dirty
-                ? "Changes waiting to sync"
-                : identity && journal.record?.lastSyncedAt
-                  ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                  : "This browser holds your offline copy"}{" "}
-              · Device saved{" "}
-              {new Date(state.updatedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {section === "workout" ? (
+                journal.record?.dirty ? (
+                  "Changes waiting to sync"
+                ) : (
+                  "Last change saved"
+                )
+              ) : (
+                <>
+                  {journal.record?.dirty
+                    ? "Changes waiting to sync"
+                    : identity && journal.record?.lastSyncedAt
+                      ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                      : "This browser holds your offline copy"}{" "}
+                  · Device saved{" "}
+                  {new Date(state.updatedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </>
+              )}
             </span>
             {journal.record?.undo && !journal.record.conflict && (
               <Button

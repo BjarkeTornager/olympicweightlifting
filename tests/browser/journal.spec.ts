@@ -8,25 +8,26 @@ test("log, reload, finish and edit a workout", async ({ page }) => {
   await page
     .getByLabel("Set 1 weight in kilograms", { exact: true })
     .fill("47.5");
-  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await page.getByLabel("Log set 1 as made", { exact: true }).click();
   await expect(
     page.getByLabel("Set 2 weight in kilograms", { exact: true }),
   ).toHaveValue("47.5");
   // The suggested next weight can already match before Made finishes saving.
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await page.reload();
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await page
     .locator(".workout-dock")
     .getByRole("button", { name: "Finish workout" })
     .click();
-  await page.getByRole("button", { name: "Save workout", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Finish workout", exact: true })
+    .click();
   await page.getByRole("button", { name: "Keep current PRs" }).click();
   await expect(
     page.getByText("1 saved strength sessions.", { exact: false }),
@@ -199,9 +200,9 @@ test.describe("authenticated offline shell", () => {
       await page
         .getByLabel("Set 1 weight in kilograms", { exact: true })
         .fill("45");
-      await page.getByLabel("Set 1 made", { exact: true }).click();
+      await page.getByLabel("Log set 1 as made", { exact: true }).click();
       await expect(
-        page.getByLabel("Set 1 made", { exact: true }),
+        page.getByLabel("Log set 1 as made", { exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
       await page.evaluate(async () => {
         await navigator.serviceWorker.ready;
@@ -221,9 +222,9 @@ test.describe("authenticated offline shell", () => {
       await new Promise<void>((resolve) => proxy.close(() => resolve()));
       await page.reload();
       await expect(page.locator(".public-landing")).toBeVisible();
-      await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveCount(
-        0,
-      );
+      await expect(
+        page.getByLabel("Log set 1 as made", { exact: true }),
+      ).toHaveCount(0);
       await page.goto(`${origin}/#library`);
       await expect(page.locator(".public-landing")).toBeVisible();
       await expect(
@@ -235,7 +236,7 @@ test.describe("authenticated offline shell", () => {
       await page.goto(`${origin}/#workout`);
       await page.getByRole("button", { name: "Check connection" }).click();
       await expect(
-        page.getByLabel("Set 1 made", { exact: true }),
+        page.getByLabel("Log set 1 as made", { exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
     } finally {
       proxy.closeAllConnections();
@@ -329,12 +330,12 @@ test("sync client retries an interrupted acknowledgement and protects conflictin
     await second
       .getByLabel("Set 1 weight in kilograms", { exact: true })
       .fill("55");
-    await second.getByLabel("Set 1 made", { exact: true }).click();
+    await second.getByLabel("Log set 1 as made", { exact: true }).click();
     await first.getByRole("button", { name: "Start this programme" }).click();
     await first
       .getByLabel("Set 1 weight in kilograms", { exact: true })
       .fill("47.5");
-    await first.getByLabel("Set 1 made", { exact: true }).click();
+    await first.getByLabel("Log set 1 as made", { exact: true }).click();
     await expect.poll(() => server.revision).toBe(1);
     const interruptedId = attempts[0];
     loseAcknowledgement = false;
@@ -443,16 +444,14 @@ test("routines repeat unlogged sets, timer survives reload, and a mistaken set t
     .locator(".routine-list")
     .getByRole("button", { name: "Start", exact: true })
     .click();
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "false",
-  );
-  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await page.getByLabel("Log set 1 as made", { exact: true }).click();
   await page.getByRole("button", { name: "Undo last change" }).click();
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "false",
-  );
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
   await page.getByLabel("Rest duration").selectOption("60");
   await page.getByRole("button", { name: "Start rest" }).click();
   await expect(
@@ -463,21 +462,23 @@ test("routines repeat unlogged sets, timer survives reload, and a mistaken set t
     page.getByRole("button", { name: "Pause", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".timer-digits")).toHaveText(/0:\d\d|1:00/);
-  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await page.getByLabel("Log set 1 as made", { exact: true }).click();
   await page
     .locator(".workout-dock")
     .getByRole("button", { name: "Finish workout" })
     .click();
-  await page.getByRole("button", { name: "Save workout", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Finish workout", exact: true })
+    .click();
   await page.locator(".history-detail > summary").click();
   await expect(
     page.getByText("Bodyweight × 16", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Repeat session" }).click();
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "false",
-  );
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
   await page.goto("/#data");
   await page.getByLabel("Larger text").click();
   await expect(page.getByLabel("Larger text")).toBeChecked();

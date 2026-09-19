@@ -97,7 +97,7 @@ test("a gym routine retains new exercises and logs after reload; changing search
     .locator(".routine-list")
     .getByRole("button", { name: "Start", exact: true })
     .click();
-  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await page.getByLabel("Log set 1 as made", { exact: true }).click();
   await page
     .getByRole("searchbox", { name: "Find an exercise or activity" })
     .fill("lat pull down");
@@ -144,8 +144,7 @@ test("a gym routine retains new exercises and logs after reload; changing search
     .filter({ hasText: "Dumbbell bench press" });
   if ((await benchToggle.getAttribute("aria-expanded")) !== "true")
     await benchToggle.click();
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
 });

@@ -110,6 +110,7 @@ for (const source of ["workout", "coach", "coach-shortcut"] as const) {
     });
     await page.goto(`/#${source === "workout" ? "workout" : "coach"}`);
     if (source === "workout") {
+      await page.locator(".session-details > summary").click();
       const uploader = page.getByRole("region", {
         name: "Log activity from a photo",
       });

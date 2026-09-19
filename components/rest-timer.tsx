@@ -6,9 +6,11 @@ type Clock = { endsAt: number | null; remaining: number };
 export function RestTimer({
   accountId,
   duration = 90,
+  onDurationChange,
 }: {
   accountId: string;
   duration?: number;
+  onDurationChange?: (seconds: number) => void;
 }) {
   const [clock, setClock] = useState<Clock>(() => {
     try {
@@ -64,6 +66,7 @@ export function RestTimer({
           onChange={(e) => {
             const seconds = Number(e.target.value);
             setSelected(seconds);
+            onDurationChange?.(seconds);
             setClock({ endsAt: null, remaining: seconds });
           }}
         >

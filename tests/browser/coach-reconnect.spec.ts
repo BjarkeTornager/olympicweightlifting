@@ -194,7 +194,7 @@ test("unsynced edits remain protected while another tab holds the write lock and
   await page
     .getByLabel("Set 1 weight in kilograms", { exact: true })
     .fill("42.5");
-  await page.getByLabel("Set 1 made", { exact: true }).click();
+  await page.getByLabel("Log set 1 as made", { exact: true }).click();
   await page
     .getByRole("navigation", { name: "Primary", exact: true })
     .getByRole("link", { name: "Coach", exact: true })
@@ -222,10 +222,9 @@ test("unsynced edits remain protected while another tab holds the write lock and
   await expect(
     page.getByLabel("Set 1 weight in kilograms", { exact: true }),
   ).toHaveValue("42.5");
-  await expect(page.getByLabel("Set 1 made", { exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByLabel("Log set 1 as made", { exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("a hung initial Coach request times out and can reconnect without losing text", async ({

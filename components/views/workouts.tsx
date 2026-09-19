@@ -178,6 +178,58 @@ export function Workouts(props: Props) {
     return <LiftingCoach state={state} update={props.update} go={go} />;
   if (state.activeWorkout && !parameter)
     return <ActiveWorkout key={state.activeWorkout.id} {...props} />;
+  if (!parameter) {
+    const suggested =
+      days.find((d) => d.weekday === new Date().getDay()) ??
+      days.find((d) => d.id === "monday")!;
+    return (
+      <section className="training-start" aria-label="Start training">
+        <div className="page-heading compact">
+          <div>
+            <h1>Train</h1>
+            <p className="lead">Your next session, ready when you are.</p>
+          </div>
+        </div>
+        <section
+          className="training-quick-start"
+          aria-label="Suggested session"
+        >
+          <span className="eyebrow">QUICK START</span>
+          <h2>{suggested.title}</h2>
+          <p className="muted">
+            {suggested.exercises.length} exercises · {suggested.focus}
+          </p>
+          <Button onClick={() => void onStart(suggested.id)}>
+            Start workout <ArrowRight size={18} />
+          </Button>
+          <Button variant="ghost" onClick={() => go("workout/choose")}>
+            Choose another
+          </Button>
+        </section>
+        <div className="training-start-links">
+          <Button variant="secondary" onClick={() => void onStart("open")}>
+            <Plus size={18} /> Start empty workout
+          </Button>
+          <Button variant="ghost" onClick={() => go("workout/choose")}>
+            Your programs & routines <ArrowRight size={17} />
+          </Button>
+          <Button variant="ghost" onClick={() => go("history")}>
+            Training history <ArrowRight size={17} />
+          </Button>
+        </div>
+        <details className="training-other-activity">
+          <summary>
+            Log a walk, run or ride <ChevronDown size={17} />
+          </summary>
+          <ActivityPhotoUpload
+            accountId={props.accountId}
+            go={go}
+            showCoachLink
+          />
+        </details>
+      </section>
+    );
+  }
   if (day) {
     const plan = planProgramDay(day, {
       sessions: state.sessions,
@@ -309,7 +361,7 @@ export function Workouts(props: Props) {
             variant="secondary"
             onClick={() => void onStart("open", date)}
           >
-            <Plus size={18} /> Open workout
+            <Plus size={18} /> Start empty workout
           </Button>
         </div>
       </div>
@@ -331,23 +383,7 @@ export function Workouts(props: Props) {
             Resume workout <ArrowRight size={17} />
           </Button>
         </div>
-      ) : (
-        !parameter && (
-          <div className="notice ongoing-workout-card">
-            <div>
-              <strong>No workout in progress</strong>
-              <p>
-                Start a session below or tell Coach what you are doing. Your
-                ongoing workout will stay here until you finish.
-              </p>
-            </div>
-            <a className="text-link" href="#history">
-              View training history <ArrowRight size={17} />
-            </a>
-          </div>
-        )
-      )}
-      <ActivityPhotoUpload accountId={props.accountId} go={go} />
+      ) : null}
       <Templates
         state={state}
         update={props.update}
@@ -463,7 +499,16 @@ export function Workouts(props: Props) {
 function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
   const draft = state.activeWorkout!;
   const [expanded, setExpanded] = useState(
-      draft.activeExerciseId ?? draft.exercises[0]?.id ?? "",
+      draft.activeExerciseId ??
+        draft.exercises.find((entry) =>
+          entry.sets.some((set) => !isValidLoggedSet(set)),
+        )?.id ??
+        draft.exercises[0]?.id ??
+        "",
+    ),
+    [reviewingSets, setReviewingSets] = useState<Record<string, string>>({}),
+    [restDuration, setRestDuration] = useState(
+      state.preferences.restSeconds ?? 90,
     ),
     [finish, setFinish] = useState(false),
     [discard, setDiscard] = useState(false),
@@ -535,31 +580,443 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
     }
   };
   return (
-    <>
+    <section className="focused-workout" aria-label="Ongoing workout">
       <div className="page-heading compact workout-heading">
         <div>
-          <div className="eyebrow">ONGOING WORKOUT</div>
           <h1>{draft.title}</h1>
           <p className="lead">
             {logged} of {total} sets logged · {draft.date}
           </p>
         </div>
-        <Button variant="secondary" onClick={() => setFinish(true)}>
-          Finish workout <Check size={18} />
+        <Button
+          variant="ghost"
+          aria-label="Finish workout"
+          onClick={() => setFinish(true)}
+        >
+          Finish <Check size={18} />
         </Button>
       </div>
       <div className="session-progress">
         <span style={{ width: `${total ? (logged / total) * 100 : 0}%` }} />
       </div>
-      <ActivityPhotoUpload accountId={accountId} go={go} />
-      <RestTimer
-        key={accountId}
-        accountId={accountId}
-        duration={state.preferences.restSeconds ?? 90}
-      />
+      <div className="exercise-stack">
+        {draft.exercises.map((entry, index) => {
+          const active = expanded === entry.id;
+          const previous = [...state.sessions]
+            .filter(
+              (w) => w.id !== draft.editingSessionId && w.date <= draft.date,
+            )
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .flatMap((w) => w.exercises)
+            .find((e) => e.exerciseId === entry.exerciseId);
+          // Keep the current row stable while correcting an earlier set. Editing
+          // clears that set's result, but must not unmount its input mid-keystroke.
+          const reviewedIndex = entry.sets.findIndex(
+            (set) => set.id === reviewingSets[entry.id],
+          );
+          const nextSetIndex = Math.max(
+            0,
+            reviewedIndex >= 0
+              ? reviewedIndex
+              : entry.sets.findIndex((set) => !isValidLoggedSet(set)),
+          );
+          const nextSet = entry.sets[nextSetIndex];
+          const renderSet = (
+            set: Entry["sets"][number],
+            i: number,
+            focused = false,
+          ) => (
+            <div
+              className={`set-group ${focused ? "focus-set" : ""} ${set.result === "success" || set.logged ? "logged" : ""} ${set.result === "miss" ? "missed" : ""}`}
+              key={focused ? "focused-set" : set.id}
+            >
+              <div className="set-row">
+                <span className="set-number">{i + 1}</span>
+                <label className="set-weight-field">
+                  {focused && <span>Weight · kg</span>}
+                  <NumericInput
+                    label={`Set ${i + 1} weight in kilograms`}
+                    value={set.weight}
+                    onChange={(value) =>
+                      changeEntry(entry.id, (e) =>
+                        updatePendingSets(e, set.id, "weight", value),
+                      )
+                    }
+                  />
+                </label>
+                <label className="set-reps-field">
+                  {focused && <span>Reps</span>}
+                  <NumericInput
+                    label={`Set ${i + 1} repetitions`}
+                    value={set.reps}
+                    step="1"
+                    onChange={(value) =>
+                      changeEntry(entry.id, (e) =>
+                        updatePendingSets(e, set.id, "reps", value),
+                      )
+                    }
+                  />
+                </label>
+                <div className="result-buttons">
+                  <button
+                    className={
+                      set.result === "success" || set.logged ? "made" : ""
+                    }
+                    aria-label={`Log set ${i + 1} as made`}
+                    aria-pressed={
+                      set.result === "success" || Boolean(set.logged)
+                    }
+                    onClick={() =>
+                      changeEntry(entry.id, (e) => {
+                        const s = e.sets.find((s) => s.id === set.id)!;
+                        if (
+                          !isValidLoggedSet({
+                            ...s,
+                            result: "success",
+                            logged: true,
+                          })
+                        )
+                          throw Error(
+                            "Enter a weight and whole repetitions before logging the set.",
+                          );
+                        s.result = "success";
+                        s.logged = true;
+                        s.touched = true;
+                      })
+                    }
+                  >
+                    <Check size={20} />
+                    {focused && (
+                      <span>
+                        {isValidLoggedSet(set) && set.result !== "miss"
+                          ? "Made"
+                          : "Log set"}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    className={set.result === "miss" ? "miss" : ""}
+                    aria-label={`Set ${i + 1} missed`}
+                    aria-pressed={set.result === "miss"}
+                    onClick={() =>
+                      changeEntry(entry.id, (e) => {
+                        const s = e.sets.find((s) => s.id === set.id)!;
+                        if (!isValidLoggedSet({ ...s, result: "miss" }))
+                          throw Error(
+                            "Enter the attempted weight before logging a miss.",
+                          );
+                        s.result = "miss";
+                        s.logged = false;
+                        s.touched = true;
+                      })
+                    }
+                  >
+                    <X size={19} />
+                    {focused && <span>Miss</span>}
+                  </button>
+                </div>
+              </div>
+              <details className="set-options">
+                <summary>Set options</summary>
+                <div className="adjustments">
+                  {[-5, -2, 2, 5].map((delta) => (
+                    <button
+                      key={delta}
+                      onClick={() =>
+                        changeEntry(entry.id, (e) => {
+                          const s = e.sets.find((s) => s.id === set.id)!;
+                          updatePendingSets(
+                            e,
+                            set.id,
+                            "weight",
+                            String(
+                              Math.max(0, wholeKilograms(s.weight) + delta),
+                            ),
+                          );
+                        })
+                      }
+                    >
+                      {delta > 0 ? "+" : ""}
+                      {delta} kg
+                      <small>
+                        {delta > 0 ? "+" : ""}
+                        {delta / 2} / side
+                      </small>
+                    </button>
+                  ))}
+                </div>
+                <div className="set-extra">
+                  <label>
+                    RPE (optional)
+                    <NumericInput
+                      label={`Set ${i + 1} RPE`}
+                      value={set.rpe}
+                      step="0.5"
+                      onChange={(value) =>
+                        changeEntry(entry.id, (e) =>
+                          updatePendingSets(e, set.id, "rpe", value),
+                        )
+                      }
+                    />
+                  </label>
+                  <Button
+                    variant="ghost"
+                    disabled={i === 0}
+                    onClick={() =>
+                      changeEntry(entry.id, (e) => {
+                        const prior = e.sets[i - 1];
+                        updatePendingSets(
+                          e,
+                          set.id,
+                          "weight",
+                          String(prior.weight),
+                        );
+                        updatePendingSets(
+                          e,
+                          set.id,
+                          "reps",
+                          String(prior.reps),
+                        );
+                      })
+                    }
+                  >
+                    <Copy size={16} />
+                    Previous set
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      changeEntry(entry.id, (e) => {
+                        e.sets = e.sets.filter((s) => s.id !== set.id);
+                        e.completed = false;
+                      })
+                    }
+                  >
+                    <Trash2 size={16} />
+                    Remove
+                  </Button>
+                </div>
+              </details>
+            </div>
+          );
+          return (
+            <article
+              className={`exercise-card ${active ? "expanded" : ""}`}
+              key={entry.id}
+            >
+              <button
+                className="exercise-toggle"
+                onClick={() => {
+                  setReviewingSets({});
+                  setExpanded(active ? "" : entry.id);
+                }}
+                aria-expanded={active}
+              >
+                <span
+                  className={`exercise-number ${entry.completed ? "complete" : ""}`}
+                >
+                  {entry.completed ? (
+                    <Check size={20} />
+                  ) : (
+                    String(index + 1).padStart(2, "0")
+                  )}
+                </span>
+                <span>
+                  <strong>{exerciseName(entry.exerciseId)}</strong>
+                  <small>
+                    {entry.prescribed.targetSets ?? entry.sets.length} sets ×{" "}
+                    {entry.prescribed.targetReps ??
+                      entry.prescribed.reps ??
+                      "—"}{" "}
+                    reps ·{" "}
+                    {entry.prescribed.targetWeight !== "" &&
+                    entry.prescribed.targetWeight != null
+                      ? `${entry.prescribed.targetWeight} kg`
+                      : "Choose load"}
+                  </small>
+                </span>
+                <ChevronDown size={20} />
+              </button>
+              {active && (
+                <div className="exercise-body">
+                  {nextSet && (
+                    <>
+                      <p className="current-set-label">
+                        {entry.sets.every(isValidLoggedSet)
+                          ? "All sets recorded"
+                          : `Set ${nextSetIndex + 1} of ${entry.sets.length}`}
+                      </p>
+                      {renderSet(nextSet, nextSetIndex, true)}
+                    </>
+                  )}
+                  <RestTimer
+                    key={accountId}
+                    accountId={accountId}
+                    duration={restDuration}
+                    onDurationChange={setRestDuration}
+                  />
+                  {entry.sets.length > 1 && (
+                    <details
+                      className="other-workout-sets"
+                      onToggle={(event) => {
+                        const open = event.currentTarget.open;
+                        setReviewingSets((current) => {
+                          const next = { ...current };
+                          if (open && nextSet) next[entry.id] = nextSet.id;
+                          else delete next[entry.id];
+                          return next;
+                        });
+                      }}
+                    >
+                      <summary>
+                        Review other sets ({entry.sets.length - 1}){" "}
+                        <ChevronDown size={17} />
+                      </summary>
+                      <div className="set-labels">
+                        <span>SET</span>
+                        <span>WEIGHT · KG</span>
+                        <span>REPS</span>
+                        <span>RESULT</span>
+                      </div>
+                      {entry.sets.map((set, i) =>
+                        i === nextSetIndex ? null : renderSet(set, i),
+                      )}
+                    </details>
+                  )}
+                  <div className="section-top">
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        changeEntry(entry.id, (e) => {
+                          const last = e.sets.at(-1);
+                          e.sets.push({
+                            id: crypto.randomUUID(),
+                            weight: String(last?.weight ?? ""),
+                            reps: String(last?.reps ?? 1),
+                            rpe: "",
+                            result: "",
+                            touched: false,
+                          });
+                          e.completed = false;
+                        })
+                      }
+                    >
+                      <Plus size={17} />
+                      Add set
+                    </Button>
+                    <Technique exerciseId={entry.exerciseId} />
+                  </div>
+                  <details className="exercise-help">
+                    <summary>
+                      Exercise details <ChevronDown size={17} />
+                    </summary>
+                    <div className="button-row exercise-order">
+                      {[-1, 1].map((direction) => (
+                        <Button
+                          key={direction}
+                          variant="ghost"
+                          disabled={
+                            index + direction < 0 ||
+                            index + direction >= draft.exercises.length
+                          }
+                          aria-label={`Move ${exerciseName(entry.exerciseId)} ${direction < 0 ? "up" : "down"}`}
+                          onClick={() =>
+                            save((s) => {
+                              const entries = s.activeWorkout!.exercises;
+                              const from = entries.findIndex(
+                                  (e) => e.id === entry.id,
+                                ),
+                                to = from + direction;
+                              if (from >= 0 && to >= 0 && to < entries.length)
+                                [entries[from], entries[to]] = [
+                                  entries[to],
+                                  entries[from],
+                                ];
+                            })
+                          }
+                        >
+                          {direction < 0 ? (
+                            <ArrowUp size={17} />
+                          ) : (
+                            <ArrowDown size={17} />
+                          )}
+                          Move {direction < 0 ? "up" : "down"}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="muted">{entry.prescribed.notes}</p>
+                    {previous && (
+                      <p className="previous">
+                        Last session:{" "}
+                        {previous.sets
+                          .filter(isValidLoggedSet)
+                          .map((s) => formatSet(s.weight, s.reps))
+                          .join(" · ") || "No logged sets"}
+                      </p>
+                    )}
+                    <p className="exercise-logging-note">
+                      {exerciseLoggingNotes(entry.exerciseId)}
+                    </p>
+                  </details>
+                  <details className="notes">
+                    <summary>Notes & coach cue</summary>
+                    <div className="form-grid">
+                      <label>
+                        Your notes
+                        <textarea
+                          value={entry.athleteNotes}
+                          onChange={(e) =>
+                            changeEntry(entry.id, (item) => {
+                              item.athleteNotes = e.target.value;
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Coach cue
+                        <textarea
+                          value={entry.coachCue}
+                          onChange={(e) =>
+                            changeEntry(entry.id, (item) => {
+                              item.coachCue = e.target.value;
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </details>
+                  <Button
+                    variant="secondary"
+                    className="full"
+                    onClick={() => {
+                      if (
+                        !entry.sets.length ||
+                        !entry.sets.every(isValidLoggedSet)
+                      ) {
+                        notify(
+                          "Log every remaining set before completing this exercise, or finish a partial workout.",
+                        );
+                        return;
+                      }
+                      changeEntry(entry.id, (e) => {
+                        e.completed = true;
+                      });
+                      setReviewingSets({});
+                      setExpanded(draft.exercises[index + 1]?.id ?? entry.id);
+                    }}
+                  >
+                    Complete {exerciseName(entry.exerciseId)}{" "}
+                    <ArrowRight size={18} />
+                  </Button>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
       <details className="panel session-details">
         <summary>
-          Session details & programmes <ChevronDown size={17} />
+          Workout details <ChevronDown size={17} />
         </summary>
         <div className="form-grid">
           <label>
@@ -605,351 +1062,8 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
             Discard draft
           </Button>
         </div>
+        <ActivityPhotoUpload accountId={accountId} go={go} />
       </details>
-      <div className="exercise-stack">
-        {draft.exercises.map((entry, index) => {
-          const active = expanded === entry.id;
-          const previous = [...state.sessions]
-            .filter(
-              (w) => w.id !== draft.editingSessionId && w.date <= draft.date,
-            )
-            .sort((a, b) => b.date.localeCompare(a.date))
-            .flatMap((w) => w.exercises)
-            .find((e) => e.exerciseId === entry.exerciseId);
-          return (
-            <article
-              className={`exercise-card ${active ? "expanded" : ""}`}
-              key={entry.id}
-            >
-              <button
-                className="exercise-toggle"
-                onClick={() => setExpanded(active ? "" : entry.id)}
-                aria-expanded={active}
-              >
-                <span
-                  className={`exercise-number ${entry.completed ? "complete" : ""}`}
-                >
-                  {entry.completed ? (
-                    <Check size={20} />
-                  ) : (
-                    String(index + 1).padStart(2, "0")
-                  )}
-                </span>
-                <span>
-                  <strong>{exerciseName(entry.exerciseId)}</strong>
-                  <small>
-                    {entry.prescribed.targetSets ?? entry.sets.length} sets ×{" "}
-                    {entry.prescribed.targetReps ??
-                      entry.prescribed.reps ??
-                      "—"}{" "}
-                    reps ·{" "}
-                    {entry.prescribed.targetWeight !== "" &&
-                    entry.prescribed.targetWeight != null
-                      ? `${entry.prescribed.targetWeight} kg`
-                      : "Choose load"}
-                  </small>
-                </span>
-                <ChevronDown size={20} />
-              </button>
-              {active && (
-                <div className="exercise-body">
-                  <div className="button-row exercise-order">
-                    {[-1, 1].map((direction) => (
-                      <Button
-                        key={direction}
-                        variant="ghost"
-                        disabled={
-                          index + direction < 0 ||
-                          index + direction >= draft.exercises.length
-                        }
-                        aria-label={`Move ${exerciseName(entry.exerciseId)} ${direction < 0 ? "up" : "down"}`}
-                        onClick={() =>
-                          save((s) => {
-                            const entries = s.activeWorkout!.exercises;
-                            const from = entries.findIndex(
-                                (e) => e.id === entry.id,
-                              ),
-                              to = from + direction;
-                            if (from >= 0 && to >= 0 && to < entries.length)
-                              [entries[from], entries[to]] = [
-                                entries[to],
-                                entries[from],
-                              ];
-                          })
-                        }
-                      >
-                        {direction < 0 ? (
-                          <ArrowUp size={17} />
-                        ) : (
-                          <ArrowDown size={17} />
-                        )}
-                        Move {direction < 0 ? "up" : "down"}
-                      </Button>
-                    ))}
-                  </div>
-                  <p className="muted">{entry.prescribed.notes}</p>
-                  {previous && (
-                    <p className="previous">
-                      Last session:{" "}
-                      {previous.sets
-                        .filter(isValidLoggedSet)
-                        .map((s) => formatSet(s.weight, s.reps))
-                        .join(" · ") || "No logged sets"}
-                    </p>
-                  )}
-                  <p className="exercise-logging-note">
-                    {exerciseLoggingNotes(entry.exerciseId)}
-                  </p>
-                  <div className="set-labels">
-                    <span>SET</span>
-                    <span>WEIGHT · KG</span>
-                    <span>REPS</span>
-                    <span>RESULT</span>
-                  </div>
-                  {entry.sets.map((set, i) => (
-                    <div
-                      className={`set-group ${set.result === "success" || set.logged ? "logged" : ""} ${set.result === "miss" ? "missed" : ""}`}
-                      key={set.id}
-                    >
-                      <div className="set-row">
-                        <span className="set-number">{i + 1}</span>
-                        <NumericInput
-                          label={`Set ${i + 1} weight in kilograms`}
-                          value={set.weight}
-                          onChange={(value) =>
-                            changeEntry(entry.id, (e) =>
-                              updatePendingSets(e, set.id, "weight", value),
-                            )
-                          }
-                        />
-                        <NumericInput
-                          label={`Set ${i + 1} repetitions`}
-                          value={set.reps}
-                          step="1"
-                          onChange={(value) =>
-                            changeEntry(entry.id, (e) =>
-                              updatePendingSets(e, set.id, "reps", value),
-                            )
-                          }
-                        />
-                        <div className="result-buttons">
-                          <button
-                            className={
-                              set.result === "success" || set.logged
-                                ? "made"
-                                : ""
-                            }
-                            aria-label={`Set ${i + 1} made`}
-                            aria-pressed={
-                              set.result === "success" || Boolean(set.logged)
-                            }
-                            onClick={() =>
-                              changeEntry(entry.id, (e) => {
-                                const s = e.sets.find((s) => s.id === set.id)!;
-                                if (
-                                  !isValidLoggedSet({
-                                    ...s,
-                                    result: "success",
-                                    logged: true,
-                                  })
-                                )
-                                  throw Error(
-                                    "Enter a weight and whole repetitions before logging the set.",
-                                  );
-                                s.result = "success";
-                                s.logged = true;
-                                s.touched = true;
-                              })
-                            }
-                          >
-                            <Check size={20} />
-                          </button>
-                          <button
-                            className={set.result === "miss" ? "miss" : ""}
-                            aria-label={`Set ${i + 1} missed`}
-                            aria-pressed={set.result === "miss"}
-                            onClick={() =>
-                              changeEntry(entry.id, (e) => {
-                                const s = e.sets.find((s) => s.id === set.id)!;
-                                if (!isValidLoggedSet({ ...s, result: "miss" }))
-                                  throw Error(
-                                    "Enter the attempted weight before logging a miss.",
-                                  );
-                                s.result = "miss";
-                                s.logged = false;
-                                s.touched = true;
-                              })
-                            }
-                          >
-                            <X size={19} />
-                          </button>
-                        </div>
-                      </div>
-                      <details className="set-options">
-                        <summary>Set options</summary>
-                        <div className="adjustments">
-                          {[-5, -2, 2, 5].map((delta) => (
-                            <button
-                              key={delta}
-                              onClick={() =>
-                                changeEntry(entry.id, (e) => {
-                                  const s = e.sets.find(
-                                    (s) => s.id === set.id,
-                                  )!;
-                                  updatePendingSets(
-                                    e,
-                                    set.id,
-                                    "weight",
-                                    String(
-                                      Math.max(
-                                        0,
-                                        wholeKilograms(s.weight) + delta,
-                                      ),
-                                    ),
-                                  );
-                                })
-                              }
-                            >
-                              {delta > 0 ? "+" : ""}
-                              {delta} kg
-                              <small>
-                                {delta > 0 ? "+" : ""}
-                                {delta / 2} / side
-                              </small>
-                            </button>
-                          ))}
-                        </div>
-                        <div className="set-extra">
-                          <label>
-                            RPE (optional)
-                            <NumericInput
-                              label={`Set ${i + 1} RPE`}
-                              value={set.rpe}
-                              step="0.5"
-                              onChange={(value) =>
-                                changeEntry(entry.id, (e) =>
-                                  updatePendingSets(e, set.id, "rpe", value),
-                                )
-                              }
-                            />
-                          </label>
-                          <Button
-                            variant="ghost"
-                            disabled={i === 0}
-                            onClick={() =>
-                              changeEntry(entry.id, (e) => {
-                                const prior = e.sets[i - 1];
-                                updatePendingSets(
-                                  e,
-                                  set.id,
-                                  "weight",
-                                  String(prior.weight),
-                                );
-                                updatePendingSets(
-                                  e,
-                                  set.id,
-                                  "reps",
-                                  String(prior.reps),
-                                );
-                              })
-                            }
-                          >
-                            <Copy size={16} />
-                            Previous set
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            onClick={() =>
-                              changeEntry(entry.id, (e) => {
-                                e.sets = e.sets.filter((s) => s.id !== set.id);
-                                e.completed = false;
-                              })
-                            }
-                          >
-                            <Trash2 size={16} />
-                            Remove
-                          </Button>
-                        </div>
-                      </details>
-                    </div>
-                  ))}
-                  <div className="section-top">
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        changeEntry(entry.id, (e) => {
-                          const last = e.sets.at(-1);
-                          e.sets.push({
-                            id: crypto.randomUUID(),
-                            weight: String(last?.weight ?? ""),
-                            reps: String(last?.reps ?? 1),
-                            rpe: "",
-                            result: "",
-                            touched: false,
-                          });
-                          e.completed = false;
-                        })
-                      }
-                    >
-                      <Plus size={17} />
-                      Add set
-                    </Button>
-                    <Technique exerciseId={entry.exerciseId} />
-                  </div>
-                  <details className="notes">
-                    <summary>Notes & coach cue</summary>
-                    <div className="form-grid">
-                      <label>
-                        Your notes
-                        <textarea
-                          value={entry.athleteNotes}
-                          onChange={(e) =>
-                            changeEntry(entry.id, (item) => {
-                              item.athleteNotes = e.target.value;
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Coach cue
-                        <textarea
-                          value={entry.coachCue}
-                          onChange={(e) =>
-                            changeEntry(entry.id, (item) => {
-                              item.coachCue = e.target.value;
-                            })
-                          }
-                        />
-                      </label>
-                    </div>
-                  </details>
-                  <Button
-                    className="full"
-                    onClick={() => {
-                      if (
-                        !entry.sets.length ||
-                        !entry.sets.every(isValidLoggedSet)
-                      ) {
-                        notify(
-                          "Log every remaining set before completing this exercise, or finish a partial workout.",
-                        );
-                        return;
-                      }
-                      changeEntry(entry.id, (e) => {
-                        e.completed = true;
-                      });
-                      setExpanded(draft.exercises[index + 1]?.id ?? entry.id);
-                    }}
-                  >
-                    Complete {exerciseName(entry.exerciseId)}{" "}
-                    <ArrowRight size={18} />
-                  </Button>
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
       <div className="panel add-exercise">
         <ExercisePicker
           label="Add an exercise or activity"
@@ -984,6 +1098,7 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
                 s.activeWorkout!.date,
               );
               s.activeWorkout!.exercises.push(entry);
+              setReviewingSets({});
               setExpanded(entry.id);
             });
           }}
@@ -1081,11 +1196,11 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
       <Dialog
         open={finish}
         onOpenChange={setFinish}
-        title="Save your session?"
-        description={`You've logged ${logged} of ${total} sets. Only recorded sets will be saved; a partial session will not unlock a load increase.`}
+        title="Finish your workout?"
+        description={`You've logged ${logged} of ${total} sets. Finish to move this workout to History. Unlogged sets stay unrecorded; a partial session will not unlock a load increase.`}
       >
         <div className="button-row">
-          <Button onClick={() => void complete()}>Save workout</Button>
+          <Button onClick={() => void complete()}>Finish workout</Button>
           <Button variant="secondary" onClick={() => setFinish(false)}>
             Keep training
           </Button>
@@ -1142,6 +1257,6 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
           </Button>
         </div>
       </Dialog>
-    </>
+    </section>
   );
 }

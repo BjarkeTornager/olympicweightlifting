@@ -181,7 +181,7 @@ h2 {
   background: var(--gold);
   color: var(--ink);
 }
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .journal {
     display: block;
   }
@@ -1606,7 +1606,7 @@ summary {
     padding: 18px;
   }
 }
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .journal {
     display: block;
   }

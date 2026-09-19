@@ -1979,3 +1979,145 @@ button,
     font-size: 18px;
   }
 }
+.quick-capture-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+.quick-capture-bar > span {
+  color: var(--ink-muted, #626262);
+  font-size: 13px;
+}
+html[data-keyboard-open] .quick-capture-bar {
+  display: none;
+}
+.quick-capture-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+.quick-capture-options > * {
+  min-height: 64px;
+  white-space: normal;
+  text-align: center;
+}
+.quick-capture-photo {
+  position: relative;
+  cursor: pointer;
+}
+.quick-capture-photo input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
+}
+.quick-capture-photo:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.quick-capture-photo.disabled {
+  opacity: 0.55;
+}
+.quick-repeat {
+  margin: 20px 0;
+}
+.quick-repeat > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line, #ddd);
+}
+.quick-repeat small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-muted, #626262);
+}
+.quick-repeat > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.quick-repeat button {
+  flex-shrink: 0;
+}
+.tracking-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line, #ddd);
+}
+.tracking-section p {
+  margin: 12px 0;
+}
+.tracking-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tracking-fields label,
+.tracking-instructions label {
+  display: grid;
+  gap: 6px;
+}
+.tracking-fields input,
+.tracking-instructions input {
+  width: 100%;
+  min-width: 0;
+}
+.tracking-topics {
+  display: grid;
+  gap: 10px;
+  border: 0;
+  margin: 12px 0;
+  padding: 0;
+}
+.tracking-topics legend {
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+.tracking-topics label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tracking-topics input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.tracking-instructions {
+  margin-top: 20px;
+}
+.tracking-instructions summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px 0;
+}
+.tracking-instructions ol {
+  padding-left: 22px;
+}
+.tracking-instructions li {
+  margin: 12px 0;
+  line-height: 1.6;
+}
+.tracking-instructions code {
+  overflow-wrap: anywhere;
+}
+.tracking-key {
+  margin-top: 16px;
+}
+@media (max-width: 450px) {
+  .quick-capture-bar > span {
+    display: none;
+  }
+  .quick-capture-bar > button {
+    width: 100%;
+  }
+  .tracking-fields {
+    grid-template-columns: 1fr;
+  }
+}

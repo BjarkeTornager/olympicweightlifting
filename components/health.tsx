@@ -50,6 +50,12 @@ export function CheckinDetails({ checkin }: { checkin: Checkin }) {
         ))}
       </div>
       {checkin.notes && <p>{checkin.notes}</p>}
+      {checkin.sleepImport && (
+        <small className="fine-print">
+          Sleep imported from Apple Health ·{" "}
+          {new Date(checkin.sleepImport.importedAt).toLocaleString()}
+        </small>
+      )}
     </div>
   );
 }

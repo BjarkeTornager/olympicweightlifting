@@ -2,6 +2,7 @@ import { readFile, writeFile, readdir, cp } from "node:fs/promises";
 import { join } from "node:path";
 const buildId = (await readFile(".next/BUILD_ID", "utf8")).trim();
 const html = await readFile(".next/server/app/index.html", "utf8");
+const pushEvents = await readFile("scripts/service-worker-push.js", "utf8");
 await writeFile("public/offline.html", html);
 async function files(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -40,6 +41,7 @@ self.addEventListener('fetch',event=>{
  }
  if(SHELL.includes(url.pathname))event.respondWith(caches.match(event.request,{ignoreSearch:true}).then(cached=>cached??fetch(event.request)));
 });
+${pushEvents}
 `,
 );
 console.log(

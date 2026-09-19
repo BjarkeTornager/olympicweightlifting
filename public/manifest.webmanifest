@@ -10,11 +10,7 @@
   "background_color": "#f6f4ef",
   "theme_color": "#f6f4ef",
   "lang": "en",
-  "categories": [
-    "fitness",
-    "sports",
-    "productivity"
-  ],
+  "categories": ["fitness", "sports", "productivity"],
   "icons": [
     {
       "src": "/assets/icon-192.png",
@@ -36,6 +32,11 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Log something",
+      "short_name": "Log",
+      "url": "./#coach/capture"
+    },
     {
       "name": "Start workout",
       "short_name": "Workout",

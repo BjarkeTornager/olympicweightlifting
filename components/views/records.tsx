@@ -1,4 +1,5 @@
 "use client";
+import { TrackingSettings } from "../tracking-settings";
 import { CombineSessions } from "../combine-sessions";
 import { CardioProgress } from "../cardio";
 import { Invitations } from "../invitations";
@@ -733,6 +734,7 @@ export function SettingsView({
         </div>
       </div>
       <div className="settings-grid">
+        <TrackingSettings journal={journal} />
         {journal.auth.canInvite && <Invitations accountId={identity.id} />}
         <section className="panel">
           <h2>Your account</h2>

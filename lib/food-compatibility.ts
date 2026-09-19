@@ -6,6 +6,16 @@ export function foodSnapshotForClient<T extends Snapshot>(
   snapshot: T,
 ): T {
   if (
+    request.headers.get("x-sleep-import-version") !== "1" &&
+    snapshot.state.health.checkins.some(
+      (entry) => entry.sleepImport !== undefined,
+    )
+  ) {
+    snapshot = structuredClone(snapshot);
+    for (const entry of snapshot.state.health.checkins)
+      delete entry.sleepImport;
+  }
+  if (
     request.headers.get("x-activity-photos-version") !== "1" &&
     snapshot.state.cardio.sessions.some((entry) => entry.photoIds !== undefined)
   ) {

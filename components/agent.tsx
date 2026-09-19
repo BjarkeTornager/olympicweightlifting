@@ -58,6 +58,7 @@ import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
 import { LiftingVideoDialog } from "./lifting-video-upload";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
+import { QuickCapture } from "./quick-capture";
 type Turn = {
   id: string;
   question: string;
@@ -88,6 +89,7 @@ export function TrainingAgent({
   initialActivityPhotoLog = false,
   initialTrainingPrompt,
   initialVideoReview = false,
+  initialCapture = false,
 }: {
   journal: JournalController;
   onLogin: () => void;
@@ -100,6 +102,7 @@ export function TrainingAgent({
   initialActivityPhotoLog?: boolean;
   initialTrainingPrompt?: string;
   initialVideoReview?: boolean;
+  initialCapture?: boolean;
 }) {
   const entryPrompt = initialSleepLog
     ? sleepLoggingPrompt(Boolean(initialPhotoId))
@@ -204,6 +207,7 @@ export function TrainingAgent({
   const [autoTag, setAutoTag] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
+  const [captureOpen, setCaptureOpen] = useState(initialCapture);
   const [handledEntry, setHandledEntry] = useState(entryId);
   const [wasVisible, setWasVisible] = useState(visible);
   // Apply a navigation intent once without discarding an existing draft or run.
@@ -211,6 +215,7 @@ export function TrainingAgent({
     setHandledEntry(entryId);
     setLoadingImage(Boolean(initialPhotoId));
     if (initialVideoReview) setVideoOpen(true);
+    if (initialCapture) setCaptureOpen(true);
     if (entryPrompt) {
       setView("conversation");
       setMessage((current) =>
@@ -830,6 +835,32 @@ export function TrainingAgent({
           </span>
         </div>
       </header>
+      <div className="quick-capture-bar">
+        <Button onClick={() => setCaptureOpen(true)}>
+          <Plus size={19} /> Log something
+        </Button>
+        <span>Food, sleep or training</span>
+      </div>
+      <QuickCapture
+        journal={journal}
+        open={captureOpen && visible}
+        onOpenChange={setCaptureOpen}
+        photoDisabled={
+          uploading || loadingImage || !accountId || photoIds.length >= 4
+        }
+        onDescribe={() => {
+          setView("conversation");
+          requestAnimationFrame(() =>
+            input.current?.focus({ preventScroll: true }),
+          );
+        }}
+        onPhoto={(file) => {
+          draft(
+            "Log the attached photo as my meal, using labelled portion estimates.",
+          );
+          void attach(file);
+        }}
+      />
       <div className="coach-today" hidden={view !== "today"}>
         {view === "today" && (
           <DailyOverview

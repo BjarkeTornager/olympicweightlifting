@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 11 September 2026.</p>
+        <p className="lead">Last updated 19 September 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -101,13 +101,13 @@ export default function PrivacyPage() {
           that context and up to eight recent completed exchanges when you send
           a message. Edit or delete saved memories and plans in Coach options.
           They are only saved after your approval and are included in journal
-          exports. Deleting them does not delete earlier chat messages.
-          Follow-up happens on a visit, without scheduled notifications. Clear
-          or change your focus in Coach options; clearing conversation keeps
-          this saved preference. Opening suggestions are generated on your
-          device from journal records, without a model request. Hiding one
-          stores only today’s date under your account on this browser until you
-          sign out or clear site data.
+          exports. Deleting them does not delete earlier chat messages. Coaching
+          follow-up happens on a visit. Optional daily logging reminders are
+          configured separately in Settings. Clear or change your focus in Coach
+          options; clearing conversation keeps this saved preference. Opening
+          suggestions are generated on your device from journal records, without
+          a model request. Hiding one stores only today’s date under your
+          account on this browser until you sign out or clear site data.
         </p>
         <p>
           Your optional lifting brief stores the goals, experience,
@@ -168,6 +168,35 @@ export default function PrivacyPage() {
             Ollama’s privacy policy
           </a>{" "}
           for their own data handling.
+        </p>
+      </section>
+      <section className="space-y-3">
+        <h2>Optional reminders and Apple Health sleep</h2>
+        <p>
+          If you enable a daily reminder, we store your chosen time, time zone,
+          topics and browser push subscription. Your browser’s push provider
+          delivers a generic notification without food, sleep or workout
+          details. Turn reminders off in Settings to stop delivery and delete
+          the saved subscription. The last attempted local date prevents
+          duplicate reminders.
+        </p>
+        <p>
+          If you set up an Apple Shortcuts sleep connection, your iPhone sends
+          the sleep intervals you select to this website. We combine overlapping
+          intervals and store sleep duration, its date, source, interval bounds
+          and import time in your journal. Raw stage samples are processed for
+          that request and are not retained. Import fingerprints help prevent
+          duplicates and preserve manual edits or deletions. Imported sleep can
+          be included as relevant journal context when you ask Coach for advice.
+        </p>
+        <p>
+          The import key is shown once; the server stores only its hash. Keep
+          the key private in your Shortcut. Disconnecting or replacing it stops
+          the old key immediately and keeps previously saved sleep. Import
+          receipts remain to prevent deleted entries returning on a retry. These
+          features do not grant the website direct access to Apple Health or
+          provide continuous monitoring. No data is read until your Shortcut
+          sends it.
         </p>
       </section>
       <section className="space-y-3">

@@ -381,6 +381,7 @@ export function Journal(props: PrivateSessionProps) {
               key={identity?.id ?? "guest"}
               visible={section === "coach"}
               entryId={coachEntry.id}
+              initialCapture={coachEntry.route === "coach/capture"}
               initialVideoReview={/^coach\/lifting\/(video|technique)$/.test(
                 coachEntry.route,
               )}

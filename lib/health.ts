@@ -30,6 +30,16 @@ export const checkinSchema = z
     bodyweight: values.bodyweight.default(null),
     notes: values.notes.default(""),
     updatedAt: z.string().datetime(),
+    sleepImport: z
+      .object({
+        provider: z.literal("apple-health"),
+        digest: z.string().regex(/^[a-f0-9]{64}$/),
+        start: z.string().datetime(),
+        end: z.string().datetime(),
+        importedAt: z.string().datetime(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .refine(
@@ -75,6 +85,7 @@ export function saveCheckin(
     ...patch,
     updatedAt: new Date().toISOString(),
   });
+  if (patch.sleepHours !== undefined) delete checkin.sleepImport;
   state.health.checkins = [
     ...state.health.checkins.filter((c) => c.date !== checkin.date),
     checkin,
@@ -225,6 +236,6 @@ export function dailyHealth(state: JournalState, date: string) {
       ? { value: weights.at(-1)!.bodyweight, date: weights.at(-1)!.date }
       : null,
     dataLimits:
-      "Self-reported journal records only. Missing entries do not mean zero intake, sleep or activity. Cardio includes user-reported activity duration, distance and optional heart rate or energy. No wearable feeds, clinical interpretation, calculated calorie expenditure or automatic background monitoring.",
+      "Journal records include self-reports and sleep explicitly imported through an optional Apple Health Shortcut, marked with their source. Missing entries do not mean zero intake, sleep or activity. Cardio includes user-reported duration, distance and optional heart rate or energy. No continuous wearable monitoring or clinical interpretation.",
   };
 }

@@ -219,6 +219,22 @@ function Landing({
 }
 
 export function AccessGate() {
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const openCapture = (event: MessageEvent) => {
+      if (
+        event.data?.type !== "OPEN_CAPTURE" ||
+        (event.origin && event.origin !== location.origin)
+      )
+        return;
+      if (location.hash === "#coach/capture")
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      else location.hash = "coach/capture";
+    };
+    navigator.serviceWorker.addEventListener("message", openCapture);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", openCapture);
+  }, []);
   const [user, setUser] = useState<Identity | null>(null);
   const [phase, setPhase] = useState<Phase>("checking");
   const [auth, setAuth] = useState<AuthOptions>({

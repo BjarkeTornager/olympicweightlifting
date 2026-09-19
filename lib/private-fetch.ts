@@ -8,6 +8,7 @@ export function privateRequestHeaders(input?: HeadersInit) {
   headers.set("X-Lifting-Coach-Version", "1");
   headers.set("X-Food-Tags-Version", "1");
   headers.set("X-Activity-Photos-Version", "1");
+  headers.set("X-Sleep-Import-Version", "1");
   return headers;
 }
 export function checkPrivateResponse(status: number) {

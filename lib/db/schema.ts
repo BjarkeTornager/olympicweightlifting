@@ -22,6 +22,47 @@ import {
   type ImageClassification,
 } from "../images";
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+export const dailyReminders = pgTable("daily_reminders", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  preferences: jsonb("preferences")
+    .$type<import("../reminders").ReminderPreferences>()
+    .notNull(),
+  subscription:
+    jsonb("subscription").$type<import("web-push").PushSubscription>(),
+  endpoint: text("endpoint").unique(),
+  lastDate: date("last_date"),
+  lastStatus: text("last_status"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export const healthConnections = pgTable("health_connections", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastDate: date("last_date"),
+  lastResult: text("last_result"),
+});
+export const healthImportReceipts = pgTable(
+  "health_import_receipts",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    date: date("sleep_date").notNull(),
+    digest: text("digest").notNull(),
+    hours: numeric("hours").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.date] })],
+);
 export const foodPhotos = pgTable(
   "food_photos",
   {

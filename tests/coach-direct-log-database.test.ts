@@ -579,7 +579,7 @@ test(
             input("Prepare my sleep for review without saving"),
             sequence(
               [call("health_overview", { date })],
-              [call("prepare_change", health)],
+              [call("prepare_change", { ...health, reviewRequested: true })],
             ),
             hooks,
           );

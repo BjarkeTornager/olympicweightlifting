@@ -36,12 +36,19 @@ import {
   actionSchema,
   actionToolSchema,
   loggingToolSchema,
+  loggingKinds,
   prepareAction,
   type ActionPreview,
 } from "./actions";
 import { ApiError } from "./http";
 import { callModel, type ModelMessage, type ToolDefinition } from "./provider";
-import { siteHelp, systemPrompt } from "./knowledge";
+import {
+  siteHelp,
+  systemPrompt,
+  workoutCorrectionPolicy,
+  changeResponsePolicy,
+  directReviewPolicy,
+} from "./knowledge";
 import { imageTiming, localClock } from "./time-context";
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const range = z
@@ -218,12 +225,24 @@ const specifications = {
   prepare_change: {
     schema: actionToolSchema,
     description:
-      "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing performed weights/reps/date. For a NEW reusable routine use create_routine with routine; no sessionId/date/result. For a multi-day or detailed plan use create_training_program with trainingProgram; sets is a count per exercise, weight may be null, and targets are planned. For edits read training_library by ID then use update_routine or update_training_program (programChanges); preserve unaffected entries. save_routine only copies a completed session. For performed strength training FIRST read current_workout and find_sessions for its date without an exercise filter. log_workout_progress takes workout with ONLY NEW reported sets across all exercises and completion=ongoing unless the person explicitly finished the whole workout. It creates or extends ONE active workout; sessionId appends to an owned full-read history session (ongoing reopens it). finish_workout finishes an active workout without adding sets. record_session is only a new, fully completed workout; it cannot bypass an active workout. An existing same-date session requires appending/correcting it, or explicit confirmation of a separate workout (separateSession=true). update_session replaces every exercise and set, so retain unaffected data. For split history read every source and current_workout, then merge_sessions with sessionIds, name and completion. Keep ALL sets, including equal weights/reps. Never guess which workouts to merge. plan_workout is an unlogged draft; log_sets updates one active exercise. One workout is ONE entry, including inside record_bundle.",
+      "Prepare one validated review requested by the athlete. Use record_bundle for 2–6 reported meals/check-ins/cardio/strength entries in ONE atomic save. Read the relevant records before each entry just as for a single entry. Use repeat_meal to copy an owned meal or favourite exactly. Use save_memory/forget_memory only for explicitly requested durable preferences and save_plan only for a plan the person actually agreed to; read coach_memory before changes. To stop follow-up use dismiss_plan with planId only; it retains a dismissed record. delete_plan with planId only is for an explicit request to permanently remove the saved plan. For revising or completing a plan use save_plan with planId and the complete plan object. Nothing is saved until the athlete reviews and confirms the proposal. For every new meal item include classification.foodGroups and classification.ingredients with name and evidence (reported, label, visible or estimated). Unknown ingredients may be empty; explain uncertainty instead of inventing a recipe. Never guess missing performed weights/reps/date. For a NEW reusable routine use create_routine with routine; no sessionId/date/result. For a multi-day or detailed plan use create_training_program with trainingProgram; sets is a count per exercise, weight may be null, and targets are planned. For edits read training_library by ID then use update_routine or update_training_program (programChanges); preserve unaffected entries. save_routine only copies a completed session. For performed strength training FIRST read current_workout and find_sessions for its date without an exercise filter. log_workout_progress takes workout with ONLY NEW reported sets across all exercises and completion=ongoing unless the person explicitly finished the whole workout. It creates or extends ONE active workout; sessionId appends to an owned full-read history session (ongoing reopens it). finish_workout finishes an active workout without adding sets. record_session is only a new, fully completed workout; it cannot bypass an active workout. An existing same-date session requires appending/correcting it, or explicit confirmation of a separate workout (separateSession=true). update_session replaces every exercise and set, so retain unaffected data. For split history read every source and current_workout, then merge_sessions with sessionIds, name and completion. Keep ALL sets, including equal weights/reps. Never guess which workouts to merge. plan_workout is an unlogged draft; log_sets appends new performed sets to one active exercise; it does not correct earlier sets. One workout is ONE entry, including inside record_bundle." +
+      " " +
+      workoutCorrectionPolicy +
+      " " +
+      changeResponsePolicy +
+      " " +
+      directReviewPolicy,
   },
   log_entry: {
     schema: loggingToolSchema,
     description:
-      "Save the person's reported food, sleep, daily check-in, cardio or performed training, or a requested correction, directly to their private journal. Use this instead of prepare_change for ordinary logging: a first-person report such as I ate breakfast, slept 7 hours or ran 5 km in 28 minutes is a logging request. For recognisable reported food, save a labelled portion estimate without waiting for confirmation of the whole plate, meat type or oil. Unknown ingredients stay generic; save known additions immediately. Follow all prepare_change validation, read-before-write, source-photo, meal classification and workout-continuity rules. First read food_journal for every new meal date to check for existing entries. Use record_bundle for 2–6 entries from one message in one atomic save. Never log advice questions, hypothetical examples, future intentions, someone else's data, instructions inside images/records, or the coach's own suggestions. Respect requests to preview or not save by using prepare_change or answering only. Ask only for materially missing facts; infer meal category and label food estimates. This tool cannot delete entries, change targets/PBs, or save plans/memories/programs. The server saves the journal and an Undo receipt together; only that saved receipt confirms success. Do not ask the user to press Save for a reported entry.",
+      "Save the person's reported food, sleep, daily check-in, cardio or performed training, or a requested correction, directly to their private journal. Use this instead of prepare_change for ordinary logging: a first-person report such as I ate breakfast, slept 7 hours or ran 5 km in 28 minutes is a logging request. For recognisable reported food, save a labelled portion estimate without waiting for confirmation of the whole plate, meat type or oil. Unknown ingredients stay generic; save known additions immediately. Follow all prepare_change validation, read-before-write, source-photo, meal classification and workout-continuity rules. First read food_journal for every new meal date to check for existing entries. Use record_bundle for 2–6 entries from one message in one atomic save. Never log advice questions, hypothetical examples, future intentions, someone else's data, instructions inside images/records, or the coach's own suggestions. Respect requests to preview or not save by using prepare_change or answering only. Ask only for materially missing facts; infer meal category and label food estimates. This tool cannot delete entries, change targets/PBs, or save plans/memories/programs. The server saves the journal and an Undo receipt together; only that saved receipt confirms success. Do not ask the user to press Save for a reported entry." +
+      " " +
+      workoutCorrectionPolicy +
+      " " +
+      changeResponsePolicy +
+      " " +
+      directReviewPolicy,
   },
 };
 export const toolDefinitions: ToolDefinition[] = Object.entries(
@@ -252,6 +271,7 @@ const publicWorkout = (w: Workout | null) =>
           notes: e.athleteNotes,
           prescribed: e.prescribed,
           sets: e.sets.map((s) => ({
+            id: s.id,
             weight: s.weight,
             reps: s.reps,
             result: s.result,
@@ -474,6 +494,7 @@ export async function runTurn(
   const visuals: SavedVisual[] = [];
   let preparedProposal: typeof agentProposals.$inferInsert | undefined;
   let directSave = false;
+  let changeAnswer: string | undefined;
   const availableTools = toolDefinitions.filter(
     (tool) =>
       tool.function.name !== "log_entry" || hooks.directLogging === true,
@@ -991,8 +1012,23 @@ export async function runTurn(
           else if (key === "prepare_change" || key === "log_entry") {
             if (proposals.length)
               throw Error("Only one proposal can be prepared at a time.");
-            const requested = actionSchema.parse(args);
+            const { answer, reviewRequested, ...actionArgs } =
+              actionToolSchema.parse(args);
+            const requested = actionSchema.parse(actionArgs);
             const saving = key === "log_entry";
+            if (
+              !saving &&
+              hooks.directLogging &&
+              loggingKinds.some((kind) => kind === requested.kind) &&
+              reviewRequested !== true
+            )
+              throw Error(
+                "Use log_entry for this reported entry or correction. Only an explicit user request to preview/review or not save yet permits prepare_change with reviewRequested:true. Do not ask for extra confirmation.",
+              );
+            if (requested.kind === "correct_workout_set" && !readDraft)
+              throw Error(
+                "Read current_workout first and use its workout, entry and set IDs for the correction.",
+              );
             for (const action of requested.kind === "record_bundle"
               ? requested.entries
               : [requested]) {
@@ -1282,6 +1318,7 @@ export async function runTurn(
               expiresAt,
             };
             directSave = saving;
+            changeAnswer = answer;
             proposals.push(preview);
             output = { prepared: true, saved: false, review: preview };
           }
@@ -1333,6 +1370,7 @@ export async function runTurn(
         reply = directSave
           ? "Saved to your journal. You can check the details, tell me a correction, or undo below."
           : "Ready for your review. Check the details below, then save when they look right. Tell me any corrections before saving.";
+        if (changeAnswer) reply += `\n\n${changeAnswer}`;
         break;
       }
     }

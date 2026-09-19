@@ -23,6 +23,60 @@ const progress = {
 const count = (state: ReturnType<typeof emptyJournal>) =>
   state.sessions.flatMap((w) => w.exercises.flatMap((e) => e.sets)).length;
 
+test("an active-set correction targets one ID, preserves equal sets and metadata, and never finishes or appends", () => {
+  const before = prepareAction(emptyJournal(), progress, date).state;
+  const draft = before.activeWorkout!,
+    entry = draft.exercises[0];
+  entry.athleteNotes = "Keep my note";
+  entry.prescribed = { targetSets: 3, targetWeight: 65, targetReps: 10 };
+  entry.sets[0].rpe = 8;
+  entry.sets.push({ ...entry.sets[0], id: crypto.randomUUID() });
+  entry.sets.push({
+    id: crypto.randomUUID(),
+    weight: 65,
+    reps: 10,
+    result: "",
+    logged: false,
+  });
+  const action = {
+    kind: "correct_workout_set",
+    workoutId: draft.id,
+    entryId: entry.id,
+    setId: entry.sets[0].id,
+    setChanges: { weight: 62.5 },
+  };
+  const corrected = prepareAction(before, action, date);
+  const expected = structuredClone(before);
+  expected.activeWorkout!.exercises[0].sets[0].weight = 62.5;
+  expected.updatedAt = corrected.state.updatedAt;
+  assert.deepEqual(corrected.state, expected);
+  assert.equal(corrected.workoutReview?.status, "ongoing");
+  assert.equal(before.activeWorkout!.exercises[0].sets[0].weight, 60);
+  for (const changes of [
+    { workoutId: crypto.randomUUID() },
+    { entryId: crypto.randomUUID() },
+    { setId: crypto.randomUUID() },
+    { setId: entry.sets[2].id },
+    { setChanges: {} },
+    { setChanges: { weight: -1 } },
+    { setChanges: { reps: 0 } },
+    { setChanges: { id: crypto.randomUUID() } },
+  ])
+    assert.throws(() => prepareAction(before, { ...action, ...changes }, date));
+  assert.throws(() => prepareAction(before, action, "2026-09-06"), /future/);
+  const miss = prepareAction(
+    before,
+    { ...action, setChanges: { result: "miss", reps: 0, rpe: null } },
+    date,
+  );
+  assert.equal(miss.state.activeWorkout!.exercises[0].sets[0].result, "miss");
+  assert.equal(miss.state.activeWorkout!.exercises[0].sets[0].reps, 0);
+  assert.deepEqual(
+    miss.state.activeWorkout!.exercises[0].sets.slice(1),
+    entry.sets.slice(1),
+  );
+});
+
 test("partial multi-exercise reports extend one draft, preserve pending targets, and finish once", () => {
   const planned = prepareAction(
     emptyJournal(),

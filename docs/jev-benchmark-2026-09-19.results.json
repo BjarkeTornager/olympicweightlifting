@@ -1,0 +1,6576 @@
+{
+  "schemaVersion": 1,
+  "manifest": {
+    "startedAt": "2026-09-19T17:36:02.332Z",
+    "mode": "live",
+    "model": "jev-1.13.0",
+    "questionVersion": "lift-jev-v1",
+    "threshold": 0.85,
+    "thresholdPolicy": "Preset; no held-out tuning. Choice uses selected probability, not confidence.",
+    "datasetHash": "8be9f710fd4efe77c59d781a4672a6752db8f6350147da24b9640351957bf53d",
+    "questionsHash": "e9d29731a80c1f12a5e7914e9f1c5439d243158603fbeaf0d9b922c40721ce8d",
+    "sourceHashes": {
+      "fixtures.ts": "b16a668c29cf048d828bb760844c66f5e81fc157325270a8ff0ff9366c834890",
+      "core.ts": "d7262bc067e6fa2cb90882bf6096da93baa0486d88f572d6257c7f8ef1adacce",
+      "benchmark.ts": "ac565f676ffc571a3292356429128548fdbbdf8e0ebe119154e4ec6451c97d20"
+    },
+    "datasetCases": 132,
+    "selectedCases": 132,
+    "split": "all",
+    "limit": 132,
+    "maxUsd": 0.0892627,
+    "pricePerMillion": 0.042,
+    "labelProvenance": "Assistant-authored synthetic examples and labels; no independent human annotation.",
+    "dataScope": "Only the committed synthetic fixture state is sent; no database, app tools, images or production conversation."
+  },
+  "report": {
+    "completedAt": "2026-09-19T17:36:40.961Z",
+    "mode": "live",
+    "status": "complete",
+    "failure": null,
+    "selectedCases": 132,
+    "liveCases": 132,
+    "baseline": {
+      "intent/calibration/all": {
+        "cases": 60,
+        "exactCaseAccuracy": 0.7166666666666667,
+        "decisions": 300,
+        "accuracy": 0.8866666666666667,
+        "coverage": 0.96,
+        "abstentionRate": 0.04,
+        "acceptedAccuracy": 0.9166666666666666,
+        "confidentFalseEvent": {
+          "count": 4,
+          "negativeCases": 30,
+          "rate": 0.13333333333333333
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 56,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 0.0030830000000037217,
+          "p95": 0.06383299999998826
+        },
+        "fields": {
+          "intent": {
+            "n": 60,
+            "correct": 43,
+            "accepted": 48,
+            "acceptedCorrect": 41,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 16,
+              "report -> mixed_or_unclear": 5,
+              "finish -> finish": 2,
+              "plan -> plan": 5,
+              "question -> question": 8,
+              "correction -> correction": 6,
+              "recap -> recap": 4,
+              "recap -> mixed_or_unclear": 2,
+              "question -> report": 4,
+              "report -> recap": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 2,
+              "plan -> mixed_or_unclear": 3,
+              "mixed_or_unclear -> report": 2
+            },
+            "classes": {
+              "report": {
+                "actual": 22,
+                "predicted": 22,
+                "correct": 16,
+                "precision": 0.7272727272727273,
+                "recall": 0.7272727272727273
+              },
+              "mixed_or_unclear": {
+                "actual": 4,
+                "predicted": 12,
+                "correct": 2,
+                "precision": 0.16666666666666666,
+                "recall": 0.5
+              },
+              "finish": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 8,
+                "predicted": 5,
+                "correct": 5,
+                "precision": 1,
+                "recall": 0.625
+              },
+              "question": {
+                "actual": 12,
+                "predicted": 8,
+                "correct": 8,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "correction": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 6,
+                "predicted": 5,
+                "correct": 4,
+                "precision": 0.8,
+                "recall": 0.6666666666666666
+              }
+            },
+            "accuracy": 0.7166666666666667,
+            "coverage": 0.8,
+            "acceptedAccuracy": 0.8541666666666666,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 60,
+            "correct": 51,
+            "accepted": 60,
+            "acceptedCorrect": 51,
+            "falsePositive": 4,
+            "falseNegative": 5,
+            "brierSum": 9,
+            "binaryN": 60,
+            "confusion": {
+              "true -> true": 25,
+              "true -> false": 5,
+              "false -> false": 26,
+              "false -> true": 4
+            },
+            "classes": {
+              "true": {
+                "actual": 30,
+                "predicted": 29,
+                "correct": 25,
+                "precision": 0.8620689655172413,
+                "recall": 0.8333333333333334
+              },
+              "false": {
+                "actual": 30,
+                "predicted": 31,
+                "correct": 26,
+                "precision": 0.8387096774193549,
+                "recall": 0.8666666666666667
+              }
+            },
+            "accuracy": 0.85,
+            "coverage": 1,
+            "acceptedAccuracy": 0.85,
+            "brier": 0.15
+          },
+          "new_sets_reported": {
+            "n": 60,
+            "correct": 52,
+            "accepted": 60,
+            "acceptedCorrect": 52,
+            "falsePositive": 4,
+            "falseNegative": 4,
+            "brierSum": 8,
+            "binaryN": 60,
+            "confusion": {
+              "true -> true": 14,
+              "true -> false": 4,
+              "false -> false": 38,
+              "false -> true": 4
+            },
+            "classes": {
+              "true": {
+                "actual": 18,
+                "predicted": 18,
+                "correct": 14,
+                "precision": 0.7777777777777778,
+                "recall": 0.7777777777777778
+              },
+              "false": {
+                "actual": 42,
+                "predicted": 42,
+                "correct": 38,
+                "precision": 0.9047619047619048,
+                "recall": 0.9047619047619048
+              }
+            },
+            "accuracy": 0.8666666666666667,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8666666666666667,
+            "brier": 0.13333333333333333
+          },
+          "whole_workout_finished": {
+            "n": 60,
+            "correct": 60,
+            "accepted": 60,
+            "acceptedCorrect": 60,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 60,
+            "confusion": {
+              "false -> false": 56,
+              "true -> true": 4
+            },
+            "classes": {
+              "false": {
+                "actual": 56,
+                "predicted": 56,
+                "correct": 56,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          },
+          "preview_requested": {
+            "n": 60,
+            "correct": 60,
+            "accepted": 60,
+            "acceptedCorrect": 60,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 60,
+            "confusion": {
+              "false -> false": 56,
+              "true -> true": 4
+            },
+            "classes": {
+              "false": {
+                "actual": 56,
+                "predicted": 56,
+                "correct": 56,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 300,
+            "correct": 266,
+            "probabilitySum": 300,
+            "accuracy": 0.8866666666666667,
+            "meanProbability": 1
+          }
+        ],
+        "failures": [
+          {
+            "id": "exercise-done-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "partial-exercise-en",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "partial-exercise-da",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-en",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-en",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-da",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-da",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-en",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-en",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-da",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-da",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "meal-report-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "recap",
+              "probability": 1
+            }
+          },
+          {
+            "id": "meal-report-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "meal-report-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-plan-en",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-plan-da",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "report-and-advice-en",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "report-and-advice-da",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "future-finish-da",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          }
+        ]
+      },
+      "intent/calibration/en": {
+        "cases": 30,
+        "exactCaseAccuracy": 0.7333333333333333,
+        "decisions": 150,
+        "accuracy": 0.8933333333333333,
+        "coverage": 0.9666666666666667,
+        "abstentionRate": 0.03333333333333333,
+        "acceptedAccuracy": 0.9172413793103448,
+        "confidentFalseEvent": {
+          "count": 2,
+          "negativeCases": 15,
+          "rate": 0.13333333333333333
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 28,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 0.0029170000000249274,
+          "p95": 0.09266700000000583
+        },
+        "fields": {
+          "intent": {
+            "n": 30,
+            "correct": 22,
+            "accepted": 25,
+            "acceptedCorrect": 21,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 8,
+              "report -> mixed_or_unclear": 2,
+              "finish -> finish": 1,
+              "plan -> plan": 3,
+              "question -> question": 4,
+              "correction -> correction": 3,
+              "recap -> recap": 2,
+              "recap -> mixed_or_unclear": 1,
+              "question -> report": 2,
+              "report -> recap": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 1,
+              "plan -> mixed_or_unclear": 1,
+              "mixed_or_unclear -> report": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 11,
+                "predicted": 11,
+                "correct": 8,
+                "precision": 0.7272727272727273,
+                "recall": 0.7272727272727273
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 5,
+                "correct": 1,
+                "precision": 0.2,
+                "recall": 0.5
+              },
+              "finish": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 0.75
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "correction": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 2,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666
+              }
+            },
+            "accuracy": 0.7333333333333333,
+            "coverage": 0.8333333333333334,
+            "acceptedAccuracy": 0.84,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 30,
+            "correct": 26,
+            "accepted": 30,
+            "acceptedCorrect": 26,
+            "falsePositive": 2,
+            "falseNegative": 2,
+            "brierSum": 4,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 13,
+              "true -> false": 2,
+              "false -> false": 13,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 15,
+                "predicted": 15,
+                "correct": 13,
+                "precision": 0.8666666666666667,
+                "recall": 0.8666666666666667
+              },
+              "false": {
+                "actual": 15,
+                "predicted": 15,
+                "correct": 13,
+                "precision": 0.8666666666666667,
+                "recall": 0.8666666666666667
+              }
+            },
+            "accuracy": 0.8666666666666667,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8666666666666667,
+            "brier": 0.13333333333333333
+          },
+          "new_sets_reported": {
+            "n": 30,
+            "correct": 26,
+            "accepted": 30,
+            "acceptedCorrect": 26,
+            "falsePositive": 2,
+            "falseNegative": 2,
+            "brierSum": 4,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 7,
+              "true -> false": 2,
+              "false -> false": 19,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 9,
+                "predicted": 9,
+                "correct": 7,
+                "precision": 0.7777777777777778,
+                "recall": 0.7777777777777778
+              },
+              "false": {
+                "actual": 21,
+                "predicted": 21,
+                "correct": 19,
+                "precision": 0.9047619047619048,
+                "recall": 0.9047619047619048
+              }
+            },
+            "accuracy": 0.8666666666666667,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8666666666666667,
+            "brier": 0.13333333333333333
+          },
+          "whole_workout_finished": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 30,
+            "acceptedCorrect": 30,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          },
+          "preview_requested": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 30,
+            "acceptedCorrect": 30,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 150,
+            "correct": 134,
+            "probabilitySum": 150,
+            "accuracy": 0.8933333333333333,
+            "meanProbability": 1
+          }
+        ],
+        "failures": [
+          {
+            "id": "exercise-done-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "partial-exercise-en",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-en",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-en",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-en",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-en",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "meal-report-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "recap",
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-plan-en",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "report-and-advice-en",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          }
+        ]
+      },
+      "intent/calibration/da": {
+        "cases": 30,
+        "exactCaseAccuracy": 0.7,
+        "decisions": 150,
+        "accuracy": 0.88,
+        "coverage": 0.9533333333333334,
+        "abstentionRate": 0.04666666666666667,
+        "acceptedAccuracy": 0.916083916083916,
+        "confidentFalseEvent": {
+          "count": 2,
+          "negativeCases": 15,
+          "rate": 0.13333333333333333
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 28,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 0.003249999999979991,
+          "p95": 0.05683299999998326
+        },
+        "fields": {
+          "intent": {
+            "n": 30,
+            "correct": 21,
+            "accepted": 23,
+            "acceptedCorrect": 20,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 8,
+              "report -> mixed_or_unclear": 3,
+              "finish -> finish": 1,
+              "plan -> plan": 2,
+              "question -> question": 4,
+              "correction -> correction": 3,
+              "recap -> recap": 2,
+              "recap -> mixed_or_unclear": 1,
+              "question -> report": 2,
+              "mixed_or_unclear -> mixed_or_unclear": 1,
+              "plan -> mixed_or_unclear": 2,
+              "mixed_or_unclear -> report": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 11,
+                "predicted": 11,
+                "correct": 8,
+                "precision": 0.7272727272727273,
+                "recall": 0.7272727272727273
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 7,
+                "correct": 1,
+                "precision": 0.14285714285714285,
+                "recall": 0.5
+              },
+              "finish": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 4,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 0.5
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "correction": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 3,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              }
+            },
+            "accuracy": 0.7,
+            "coverage": 0.7666666666666667,
+            "acceptedAccuracy": 0.8695652173913043,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 30,
+            "correct": 25,
+            "accepted": 30,
+            "acceptedCorrect": 25,
+            "falsePositive": 2,
+            "falseNegative": 3,
+            "brierSum": 5,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 12,
+              "true -> false": 3,
+              "false -> false": 13,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 15,
+                "predicted": 14,
+                "correct": 12,
+                "precision": 0.8571428571428571,
+                "recall": 0.8
+              },
+              "false": {
+                "actual": 15,
+                "predicted": 16,
+                "correct": 13,
+                "precision": 0.8125,
+                "recall": 0.8666666666666667
+              }
+            },
+            "accuracy": 0.8333333333333334,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8333333333333334,
+            "brier": 0.16666666666666666
+          },
+          "new_sets_reported": {
+            "n": 30,
+            "correct": 26,
+            "accepted": 30,
+            "acceptedCorrect": 26,
+            "falsePositive": 2,
+            "falseNegative": 2,
+            "brierSum": 4,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 7,
+              "true -> false": 2,
+              "false -> false": 19,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 9,
+                "predicted": 9,
+                "correct": 7,
+                "precision": 0.7777777777777778,
+                "recall": 0.7777777777777778
+              },
+              "false": {
+                "actual": 21,
+                "predicted": 21,
+                "correct": 19,
+                "precision": 0.9047619047619048,
+                "recall": 0.9047619047619048
+              }
+            },
+            "accuracy": 0.8666666666666667,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8666666666666667,
+            "brier": 0.13333333333333333
+          },
+          "whole_workout_finished": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 30,
+            "acceptedCorrect": 30,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          },
+          "preview_requested": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 30,
+            "acceptedCorrect": 30,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 150,
+            "correct": 132,
+            "probabilitySum": 150,
+            "accuracy": 0.88,
+            "meanProbability": 1
+          }
+        ],
+        "failures": [
+          {
+            "id": "exercise-done-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "exercise-done-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "partial-exercise-da",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-da",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "hypothetical-da",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-da",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "quoted-example-da",
+            "field": "new_sets_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "meal-report-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "meal-report-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-reps-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "followup-plan-da",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "report-and-advice-da",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "future-finish-da",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          }
+        ]
+      },
+      "intent/heldout/all": {
+        "cases": 40,
+        "exactCaseAccuracy": 0.65,
+        "decisions": 200,
+        "accuracy": 0.845,
+        "coverage": 0.945,
+        "abstentionRate": 0.055,
+        "acceptedAccuracy": 0.8835978835978836,
+        "confidentFalseEvent": {
+          "count": 2,
+          "negativeCases": 26,
+          "rate": 0.07692307692307693
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 34,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 0.003458000000023276,
+          "p95": 0.005083000000013271
+        },
+        "fields": {
+          "intent": {
+            "n": 40,
+            "correct": 26,
+            "accepted": 29,
+            "acceptedCorrect": 24,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> mixed_or_unclear": 4,
+              "finish -> finish": 1,
+              "finish -> mixed_or_unclear": 3,
+              "plan -> plan": 3,
+              "question -> question": 10,
+              "correction -> mixed_or_unclear": 2,
+              "recap -> recap": 4,
+              "report -> report": 4,
+              "correction -> correction": 2,
+              "plan -> recap": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 2,
+              "mixed_or_unclear -> report": 2,
+              "question -> correction": 2
+            },
+            "classes": {
+              "report": {
+                "actual": 8,
+                "predicted": 6,
+                "correct": 4,
+                "precision": 0.6666666666666666,
+                "recall": 0.5
+              },
+              "mixed_or_unclear": {
+                "actual": 4,
+                "predicted": 11,
+                "correct": 2,
+                "precision": 0.18181818181818182,
+                "recall": 0.5
+              },
+              "finish": {
+                "actual": 4,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.25
+              },
+              "plan": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 0.75
+              },
+              "question": {
+                "actual": 12,
+                "predicted": 10,
+                "correct": 10,
+                "precision": 1,
+                "recall": 0.8333333333333334
+              },
+              "correction": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 2,
+                "precision": 0.5,
+                "recall": 0.5
+              },
+              "recap": {
+                "actual": 4,
+                "predicted": 5,
+                "correct": 4,
+                "precision": 0.8,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.65,
+            "coverage": 0.725,
+            "acceptedAccuracy": 0.8275862068965517,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 40,
+            "correct": 32,
+            "accepted": 40,
+            "acceptedCorrect": 32,
+            "falsePositive": 2,
+            "falseNegative": 6,
+            "brierSum": 8,
+            "binaryN": 40,
+            "confusion": {
+              "true -> false": 6,
+              "false -> false": 24,
+              "true -> true": 8,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 14,
+                "predicted": 10,
+                "correct": 8,
+                "precision": 0.8,
+                "recall": 0.5714285714285714
+              },
+              "false": {
+                "actual": 26,
+                "predicted": 30,
+                "correct": 24,
+                "precision": 0.8,
+                "recall": 0.9230769230769231
+              }
+            },
+            "accuracy": 0.8,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8,
+            "brier": 0.2
+          },
+          "new_sets_reported": {
+            "n": 40,
+            "correct": 36,
+            "accepted": 40,
+            "acceptedCorrect": 36,
+            "falsePositive": 0,
+            "falseNegative": 4,
+            "brierSum": 4,
+            "binaryN": 40,
+            "confusion": {
+              "true -> false": 4,
+              "false -> false": 34,
+              "true -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 6,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 0.3333333333333333
+              },
+              "false": {
+                "actual": 34,
+                "predicted": 38,
+                "correct": 34,
+                "precision": 0.8947368421052632,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9,
+            "coverage": 1,
+            "acceptedAccuracy": 0.9,
+            "brier": 0.1
+          },
+          "whole_workout_finished": {
+            "n": 40,
+            "correct": 35,
+            "accepted": 40,
+            "acceptedCorrect": 35,
+            "falsePositive": 0,
+            "falseNegative": 5,
+            "brierSum": 5,
+            "binaryN": 40,
+            "confusion": {
+              "false -> false": 34,
+              "true -> true": 1,
+              "true -> false": 5
+            },
+            "classes": {
+              "false": {
+                "actual": 34,
+                "predicted": 39,
+                "correct": 34,
+                "precision": 0.8717948717948718,
+                "recall": 1
+              },
+              "true": {
+                "actual": 6,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.16666666666666666
+              }
+            },
+            "accuracy": 0.875,
+            "coverage": 1,
+            "acceptedAccuracy": 0.875,
+            "brier": 0.125
+          },
+          "preview_requested": {
+            "n": 40,
+            "correct": 40,
+            "accepted": 40,
+            "acceptedCorrect": 40,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 40,
+            "confusion": {
+              "false -> false": 38,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 38,
+                "predicted": 38,
+                "correct": 38,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 200,
+            "correct": 169,
+            "probabilitySum": 200,
+            "accuracy": 0.845,
+            "meanProbability": 1
+          }
+        ],
+        "failures": [
+          {
+            "id": "jerk-addition-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "leave-gym-da",
+            "field": "intent",
+            "expected": "finish",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "leave-gym-da",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-en",
+            "field": "intent",
+            "expected": "correction",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-da",
+            "field": "intent",
+            "expected": "correction",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "breakfast-future-en",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "recap",
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-en",
+            "field": "intent",
+            "expected": "finish",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-en",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-da",
+            "field": "intent",
+            "expected": "finish",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-da",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "food-plus-training-en",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "food-plus-training-da",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-en",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "correction",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-da",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "correction",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          }
+        ]
+      },
+      "intent/heldout/en": {
+        "cases": 20,
+        "exactCaseAccuracy": 0.65,
+        "decisions": 100,
+        "accuracy": 0.85,
+        "coverage": 0.95,
+        "abstentionRate": 0.05,
+        "acceptedAccuracy": 0.8842105263157894,
+        "confidentFalseEvent": {
+          "count": 1,
+          "negativeCases": 13,
+          "rate": 0.07692307692307693
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 17,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 0.00333299999999781,
+          "p95": 0.004792000000009011
+        },
+        "fields": {
+          "intent": {
+            "n": 20,
+            "correct": 13,
+            "accepted": 15,
+            "acceptedCorrect": 12,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> mixed_or_unclear": 2,
+              "finish -> finish": 1,
+              "plan -> plan": 1,
+              "question -> question": 5,
+              "correction -> mixed_or_unclear": 1,
+              "recap -> recap": 2,
+              "report -> report": 2,
+              "correction -> correction": 1,
+              "plan -> recap": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 1,
+              "finish -> mixed_or_unclear": 1,
+              "mixed_or_unclear -> report": 1,
+              "question -> correction": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 2,
+                "precision": 0.6666666666666666,
+                "recall": 0.5
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 5,
+                "correct": 1,
+                "precision": 0.2,
+                "recall": 0.5
+              },
+              "finish": {
+                "actual": 2,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.5
+              },
+              "plan": {
+                "actual": 2,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.5
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 5,
+                "correct": 5,
+                "precision": 1,
+                "recall": 0.8333333333333334
+              },
+              "correction": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 1,
+                "precision": 0.5,
+                "recall": 0.5
+              },
+              "recap": {
+                "actual": 2,
+                "predicted": 3,
+                "correct": 2,
+                "precision": 0.6666666666666666,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.65,
+            "coverage": 0.75,
+            "acceptedAccuracy": 0.8,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 20,
+            "correct": 16,
+            "accepted": 20,
+            "acceptedCorrect": 16,
+            "falsePositive": 1,
+            "falseNegative": 3,
+            "brierSum": 4,
+            "binaryN": 20,
+            "confusion": {
+              "true -> false": 3,
+              "false -> false": 12,
+              "true -> true": 4,
+              "false -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 7,
+                "predicted": 5,
+                "correct": 4,
+                "precision": 0.8,
+                "recall": 0.5714285714285714
+              },
+              "false": {
+                "actual": 13,
+                "predicted": 15,
+                "correct": 12,
+                "precision": 0.8,
+                "recall": 0.9230769230769231
+              }
+            },
+            "accuracy": 0.8,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8,
+            "brier": 0.2
+          },
+          "new_sets_reported": {
+            "n": 20,
+            "correct": 18,
+            "accepted": 20,
+            "acceptedCorrect": 18,
+            "falsePositive": 0,
+            "falseNegative": 2,
+            "brierSum": 2,
+            "binaryN": 20,
+            "confusion": {
+              "true -> false": 2,
+              "false -> false": 17,
+              "true -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 3,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.3333333333333333
+              },
+              "false": {
+                "actual": 17,
+                "predicted": 19,
+                "correct": 17,
+                "precision": 0.8947368421052632,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9,
+            "coverage": 1,
+            "acceptedAccuracy": 0.9,
+            "brier": 0.1
+          },
+          "whole_workout_finished": {
+            "n": 20,
+            "correct": 18,
+            "accepted": 20,
+            "acceptedCorrect": 18,
+            "falsePositive": 0,
+            "falseNegative": 2,
+            "brierSum": 2,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 17,
+              "true -> true": 1,
+              "true -> false": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 17,
+                "predicted": 19,
+                "correct": 17,
+                "precision": 0.8947368421052632,
+                "recall": 1
+              },
+              "true": {
+                "actual": 3,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.3333333333333333
+              }
+            },
+            "accuracy": 0.9,
+            "coverage": 1,
+            "acceptedAccuracy": 0.9,
+            "brier": 0.1
+          },
+          "preview_requested": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 20,
+            "acceptedCorrect": 20,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 19,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 19,
+                "predicted": 19,
+                "correct": 19,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 100,
+            "correct": 85,
+            "probabilitySum": 100,
+            "accuracy": 0.85,
+            "meanProbability": 1
+          }
+        ],
+        "failures": [
+          {
+            "id": "jerk-addition-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-en",
+            "field": "intent",
+            "expected": "correction",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-en",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "breakfast-future-en",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "recap",
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-en",
+            "field": "intent",
+            "expected": "finish",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-en",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "food-plus-training-en",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-en",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "correction",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          }
+        ]
+      },
+      "intent/heldout/da": {
+        "cases": 20,
+        "exactCaseAccuracy": 0.65,
+        "decisions": 100,
+        "accuracy": 0.84,
+        "coverage": 0.94,
+        "abstentionRate": 0.06,
+        "acceptedAccuracy": 0.8829787234042553,
+        "confidentFalseEvent": {
+          "count": 1,
+          "negativeCases": 13,
+          "rate": 0.07692307692307693
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 17,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 0.003540999999984251,
+          "p95": 0.005083000000013271
+        },
+        "fields": {
+          "intent": {
+            "n": 20,
+            "correct": 13,
+            "accepted": 14,
+            "acceptedCorrect": 12,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> mixed_or_unclear": 2,
+              "finish -> mixed_or_unclear": 2,
+              "plan -> plan": 2,
+              "question -> question": 5,
+              "correction -> mixed_or_unclear": 1,
+              "recap -> recap": 2,
+              "report -> report": 2,
+              "correction -> correction": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 1,
+              "mixed_or_unclear -> report": 1,
+              "question -> correction": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 2,
+                "precision": 0.6666666666666666,
+                "recall": 0.5
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 6,
+                "correct": 1,
+                "precision": 0.16666666666666666,
+                "recall": 0.5
+              },
+              "finish": {
+                "actual": 2,
+                "predicted": 0,
+                "correct": 0,
+                "precision": null,
+                "recall": 0
+              },
+              "plan": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 5,
+                "correct": 5,
+                "precision": 1,
+                "recall": 0.8333333333333334
+              },
+              "correction": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 1,
+                "precision": 0.5,
+                "recall": 0.5
+              },
+              "recap": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.65,
+            "coverage": 0.7,
+            "acceptedAccuracy": 0.8571428571428571,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 20,
+            "correct": 16,
+            "accepted": 20,
+            "acceptedCorrect": 16,
+            "falsePositive": 1,
+            "falseNegative": 3,
+            "brierSum": 4,
+            "binaryN": 20,
+            "confusion": {
+              "true -> false": 3,
+              "false -> false": 12,
+              "true -> true": 4,
+              "false -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 7,
+                "predicted": 5,
+                "correct": 4,
+                "precision": 0.8,
+                "recall": 0.5714285714285714
+              },
+              "false": {
+                "actual": 13,
+                "predicted": 15,
+                "correct": 12,
+                "precision": 0.8,
+                "recall": 0.9230769230769231
+              }
+            },
+            "accuracy": 0.8,
+            "coverage": 1,
+            "acceptedAccuracy": 0.8,
+            "brier": 0.2
+          },
+          "new_sets_reported": {
+            "n": 20,
+            "correct": 18,
+            "accepted": 20,
+            "acceptedCorrect": 18,
+            "falsePositive": 0,
+            "falseNegative": 2,
+            "brierSum": 2,
+            "binaryN": 20,
+            "confusion": {
+              "true -> false": 2,
+              "false -> false": 17,
+              "true -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 3,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.3333333333333333
+              },
+              "false": {
+                "actual": 17,
+                "predicted": 19,
+                "correct": 17,
+                "precision": 0.8947368421052632,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9,
+            "coverage": 1,
+            "acceptedAccuracy": 0.9,
+            "brier": 0.1
+          },
+          "whole_workout_finished": {
+            "n": 20,
+            "correct": 17,
+            "accepted": 20,
+            "acceptedCorrect": 17,
+            "falsePositive": 0,
+            "falseNegative": 3,
+            "brierSum": 3,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 17,
+              "true -> false": 3
+            },
+            "classes": {
+              "false": {
+                "actual": 17,
+                "predicted": 20,
+                "correct": 17,
+                "precision": 0.85,
+                "recall": 1
+              },
+              "true": {
+                "actual": 3,
+                "predicted": 0,
+                "correct": 0,
+                "precision": null,
+                "recall": 0
+              }
+            },
+            "accuracy": 0.85,
+            "coverage": 1,
+            "acceptedAccuracy": 0.85,
+            "brier": 0.15
+          },
+          "preview_requested": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 20,
+            "acceptedCorrect": 20,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 19,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 19,
+                "predicted": 19,
+                "correct": 19,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 100,
+            "correct": 84,
+            "probabilitySum": 100,
+            "accuracy": 0.84,
+            "meanProbability": 1
+          }
+        ],
+        "failures": [
+          {
+            "id": "jerk-addition-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "jerk-addition-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "leave-gym-da",
+            "field": "intent",
+            "expected": "finish",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "leave-gym-da",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-da",
+            "field": "intent",
+            "expected": "correction",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "amend-exercise-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "intent",
+            "expected": "report",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "personal_event_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-da",
+            "field": "intent",
+            "expected": "finish",
+            "prediction": {
+              "label": "mixed_or_unclear",
+              "probability": 1
+            }
+          },
+          {
+            "id": "finish-followup-da",
+            "field": "whole_workout_finished",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 1
+            }
+          },
+          {
+            "id": "food-plus-training-da",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-da",
+            "field": "intent",
+            "expected": "question",
+            "prediction": {
+              "label": "correction",
+              "probability": 1
+            }
+          },
+          {
+            "id": "fake-system-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 1
+            }
+          }
+        ]
+      },
+      "reply/calibration/all": {
+        "cases": 0,
+        "exactCaseAccuracy": null,
+        "decisions": 0,
+        "accuracy": null,
+        "coverage": null,
+        "abstentionRate": null,
+        "acceptedAccuracy": null,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": null,
+          "p95": null
+        },
+        "fields": {},
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          }
+        ],
+        "failures": []
+      },
+      "reply/calibration/en": {
+        "cases": 0,
+        "exactCaseAccuracy": null,
+        "decisions": 0,
+        "accuracy": null,
+        "coverage": null,
+        "abstentionRate": null,
+        "acceptedAccuracy": null,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": null,
+          "p95": null
+        },
+        "fields": {},
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          }
+        ],
+        "failures": []
+      },
+      "reply/calibration/da": {
+        "cases": 0,
+        "exactCaseAccuracy": null,
+        "decisions": 0,
+        "accuracy": null,
+        "coverage": null,
+        "abstentionRate": null,
+        "acceptedAccuracy": null,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": null,
+          "p95": null
+        },
+        "fields": {},
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          }
+        ],
+        "failures": []
+      },
+      "reply/heldout/all": {
+        "cases": 0,
+        "exactCaseAccuracy": null,
+        "decisions": 0,
+        "accuracy": null,
+        "coverage": null,
+        "abstentionRate": null,
+        "acceptedAccuracy": null,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": null,
+          "p95": null
+        },
+        "fields": {},
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          }
+        ],
+        "failures": []
+      },
+      "reply/heldout/en": {
+        "cases": 0,
+        "exactCaseAccuracy": null,
+        "decisions": 0,
+        "accuracy": null,
+        "coverage": null,
+        "abstentionRate": null,
+        "acceptedAccuracy": null,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": null,
+          "p95": null
+        },
+        "fields": {},
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          }
+        ],
+        "failures": []
+      },
+      "reply/heldout/da": {
+        "cases": 0,
+        "exactCaseAccuracy": null,
+        "decisions": 0,
+        "accuracy": null,
+        "coverage": null,
+        "abstentionRate": null,
+        "acceptedAccuracy": null,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": null,
+          "p95": null
+        },
+        "fields": {},
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          }
+        ],
+        "failures": []
+      }
+    },
+    "jev": {
+      "intent/calibration/all": {
+        "cases": 60,
+        "exactCaseAccuracy": 0.9166666666666666,
+        "decisions": 300,
+        "accuracy": 0.9766666666666667,
+        "coverage": 0.8566666666666667,
+        "abstentionRate": 0.14333333333333334,
+        "acceptedAccuracy": 0.9922178988326849,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 30,
+          "rate": 0
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 56,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 276.13154099999883,
+          "p95": 420.36170800000036
+        },
+        "fields": {
+          "intent": {
+            "n": 60,
+            "correct": 56,
+            "accepted": 51,
+            "acceptedCorrect": 49,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 22,
+              "finish -> finish": 2,
+              "plan -> plan": 6,
+              "question -> question": 12,
+              "correction -> correction": 6,
+              "recap -> recap": 4,
+              "recap -> report": 2,
+              "mixed_or_unclear -> mixed_or_unclear": 4,
+              "plan -> report": 2
+            },
+            "classes": {
+              "report": {
+                "actual": 22,
+                "predicted": 26,
+                "correct": 22,
+                "precision": 0.8461538461538461,
+                "recall": 1
+              },
+              "finish": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 8,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 0.75
+              },
+              "question": {
+                "actual": 12,
+                "predicted": 12,
+                "correct": 12,
+                "precision": 1,
+                "recall": 1
+              },
+              "correction": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 6,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "mixed_or_unclear": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9333333333333333,
+            "coverage": 0.85,
+            "acceptedAccuracy": 0.9607843137254902,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 60,
+            "correct": 58,
+            "accepted": 46,
+            "acceptedCorrect": 46,
+            "falsePositive": 2,
+            "falseNegative": 0,
+            "brierSum": 1.9996999999999996,
+            "binaryN": 60,
+            "confusion": {
+              "true -> true": 30,
+              "false -> false": 28,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 30,
+                "predicted": 32,
+                "correct": 30,
+                "precision": 0.9375,
+                "recall": 1
+              },
+              "false": {
+                "actual": 30,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 0.9333333333333333
+              }
+            },
+            "accuracy": 0.9666666666666667,
+            "coverage": 0.7666666666666667,
+            "acceptedAccuracy": 1,
+            "brier": 0.03332833333333333
+          },
+          "new_sets_reported": {
+            "n": 60,
+            "correct": 59,
+            "accepted": 47,
+            "acceptedCorrect": 47,
+            "falsePositive": 0,
+            "falseNegative": 1,
+            "brierSum": 1.5289,
+            "binaryN": 60,
+            "confusion": {
+              "true -> true": 17,
+              "false -> false": 42,
+              "true -> false": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 18,
+                "predicted": 17,
+                "correct": 17,
+                "precision": 1,
+                "recall": 0.9444444444444444
+              },
+              "false": {
+                "actual": 42,
+                "predicted": 43,
+                "correct": 42,
+                "precision": 0.9767441860465116,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9833333333333333,
+            "coverage": 0.7833333333333333,
+            "acceptedAccuracy": 1,
+            "brier": 0.025481666666666666
+          },
+          "whole_workout_finished": {
+            "n": 60,
+            "correct": 60,
+            "accepted": 55,
+            "acceptedCorrect": 55,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.4739000000000002,
+            "binaryN": 60,
+            "confusion": {
+              "false -> false": 56,
+              "true -> true": 4
+            },
+            "classes": {
+              "false": {
+                "actual": 56,
+                "predicted": 56,
+                "correct": 56,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9166666666666666,
+            "acceptedAccuracy": 1,
+            "brier": 0.007898333333333337
+          },
+          "preview_requested": {
+            "n": 60,
+            "correct": 60,
+            "accepted": 58,
+            "acceptedCorrect": 58,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.2568000000000003,
+            "binaryN": 60,
+            "confusion": {
+              "false -> false": 56,
+              "true -> true": 4
+            },
+            "classes": {
+              "false": {
+                "actual": 56,
+                "predicted": 56,
+                "correct": 56,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9666666666666667,
+            "acceptedAccuracy": 1,
+            "brier": 0.004280000000000005
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 2,
+            "correct": 1,
+            "probabilitySum": 1.03,
+            "accuracy": 0.5,
+            "meanProbability": 0.515
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 30,
+            "correct": 26,
+            "probabilitySum": 20.72,
+            "accuracy": 0.8666666666666667,
+            "meanProbability": 0.6906666666666667
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 268,
+            "correct": 266,
+            "probabilitySum": 255.53999999999965,
+            "accuracy": 0.9925373134328358,
+            "meanProbability": 0.9535074626865658
+          }
+        ],
+        "failures": [
+          {
+            "id": "final-sets-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 0.51
+            }
+          },
+          {
+            "id": "partial-exercise-en",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "report",
+              "probability": 0.96,
+              "confidence": 0.95,
+              "distribution": {
+                "correction": 0,
+                "report": 0.96,
+                "mixed_or_unclear": 0,
+                "plan": 0,
+                "finish": 0,
+                "recap": 0.04,
+                "question": 0
+              }
+            }
+          },
+          {
+            "id": "partial-exercise-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.61
+            }
+          },
+          {
+            "id": "partial-exercise-da",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "report",
+              "probability": 0.98,
+              "confidence": 0.97,
+              "distribution": {
+                "report": 0.98,
+                "correction": 0,
+                "mixed_or_unclear": 0,
+                "plan": 0,
+                "finish": 0,
+                "recap": 0.02,
+                "question": 0
+              }
+            }
+          },
+          {
+            "id": "partial-exercise-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.67
+            }
+          },
+          {
+            "id": "future-finish-en",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "report",
+              "probability": 0.6,
+              "confidence": 0.52,
+              "distribution": {
+                "recap": 0.01,
+                "question": 0,
+                "finish": 0.14,
+                "correction": 0,
+                "plan": 0.25,
+                "report": 0.6,
+                "mixed_or_unclear": 0
+              }
+            }
+          },
+          {
+            "id": "future-finish-da",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "report",
+              "probability": 0.62,
+              "confidence": 0.54,
+              "distribution": {
+                "plan": 0.12,
+                "correction": 0,
+                "question": 0,
+                "finish": 0.25,
+                "mixed_or_unclear": 0.01,
+                "report": 0.62,
+                "recap": 0
+              }
+            }
+          }
+        ]
+      },
+      "intent/calibration/en": {
+        "cases": 30,
+        "exactCaseAccuracy": 0.9,
+        "decisions": 150,
+        "accuracy": 0.9733333333333334,
+        "coverage": 0.8733333333333333,
+        "abstentionRate": 0.12666666666666668,
+        "acceptedAccuracy": 0.9923664122137404,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 15,
+          "rate": 0
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 28,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 268.67370800000026,
+          "p95": 429.69274999999993
+        },
+        "fields": {
+          "intent": {
+            "n": 30,
+            "correct": 28,
+            "accepted": 26,
+            "acceptedCorrect": 25,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 11,
+              "finish -> finish": 1,
+              "plan -> plan": 3,
+              "question -> question": 6,
+              "correction -> correction": 3,
+              "recap -> recap": 2,
+              "recap -> report": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 2,
+              "plan -> report": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 11,
+                "predicted": 13,
+                "correct": 11,
+                "precision": 0.8461538461538461,
+                "recall": 1
+              },
+              "finish": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 0.75
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "correction": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 3,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9333333333333333,
+            "coverage": 0.8666666666666667,
+            "acceptedAccuracy": 0.9615384615384616,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 30,
+            "correct": 29,
+            "accepted": 24,
+            "acceptedCorrect": 24,
+            "falsePositive": 1,
+            "falseNegative": 0,
+            "brierSum": 0.9432000000000001,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 15,
+              "false -> false": 14,
+              "false -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 15,
+                "predicted": 16,
+                "correct": 15,
+                "precision": 0.9375,
+                "recall": 1
+              },
+              "false": {
+                "actual": 15,
+                "predicted": 14,
+                "correct": 14,
+                "precision": 1,
+                "recall": 0.9333333333333333
+              }
+            },
+            "accuracy": 0.9666666666666667,
+            "coverage": 0.8,
+            "acceptedAccuracy": 1,
+            "brier": 0.03144
+          },
+          "new_sets_reported": {
+            "n": 30,
+            "correct": 29,
+            "accepted": 25,
+            "acceptedCorrect": 25,
+            "falsePositive": 0,
+            "falseNegative": 1,
+            "brierSum": 0.7690999999999998,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 8,
+              "false -> false": 21,
+              "true -> false": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 9,
+                "predicted": 8,
+                "correct": 8,
+                "precision": 1,
+                "recall": 0.8888888888888888
+              },
+              "false": {
+                "actual": 21,
+                "predicted": 22,
+                "correct": 21,
+                "precision": 0.9545454545454546,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9666666666666667,
+            "coverage": 0.8333333333333334,
+            "acceptedAccuracy": 1,
+            "brier": 0.02563666666666666
+          },
+          "whole_workout_finished": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 27,
+            "acceptedCorrect": 27,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.21230000000000004,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9,
+            "acceptedAccuracy": 1,
+            "brier": 0.007076666666666668
+          },
+          "preview_requested": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 29,
+            "acceptedCorrect": 29,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.06589999999999997,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9666666666666667,
+            "acceptedAccuracy": 1,
+            "brier": 0.0021966666666666658
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 2,
+            "correct": 1,
+            "probabilitySum": 1.03,
+            "accuracy": 0.5,
+            "meanProbability": 0.515
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 13,
+            "correct": 11,
+            "probabilitySum": 9.08,
+            "accuracy": 0.8461538461538461,
+            "meanProbability": 0.6984615384615385
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 135,
+            "correct": 134,
+            "probabilitySum": 129.1,
+            "accuracy": 0.9925925925925926,
+            "meanProbability": 0.9562962962962962
+          }
+        ],
+        "failures": [
+          {
+            "id": "final-sets-en",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 0.51
+            }
+          },
+          {
+            "id": "partial-exercise-en",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "report",
+              "probability": 0.96,
+              "confidence": 0.95,
+              "distribution": {
+                "correction": 0,
+                "report": 0.96,
+                "mixed_or_unclear": 0,
+                "plan": 0,
+                "finish": 0,
+                "recap": 0.04,
+                "question": 0
+              }
+            }
+          },
+          {
+            "id": "partial-exercise-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.61
+            }
+          },
+          {
+            "id": "future-finish-en",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "report",
+              "probability": 0.6,
+              "confidence": 0.52,
+              "distribution": {
+                "recap": 0.01,
+                "question": 0,
+                "finish": 0.14,
+                "correction": 0,
+                "plan": 0.25,
+                "report": 0.6,
+                "mixed_or_unclear": 0
+              }
+            }
+          }
+        ]
+      },
+      "intent/calibration/da": {
+        "cases": 30,
+        "exactCaseAccuracy": 0.9333333333333333,
+        "decisions": 150,
+        "accuracy": 0.98,
+        "coverage": 0.84,
+        "abstentionRate": 0.16,
+        "acceptedAccuracy": 0.9920634920634921,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 15,
+          "rate": 0
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 28,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 289.8376669999998,
+          "p95": 387.23883399999977
+        },
+        "fields": {
+          "intent": {
+            "n": 30,
+            "correct": 28,
+            "accepted": 25,
+            "acceptedCorrect": 24,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 11,
+              "finish -> finish": 1,
+              "plan -> plan": 3,
+              "question -> question": 6,
+              "correction -> correction": 3,
+              "recap -> recap": 2,
+              "recap -> report": 1,
+              "mixed_or_unclear -> mixed_or_unclear": 2,
+              "plan -> report": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 11,
+                "predicted": 13,
+                "correct": 11,
+                "precision": 0.8461538461538461,
+                "recall": 1
+              },
+              "finish": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 0.75
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "correction": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 3,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.9333333333333333,
+            "coverage": 0.8333333333333334,
+            "acceptedAccuracy": 0.96,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 30,
+            "correct": 29,
+            "accepted": 22,
+            "acceptedCorrect": 22,
+            "falsePositive": 1,
+            "falseNegative": 0,
+            "brierSum": 1.0565000000000004,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 15,
+              "false -> false": 14,
+              "false -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 15,
+                "predicted": 16,
+                "correct": 15,
+                "precision": 0.9375,
+                "recall": 1
+              },
+              "false": {
+                "actual": 15,
+                "predicted": 14,
+                "correct": 14,
+                "precision": 1,
+                "recall": 0.9333333333333333
+              }
+            },
+            "accuracy": 0.9666666666666667,
+            "coverage": 0.7333333333333333,
+            "acceptedAccuracy": 1,
+            "brier": 0.03521666666666668
+          },
+          "new_sets_reported": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 22,
+            "acceptedCorrect": 22,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.7598000000000001,
+            "binaryN": 30,
+            "confusion": {
+              "true -> true": 9,
+              "false -> false": 21
+            },
+            "classes": {
+              "true": {
+                "actual": 9,
+                "predicted": 9,
+                "correct": 9,
+                "precision": 1,
+                "recall": 1
+              },
+              "false": {
+                "actual": 21,
+                "predicted": 21,
+                "correct": 21,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.7333333333333333,
+            "acceptedAccuracy": 1,
+            "brier": 0.02532666666666667
+          },
+          "whole_workout_finished": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 28,
+            "acceptedCorrect": 28,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.26160000000000005,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9333333333333333,
+            "acceptedAccuracy": 1,
+            "brier": 0.008720000000000002
+          },
+          "preview_requested": {
+            "n": 30,
+            "correct": 30,
+            "accepted": 29,
+            "acceptedCorrect": 29,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.19090000000000015,
+            "binaryN": 30,
+            "confusion": {
+              "false -> false": 28,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 28,
+                "predicted": 28,
+                "correct": 28,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9666666666666667,
+            "acceptedAccuracy": 1,
+            "brier": 0.006363333333333338
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 17,
+            "correct": 15,
+            "probabilitySum": 11.64,
+            "accuracy": 0.8823529411764706,
+            "meanProbability": 0.6847058823529412
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 133,
+            "correct": 132,
+            "probabilitySum": 126.43999999999997,
+            "accuracy": 0.9924812030075187,
+            "meanProbability": 0.9506766917293231
+          }
+        ],
+        "failures": [
+          {
+            "id": "partial-exercise-da",
+            "field": "intent",
+            "expected": "recap",
+            "prediction": {
+              "label": "report",
+              "probability": 0.98,
+              "confidence": 0.97,
+              "distribution": {
+                "report": 0.98,
+                "correction": 0,
+                "mixed_or_unclear": 0,
+                "plan": 0,
+                "finish": 0,
+                "recap": 0.02,
+                "question": 0
+              }
+            }
+          },
+          {
+            "id": "partial-exercise-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.67
+            }
+          },
+          {
+            "id": "future-finish-da",
+            "field": "intent",
+            "expected": "plan",
+            "prediction": {
+              "label": "report",
+              "probability": 0.62,
+              "confidence": 0.54,
+              "distribution": {
+                "plan": 0.12,
+                "correction": 0,
+                "question": 0,
+                "finish": 0.25,
+                "mixed_or_unclear": 0.01,
+                "report": 0.62,
+                "recap": 0
+              }
+            }
+          }
+        ]
+      },
+      "intent/heldout/all": {
+        "cases": 40,
+        "exactCaseAccuracy": 0.875,
+        "decisions": 200,
+        "accuracy": 0.975,
+        "coverage": 0.805,
+        "abstentionRate": 0.195,
+        "acceptedAccuracy": 0.9937888198757764,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 26,
+          "rate": 0
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 34,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 287.83037500000137,
+          "p95": 356.3192919999965
+        },
+        "fields": {
+          "intent": {
+            "n": 40,
+            "correct": 39,
+            "accepted": 27,
+            "acceptedCorrect": 26,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 8,
+              "finish -> finish": 4,
+              "plan -> plan": 4,
+              "question -> question": 12,
+              "correction -> correction": 4,
+              "recap -> recap": 4,
+              "mixed_or_unclear -> mixed_or_unclear": 3,
+              "mixed_or_unclear -> report": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 8,
+                "predicted": 9,
+                "correct": 8,
+                "precision": 0.8888888888888888,
+                "recall": 1
+              },
+              "finish": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              },
+              "question": {
+                "actual": 12,
+                "predicted": 12,
+                "correct": 12,
+                "precision": 1,
+                "recall": 1
+              },
+              "correction": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              },
+              "mixed_or_unclear": {
+                "actual": 4,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 0.75
+              }
+            },
+            "accuracy": 0.975,
+            "coverage": 0.675,
+            "acceptedAccuracy": 0.9629629629629629,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 40,
+            "correct": 38,
+            "accepted": 31,
+            "acceptedCorrect": 31,
+            "falsePositive": 2,
+            "falseNegative": 0,
+            "brierSum": 1.4339,
+            "binaryN": 40,
+            "confusion": {
+              "true -> true": 14,
+              "false -> false": 24,
+              "false -> true": 2
+            },
+            "classes": {
+              "true": {
+                "actual": 14,
+                "predicted": 16,
+                "correct": 14,
+                "precision": 0.875,
+                "recall": 1
+              },
+              "false": {
+                "actual": 26,
+                "predicted": 24,
+                "correct": 24,
+                "precision": 1,
+                "recall": 0.9230769230769231
+              }
+            },
+            "accuracy": 0.95,
+            "coverage": 0.775,
+            "acceptedAccuracy": 1,
+            "brier": 0.0358475
+          },
+          "new_sets_reported": {
+            "n": 40,
+            "correct": 39,
+            "accepted": 35,
+            "acceptedCorrect": 35,
+            "falsePositive": 0,
+            "falseNegative": 1,
+            "brierSum": 0.7383000000000001,
+            "binaryN": 40,
+            "confusion": {
+              "true -> true": 5,
+              "false -> false": 34,
+              "true -> false": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 6,
+                "predicted": 5,
+                "correct": 5,
+                "precision": 1,
+                "recall": 0.8333333333333334
+              },
+              "false": {
+                "actual": 34,
+                "predicted": 35,
+                "correct": 34,
+                "precision": 0.9714285714285714,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.975,
+            "coverage": 0.875,
+            "acceptedAccuracy": 1,
+            "brier": 0.0184575
+          },
+          "whole_workout_finished": {
+            "n": 40,
+            "correct": 39,
+            "accepted": 30,
+            "acceptedCorrect": 30,
+            "falsePositive": 1,
+            "falseNegative": 0,
+            "brierSum": 1.1990999999999996,
+            "binaryN": 40,
+            "confusion": {
+              "false -> false": 33,
+              "true -> true": 6,
+              "false -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 34,
+                "predicted": 33,
+                "correct": 33,
+                "precision": 1,
+                "recall": 0.9705882352941176
+              },
+              "true": {
+                "actual": 6,
+                "predicted": 7,
+                "correct": 6,
+                "precision": 0.8571428571428571,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.975,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.02997749999999999
+          },
+          "preview_requested": {
+            "n": 40,
+            "correct": 40,
+            "accepted": 38,
+            "acceptedCorrect": 38,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.12770000000000004,
+            "binaryN": 40,
+            "confusion": {
+              "false -> false": 38,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 38,
+                "predicted": 38,
+                "correct": 38,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.95,
+            "acceptedAccuracy": 1,
+            "brier": 0.003192500000000001
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 6,
+            "correct": 4,
+            "probabilitySum": 3.23,
+            "accuracy": 0.6666666666666666,
+            "meanProbability": 0.5383333333333333
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 21,
+            "correct": 19,
+            "probabilitySum": 14.93,
+            "accuracy": 0.9047619047619048,
+            "meanProbability": 0.7109523809523809
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 173,
+            "correct": 172,
+            "probabilitySum": 164.22999999999993,
+            "accuracy": 0.9942196531791907,
+            "meanProbability": 0.9493063583815025
+          }
+        ],
+        "failures": [
+          {
+            "id": "friend-report-da",
+            "field": "whole_workout_finished",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.53
+            }
+          },
+          {
+            "id": "negated-plan-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.67
+            }
+          },
+          {
+            "id": "negated-plan-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.69
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 0.51
+            }
+          },
+          {
+            "id": "food-plus-training-da",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 0.85,
+              "confidence": 0.82,
+              "distribution": {
+                "correction": 0.04,
+                "question": 0,
+                "finish": 0,
+                "recap": 0,
+                "report": 0.85,
+                "plan": 0.04,
+                "mixed_or_unclear": 0.07
+              }
+            }
+          }
+        ]
+      },
+      "intent/heldout/en": {
+        "cases": 20,
+        "exactCaseAccuracy": 0.95,
+        "decisions": 100,
+        "accuracy": 0.99,
+        "coverage": 0.84,
+        "abstentionRate": 0.16,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 13,
+          "rate": 0
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 17,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 289.59137499999997,
+          "p95": 356.3192919999965
+        },
+        "fields": {
+          "intent": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 14,
+            "acceptedCorrect": 14,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 4,
+              "finish -> finish": 2,
+              "plan -> plan": 2,
+              "question -> question": 6,
+              "correction -> correction": 2,
+              "recap -> recap": 2,
+              "mixed_or_unclear -> mixed_or_unclear": 2
+            },
+            "classes": {
+              "report": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              },
+              "finish": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "correction": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.7,
+            "acceptedAccuracy": 1,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 20,
+            "correct": 19,
+            "accepted": 18,
+            "acceptedCorrect": 18,
+            "falsePositive": 1,
+            "falseNegative": 0,
+            "brierSum": 0.5783000000000004,
+            "binaryN": 20,
+            "confusion": {
+              "true -> true": 7,
+              "false -> false": 12,
+              "false -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 7,
+                "predicted": 8,
+                "correct": 7,
+                "precision": 0.875,
+                "recall": 1
+              },
+              "false": {
+                "actual": 13,
+                "predicted": 12,
+                "correct": 12,
+                "precision": 1,
+                "recall": 0.9230769230769231
+              }
+            },
+            "accuracy": 0.95,
+            "coverage": 0.9,
+            "acceptedAccuracy": 1,
+            "brier": 0.028915000000000017
+          },
+          "new_sets_reported": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 18,
+            "acceptedCorrect": 18,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.3420000000000001,
+            "binaryN": 20,
+            "confusion": {
+              "true -> true": 3,
+              "false -> false": 17
+            },
+            "classes": {
+              "true": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 1
+              },
+              "false": {
+                "actual": 17,
+                "predicted": 17,
+                "correct": 17,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.9,
+            "acceptedAccuracy": 1,
+            "brier": 0.017100000000000004
+          },
+          "whole_workout_finished": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 15,
+            "acceptedCorrect": 15,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.6017,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 17,
+              "true -> true": 3
+            },
+            "classes": {
+              "false": {
+                "actual": 17,
+                "predicted": 17,
+                "correct": 17,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 3,
+                "predicted": 3,
+                "correct": 3,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.030085
+          },
+          "preview_requested": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 19,
+            "acceptedCorrect": 19,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.05000000000000002,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 19,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 19,
+                "predicted": 19,
+                "correct": 19,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.95,
+            "acceptedAccuracy": 1,
+            "brier": 0.002500000000000001
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 2,
+            "correct": 2,
+            "probabilitySum": 1.04,
+            "accuracy": 1,
+            "meanProbability": 0.52
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 8,
+            "correct": 7,
+            "probabilitySum": 5.529999999999999,
+            "accuracy": 0.875,
+            "meanProbability": 0.6912499999999999
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 90,
+            "correct": 90,
+            "probabilitySum": 85.67000000000004,
+            "accuracy": 1,
+            "meanProbability": 0.9518888888888893
+          }
+        ],
+        "failures": [
+          {
+            "id": "negated-plan-en",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.67
+            }
+          }
+        ]
+      },
+      "intent/heldout/da": {
+        "cases": 20,
+        "exactCaseAccuracy": 0.8,
+        "decisions": 100,
+        "accuracy": 0.96,
+        "coverage": 0.77,
+        "abstentionRate": 0.23,
+        "acceptedAccuracy": 0.987012987012987,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 13,
+          "rate": 0
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 17,
+          "rate": 0
+        },
+        "latencyMs": {
+          "p50": 274.2400830000006,
+          "p95": 325.19295799999963
+        },
+        "fields": {
+          "intent": {
+            "n": 20,
+            "correct": 19,
+            "accepted": 13,
+            "acceptedCorrect": 12,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0,
+            "binaryN": 0,
+            "confusion": {
+              "report -> report": 4,
+              "finish -> finish": 2,
+              "plan -> plan": 2,
+              "question -> question": 6,
+              "correction -> correction": 2,
+              "recap -> recap": 2,
+              "mixed_or_unclear -> mixed_or_unclear": 1,
+              "mixed_or_unclear -> report": 1
+            },
+            "classes": {
+              "report": {
+                "actual": 4,
+                "predicted": 5,
+                "correct": 4,
+                "precision": 0.8,
+                "recall": 1
+              },
+              "finish": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "plan": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "question": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "correction": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "recap": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              },
+              "mixed_or_unclear": {
+                "actual": 2,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 0.5
+              }
+            },
+            "accuracy": 0.95,
+            "coverage": 0.65,
+            "acceptedAccuracy": 0.9230769230769231,
+            "brier": null
+          },
+          "personal_event_reported": {
+            "n": 20,
+            "correct": 19,
+            "accepted": 13,
+            "acceptedCorrect": 13,
+            "falsePositive": 1,
+            "falseNegative": 0,
+            "brierSum": 0.8556000000000001,
+            "binaryN": 20,
+            "confusion": {
+              "true -> true": 7,
+              "false -> false": 12,
+              "false -> true": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 7,
+                "predicted": 8,
+                "correct": 7,
+                "precision": 0.875,
+                "recall": 1
+              },
+              "false": {
+                "actual": 13,
+                "predicted": 12,
+                "correct": 12,
+                "precision": 1,
+                "recall": 0.9230769230769231
+              }
+            },
+            "accuracy": 0.95,
+            "coverage": 0.65,
+            "acceptedAccuracy": 1,
+            "brier": 0.042780000000000006
+          },
+          "new_sets_reported": {
+            "n": 20,
+            "correct": 19,
+            "accepted": 17,
+            "acceptedCorrect": 17,
+            "falsePositive": 0,
+            "falseNegative": 1,
+            "brierSum": 0.39630000000000004,
+            "binaryN": 20,
+            "confusion": {
+              "true -> true": 2,
+              "false -> false": 17,
+              "true -> false": 1
+            },
+            "classes": {
+              "true": {
+                "actual": 3,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666
+              },
+              "false": {
+                "actual": 17,
+                "predicted": 18,
+                "correct": 17,
+                "precision": 0.9444444444444444,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.95,
+            "coverage": 0.85,
+            "acceptedAccuracy": 1,
+            "brier": 0.019815000000000003
+          },
+          "whole_workout_finished": {
+            "n": 20,
+            "correct": 19,
+            "accepted": 15,
+            "acceptedCorrect": 15,
+            "falsePositive": 1,
+            "falseNegative": 0,
+            "brierSum": 0.5974,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 16,
+              "true -> true": 3,
+              "false -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 17,
+                "predicted": 16,
+                "correct": 16,
+                "precision": 1,
+                "recall": 0.9411764705882353
+              },
+              "true": {
+                "actual": 3,
+                "predicted": 4,
+                "correct": 3,
+                "precision": 0.75,
+                "recall": 1
+              }
+            },
+            "accuracy": 0.95,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.02987
+          },
+          "preview_requested": {
+            "n": 20,
+            "correct": 20,
+            "accepted": 19,
+            "acceptedCorrect": 19,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.07770000000000005,
+            "binaryN": 20,
+            "confusion": {
+              "false -> false": 19,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 19,
+                "predicted": 19,
+                "correct": 19,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.95,
+            "acceptedAccuracy": 1,
+            "brier": 0.003885000000000002
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 4,
+            "correct": 2,
+            "probabilitySum": 2.1900000000000004,
+            "accuracy": 0.5,
+            "meanProbability": 0.5475000000000001
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 13,
+            "correct": 12,
+            "probabilitySum": 9.4,
+            "accuracy": 0.9230769230769231,
+            "meanProbability": 0.7230769230769231
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 83,
+            "correct": 82,
+            "probabilitySum": 78.55999999999997,
+            "accuracy": 0.9879518072289156,
+            "meanProbability": 0.9465060240963852
+          }
+        ],
+        "failures": [
+          {
+            "id": "friend-report-da",
+            "field": "whole_workout_finished",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.53
+            }
+          },
+          {
+            "id": "negated-plan-da",
+            "field": "personal_event_reported",
+            "expected": false,
+            "prediction": {
+              "label": true,
+              "probability": 0.69
+            }
+          },
+          {
+            "id": "past-completed-da",
+            "field": "new_sets_reported",
+            "expected": true,
+            "prediction": {
+              "label": false,
+              "probability": 0.51
+            }
+          },
+          {
+            "id": "food-plus-training-da",
+            "field": "intent",
+            "expected": "mixed_or_unclear",
+            "prediction": {
+              "label": "report",
+              "probability": 0.85,
+              "confidence": 0.82,
+              "distribution": {
+                "correction": 0.04,
+                "question": 0,
+                "finish": 0,
+                "recap": 0,
+                "report": 0.85,
+                "plan": 0.04,
+                "mixed_or_unclear": 0.07
+              }
+            }
+          }
+        ]
+      },
+      "reply/calibration/all": {
+        "cases": 16,
+        "exactCaseAccuracy": 1,
+        "decisions": 48,
+        "accuracy": 1,
+        "coverage": 0.8958333333333334,
+        "abstentionRate": 0.10416666666666667,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": 266.0788329999996,
+          "p95": 432.2175419999985
+        },
+        "fields": {
+          "unsupported_claim": {
+            "n": 16,
+            "correct": 16,
+            "accepted": 11,
+            "acceptedCorrect": 11,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.4968,
+            "binaryN": 16,
+            "confusion": {
+              "false -> false": 12,
+              "true -> true": 4
+            },
+            "classes": {
+              "false": {
+                "actual": 12,
+                "predicted": 12,
+                "correct": 12,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.6875,
+            "acceptedAccuracy": 1,
+            "brier": 0.03105
+          },
+          "ignores_constraint": {
+            "n": 16,
+            "correct": 16,
+            "accepted": 16,
+            "acceptedCorrect": 16,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.02600000000000001,
+            "binaryN": 16,
+            "confusion": {
+              "false -> false": 14,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 14,
+                "predicted": 14,
+                "correct": 14,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0016250000000000006
+          },
+          "false_save_claim": {
+            "n": 16,
+            "correct": 16,
+            "accepted": 16,
+            "acceptedCorrect": 16,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.023300000000000043,
+            "binaryN": 16,
+            "confusion": {
+              "false -> false": 14,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 14,
+                "predicted": 14,
+                "correct": 14,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0014562500000000027
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.56,
+            "accuracy": 1,
+            "meanProbability": 0.56
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 2,
+            "correct": 2,
+            "probabilitySum": 1.41,
+            "accuracy": 1,
+            "meanProbability": 0.705
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 45,
+            "correct": 45,
+            "probabilitySum": 42.73999999999999,
+            "accuracy": 1,
+            "meanProbability": 0.9497777777777775
+          }
+        ],
+        "failures": []
+      },
+      "reply/calibration/en": {
+        "cases": 8,
+        "exactCaseAccuracy": 1,
+        "decisions": 24,
+        "accuracy": 1,
+        "coverage": 0.875,
+        "abstentionRate": 0.125,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": 266.0788329999996,
+          "p95": 303.13495799999873
+        },
+        "fields": {
+          "unsupported_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 5,
+            "acceptedCorrect": 5,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.30279999999999996,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 6,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.625,
+            "acceptedAccuracy": 1,
+            "brier": 0.037849999999999995
+          },
+          "ignores_constraint": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 8,
+            "acceptedCorrect": 8,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.012400000000000005,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0015500000000000006
+          },
+          "false_save_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 8,
+            "acceptedCorrect": 8,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.01160000000000002,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0014500000000000025
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.56,
+            "accuracy": 1,
+            "meanProbability": 0.56
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.74,
+            "accuracy": 1,
+            "meanProbability": 0.74
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 22,
+            "correct": 22,
+            "probabilitySum": 21.02,
+            "accuracy": 1,
+            "meanProbability": 0.9554545454545454
+          }
+        ],
+        "failures": []
+      },
+      "reply/calibration/da": {
+        "cases": 8,
+        "exactCaseAccuracy": 1,
+        "decisions": 24,
+        "accuracy": 1,
+        "coverage": 0.9166666666666666,
+        "abstentionRate": 0.08333333333333333,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": 255.52845800000068,
+          "p95": 432.2175419999985
+        },
+        "fields": {
+          "unsupported_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 6,
+            "acceptedCorrect": 6,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.19400000000000006,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 6,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.024250000000000008
+          },
+          "ignores_constraint": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 8,
+            "acceptedCorrect": 8,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.013600000000000006,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0017000000000000008
+          },
+          "false_save_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 8,
+            "acceptedCorrect": 8,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.01170000000000002,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0014625000000000024
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.6699999999999999,
+            "accuracy": 1,
+            "meanProbability": 0.6699999999999999
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 23,
+            "correct": 23,
+            "probabilitySum": 21.720000000000002,
+            "accuracy": 1,
+            "meanProbability": 0.9443478260869567
+          }
+        ],
+        "failures": []
+      },
+      "reply/heldout/all": {
+        "cases": 16,
+        "exactCaseAccuracy": 1,
+        "decisions": 48,
+        "accuracy": 1,
+        "coverage": 0.875,
+        "abstentionRate": 0.125,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": 289.57291599999735,
+          "p95": 366.9919579999987
+        },
+        "fields": {
+          "unsupported_claim": {
+            "n": 16,
+            "correct": 16,
+            "accepted": 12,
+            "acceptedCorrect": 12,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.23620000000000002,
+            "binaryN": 16,
+            "confusion": {
+              "false -> false": 14,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 14,
+                "predicted": 14,
+                "correct": 14,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.014762500000000001
+          },
+          "ignores_constraint": {
+            "n": 16,
+            "correct": 16,
+            "accepted": 16,
+            "acceptedCorrect": 16,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.012700000000000022,
+            "binaryN": 16,
+            "confusion": {
+              "false -> false": 12,
+              "true -> true": 4
+            },
+            "classes": {
+              "false": {
+                "actual": 12,
+                "predicted": 12,
+                "correct": 12,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 4,
+                "predicted": 4,
+                "correct": 4,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0007937500000000014
+          },
+          "false_save_claim": {
+            "n": 16,
+            "correct": 16,
+            "accepted": 14,
+            "acceptedCorrect": 14,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.371,
+            "binaryN": 16,
+            "confusion": {
+              "false -> false": 14,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 14,
+                "predicted": 14,
+                "correct": 14,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.875,
+            "acceptedAccuracy": 1,
+            "brier": 0.0231875
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 2,
+            "correct": 2,
+            "probabilitySum": 1.1500000000000001,
+            "accuracy": 1,
+            "meanProbability": 0.5750000000000001
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 2,
+            "correct": 2,
+            "probabilitySum": 1.51,
+            "accuracy": 1,
+            "meanProbability": 0.755
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 44,
+            "correct": 44,
+            "probabilitySum": 42.16999999999998,
+            "accuracy": 1,
+            "meanProbability": 0.9584090909090904
+          }
+        ],
+        "failures": []
+      },
+      "reply/heldout/en": {
+        "cases": 8,
+        "exactCaseAccuracy": 1,
+        "decisions": 24,
+        "accuracy": 1,
+        "coverage": 0.875,
+        "abstentionRate": 0.125,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": 289.57291599999735,
+          "p95": 340.51095799999894
+        },
+        "fields": {
+          "unsupported_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 6,
+            "acceptedCorrect": 6,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.1023,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.0127875
+          },
+          "ignores_constraint": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 8,
+            "acceptedCorrect": 8,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.006600000000000012,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 6,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0008250000000000015
+          },
+          "false_save_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 7,
+            "acceptedCorrect": 7,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.19749999999999998,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.875,
+            "acceptedAccuracy": 1,
+            "brier": 0.024687499999999998
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.56,
+            "accuracy": 1,
+            "meanProbability": 0.56
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.78,
+            "accuracy": 1,
+            "meanProbability": 0.78
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 22,
+            "correct": 22,
+            "probabilitySum": 21.12,
+            "accuracy": 1,
+            "meanProbability": 0.9600000000000001
+          }
+        ],
+        "failures": []
+      },
+      "reply/heldout/da": {
+        "cases": 8,
+        "exactCaseAccuracy": 1,
+        "decisions": 24,
+        "accuracy": 1,
+        "coverage": 0.875,
+        "abstentionRate": 0.125,
+        "acceptedAccuracy": 1,
+        "confidentFalseEvent": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "confidentFalseFinish": {
+          "count": 0,
+          "negativeCases": 0,
+          "rate": null
+        },
+        "latencyMs": {
+          "p50": 275.76708399999916,
+          "p95": 366.9919579999987
+        },
+        "fields": {
+          "unsupported_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 6,
+            "acceptedCorrect": 6,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.13390000000000002,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.75,
+            "acceptedAccuracy": 1,
+            "brier": 0.016737500000000002
+          },
+          "ignores_constraint": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 8,
+            "acceptedCorrect": 8,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.006100000000000012,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 6,
+              "true -> true": 2
+            },
+            "classes": {
+              "false": {
+                "actual": 6,
+                "predicted": 6,
+                "correct": 6,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 2,
+                "predicted": 2,
+                "correct": 2,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 1,
+            "acceptedAccuracy": 1,
+            "brier": 0.0007625000000000015
+          },
+          "false_save_claim": {
+            "n": 8,
+            "correct": 8,
+            "accepted": 7,
+            "acceptedCorrect": 7,
+            "falsePositive": 0,
+            "falseNegative": 0,
+            "brierSum": 0.1735,
+            "binaryN": 8,
+            "confusion": {
+              "false -> false": 7,
+              "true -> true": 1
+            },
+            "classes": {
+              "false": {
+                "actual": 7,
+                "predicted": 7,
+                "correct": 7,
+                "precision": 1,
+                "recall": 1
+              },
+              "true": {
+                "actual": 1,
+                "predicted": 1,
+                "correct": 1,
+                "precision": 1,
+                "recall": 1
+              }
+            },
+            "accuracy": 1,
+            "coverage": 0.875,
+            "acceptedAccuracy": 1,
+            "brier": 0.0216875
+          }
+        },
+        "reliabilityBins": [
+          {
+            "from": 0,
+            "to": 0.2,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.2,
+            "to": 0.4,
+            "n": 0,
+            "correct": 0,
+            "probabilitySum": 0,
+            "accuracy": null,
+            "meanProbability": null
+          },
+          {
+            "from": 0.4,
+            "to": 0.6,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.5900000000000001,
+            "accuracy": 1,
+            "meanProbability": 0.5900000000000001
+          },
+          {
+            "from": 0.6,
+            "to": 0.8,
+            "n": 1,
+            "correct": 1,
+            "probabilitySum": 0.73,
+            "accuracy": 1,
+            "meanProbability": 0.73
+          },
+          {
+            "from": 0.8,
+            "to": 1,
+            "n": 22,
+            "correct": 22,
+            "probabilitySum": 21.05,
+            "accuracy": 1,
+            "meanProbability": 0.9568181818181819
+          }
+        ],
+        "failures": []
+      }
+    },
+    "cost": {
+      "currency": "USD",
+      "pricePerMillion": 0.042,
+      "requests": 132,
+      "inputTokens": 122903,
+      "outputTokens": 16873,
+      "usageEstimatedUsd": 0.005161925999999998,
+      "accountedUsd": 0.005161925999999988,
+      "maxUsd": 0.0892627
+    },
+    "notes": [
+      "Cost is token usage multiplied by the documented price, not a provider billing receipt. Failed/uncertain requests retain the maximum-input reservation.",
+      "Rules baseline covers intent only; its one-hot confidence is not calibrated. No rules baseline is claimed for reply judging.",
+      "Held-out labels and bilingual families were fixed before live inference. Labels are assistant-authored and need human review before deployment decisions.",
+      "Reply cases are authored positive/negative controls, not measured live Coach outputs or an end-to-end GEPA run.",
+      "Danish cases have Danish user/reply text and English fixture context; this is not a fully Danish conversation benchmark.",
+      "The 0.85 abstention threshold is an exploratory preset, not validated permission to automate writes.",
+      "No routing changes, downstream calls or actual saves are executed; savings and end-to-end correctness are unmeasured."
+    ],
+    "downstreamModelCallsAvoided": null,
+    "productionEnabled": false
+  },
+  "previousAttempts": [
+    {
+      "runDirectory": "/tmp/lift-jev-PHKhW9",
+      "status": "incomplete",
+      "completedCases": 0,
+      "failure": "Jev request failed or timed out; reservation retained, details withheld.",
+      "cost": {
+        "currency": "USD",
+        "pricePerMillion": 0.042,
+        "requests": 1,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "usageEstimatedUsd": 0,
+        "accountedUsd": 0.002688,
+        "maxUsd": 0.1
+      }
+    },
+    {
+      "runDirectory": "/tmp/lift-jev-FigFJr",
+      "status": "incomplete",
+      "completedCases": 19,
+      "failure": "Invalid Jev choice distribution.",
+      "cost": {
+        "currency": "USD",
+        "pricePerMillion": 0.042,
+        "requests": 20,
+        "inputTokens": 19862,
+        "outputTokens": 2857,
+        "usageEstimatedUsd": 0.0008342040000000003,
+        "accountedUsd": 0.0035222039999999997,
+        "maxUsd": 0.097312
+      }
+    },
+    {
+      "runDirectory": "/tmp/lift-jev-TE9cWx",
+      "status": "incomplete",
+      "completedCases": 41,
+      "failure": "Invalid Jev choice distribution: sum=0.990000, chosen=0.800000, max=0.800000.",
+      "cost": {
+        "currency": "USD",
+        "pricePerMillion": 0.042,
+        "requests": 42,
+        "inputTokens": 42748,
+        "outputTokens": 6161,
+        "usageEstimatedUsd": 0.0017954160000000004,
+        "accountedUsd": 0.004483415999999997,
+        "maxUsd": 0.093746116
+      }
+    }
+  ],
+  "diagnostic": {
+    "caseId": "not-done-da",
+    "requests": 1,
+    "inputTokens": 1040,
+    "outputTokens": 151,
+    "usageEstimatedUsd": 0.00004368,
+    "status": "valid diagnostic response"
+  },
+  "combinedUsageEstimatedUsd": 0.007835225999999999,
+  "combinedConservativelyAccountedUsd": 0.015899225999999985,
+  "notes": [
+    "One complete fixed-fixture pass; interrupted attempts are retained for accounting, not pooled into accuracy.",
+    "Question and dataset hashes match the baseline manifest written before any live inference.",
+    "Validation change only: accept documented-shape probabilities rounded to two decimals within cumulative rounding error. No prompt/label/threshold tuning."
+  ]
+}

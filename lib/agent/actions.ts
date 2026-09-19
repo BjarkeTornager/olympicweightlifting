@@ -12,6 +12,7 @@ import {
 } from "../coaching";
 import { repeatMeal } from "../nutrition";
 import { liftingBriefInputSchema, type LiftingBrief } from "../lifting-brief";
+import { isValidLoggedSet } from "../../js/progression.js";
 import { z } from "zod";
 import {
   cardioInputSchema,
@@ -64,6 +65,24 @@ const set = z
     reps: z.number().int().min(1).max(1000),
     result: z.enum(["success", "miss"]),
     rpe: z.number().min(1).max(10).optional(),
+  })
+  .strict();
+const setChangesSchema = z
+  .object({
+    weight: z.number().finite().min(0).max(1000).optional(),
+    reps: z.number().int().min(0).max(1000).optional(),
+    result: z.enum(["success", "miss"]).optional(),
+    rpe: z.number().min(1).max(10).nullable().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, "Include a set correction");
+const correctSetSchema = z
+  .object({
+    kind: z.literal("correct_workout_set"),
+    workoutId: z.string().min(1).max(160),
+    entryId: z.string().min(1).max(160),
+    setId: z.string().min(1).max(160),
+    setChanges: setChangesSchema,
   })
   .strict();
 const training = z
@@ -130,6 +149,7 @@ const bundleEntrySchema = z.discriminatedUnion("kind", [
   repeatMealActionSchema,
 ]);
 const singleActionSchema = z.discriminatedUnion("kind", [
+  correctSetSchema,
   z
     .object({
       kind: z.literal("set_lifting_brief"),
@@ -333,6 +353,7 @@ export const actionToolSchema = z
       "plan_workout",
       "update_session",
       "log_sets",
+      "correct_workout_set",
       "finish_workout",
       "start_programme",
       "repeat_session",
@@ -396,12 +417,35 @@ export const actionToolSchema = z
     sessionId: z.string().max(160).optional(),
     exerciseId: exerciseId.optional(),
     sets: z.array(set).min(1).max(30).optional(),
+    workoutId: z.string().min(1).max(160).optional(),
+    entryId: z.string().min(1).max(160).optional(),
+    setId: z.string().min(1).max(160).optional(),
+    setChanges: setChangesSchema
+      .describe(
+        "For correct_workout_set only: change ONLY reported fields of one already logged active-workout set. Copy workoutId, entryId and setId from current_workout. Preserve all other sets, metadata and ongoing status. Never use log_sets or log_workout_progress for a correction; those append sets.",
+      )
+      .optional(),
     dayId: z.string().max(160).optional(),
     date: date.optional(),
     name: z.string().max(120).optional(),
     meal: mealInputSchema
       .describe(
         "New meals and new items require classification with foodGroups and ingredients [{name,evidence}]. Empty arrays mean unknown, not a complete ingredient list. On corrections, keep original ingredient evidence unless the user corrects it.",
+      )
+      .optional(),
+    answer: z
+      .string()
+      .trim()
+      .min(1)
+      .max(8000)
+      .describe(
+        "When the user ALSO asks a question or explanation alongside the change, include the complete answer here in their language. Finish relevant read-only lookups first. Answer only the additional request; omit save/review claims and instructions, which the server supplies. Omit for logging-only requests. This text grants no additional writes.",
+      )
+      .optional(),
+    reviewRequested: z
+      .boolean()
+      .describe(
+        "For prepare_change on a direct-logging client: true ONLY when the user explicitly asks for a preview/review or says not to save yet. Ordinary record reports and corrections use log_entry instead. Changes requiring review (deletes, plans, targets, memories) do not need this flag.",
       )
       .optional(),
     mealId: z.string().uuid().optional(),
@@ -427,6 +471,7 @@ export const loggingKinds = [
   "update_session",
   "log_workout_progress",
   "log_sets",
+  "correct_workout_set",
   "finish_workout",
   "record_bundle",
 ] as const;
@@ -443,6 +488,11 @@ export const loggingToolSchema = actionToolSchema
     sessionId: true,
     exerciseId: true,
     sets: true,
+    workoutId: true,
+    entryId: true,
+    setId: true,
+    setChanges: true,
+    answer: true,
     date: true,
     meal: true,
     mealId: true,
@@ -940,6 +990,30 @@ export function prepareAction(
         ? "You already have training on this date. This creates an additional session."
         : "Adds this session to your training history.";
     }
+  } else if (action.kind === "correct_workout_set") {
+    const draft = next.activeWorkout;
+    if (!draft || draft.id !== action.workoutId)
+      throw Error(
+        "That ongoing workout is not in your journal. Read current_workout again.",
+      );
+    if (draft.date > currentDate)
+      throw Error("Check this workout’s future training date first.");
+    const entries = draft.exercises.filter((e) => e.id === action.entryId);
+    const matches =
+      entries.length === 1
+        ? entries[0].sets.filter((s) => s.id === action.setId)
+        : [];
+    if (matches.length !== 1 || !isValidLoggedSet(matches[0]))
+      throw Error(
+        "Choose one already logged set from current_workout; planned or unknown sets cannot be corrected.",
+      );
+    Object.assign(matches[0], action.setChanges);
+    // The complete journal schema below also validates the resulting reps/result
+    // combination. IDs, sibling sets, prescriptions and completion stay intact.
+    workout = draft;
+    title = "Correct an ongoing set";
+    detail =
+      "Updates only the requested set fields. All other sets and targets are kept, and the workout stays ongoing.";
   } else if (action.kind === "log_sets") {
     const draft = next.activeWorkout;
     if (!draft)

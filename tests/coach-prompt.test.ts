@@ -11,9 +11,10 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     createHash("sha256")
       .update(prompt.replace(coachStyle, "<COACH_STYLE>"))
       .digest("hex"),
-    // Activity-photo policy reviewed with activity-photos and Coach direct-log tests.
+    // Active-set corrections, mixed answers and explicit reviews are covered by
+    // coach-workflow-fixes-database and the 2026-09-19 live workflow rerun.
     // Historical GEPA scores are not an evaluation of this policy revision.
-    "5ae46cee4acdb325fc54c819bc8ffd5ff2629d043cb45909cbb33eb31cdbff6c",
+    "bf0e1cc3723b31b6a318eafc191a68727548e32310914d22c39c47f6c2e04659",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

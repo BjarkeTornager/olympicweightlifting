@@ -173,7 +173,7 @@ for (const width of [390, 1280]) {
     for (let pass = 0; pass < 3; pass++) {
       await d
         .getByLabel("Playback speed")
-        .selectOption(pass === 1 ? "0.5" : "1");
+        .selectOption(pass === 1 ? "0.25" : "0.5");
       await d.getByLabel("Video position").fill("0.101");
       await video.evaluate((v) =>
         v.scrollIntoView({ block: "center", behavior: "instant" }),

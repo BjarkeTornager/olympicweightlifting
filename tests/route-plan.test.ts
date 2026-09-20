@@ -346,3 +346,148 @@ test("planRoute fails closed without a key or an unknown place", async () => {
     /Could not find/,
   );
 });
+
+// The three complaints about Coach routes: a named heading was ignored, a
+// refinement returned the previous route, and parks were found then dropped.
+function bearingFromStart(lat: number, lng: number) {
+  const from = (faelled.lat * Math.PI) / 180;
+  const to = (lat * Math.PI) / 180;
+  const dLng = ((lng - faelled.lng) * Math.PI) / 180;
+  const degrees =
+    (Math.atan2(
+      Math.sin(dLng) * Math.cos(to),
+      Math.cos(from) * Math.sin(to) - Math.sin(from) * Math.cos(to) * Math.cos(dLng),
+    ) *
+      180) /
+    Math.PI;
+  return (degrees + 360) % 360;
+}
+
+function loopProbe(parks: { lat: number; lng: number; name: string }[] = []) {
+  const waypoints: { lat: number; lng: number }[][] = [];
+  const fetchImpl = async (url: RequestInfo | URL) => {
+    const href = decodeURIComponent(String(url));
+    if (href.includes("/geocode/")) return jsonResponse(geocodePayload("Fælledparken"));
+    if (href.includes("/place/nearbysearch/"))
+      return jsonResponse({
+        status: "OK",
+        results: parks.map((park) => ({
+          name: park.name,
+          types: ["park"],
+          geometry: { location: { lat: park.lat, lng: park.lng } },
+        })),
+      });
+    waypoints.push(
+      [...href.matchAll(/via:([\d.-]+),([\d.-]+)/g)].map((match) => ({
+        lat: Number(match[1]),
+        lng: Number(match[2]),
+      })),
+    );
+    return jsonResponse({
+      status: "OK",
+      routes: [
+        {
+          overview_polyline: { points: polylineFor() },
+          legs: [{ distance: { value: 10050 }, duration: { value: 2400 } }],
+        },
+      ],
+    });
+  };
+  return {
+    waypoints,
+    deps: { key: "test-key", fetch: fetchImpl as unknown as typeof fetch },
+  };
+}
+
+test("a ride in a named direction heads that way instead of ringing the start", async () => {
+  const probe = loopProbe();
+  const planned = await planRoute(
+    { start: "Fælledparken", activity: "bike", targetKm: 10, direction: "north" },
+    probe.deps,
+  );
+  const sent = probe.waypoints.at(-1)!;
+  assert.ok(sent.length >= 2);
+  // Every waypoint sits in the northern half rather than surrounding the start.
+  for (const point of sent) {
+    const bearing = bearingFromStart(point.lat, point.lng);
+    assert.ok(
+      bearing <= 90 || bearing >= 270,
+      `waypoint at bearing ${bearing.toFixed(0)} is not toward the north`,
+    );
+    assert.ok(point.lat > faelled.lat, "waypoint should be north of the start");
+  }
+  assert.match(planned.title, /north from/);
+  assert.match(planned.caption, /Heads north/);
+});
+
+test("an undirected loop still encircles the start", async () => {
+  const probe = loopProbe();
+  await planRoute(
+    { start: "Fælledparken", activity: "bike", targetKm: 10 },
+    probe.deps,
+  );
+  const sent = probe.waypoints.at(-1)!;
+  assert.equal(sent.length, 4);
+  assert.ok(sent.some((point) => point.lat > faelled.lat));
+  assert.ok(sent.some((point) => point.lat < faelled.lat));
+});
+
+test("asking again with a new variant returns a different route", async () => {
+  const first = loopProbe();
+  await planRoute(
+    { start: "Fælledparken", activity: "run", targetKm: 10, parkBias: "some" },
+    first.deps,
+  );
+  const repeat = loopProbe();
+  await planRoute(
+    { start: "Fælledparken", activity: "run", targetKm: 10, parkBias: "some" },
+    repeat.deps,
+  );
+  const varied = loopProbe();
+  await planRoute(
+    {
+      start: "Fælledparken",
+      activity: "run",
+      targetKm: 10,
+      parkBias: "some",
+      variant: 1,
+    },
+    varied.deps,
+  );
+  const shape = (points: { lat: number; lng: number }[]) =>
+    JSON.stringify(points.map((p) => [p.lat.toFixed(4), p.lng.toFixed(4)]));
+  assert.equal(
+    shape(repeat.waypoints.at(-1)!),
+    shape(first.waypoints.at(-1)!),
+    "the same request should stay stable",
+  );
+  assert.notEqual(
+    shape(varied.waypoints.at(-1)!),
+    shape(first.waypoints.at(-1)!),
+    "a new variant must not repeat the previous route",
+  );
+});
+
+test("a high park bias routes through parks the old snap window discarded", async () => {
+  const parks = [
+    { lat: 55.7128, lng: 12.5681, name: "Nørrebroparken" },
+    { lat: 55.6944, lng: 12.5881, name: "Østre Anlæg" },
+  ];
+  const biased = loopProbe(parks);
+  await planRoute(
+    { start: "Fælledparken", activity: "run", targetKm: 5, parkBias: "high" },
+    biased.deps,
+  );
+  const used = biased.waypoints.at(-1)!;
+  const hits = parks.filter((park) =>
+    used.some(
+      (point) =>
+        Math.abs(point.lat - park.lat) < 1e-6 &&
+        Math.abs(point.lng - park.lng) < 1e-6,
+    ),
+  );
+  assert.ok(
+    hits.length >= 1,
+    "a high park bias should route through a nearby park",
+  );
+});

@@ -2,6 +2,19 @@ import { z } from "zod";
 
 export const routeActivitySchema = z.enum(["run", "walk", "bike"]);
 export type RouteActivity = z.infer<typeof routeActivitySchema>;
+export const routeDirectionSchema = z.enum([
+  "north",
+  "northeast",
+  "east",
+  "southeast",
+  "south",
+  "southwest",
+  "west",
+  "northwest",
+]);
+export type RouteDirection = z.infer<typeof routeDirectionSchema>;
+export const routeParkBiasSchema = z.enum(["none", "some", "high"]);
+export type RouteParkBias = z.infer<typeof routeParkBiasSchema>;
 export const routeRequestSchema = z
   .object({
     start: z.string().trim().min(2).max(200),
@@ -9,7 +22,16 @@ export const routeRequestSchema = z
     via: z.array(z.string().trim().min(2).max(200)).max(3).optional(),
     activity: routeActivitySchema,
     targetKm: z.number().finite().min(0.5).max(80).optional(),
+    // Heading to travel toward. Without it a loop encircles the start, which
+    // is wrong when someone asks to head out of town in one direction.
+    direction: routeDirectionSchema.optional(),
+    // How hard to pull the route onto green paths. preferParks is the older
+    // boolean form and still maps onto this.
+    parkBias: routeParkBiasSchema.optional(),
     preferParks: z.boolean().optional(),
+    // Same request, different route. Repeat asks must not return the previous
+    // route unchanged, so this shifts the bearings and the park pairing.
+    variant: z.number().int().min(0).max(5).optional(),
     title: z.string().trim().min(1).max(120).optional(),
   })
   .strict()
@@ -35,6 +57,26 @@ const MAX_BYTES = 256000;
 const EARTH_KM = 6371;
 const PARK_HINT =
   /\b(park|parks|have|haven|sø|soen|lake|lakes|forest|skov|trail|green|garden|gardens|fælled|common|nature|woods)\b/i;
+
+const DIRECTION_BEARINGS: Record<RouteDirection, number> = {
+  north: 0,
+  northeast: 45,
+  east: 90,
+  southeast: 135,
+  south: 180,
+  southwest: 225,
+  west: 270,
+  northwest: 315,
+};
+
+// A park is used when it sits within this distance of the shape's next corner.
+// The old fixed window was narrow enough that real parks were usually found
+// and then discarded, leaving a plain geometric circle.
+function parkSnapKm(bias: RouteParkBias, radiusKm: number) {
+  return bias === "high"
+    ? Math.max(1, radiusKm * 1.6)
+    : Math.max(0.5, radiusKm * 0.9);
+}
 
 export function googleMapsKey() {
   return process.env.GOOGLE_MAPS_API_KEY?.trim() ?? "";
@@ -352,28 +394,64 @@ function closeEnough(actual: number, target: number) {
   return Math.abs(actual - target) / target <= 0.08;
 }
 
-function loopWaypoints(start: RouteStop, parks: RouteStop[], radiusKm: number) {
-  const geometric = [30, 120, 210, 300].map((bearing, i) => ({
-    ...offsetPoint(start.lat, start.lng, radiusKm, bearing),
+type LoopShape = {
+  direction?: RouteDirection;
+  variant: number;
+  parkBias: RouteParkBias;
+};
+
+// Without a direction this is a ring around the start. With one it is a lobe
+// that reaches out along the heading and comes back, so "north" travels north
+// instead of circling the whole city.
+function loopCorners(start: RouteStop, radiusKm: number, shape: LoopShape) {
+  if (shape.direction === undefined)
+    return [30, 120, 210, 300].map((bearing, i) => ({
+      ...offsetPoint(start.lat, start.lng, radiusKm, bearing + shape.variant * 37),
+      label: `Turn ${i + 1}`,
+    }));
+  const axis =
+    DIRECTION_BEARINGS[shape.direction] + ((shape.variant % 3) - 1) * 18;
+  const spread = 32 + (shape.variant % 2) * 14;
+  return [
+    { bearing: axis - spread, reach: 0.6 },
+    { bearing: axis, reach: 1 },
+    { bearing: axis + spread, reach: 0.6 },
+  ].map((corner, i) => ({
+    ...offsetPoint(start.lat, start.lng, radiusKm * corner.reach, corner.bearing),
     label: `Turn ${i + 1}`,
   }));
-  if (!parks.length) return geometric;
+}
+
+function loopWaypoints(
+  start: RouteStop,
+  parks: RouteStop[],
+  radiusKm: number,
+  shape: LoopShape,
+) {
+  const corners = loopCorners(start, radiusKm, shape);
+  if (!parks.length || shape.parkBias === "none") return corners;
   const unused = [...parks];
-  const snapKm = Math.max(0.35, radiusKm * 0.55);
-  return geometric.map((point) => {
+  const snapKm = parkSnapKm(shape.parkBias, radiusKm);
+  const chosen = [...corners];
+  // Pairing starts at a different corner per variant, so a repeat request
+  // routes through the parks in a different order rather than identically.
+  for (let step = 0; step < corners.length; step++) {
+    const index = (step + shape.variant) % corners.length;
+    const point = corners[index]!;
     let best = -1;
     let bestKm = Infinity;
-    unused.forEach((park, index) => {
+    unused.forEach((park, at) => {
       const distance = kmBetween(point, park);
       if (distance < bestKm) {
         bestKm = distance;
-        best = index;
+        best = at;
       }
     });
-    if (best < 0 || bestKm > snapKm) return point;
+    if (best < 0 || bestKm > snapKm) continue;
     const [park] = unused.splice(best, 1);
-    return park!;
-  });
+    chosen[index] = park!;
+  }
+  return chosen;
 }
 
 async function loopRoute(
@@ -382,14 +460,20 @@ async function loopRoute(
   parks: RouteStop[],
   activity: RouteActivity,
   targetKm: number,
+  shape: LoopShape,
 ) {
   let scale = 0.9;
   let best:
     | Awaited<ReturnType<typeof directions>> & { waypoints: RouteStop[] }
     | undefined;
   for (let attempt = 0; attempt < 5; attempt++) {
-    const radius = (targetKm / (2 * Math.PI)) * scale;
-    const waypoints = loopWaypoints(start, parks, radius);
+    // A ring's perimeter is its circumference; an out-and-back lobe covers the
+    // reach roughly twice. Either way the loop below corrects the scale.
+    const radius =
+      (shape.direction === undefined
+        ? targetKm / (2 * Math.PI)
+        : targetKm / 2.4) * scale;
+    const waypoints = loopWaypoints(start, parks, radius, shape);
     const routed = await directions(client, start, start, waypoints, activity);
     const candidate = { ...routed, waypoints };
     if (
@@ -414,6 +498,7 @@ async function pointToPoint(
   parks: RouteStop[],
   activity: RouteActivity,
   targetKm?: number,
+  direction?: RouteDirection,
 ) {
   const prefer = parks.filter(
     (park) =>
@@ -431,12 +516,17 @@ async function pointToPoint(
   const extra = Math.max(0.3, (targetKm - routed.distanceKm) / 2);
   const midLat = (start.lat + end.lat) / 2;
   const midLng = (start.lng + end.lng) / 2;
+  // Bulge toward the requested heading when there is one, otherwise sideways
+  // from the straight line between the two places.
   const detour = offsetPoint(
     midLat,
     midLng,
     extra,
-    90 +
-      (Math.atan2(end.lng - start.lng, end.lat - start.lat) * 180) / Math.PI,
+    direction === undefined
+      ? 90 +
+          (Math.atan2(end.lng - start.lng, end.lat - start.lat) * 180) /
+            Math.PI
+      : DIRECTION_BEARINGS[direction],
   );
   waypoints = [...waypoints, { ...detour, label: "Park loop" }].slice(0, 4);
   routed = await directions(client, start, end, waypoints, activity);
@@ -471,11 +561,15 @@ export async function planRoute(
     !end ||
     (Math.abs(start.lat - end.lat) < 0.0004 &&
       Math.abs(start.lng - end.lng) < 0.0004);
+  // An explicit park request, in either the new or the older boolean form.
+  const explicitParks = request.parkBias
+    ? request.parkBias !== "none"
+    : request.preferParks === true;
   const nearbyGreenEnds = Boolean(
     end &&
       request.targetKm &&
       kmBetween(start, end) < Math.min(1.5, request.targetKm * 0.25) &&
-      (request.preferParks === true ||
+      (explicitParks ||
         (looksLikePark(request.start) && looksLikePark(request.end ?? ""))),
   );
   const loop = samePlace || nearbyGreenEnds;
@@ -483,15 +577,27 @@ export async function planRoute(
     throw Error(
       "A loop needs a target distance, for example 5 km around that park.",
     );
-  const preferParks =
-    request.preferParks === true ||
+  const parkBias: RouteParkBias =
+    request.parkBias ??
+    (request.preferParks === true ||
     looksLikePark(request.start) ||
-    looksLikePark(request.end ?? "");
-  const parks = preferParks
-    ? await nearbyParks(client, start, request.start, request.targetKm)
-    : [];
+    looksLikePark(request.end ?? "")
+      ? "some"
+      : "none");
+  const parks =
+    parkBias === "none"
+      ? []
+      : await nearbyParks(client, start, request.start, request.targetKm);
+  const variant = request.variant ?? 0;
   const routed = loop
-    ? await loopRoute(client, start, parks, request.activity, request.targetKm!)
+    ? await loopRoute(
+        client,
+        start,
+        parks,
+        request.activity,
+        request.targetKm!,
+        { direction: request.direction, variant, parkBias },
+      )
     : await pointToPoint(
         client,
         start,
@@ -500,6 +606,7 @@ export async function planRoute(
         parks,
         request.activity,
         request.targetKm,
+        request.direction,
       );
   if (routed.distanceKm <= 0 || routed.distanceKm > 200)
     throw Error("That route is outside the 200 km planning limit.");
@@ -534,14 +641,22 @@ export async function planRoute(
   const targetNote = request.targetKm
     ? `Requested ${request.targetKm.toFixed(1)} km · planned ${routed.distanceKm.toFixed(1)} km`
     : `${routed.distanceKm.toFixed(1)} km`;
-  const parkNote = preferParks
-    ? " Prefers parks and green paths when Google Maps has them."
+  const parkNote =
+    parkBias === "high"
+      ? " Pulled onto parks and green paths wherever Google Maps has them."
+      : parkBias === "some"
+        ? " Prefers parks and green paths when Google Maps has them."
+        : "";
+  const directionNote = request.direction
+    ? ` Heads ${request.direction} from the start.`
     : "";
   return {
     title:
       request.title ??
       (loop
-        ? `${request.targetKm?.toFixed(1) ?? routed.distanceKm.toFixed(1)} km around ${start.label}`
+        ? `${request.targetKm?.toFixed(1) ?? routed.distanceKm.toFixed(1)} km ${
+            request.direction ? `${request.direction} from` : "around"
+          } ${start.label}`
         : `${start.label} to ${end!.label}`),
     activity: request.activity,
     distanceKm: routed.distanceKm,
@@ -554,6 +669,6 @@ export async function planRoute(
     loop,
     stops,
     path: routed.path,
-    caption: `${targetNote} ${activityLabel} on Google Maps.${parkNote} Not GPS navigation or a logged activity.`,
+    caption: `${targetNote} ${activityLabel} on Google Maps.${directionNote}${parkNote} Not GPS navigation or a logged activity.`,
   };
 }

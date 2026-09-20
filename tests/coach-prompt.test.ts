@@ -14,7 +14,10 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Multi-photo atomic saves, same-meal angles, retries and Undo are covered by
     // the 2026-09-20 coach-direct-log-database regression baseline.
     // Historical GEPA scores are not an evaluation of this policy revision.
-    "518024dd0cb5e59e4056cf3e299c3fdfc717d7be5b99eba3d982cde346063ce1",
+    // Revised 2026-09-20 for plan_route direction/parkBias/variant guidance only.
+    // The health, privacy, evidence and action policy text is byte-identical;
+    // the sole prompt diff is the route-planning paragraph (route-plan.test.ts).
+    "2a1b7f3d63f06210c91bada52a8503c2cf7b6171d221bb334bfb04fb1c0c2459",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

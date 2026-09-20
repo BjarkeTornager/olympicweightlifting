@@ -199,9 +199,9 @@ test.describe("focused Coach conversation", () => {
       page.getByRole("heading", { name: "A little direction for today." }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Plan my day" }).click();
-    await expect(
-      page.getByRole("button", { name: "Conversation", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+    // Coach switches back to the conversation itself; there is no view toggle
+    // to press. The composer returning is what the athlete actually sees.
+    await expect(composer).toBeVisible();
     await expect(composer).toHaveValue(
       /^I slept 7 hours 47 minutes last night\./,
     );

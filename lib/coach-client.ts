@@ -5,6 +5,11 @@ import {
   type CoachResponse,
   type SavedVisual,
 } from "./coach-visuals";
+import {
+  AGUI_ROUTE_MAP_COMPONENT,
+  AGUI_ROUTE_MAP_TOOL,
+  visualFromAguiPayload,
+} from "./agui-components";
 
 type RunInput = {
   id: string;
@@ -80,6 +85,20 @@ export async function runCoach(
           if (event.name !== "coach.visual") return;
           const parsed = savedVisualSchema.safeParse(event.value);
           if (parsed.success) update({ visual: parsed.data });
+        },
+        onToolCallResultEvent: ({ event }) => {
+          const visual = visualFromAguiPayload(event.content);
+          if (visual?.content.kind === "route_map") update({ visual });
+        },
+        onToolCallEndEvent: ({ toolCallName, toolCallArgs }) => {
+          if (toolCallName !== AGUI_ROUTE_MAP_TOOL) return;
+          const visual = visualFromAguiPayload(toolCallArgs);
+          if (visual?.content.kind === "route_map") update({ visual });
+        },
+        onActivitySnapshotEvent: ({ event }) => {
+          if (event.activityType !== AGUI_ROUTE_MAP_COMPONENT) return;
+          const visual = visualFromAguiPayload(event.content);
+          if (visual?.content.kind === "route_map") update({ visual });
         },
         onRunErrorEvent: ({ event }) => {
           failure = event.message;

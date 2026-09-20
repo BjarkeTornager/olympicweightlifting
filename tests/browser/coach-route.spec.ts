@@ -61,6 +61,31 @@ test("Coach shows an interactive OpenStreetMap for a planned run", async ({
       messageId: "answer",
       delta: "Here is a suggested lakes run.",
     },
+    {
+      type: "TOOL_CALL_START",
+      toolCallId: route.id,
+      toolCallName: "plan_route",
+    },
+    {
+      type: "TOOL_CALL_ARGS",
+      toolCallId: route.id,
+      delta: JSON.stringify(route),
+    },
+    { type: "TOOL_CALL_END", toolCallId: route.id },
+    {
+      type: "TOOL_CALL_RESULT",
+      toolCallId: route.id,
+      messageId: route.id,
+      content: JSON.stringify(route),
+      role: "tool",
+    },
+    {
+      type: "ACTIVITY_SNAPSHOT",
+      messageId: route.id,
+      activityType: "route_map",
+      content: route,
+      replace: true,
+    },
     { type: "CUSTOM", name: "coach.visual", value: route },
     { type: "TEXT_MESSAGE_END", messageId: "answer" },
     {
@@ -77,6 +102,7 @@ test("Coach shows an interactive OpenStreetMap for a planned run", async ({
   await page.evaluate(() =>
     (window as unknown as StreamWindow).closeCoachStream(),
   );
+  await expect(page.locator('[data-agui-component="route_map"]')).toBeVisible();
   await expect(page.getByRole("heading", { name: "Lakes run" })).toBeVisible();
   await expect(page.getByText("5.2 km run")).toBeVisible();
   await expect(page.getByText("Dronning Louises Bro")).toBeVisible();

@@ -355,6 +355,107 @@ test("official AG-UI client receives live progress, text and validated visuals b
   assert.deepEqual(result.visuals, [visual]);
 });
 
+test("AG-UI renders a planned route as a plan_route / route_map component", async () => {
+  const { emitDisplayedVisual } = await import("../lib/agui-components");
+  const route: SavedVisual = {
+    id: "aa19d58a-9408-46a1-81b6-21b42a147599",
+    content: {
+      kind: "route_map",
+      title: "Lakes run",
+      activity: "run",
+      distanceKm: 5.2,
+      durationSeconds: 1872,
+      stops: [
+        { lat: 55.674, lng: 12.568, label: "Start" },
+        { lat: 55.688, lng: 12.576, label: "End" },
+      ],
+      path: [
+        [55.674, 12.568],
+        [55.688, 12.576],
+      ],
+    },
+  };
+  const events: { type: string; name?: string; toolCallName?: string; activityType?: string }[] =
+    [];
+  const visuals: SavedVisual[] = [];
+  emitDisplayedVisual((event) => {
+    events.push(event as (typeof events)[number]);
+  }, route);
+  assert.deepEqual(
+    events.map((e) => e.type),
+    [
+      EventType.CUSTOM,
+      EventType.TOOL_CALL_START,
+      EventType.TOOL_CALL_ARGS,
+      EventType.TOOL_CALL_END,
+      EventType.TOOL_CALL_RESULT,
+      EventType.ACTIVITY_SNAPSHOT,
+    ],
+  );
+  assert.equal(events[1]?.toolCallName, "plan_route");
+  assert.equal(events[5]?.activityType, "route_map");
+  const question = input();
+  const agent = new HttpAgent({
+    url: "http://localhost/api/agent/run",
+    threadId: "coach",
+    debug: false,
+    initialMessages: [
+      { id: question.id, role: "user", content: question.message },
+    ],
+    fetch: async (_url: string, init: RequestInit) => {
+      const request = new Request("http://localhost/api/agent/run", init);
+      const parsed = parseCoachRun(await request.clone().json());
+      return coachStream(
+        request,
+        parsed.threadId,
+        parsed.input.id,
+        async (emit) => {
+          emitDisplayedVisual(emit, route);
+          emit({
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "reply",
+            role: "assistant",
+          });
+          emit({
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "reply",
+            delta: "Here is a suggested route.",
+          });
+          emit({ type: EventType.TEXT_MESSAGE_END, messageId: "reply" });
+          return {
+            reply: "Here is a suggested route.",
+            proposals: [],
+            visuals: [route],
+          };
+        },
+      );
+    },
+  });
+  const { visualFromAguiPayload } = await import("../lib/agui-components");
+  await agent.runAgent(
+    {
+      runId: question.id,
+      forwardedProps: {
+        revision: 0,
+        timezone: "Europe/Copenhagen",
+        photoIds: [],
+      },
+    },
+    {
+      onToolCallResultEvent: ({ event }) => {
+        const parsed = visualFromAguiPayload(event.content);
+        if (parsed) visuals.push(parsed);
+      },
+      onActivitySnapshotEvent: ({ event }) => {
+        const parsed = visualFromAguiPayload(event.content);
+        if (parsed) visuals.push(parsed);
+      },
+    },
+  );
+  assert.ok(visuals.some((v) => v.content.kind === "route_map"));
+  assert.equal(visuals[0]?.content.kind, "route_map");
+});
+
 test("AG-UI stream sanitizes backend errors and aborts work when the reader disconnects", async () => {
   const response = coachStream(
     new Request("http://localhost"),

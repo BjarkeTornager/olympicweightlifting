@@ -50,6 +50,7 @@ import {
 } from "./provider";
 import { routeCoachTurn } from "./routing";
 import { planRoute, routeRequestSchema } from "../route-plan";
+import { emitDisplayedVisual } from "../agui-components";
 import {
   siteHelp,
   systemPrompt,
@@ -702,11 +703,7 @@ export async function runTurn(
               },
             };
             visuals.push(visual);
-            emit?.({
-              type: EventType.CUSTOM,
-              name: "coach.visual",
-              value: visual,
-            });
+            emitDisplayedVisual(emit, visual);
             output = {
               displayed: true,
               imageIds: a.imageIds,
@@ -762,11 +759,7 @@ export async function runTurn(
             };
             visualSchema.parse(visual.content);
             visuals.push(visual);
-            emit?.({
-              type: EventType.CUSTOM,
-              name: "coach.visual",
-              value: visual,
-            });
+            emitDisplayedVisual(emit, visual);
             output = {
               displayed: true,
               title: planned.title,
@@ -774,7 +767,8 @@ export async function runTurn(
               distanceKm: planned.distanceKm,
               durationMinutes: Math.round(planned.durationSeconds / 60),
               stops: planned.stops.map((stop) => stop.label),
-              note: "Shown on OpenStreetMap in chat. This is a suggested public-road route, not a logged activity, GPS track or turn-by-turn navigation.",
+              component: "route_map",
+              note: "Shown as an AG-UI route_map component on OpenStreetMap. This is a suggested public-road route, not a logged activity, GPS track or turn-by-turn navigation.",
             };
           } else if (key === "show_visual") {
             if (visuals.length >= 3)
@@ -786,11 +780,7 @@ export async function runTurn(
               content: visualSchema.parse(args),
             };
             visuals.push(visual);
-            emit?.({
-              type: EventType.CUSTOM,
-              name: "coach.visual",
-              value: visual,
-            });
+            emitDisplayedVisual(emit, visual);
             output = { displayed: true, title: visual.content.title };
           } else if (key === "image_library") {
             const a = specifications.image_library.schema.parse(args),

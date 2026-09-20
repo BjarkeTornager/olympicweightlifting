@@ -51,7 +51,7 @@ import { Dialog } from "./ui/dialog";
 import { CardioDetails } from "./cardio";
 import { CheckinDialog, CheckinDetails } from "./health";
 import { AssistantText } from "./assistant-text";
-import { CoachVisuals } from "./coach-visuals";
+import { AguiVisuals } from "./agui-components";
 import { CoachMemoryBook } from "./coach-memory";
 import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
@@ -1078,7 +1078,7 @@ export function TrainingAgent({
                         </span>
                         {t.reply && <AssistantText text={t.reply} />}
                         {Boolean(t.visuals?.length) && (
-                          <CoachVisuals
+                          <AguiVisuals
                             visuals={t.visuals!}
                             accountId={accountId}
                           />

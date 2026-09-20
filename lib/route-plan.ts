@@ -5,12 +5,17 @@ export type RouteActivity = z.infer<typeof routeActivitySchema>;
 export const routeRequestSchema = z
   .object({
     start: z.string().trim().min(2).max(200),
-    end: z.string().trim().min(2).max(200),
+    end: z.string().trim().min(2).max(200).optional(),
     via: z.array(z.string().trim().min(2).max(200)).max(3).optional(),
     activity: routeActivitySchema,
+    targetKm: z.number().finite().min(0.5).max(80).optional(),
+    preferParks: z.boolean().optional(),
     title: z.string().trim().min(1).max(120).optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => Boolean(value.end || value.targetKm), {
+    message: "Provide an end place or a target distance in kilometres.",
+  });
 export type RouteRequest = z.infer<typeof routeRequestSchema>;
 export type RouteStop = { lat: number; lng: number; label: string };
 export type PlannedRoute = {
@@ -18,40 +23,68 @@ export type PlannedRoute = {
   activity: RouteActivity;
   distanceKm: number;
   durationSeconds: number;
+  targetKm?: number;
+  loop?: boolean;
   stops: RouteStop[];
   path: [number, number][];
   caption: string;
 };
 
-const USER_AGENT =
-  "LiftJournal/2.0 (https://lift-journal-production.up.railway.app; cardio-route-planning)";
-const NOMINATIM = "https://nominatim.openstreetmap.org/search";
-const OSRM = "https://router.project-osrm.org/route/v1";
 const MAX_PATH = 180;
 const MAX_BYTES = 256000;
+const EARTH_KM = 6371;
+const PARK_HINT =
+  /\b(park|parks|have|haven|sø|soen|lake|lakes|forest|skov|trail|green|garden|gardens|fælled|common|nature|woods)\b/i;
 
-const nominatimHit = z.object({
-  lat: z.string(),
-  lon: z.string(),
-  display_name: z.string().min(1),
+export function googleMapsKey() {
+  return process.env.GOOGLE_MAPS_API_KEY?.trim() ?? "";
+}
+
+const geocodeResult = z.object({
+  formatted_address: z.string().min(1),
+  types: z.array(z.string()).optional(),
+  geometry: z.object({
+    location: z.object({
+      lat: z.number().finite(),
+      lng: z.number().finite(),
+    }),
+  }),
 });
-const osrmResponse = z.object({
-  code: z.string(),
+const geocodeResponse = z.object({
+  status: z.string(),
+  results: z.array(geocodeResult),
+});
+const placeResult = z.object({
+  name: z.string().min(1),
+  types: z.array(z.string()).optional(),
+  geometry: z.object({
+    location: z.object({
+      lat: z.number().finite(),
+      lng: z.number().finite(),
+    }),
+  }),
+});
+const nearbyResponse = z.object({
+  status: z.string(),
+  results: z.array(placeResult).optional(),
+});
+const directionsResponse = z.object({
+  status: z.string(),
   routes: z
     .array(
       z.object({
-        distance: z.number().finite().nonnegative(),
-        duration: z.number().finite().nonnegative(),
-        geometry: z.object({
-          type: z.literal("LineString"),
-          coordinates: z
-            .array(z.tuple([z.number().finite(), z.number().finite()]))
-            .min(2)
-            .max(20000),
-        }),
+        overview_polyline: z.object({ points: z.string().min(1) }),
+        legs: z
+          .array(
+            z.object({
+              distance: z.object({ value: z.number().finite().nonnegative() }),
+              duration: z.object({ value: z.number().finite().nonnegative() }),
+            }),
+          )
+          .min(1),
       }),
     )
-    .min(1),
+    .optional(),
 });
 
 export function simplifyPath(
@@ -61,19 +94,87 @@ export function simplifyPath(
   if (points.length <= max) return points;
   const step = (points.length - 1) / (max - 1);
   const path: [number, number][] = [];
-  for (let i = 0; i < max - 1; i++)
-    path.push(points[Math.round(i * step)]!);
+  for (let i = 0; i < max - 1; i++) path.push(points[Math.round(i * step)]!);
   path.push(points[points.length - 1]!);
   return path;
+}
+
+export function decodePolyline(encoded: string): [number, number][] {
+  let index = 0,
+    lat = 0,
+    lng = 0;
+  const path: [number, number][] = [];
+  while (index < encoded.length) {
+    let result = 0,
+      shift = 0,
+      byte = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 31) << shift;
+      shift += 5;
+    } while (byte >= 32);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 31) << shift;
+      shift += 5;
+    } while (byte >= 32);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+    path.push([lat / 1e5, lng / 1e5]);
+  }
+  return path;
+}
+
+export function kmBetween(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) {
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+export function offsetPoint(
+  lat: number,
+  lng: number,
+  distanceKm: number,
+  bearingDeg: number,
+): RouteStop {
+  const bearing = (bearingDeg * Math.PI) / 180;
+  const fromLat = (lat * Math.PI) / 180;
+  const fromLng = (lng * Math.PI) / 180;
+  const angular = distanceKm / EARTH_KM;
+  const toLat = Math.asin(
+    Math.sin(fromLat) * Math.cos(angular) +
+      Math.cos(fromLat) * Math.sin(angular) * Math.cos(bearing),
+  );
+  const toLng =
+    fromLng +
+    Math.atan2(
+      Math.sin(bearing) * Math.sin(angular) * Math.cos(fromLat),
+      Math.cos(angular) - Math.sin(fromLat) * Math.sin(toLat),
+    );
+  return {
+    lat: (toLat * 180) / Math.PI,
+    lng: (((toLng * 180) / Math.PI + 540) % 360) - 180,
+    label: "Waypoint",
+  };
 }
 
 export function estimateDuration(
   activity: RouteActivity,
   distanceKm: number,
-  osrmSeconds: number,
+  routedSeconds: number,
 ) {
-  if (activity === "walk") return Math.max(1, Math.round(osrmSeconds));
-  if (activity === "bike") return Math.max(1, Math.round(osrmSeconds));
+  if (activity === "walk" || activity === "bike")
+    return Math.max(1, Math.round(routedSeconds));
   return Math.max(1, Math.round((distanceKm / 10) * 3600));
 }
 
@@ -81,10 +182,20 @@ function placeLabel(name: string) {
   return name.split(",")[0]!.trim().slice(0, 120) || "Place";
 }
 
-async function readJson(
-  response: Response,
-  label: string,
-): Promise<unknown> {
+function looksLikePark(text: string, types: string[] = []) {
+  return (
+    PARK_HINT.test(text) ||
+    types.some((type) =>
+      ["park", "campground", "natural_feature"].includes(type),
+    )
+  );
+}
+
+function km(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+async function readJson(response: Response, label: string): Promise<unknown> {
   if (!response.ok) {
     await response.body?.cancel();
     throw Error(`${label} is unavailable right now. Try again shortly.`);
@@ -110,80 +221,287 @@ async function readJson(
   }
 }
 
+type MapsClient = {
+  key: string;
+  fetch: typeof fetch;
+  signal?: AbortSignal;
+};
+
+function mapsUrl(path: string, key: string, params: Record<string, string>) {
+  const url = new URL(`https://maps.googleapis.com/maps/api/${path}/json`);
+  url.searchParams.set("key", key);
+  for (const [name, value] of Object.entries(params))
+    url.searchParams.set(name, value);
+  return url;
+}
+
+async function geocode(client: MapsClient, query: string): Promise<RouteStop> {
+  const response = await client.fetch(
+    mapsUrl("geocode", client.key, { address: query }),
+    { redirect: "error", signal: client.signal ?? AbortSignal.timeout(8000) },
+  );
+  const body = geocodeResponse.safeParse(
+    await readJson(response, "Place lookup"),
+  );
+  const hit = body.success && body.data.status === "OK" ? body.data.results[0] : undefined;
+  if (!hit)
+    throw Error(
+      `Could not find “${query.slice(0, 80)}”. Try a more specific park, street or neighbourhood.`,
+    );
+  const { lat, lng } = hit.geometry.location;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180)
+    throw Error("That place lookup returned an invalid location.");
+  return {
+    lat,
+    lng,
+    label: placeLabel(hit.formatted_address),
+  };
+}
+
+async function nearbyParks(
+  client: MapsClient,
+  center: RouteStop,
+  query: string,
+  targetKm?: number,
+): Promise<RouteStop[]> {
+  const radius = Math.round(
+    Math.min(8000, Math.max(1200, (targetKm ?? 5) * 600)),
+  );
+  const lake = /\b(sø|soen|lake|lakes)\b/i.test(query);
+  const response = await client.fetch(
+    mapsUrl("place/nearbysearch", client.key, {
+      location: `${center.lat},${center.lng}`,
+      radius: String(radius),
+      ...(lake ? {} : { type: "park" }),
+      keyword: query.slice(0, 80),
+    }),
+    { redirect: "error", signal: client.signal ?? AbortSignal.timeout(8000) },
+  );
+  const body = nearbyResponse.safeParse(
+    await readJson(response, "Park lookup"),
+  );
+  if (!body.success || !["OK", "ZERO_RESULTS"].includes(body.data.status))
+    return [];
+  const seen = new Set<string>();
+  return (body.data.results ?? [])
+    .filter(
+      (place) =>
+        looksLikePark(place.name, place.types) ||
+        (place.types ?? []).some((type) =>
+          ["park", "campground", "natural_feature"].includes(type),
+        ),
+    )
+    .map((place) => ({
+      lat: place.geometry.location.lat,
+      lng: place.geometry.location.lng,
+      label: placeLabel(place.name),
+    }))
+    .filter((place) => {
+      const key = `${place.lat.toFixed(4)},${place.lng.toFixed(4)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return kmBetween(place, center) > 0.08;
+    })
+    .slice(0, 6);
+}
+
+async function directions(
+  client: MapsClient,
+  origin: RouteStop,
+  destination: RouteStop,
+  waypoints: RouteStop[],
+  activity: RouteActivity,
+) {
+  const mode = activity === "bike" ? "bicycling" : "walking";
+  const params: Record<string, string> = {
+    origin: `${origin.lat},${origin.lng}`,
+    destination: `${destination.lat},${destination.lng}`,
+    mode,
+    alternatives: "false",
+  };
+  if (activity !== "bike") params.avoid = "highways";
+  if (waypoints.length)
+    params.waypoints = waypoints
+      .map((point) => `via:${point.lat},${point.lng}`)
+      .join("|");
+  const response = await client.fetch(mapsUrl("directions", client.key, params), {
+    redirect: "error",
+    signal: client.signal ?? AbortSignal.timeout(8000),
+  });
+  const body = directionsResponse.safeParse(
+    await readJson(response, "Route planning"),
+  );
+  const route =
+    body.success && body.data.status === "OK" ? body.data.routes?.[0] : undefined;
+  if (!route)
+    throw Error(
+      "No walking or cycling route could be found for those places. Try a named park, a closer end point, or a shorter distance.",
+    );
+  const metres = route.legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+  const seconds = route.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+  const path = simplifyPath(decodePolyline(route.overview_polyline.points));
+  if (path.length < 2) throw Error("That route could not be drawn on the map.");
+  return {
+    distanceKm: km(metres / 1000),
+    durationSeconds: Math.max(1, Math.round(seconds)),
+    path,
+  };
+}
+
+function closeEnough(actual: number, target: number) {
+  return Math.abs(actual - target) / target <= 0.08;
+}
+
+function loopWaypoints(start: RouteStop, parks: RouteStop[], radiusKm: number) {
+  const geometric = [30, 120, 210, 300].map((bearing, i) => ({
+    ...offsetPoint(start.lat, start.lng, radiusKm, bearing),
+    label: `Turn ${i + 1}`,
+  }));
+  if (!parks.length) return geometric;
+  const unused = [...parks];
+  const snapKm = Math.max(0.35, radiusKm * 0.55);
+  return geometric.map((point) => {
+    let best = -1;
+    let bestKm = Infinity;
+    unused.forEach((park, index) => {
+      const distance = kmBetween(point, park);
+      if (distance < bestKm) {
+        bestKm = distance;
+        best = index;
+      }
+    });
+    if (best < 0 || bestKm > snapKm) return point;
+    const [park] = unused.splice(best, 1);
+    return park!;
+  });
+}
+
+async function loopRoute(
+  client: MapsClient,
+  start: RouteStop,
+  parks: RouteStop[],
+  activity: RouteActivity,
+  targetKm: number,
+) {
+  let scale = 0.9;
+  let best:
+    | Awaited<ReturnType<typeof directions>> & { waypoints: RouteStop[] }
+    | undefined;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const radius = (targetKm / (2 * Math.PI)) * scale;
+    const waypoints = loopWaypoints(start, parks, radius);
+    const routed = await directions(client, start, start, waypoints, activity);
+    const candidate = { ...routed, waypoints };
+    if (
+      !best ||
+      Math.abs(candidate.distanceKm - targetKm) <
+        Math.abs(best.distanceKm - targetKm)
+    )
+      best = candidate;
+    if (closeEnough(candidate.distanceKm, targetKm)) return candidate;
+    scale *= targetKm / Math.max(0.4, candidate.distanceKm);
+    scale = Math.min(1.85, Math.max(0.45, scale));
+  }
+  if (!best) throw Error("Could not build a loop of that distance.");
+  return best;
+}
+
+async function pointToPoint(
+  client: MapsClient,
+  start: RouteStop,
+  end: RouteStop,
+  via: RouteStop[],
+  parks: RouteStop[],
+  activity: RouteActivity,
+  targetKm?: number,
+) {
+  const prefer = parks.filter(
+    (park) =>
+      (Math.abs(park.lat - start.lat) > 0.0005 ||
+        Math.abs(park.lng - start.lng) > 0.0005) &&
+      (Math.abs(park.lat - end.lat) > 0.0005 ||
+        Math.abs(park.lng - end.lng) > 0.0005),
+  );
+  let waypoints = [...via, ...prefer].slice(0, 3);
+  let routed = await directions(client, start, end, waypoints, activity);
+  if (!targetKm || closeEnough(routed.distanceKm, targetKm))
+    return { ...routed, waypoints };
+  if (routed.distanceKm > targetKm)
+    return { ...routed, waypoints };
+  const extra = Math.max(0.3, (targetKm - routed.distanceKm) / 2);
+  const midLat = (start.lat + end.lat) / 2;
+  const midLng = (start.lng + end.lng) / 2;
+  const detour = offsetPoint(
+    midLat,
+    midLng,
+    extra,
+    90 +
+      (Math.atan2(end.lng - start.lng, end.lat - start.lat) * 180) / Math.PI,
+  );
+  waypoints = [...waypoints, { ...detour, label: "Park loop" }].slice(0, 4);
+  routed = await directions(client, start, end, waypoints, activity);
+  return { ...routed, waypoints };
+}
+
 export async function planRoute(
   input: RouteRequest,
   deps: {
     fetch?: typeof fetch;
-    now?: () => number;
-    wait?: (ms: number) => Promise<void>;
+    key?: string;
     signal?: AbortSignal;
   } = {},
 ): Promise<PlannedRoute> {
   const request = routeRequestSchema.parse(input);
-  const transport = deps.fetch ?? fetch;
-  const now = deps.now ?? Date.now;
-  const wait =
-    deps.wait ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const queries = [
-    request.start,
-    ...(request.via ?? []),
-    request.end,
-  ];
-  const stops: RouteStop[] = [];
-  let lastNominatim = 0;
-  for (const query of queries) {
-    const pause = lastNominatim ? 1100 - (now() - lastNominatim) : 0;
-    if (pause > 0) await wait(pause);
-    lastNominatim = now();
-    const url = new URL(NOMINATIM);
-    url.searchParams.set("format", "jsonv2");
-    url.searchParams.set("limit", "1");
-    url.searchParams.set("q", query);
-    const response = await transport(url, {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
-      redirect: "error",
-      signal: deps.signal ?? AbortSignal.timeout(8000),
-    });
-    const hits = z.array(nominatimHit).min(1).safeParse(
-      await readJson(response, "Place lookup"),
-    );
-    if (!hits.success)
-      throw Error(
-        `Could not find “${query.slice(0, 80)}”. Try a more specific place, neighbourhood or street.`,
-      );
-    const hit = hits.data[0]!;
-    const lat = Number(hit.lat),
-      lng = Number(hit.lon);
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lng) ||
-      Math.abs(lat) > 90 ||
-      Math.abs(lng) > 180
-    )
-      throw Error("That place lookup returned an invalid location.");
-    stops.push({ lat, lng, label: placeLabel(hit.display_name) });
-  }
-  const profile = request.activity === "bike" ? "bike" : "foot";
-  const coords = stops.map((s) => `${s.lng.toFixed(6)},${s.lat.toFixed(6)}`).join(";");
-  const osrm = await transport(
-    `${OSRM}/${profile}/${coords}?overview=simplified&geometries=geojson&steps=false`,
-    {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
-      redirect: "error",
-      signal: deps.signal ?? AbortSignal.timeout(8000),
-    },
-  );
-  const routed = osrmResponse.safeParse(await readJson(osrm, "Route planning"));
-  if (!routed.success || routed.data.code !== "Ok")
+  const key = deps.key ?? googleMapsKey();
+  if (!key)
     throw Error(
-      "No public walking or cycling route could be found between those places. Try closer, named streets or a different end point.",
+      "Google Maps is not connected yet. The app owner needs to add a Maps API key.",
     );
-  const route = routed.data.routes[0]!;
-  const path = simplifyPath(
-    route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+  const client: MapsClient = {
+    key,
+    fetch: deps.fetch ?? fetch,
+    signal: deps.signal,
+  };
+  const start = await geocode(client, request.start);
+  const end = request.end ? await geocode(client, request.end) : undefined;
+  const via = await Promise.all(
+    (request.via ?? []).map((place) => geocode(client, place)),
   );
-  const distanceKm = Math.round((route.distance / 1000) * 100) / 100;
-  if (distanceKm <= 0 || distanceKm > 200)
+  const samePlace =
+    !end ||
+    (Math.abs(start.lat - end.lat) < 0.0004 &&
+      Math.abs(start.lng - end.lng) < 0.0004);
+  const nearbyGreenEnds = Boolean(
+    end &&
+      request.targetKm &&
+      kmBetween(start, end) < Math.min(1.5, request.targetKm * 0.25) &&
+      (request.preferParks === true ||
+        (looksLikePark(request.start) && looksLikePark(request.end ?? ""))),
+  );
+  const loop = samePlace || nearbyGreenEnds;
+  if (loop && !request.targetKm)
+    throw Error(
+      "A loop needs a target distance, for example 5 km around that park.",
+    );
+  const preferParks =
+    request.preferParks === true ||
+    looksLikePark(request.start) ||
+    looksLikePark(request.end ?? "");
+  const parks = preferParks
+    ? await nearbyParks(client, start, request.start, request.targetKm)
+    : [];
+  const routed = loop
+    ? await loopRoute(client, start, parks, request.activity, request.targetKm!)
+    : await pointToPoint(
+        client,
+        start,
+        end!,
+        via,
+        parks,
+        request.activity,
+        request.targetKm,
+      );
+  if (routed.distanceKm <= 0 || routed.distanceKm > 200)
     throw Error("That route is outside the 200 km planning limit.");
   const activityLabel =
     request.activity === "bike"
@@ -191,19 +509,51 @@ export async function planRoute(
       : request.activity === "walk"
         ? "walk"
         : "run";
+  const namedStops: RouteStop[] = loop
+    ? [
+        start,
+        ...routed.waypoints.filter((point) => point.label !== "Waypoint"),
+        { ...start, label: "Finish" },
+      ].slice(0, 5)
+    : [start, ...via, ...routed.waypoints.filter((point) => point.label !== "Waypoint" && point.label !== "Turn 1" && !point.label.startsWith("Turn ")), end!].filter(
+        (point, index, all) =>
+          index === 0 ||
+          index === all.length - 1 ||
+          point.label !== all[index - 1]?.label,
+      ).slice(0, 5);
+  const uniqueStops = namedStops.filter(
+    (point, index) =>
+      index === 0 ||
+      index === namedStops.length - 1 ||
+      !point.label.startsWith("Turn "),
+  );
+  const stops = (uniqueStops.length >= 2 ? uniqueStops : [start, end ?? start]).slice(
+    0,
+    5,
+  );
+  const targetNote = request.targetKm
+    ? `Requested ${request.targetKm.toFixed(1)} km · planned ${routed.distanceKm.toFixed(1)} km`
+    : `${routed.distanceKm.toFixed(1)} km`;
+  const parkNote = preferParks
+    ? " Prefers parks and green paths when Google Maps has them."
+    : "";
   return {
     title:
       request.title ??
-      `${stops[0]!.label} to ${stops[stops.length - 1]!.label}`,
+      (loop
+        ? `${request.targetKm?.toFixed(1) ?? routed.distanceKm.toFixed(1)} km around ${start.label}`
+        : `${start.label} to ${end!.label}`),
     activity: request.activity,
-    distanceKm,
+    distanceKm: routed.distanceKm,
     durationSeconds: estimateDuration(
       request.activity,
-      distanceKm,
-      route.duration,
+      routed.distanceKm,
+      routed.durationSeconds,
     ),
+    targetKm: request.targetKm,
+    loop,
     stops,
-    path,
-    caption: `Suggested ${activityLabel} on public OpenStreetMap roads. This is not GPS navigation, a traffic check or a logged activity.`,
+    path: routed.path,
+    caption: `${targetNote} ${activityLabel} on Google Maps.${parkNote} Not GPS navigation or a logged activity.`,
   };
 }

@@ -22,6 +22,7 @@ export default defineRailway(() => {
       DATABASE_URL: preserve(),
       GOOGLE_CLIENT_ID: preserve(),
       GOOGLE_CLIENT_SECRET: preserve(),
+      GOOGLE_MAPS_API_KEY: preserve(),
       MIGRATION_DATABASE_URL: preserve(),
       PORT: preserve(),
       DAILY_REMINDERS_WORKER: preserve(),

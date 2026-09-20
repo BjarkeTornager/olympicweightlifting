@@ -80,6 +80,8 @@ export const visualSchema = z
         activity: z.enum(["run", "walk", "bike"]),
         distanceKm: z.number().finite().gt(0).max(200),
         durationSeconds: z.number().int().gt(0).max(86400),
+        targetKm: z.number().finite().gt(0).max(80).optional(),
+        loop: z.boolean().optional(),
         stops: z
           .array(
             z

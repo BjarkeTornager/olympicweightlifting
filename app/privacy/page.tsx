@@ -99,18 +99,17 @@ export default function PrivacyPage() {
         </p>
         <p>
           If you ask Coach to plan a run, walk or ride, the named start, end and
-          optional via places are sent to OpenStreetMap’s Nominatim lookup and
-          the public OSRM routing service so a suggested road route can be
-          shown. The interactive map loads map images from OpenStreetMap tile
-          servers in your browser. Those services see the place names or map
-          tiles you request, not your journal. Suggested routes are not GPS
+          optional via places are sent to Google Maps Geocoding, Places and
+          Directions so a suggested route can be shown. The interactive map
+          loads Google Maps in your browser. Google sees the place names and
+          map tiles you request, not your journal. Suggested routes are not GPS
           tracks, live navigation or saved cardio unless you later log the
           activity. See{" "}
           <a
-            href="https://wiki.osmfoundation.org/wiki/Privacy_Policy"
+            href="https://policies.google.com/privacy"
             className="underline"
           >
-            OpenStreetMap’s privacy policy
+            Google’s privacy policy
           </a>
           .
         </p>

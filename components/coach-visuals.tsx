@@ -177,7 +177,7 @@ export const CoachVisuals = memo(function CoachVisuals({
         // Validate history too: malformed or future visual types never break chat.
         const parsed = savedVisualSchema.safeParse(saved);
         if (!parsed.success) return null;
-        const visual = parsed.data.content;
+        const visual = saved.content;
         const Icon =
           visual.kind === "table"
             ? Table2

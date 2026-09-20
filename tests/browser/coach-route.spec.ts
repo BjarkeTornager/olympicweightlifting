@@ -29,11 +29,43 @@ const route: SavedVisual = {
   },
 };
 
-test("Coach shows an interactive OpenStreetMap for a planned run", async ({
+test("Coach shows an interactive Google Map for a planned run", async ({
   page,
   context,
 }, info) => {
   await streamingFixture(page);
+  await page.addInitScript(() => {
+    const state = window as unknown as {
+      __coachMapCreates?: number;
+      google?: unknown;
+    };
+    state.__coachMapCreates = 0;
+    class Map {
+      constructor(el: HTMLElement) {
+        state.__coachMapCreates = (state.__coachMapCreates ?? 0) + 1;
+        el.classList.add("coach-route-google");
+      }
+      fitBounds() {}
+    }
+    class Polyline {
+      setMap() {}
+    }
+    class Marker {
+      setMap() {}
+    }
+    class LatLngBounds {
+      extend() {}
+    }
+    state.google = {
+      maps: {
+        Map,
+        Polyline,
+        Marker,
+        LatLngBounds,
+        SymbolPath: { FORWARD_CLOSED_ARROW: 1 },
+      },
+    };
+  });
   await context.route("**/api/agent", (r) =>
     r.fulfill({
       json: {
@@ -106,13 +138,25 @@ test("Coach shows an interactive OpenStreetMap for a planned run", async ({
   await expect(page.getByRole("heading", { name: "Lakes run" })).toBeVisible();
   await expect(page.getByText("5.2 km run")).toBeVisible();
   await expect(page.getByText("Dronning Louises Bro")).toBeVisible();
-  await expect(page.locator(".leaflet-container")).toBeVisible();
-  await expect(page.locator(".leaflet-control-zoom-in")).toBeVisible();
-  await expect(page.getByText("OpenStreetMap")).toBeVisible();
-  await page.locator(".leaflet-control-zoom-in").click();
+  await expect(page.getByText("Arrows on the map show the running direction.")).toBeVisible();
+  await expect(page.locator(".coach-route-google")).toBeVisible();
+  const mapCreates = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __coachMapCreates?: number }).__coachMapCreates,
+    );
+  expect(await mapCreates()).toBe(1);
+  await composer.fill("I will run this tomorrow after work");
+  await expect(page.locator(".coach-route-google")).toBeVisible();
+  expect(await mapCreates()).toBe(1);
+  await page.getByRole("button", { name: "Open full screen" }).click();
+  await expect(page.getByRole("dialog", { name: "Lakes run" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exit full screen" })).toBeVisible();
+  await page.getByRole("button", { name: "Exit full screen" }).click();
+  await expect(page.getByRole("dialog", { name: "Lakes run" })).toHaveCount(0);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.locator(".leaflet-container")).toBeVisible();
+    await expect(page.locator(".coach-route-google")).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,

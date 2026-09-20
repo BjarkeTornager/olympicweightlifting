@@ -574,12 +574,11 @@ export function TrainingAgent({
                         ...(update.activity
                           ? { activity: update.activity }
                           : {}),
-                        ...(update.visual
+                        ...(update.visual &&
+                        !(t.visuals ?? []).some((v) => v.id === update.visual!.id)
                           ? {
                               visuals: [
-                                ...(t.visuals ?? []).filter(
-                                  (v) => v.id !== update.visual!.id,
-                                ),
+                                ...(t.visuals ?? []),
                                 update.visual,
                               ].slice(0, 3),
                             }

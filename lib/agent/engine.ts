@@ -125,7 +125,7 @@ const specifications = {
   plan_route: {
     schema: routeRequestSchema,
     description:
-      "Plan a suggested running, walking or cycling route between named places and show it on an OpenStreetMap in this conversation. Pass start and end as place names or streets (city helps), optional via places, and activity run, walk or bike. The server looks up public map data; do not invent coordinates, streets or distances. Ask for missing start or end. A loop needs a via point if start and end are the same. This does not log cardio, use GPS, check traffic or save a journal entry.",
+      "Plan a suggested running, walking or cycling route and show it as a Google Maps component. Pass start as a named place. If the person wants a 5 km park loop, pass that park as start, targetKm: 5, preferParks: true, and omit end. If they want A to B, pass end. Always pass targetKm when they state a distance (5 km, 10k). Set preferParks when they mention a park, forest, lakes, trail or green area, or when a loop in a park would fit. Optional via places. Activity is run, walk or bike. The server looks up Google Maps; do not invent coordinates or distances. Ask for a place or distance if both an end and targetKm are missing. This does not log cardio, use GPS, check traffic or save a journal entry.",
   },
   show_images: {
     schema: z
@@ -753,6 +753,8 @@ export async function runTurn(
                 activity: planned.activity,
                 distanceKm: planned.distanceKm,
                 durationSeconds: planned.durationSeconds,
+                targetKm: planned.targetKm,
+                loop: planned.loop,
                 stops: planned.stops,
                 path: planned.path,
               },
@@ -768,7 +770,7 @@ export async function runTurn(
               durationMinutes: Math.round(planned.durationSeconds / 60),
               stops: planned.stops.map((stop) => stop.label),
               component: "route_map",
-              note: "Shown as an AG-UI route_map component on OpenStreetMap. This is a suggested public-road route, not a logged activity, GPS track or turn-by-turn navigation.",
+              note: "Shown as an AG-UI route_map component on Google Maps, with direction arrows. This is a suggested route, not a logged activity, GPS track or live navigation.",
             };
           } else if (key === "show_visual") {
             if (visuals.length >= 3)

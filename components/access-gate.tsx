@@ -281,6 +281,7 @@ export function AccessGate() {
       try {
         const response = await fetch("/api/session", {
           cache: "no-store",
+          credentials: "include",
           signal: abort.signal,
         });
         if (!response.ok) throw Error("Session verification unavailable");

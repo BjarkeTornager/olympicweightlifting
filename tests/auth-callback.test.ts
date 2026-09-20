@@ -131,8 +131,12 @@ test(
         `${origin}/mobile?challenge=${"a".repeat(43)}&state=${"b".repeat(32)}`,
       ]) {
         const response = await GET(await start(callbackURL));
-        assert.equal(response.status, 302);
-        assert.equal(response.headers.get("location"), callbackURL);
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get("content-type") ?? "", /text\/html/);
+        const html = await response.text();
+        assert.match(html, /Signing in/);
+        assert.match(html, /location\.replace/);
+        assert.ok(html.includes(callbackURL));
         assert.ok(cookie(response).includes("session_token="));
         const current = await session(
           new Request(`${origin}/api/session`, {
@@ -148,10 +152,8 @@ test(
           `${origin}/api/auth/callback/google?code=synthetic&state=invalid`,
         ),
       );
-      assert.equal(invalid.status, 302);
-      const destination = new URL(invalid.headers.get("location")!, origin);
-      assert.equal(destination.origin, origin);
-      assert.equal(destination.searchParams.get("signin"), "failed");
+      assert.equal(invalid.status, 200);
+      assert.match(await invalid.text(), /signin=failed/);
 
       // Unexpected exceptions also return a page on a browser callback; API
       // callers must retain JSON errors rather than receiving an HTML redirect.

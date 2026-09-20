@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { serializeSignedCookie } from "better-call";
 
@@ -51,24 +50,21 @@ export function allSetCookies(response: Response) {
   return found;
 }
 
-const googleCallbackStore = new AsyncLocalStorage<{ token?: string }>();
-let fallbackToken: string | undefined;
+const TOKEN_KEY = "__liftGoogleSessionToken";
 
 export function runGoogleCallback<T>(fn: () => T) {
-  return googleCallbackStore.run({}, fn);
+  return fn();
 }
 
 export function rememberSessionToken(token: string | undefined) {
-  if (!token) return;
-  const store = googleCallbackStore.getStore();
-  if (store) store.token = token;
-  fallbackToken = token;
+  if (token) (globalThis as Record<string, unknown>)[TOKEN_KEY] = token;
 }
 
 export function takeSessionToken() {
-  const token = googleCallbackStore.getStore()?.token ?? fallbackToken;
-  fallbackToken = undefined;
-  return token;
+  const bag = globalThis as Record<string, unknown>;
+  const token = bag[TOKEN_KEY];
+  bag[TOKEN_KEY] = undefined;
+  return typeof token === "string" ? token : undefined;
 }
 
 export async function sessionCookieHeader(token: string) {

@@ -72,10 +72,13 @@ async function finishGoogleNavigation(response: Response, token?: string) {
   token ??= takeSessionToken();
   if (!token && !destination.includes("signin=failed")) {
     const { getPool } = await import("@/lib/db");
-    const latest = await getPool().query(
-      "SELECT token FROM auth_sessions WHERE expires_at > now() ORDER BY created_at DESC LIMIT 1",
-    );
-    token = latest.rows[0]?.token as string | undefined;
+    for (let attempt = 0; attempt < 8 && !token; attempt++) {
+      if (attempt) await new Promise((resolve) => setTimeout(resolve, 40));
+      const latest = await getPool().query(
+        "SELECT token FROM auth_sessions WHERE expires_at > now() ORDER BY created_at DESC LIMIT 1",
+      );
+      token = latest.rows[0]?.token as string | undefined;
+    }
   }
   if (!token) {
     console.error(JSON.stringify({ event: "google_callback_missing_token" }));

@@ -1,5 +1,13 @@
 @import "tailwindcss";
-
+@theme inline {
+  --color-brand: #245d77;
+  --font-sans: var(--font-journal), Arial, sans-serif;
+}
+/* Everything below is one layer so it sits above Tailwind's layers by
+   declaration order rather than by being unlayered. Within the layer the
+   normal cascade still applies, so nothing here changed order. */
+@layer app;
+@layer app {
 /* Video transfer and processing are separate, observable steps. */
 .video-progress-card {
   padding: clamp(18px, 3vw, 28px);
@@ -47,10 +55,6 @@
 @media (prefers-reduced-motion: reduce) {
   .video-progress-spinner { animation: none; }
   .video-progress-card progress::-webkit-progress-value { transition: none; }
-}
-@theme inline {
-  --color-brand: #245d77;
-  --font-sans: var(--font-journal), Arial, sans-serif;
 }
 :root {
   --red: #ba5143;
@@ -3419,3 +3423,5 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .video-simple-replay .guided-replay-heading>span {font-size:18px;}
 .video-simple-replay>.video-form-legend {position:static;display:block;margin:-4px 0 16px;padding:0;background:none;color:#52645f;text-shadow:none;font-size:11px;}
 .video-simple-replay .guided-replay-heading>h3 {font-size:18px;margin:0;line-height:1.35;}
+}
+

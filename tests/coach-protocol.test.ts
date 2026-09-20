@@ -423,6 +423,55 @@ test("visual schemas reject dangling edges, duplicate IDs, bad table widths, exe
       ],
       edges: [{ from: "a", to: "c" }],
     },
+    {
+      kind: "route_map",
+      title: "Bad",
+      activity: "run",
+      distanceKm: 5,
+      durationSeconds: 1800,
+      stops: [
+        { lat: 55.6, lng: 12.5, label: "Start" },
+        { lat: 55.7, lng: 12.6, label: "End" },
+      ],
+      path: [
+        [55.6, 12.5],
+        [200, 12.6],
+      ],
+    },
+    {
+      kind: "route_map",
+      title: "Tracking",
+      activity: "run",
+      distanceKm: 5,
+      durationSeconds: 1800,
+      url: "https://tracking.example/map",
+      stops: [
+        { lat: 55.6, lng: 12.5, label: "Start" },
+        { lat: 55.7, lng: 12.6, label: "End" },
+      ],
+      path: [
+        [55.6, 12.5],
+        [55.7, 12.6],
+      ],
+    },
   ])
     assert.equal(visualSchema.safeParse(bad).success, false);
+  assert.equal(
+    visualSchema.safeParse({
+      kind: "route_map",
+      title: "Lakes loop",
+      activity: "run",
+      distanceKm: 5.2,
+      durationSeconds: 1872,
+      stops: [
+        { lat: 55.674, lng: 12.568, label: "Dronning Louises Bro" },
+        { lat: 55.688, lng: 12.576, label: "Sortedams Sø" },
+      ],
+      path: [
+        [55.674, 12.568],
+        [55.688, 12.576],
+      ],
+    }).success,
+    true,
+  );
 });

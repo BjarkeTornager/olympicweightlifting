@@ -49,6 +49,7 @@ import {
   type ToolDefinition,
 } from "./provider";
 import { routeCoachTurn } from "./routing";
+import { planRoute, routeRequestSchema } from "../route-plan";
 import {
   siteHelp,
   systemPrompt,
@@ -117,8 +118,13 @@ const specifications = {
   },
   show_visual: {
     description:
-      "Display a useful table, bar chart or connected diagram in this conversation. Always pass kind and title. For table, also pass columns and rows (every cell is a string); for bar_chart, unit and points; for diagram, nodes and edges. Only include fields for that kind. Read relevant journal tools first for personal facts. Never invent observations or fill missing days with zero; label estimates, suggestions and date ranges in caption. Use at most three focused visuals, then give a brief explanation. This only displays information; it cannot save journal changes.",
+      "Display a useful table, bar chart or connected diagram in this conversation. Always pass kind and title. For table, also pass columns and rows (every cell is a string); for bar_chart, unit and points; for diagram, nodes and edges. Only include fields for that kind. Read relevant journal tools first for personal facts. Never invent observations or fill missing days with zero; label estimates, suggestions and date ranges in caption. Use at most three focused visuals, then give a brief explanation. This only displays information; it cannot save journal changes. Do not use this for maps; use plan_route for running, walking or cycling routes.",
     schema: visualToolSchema,
+  },
+  plan_route: {
+    schema: routeRequestSchema,
+    description:
+      "Plan a suggested running, walking or cycling route between named places and show it on an OpenStreetMap in this conversation. Pass start and end as place names or streets (city helps), optional via places, and activity run, walk or bike. The server looks up public map data; do not invent coordinates, streets or distances. Ask for missing start or end. A loop needs a via point if start and end are the same. This does not log cardio, use GPS, check traffic or save a journal entry.",
   },
   show_images: {
     schema: z
@@ -315,6 +321,7 @@ function toolStep(name: string) {
     food_photos: "Checking your food photos",
     site_help: "Checking how Lift Journal works",
     show_visual: "Building your visual",
+    plan_route: "Planning your route",
     show_images: "Bringing your photos into chat",
     inspect_images: "Reading the selected saved images",
     prepare_change: "Preparing a change for your review",
@@ -730,6 +737,44 @@ export async function runTurn(
               inspected: true,
               imageIds: [...new Set(a.imageIds)],
               note: "These pixels are available for this turn only. Library dates and labels are not proof of what the image depicts.",
+            };
+          } else if (key === "plan_route") {
+            if (visuals.length >= 3)
+              throw Error(
+                "Three visuals are enough for one reply. Explain the result now.",
+              );
+            const planned = await planRoute(
+              specifications.plan_route.schema.parse(args),
+              { signal },
+            );
+            const visual: SavedVisual = {
+              id: uid(),
+              content: {
+                kind: "route_map",
+                title: planned.title,
+                caption: planned.caption,
+                activity: planned.activity,
+                distanceKm: planned.distanceKm,
+                durationSeconds: planned.durationSeconds,
+                stops: planned.stops,
+                path: planned.path,
+              },
+            };
+            visualSchema.parse(visual.content);
+            visuals.push(visual);
+            emit?.({
+              type: EventType.CUSTOM,
+              name: "coach.visual",
+              value: visual,
+            });
+            output = {
+              displayed: true,
+              title: planned.title,
+              activity: planned.activity,
+              distanceKm: planned.distanceKm,
+              durationMinutes: Math.round(planned.durationSeconds / 60),
+              stops: planned.stops.map((stop) => stop.label),
+              note: "Shown on OpenStreetMap in chat. This is a suggested public-road route, not a logged activity, GPS track or turn-by-turn navigation.",
             };
           } else if (key === "show_visual") {
             if (visuals.length >= 3)

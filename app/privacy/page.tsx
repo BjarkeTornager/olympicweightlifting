@@ -98,6 +98,23 @@ export default function PrivacyPage() {
           .
         </p>
         <p>
+          If you ask Coach to plan a run, walk or ride, the named start, end and
+          optional via places are sent to OpenStreetMap’s Nominatim lookup and
+          the public OSRM routing service so a suggested road route can be
+          shown. The interactive map loads map images from OpenStreetMap tile
+          servers in your browser. Those services see the place names or map
+          tiles you request, not your journal. Suggested routes are not GPS
+          tracks, live navigation or saved cardio unless you later log the
+          activity. See{" "}
+          <a
+            href="https://wiki.osmfoundation.org/wiki/Privacy_Policy"
+            className="underline"
+          >
+            OpenStreetMap’s privacy policy
+          </a>
+          .
+        </p>
+        <p>
           Conversation is stored with your account. The app removes conversation
           older than 90 days when you next use the assistant. Proposals
           temporarily include journal snapshots for safe save and undo; they

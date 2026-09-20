@@ -73,6 +73,36 @@ export const visualSchema = z
         imageIds: galleryIdsSchema,
       })
       .strict(),
+    z
+      .object({
+        ...base,
+        kind: z.literal("route_map"),
+        activity: z.enum(["run", "walk", "bike"]),
+        distanceKm: z.number().finite().gt(0).max(200),
+        durationSeconds: z.number().int().gt(0).max(86400),
+        stops: z
+          .array(
+            z
+              .object({
+                lat: z.number().finite().gte(-90).lte(90),
+                lng: z.number().finite().gte(-180).lte(180),
+                label,
+              })
+              .strict(),
+          )
+          .min(2)
+          .max(5),
+        path: z
+          .array(
+            z.tuple([
+              z.number().finite().gte(-90).lte(90),
+              z.number().finite().gte(-180).lte(180),
+            ]),
+          )
+          .min(2)
+          .max(200),
+      })
+      .strict(),
   ])
   .superRefine((visual, ctx) => {
     if (

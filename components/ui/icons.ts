@@ -31,6 +31,7 @@ export { HouseIcon as House } from "@phosphor-icons/react/dist/ssr/House";
 export { ImagesIcon as Images } from "@phosphor-icons/react/dist/ssr/Images";
 export { SpinnerGapIcon as LoaderCircle } from "@phosphor-icons/react/dist/ssr/SpinnerGap";
 export { LockKeyIcon as LockKeyhole } from "@phosphor-icons/react/dist/ssr/LockKey";
+export { MapTrifoldIcon as MapTrifold } from "@phosphor-icons/react/dist/ssr/MapTrifold";
 export { SignInIcon as LogIn } from "@phosphor-icons/react/dist/ssr/SignIn";
 export { SignOutIcon as LogOut } from "@phosphor-icons/react/dist/ssr/SignOut";
 export { ChatCircleIcon as MessageCircle } from "@phosphor-icons/react/dist/ssr/ChatCircle";

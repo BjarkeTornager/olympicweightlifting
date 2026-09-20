@@ -1,7 +1,15 @@
 "use client";
 import { memo, useId } from "react";
-import { ArrowRight, BarChart3, GitBranch, Table2, Images } from "@/components/ui/icons";
+import {
+  ArrowRight,
+  BarChart3,
+  GitBranch,
+  Table2,
+  Images,
+  MapTrifold,
+} from "@/components/ui/icons";
 import { CoachPhotoGallery } from "./coach-photo-gallery";
+import { CoachRouteMap, CoachRouteSummary } from "./coach-route-map";
 import {
   savedVisualSchema,
   type CoachVisual,
@@ -177,7 +185,9 @@ export const CoachVisuals = memo(function CoachVisuals({
               ? GitBranch
               : visual.kind === "photo_gallery"
                 ? Images
-                : BarChart3;
+                : visual.kind === "route_map"
+                  ? MapTrifold
+                  : BarChart3;
         return (
           <figure
             className={`coach-visual coach-visual-${visual.kind}`}
@@ -192,7 +202,9 @@ export const CoachVisuals = memo(function CoachVisuals({
                     ? "Step by step"
                     : visual.kind === "photo_gallery"
                       ? "Your photos"
-                      : "At a glance"}
+                      : visual.kind === "route_map"
+                        ? "Suggested route"
+                        : "At a glance"}
               </span>
               <h3>{visual.title}</h3>
               {visual.caption && <p>{visual.caption}</p>}
@@ -260,6 +272,12 @@ export const CoachVisuals = memo(function CoachVisuals({
                 imageIds={visual.imageIds}
                 accountId={accountId}
               />
+            )}
+            {visual.kind === "route_map" && (
+              <>
+                <CoachRouteMap visual={visual} />
+                <CoachRouteSummary visual={visual} />
+              </>
             )}
           </figure>
         );

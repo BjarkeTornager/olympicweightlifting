@@ -78,6 +78,40 @@ test("generated visuals render only controlled table, bar and graph elements, in
   );
   assert.match(html, /<table>/);
   assert.match(html, /7.5 h/);
+  const map = renderToStaticMarkup(
+    createElement(CoachVisuals, {
+      accountId: "synthetic-visual-test",
+      visuals: [
+        {
+          id: crypto.randomUUID(),
+          content: {
+            kind: "route_map",
+            title: "Lakes run",
+            caption: "Suggested public roads.",
+            activity: "run",
+            distanceKm: 5.2,
+            durationSeconds: 1872,
+            stops: [
+              {
+                lat: 55.674,
+                lng: 12.568,
+                label: "<img src=x onerror=alert(1)>",
+              },
+              { lat: 55.688, lng: 12.576, label: "Sortedams Sø" },
+            ],
+            path: [
+              [55.674, 12.568],
+              [55.688, 12.576],
+            ],
+          },
+        },
+      ],
+    }),
+  );
+  assert.match(map, /5\.2 km run/);
+  assert.match(map, /Sortedams Sø/);
+  assert.match(map, /&lt;img/);
+  assert.doesNotMatch(map, /<img |<script/);
   assert.match(html, /<svg/);
   assert.match(html, /Comfortable\?/);
   assert.match(html, /&lt;script/);

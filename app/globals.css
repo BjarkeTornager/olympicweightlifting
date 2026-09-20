@@ -2970,6 +2970,30 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 
 /* Coach's generated views share the journal's private, responsive workspace. */
 .coach-visuals { display: grid; gap: 18px; min-width: 0; margin-top: 18px; }
+.coach-route-map {
+  height: 280px;
+  width: 100%;
+  background: #e7ece8;
+}
+.coach-route-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  font: inherit;
+  background: #e7ece8;
+}
+.coach-route-map .leaflet-control-attribution {
+  font-size: 11px;
+  max-width: 70%;
+}
+.coach-route-summary { padding: 14px 20px 16px; }
+.coach-route-summary p { margin: 0; font-size: 14px; }
+.coach-route-summary ol {
+  margin: 10px 0 0;
+  padding-left: 1.2em;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #52675d;
+}
 .coach-visual { --coach-graph-line: #67877a; --coach-graph-node: #edf4ef; --coach-graph-border: #ccddd3; margin: 0; min-width: 0; border: 1px solid #d9e3df; border-radius: 14px; overflow: hidden; background: #fff; }
 .coach-visual figcaption { padding: 18px 20px 16px; background: linear-gradient(120deg, #f3f8f5, #fbfcfb); border-bottom: 1px solid #e3ebe6; }
 .coach-visual-label { display: flex; gap: 7px; align-items: center; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; color: #496b5d; }

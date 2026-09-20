@@ -14,7 +14,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Multi-photo atomic saves, same-meal angles, retries and Undo are covered by
     // the 2026-09-20 coach-direct-log-database regression baseline.
     // Historical GEPA scores are not an evaluation of this policy revision.
-    "b49c47a4b002f69d0d2317daf9273cc16e5ee22880da51cd565d74062998562c",
+    "5b67b95f6f1b9223a44d52e1987e1e27c2742fe020cdd162854b6502c62940ee",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

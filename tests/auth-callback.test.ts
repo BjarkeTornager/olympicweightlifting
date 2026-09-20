@@ -135,12 +135,25 @@ test(
         assert.match(response.headers.get("content-type") ?? "", /text\/html/);
         const html = await response.text();
         assert.match(html, /Signing in/);
-        assert.match(html, /location\.replace/);
+        assert.match(html, /\/api\/auth\/complete/);
         assert.ok(html.includes(callbackURL));
-        assert.ok(cookie(response).includes("session_token="));
+        const ticket = html.match(/const ticket = "([^"]+)"/)?.[1];
+        assert.ok(ticket);
+        const completed = await POST(
+          new Request(`${origin}/api/auth/complete`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Origin: origin,
+            },
+            body: JSON.stringify({ ticket }),
+          }),
+        );
+        assert.equal(completed.status, 200);
+        assert.ok(cookie(completed).includes("session_token="));
         const current = await session(
           new Request(`${origin}/api/session`, {
-            headers: { Cookie: cookie(response) },
+            headers: { Cookie: cookie(completed) },
           }),
         );
         assert.equal((await current.json()).user.email, ownerEmail);

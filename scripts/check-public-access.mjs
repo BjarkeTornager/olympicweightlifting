@@ -8,6 +8,7 @@ const paths = [
   "/mobile",
   "/api/mobile/overview?date=2026-09-06",
   "/api/session",
+  "/api/auth/ok",
   "/api/auth/get-session",
   "/api/auth/list-sessions",
   "/api/auth/list-users",
@@ -76,6 +77,12 @@ for (const path of paths) {
     assert.match(csp, /form-action[^;]*'self'/);
     assert.match(csp, /form-action[^;]*https:\/\/accounts\.google\.com/);
     assert.match(csp, /connect-src[^;]*'self'/);
+  }
+  if (path === "/api/auth/ok") {
+    const csp = r.headers.get("content-security-policy") ?? "";
+    assert.match(csp, /form-action[^;]*https:\/\/accounts\.google\.com/);
+    assert.doesNotMatch(csp, /maps\.googleapis\.com/);
+    assert.doesNotMatch(csp, /\*\.google\.com/);
   }
   if (
     [

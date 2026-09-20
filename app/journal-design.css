@@ -3,15 +3,18 @@
 :root {
   --canvas: #ffffff;
   --paper: #ffffff;
-  --ink: #242424;
-  --muted: #686868;
-  --line: #e8e6e3;
-  --blue: #ac2d4f;
-  --color-brand: #ac2d4f;
-  --accent-soft: #f9eef1;
-  --surface-subtle: #f7f6f4;
-  --surface-hover: #f0efed;
-  --shadow-raised: 0 6px 24px #2424240a, 0 1px 4px #24242406;
+  /* Cool graphite reads as equipment rather than stationery. Saturated colour
+     is reserved for what a lift actually did: made, missed, synced. */
+  --ink: #141a22;
+  --muted: #5b6573;
+  --line: #e2e6ec;
+  /* The competition 20 kg plate. Structural, not decorative. */
+  --blue: #17458f;
+  --color-brand: #17458f;
+  --accent-soft: #eef2f8;
+  --surface-subtle: #f6f8fa;
+  --surface-hover: #eaeef4;
+  --shadow-raised: 0 6px 24px #141a2210, 0 1px 3px #141a2208;
 }
 body {
   background: var(--canvas);
@@ -24,13 +27,16 @@ h3 {
   text-wrap: balance;
 }
 h1 {
-  font-size: clamp(30px, 3.3vw, 44px);
-  letter-spacing: -0.035em;
-  font-weight: 650;
+  /* A screen title, not a marketing headline. The old scale reached 44px and
+     pushed the actual records below the fold. */
+  font-size: clamp(23px, 1.9vw, 29px);
+  letter-spacing: -0.02em;
+  font-weight: 640;
 }
 h2 {
-  font-size: 25px;
-  letter-spacing: -0.025em;
+  font-size: 19px;
+  letter-spacing: -0.015em;
+  font-weight: 640;
 }
 button,
 a,
@@ -109,9 +115,9 @@ button,
 }
 .page-heading h1,
 .page-heading.compact h1 {
-  font-size: clamp(30px, 3vw, 40px);
-  letter-spacing: -0.035em;
-  margin: 10px 0 12px;
+  font-size: clamp(24px, 2vw, 30px);
+  letter-spacing: -0.02em;
+  margin: 6px 0 8px;
 }
 .page-heading .lead {
   font-size: 15px;
@@ -233,15 +239,22 @@ button,
   color: var(--muted);
 }
 .avatar {
-  background: #ece7e1;
-  color: #544b40;
+  background: #e7ecf3;
+  color: #3c4757;
   width: 38px;
   height: 38px;
   border-radius: 50%;
 }
 .main {
-  max-width: 1300px;
-  padding: 28px 48px 80px;
+  /* One centred measure. The column used to sit flush left inside a much wider
+     area, so every rule and tab strip overhung the content beside dead space. */
+  max-width: 1040px;
+  /* globals.css sets margin:auto here, and on a grid item the block-axis auto
+     centred short screens vertically, leaving a band of empty space above the
+     date on Train and Progress. Only the inline axis should centre. */
+  margin: 0 auto;
+  padding: 20px 48px 72px;
+  align-self: stretch;
 }
 .topbar {
   color: var(--muted);
@@ -403,10 +416,10 @@ button,
   padding: 18px 12px;
 }
 .coach-start h2 {
-  font-size: clamp(26px, 3.2vw, 36px);
-  letter-spacing: -0.04em;
-  font-weight: 600;
-  margin-bottom: 12px;
+  font-size: clamp(20px, 2.1vw, 25px);
+  letter-spacing: -0.02em;
+  font-weight: 640;
+  margin-bottom: 10px;
 }
 .coach-start > p {
   font-size: 14px;
@@ -1143,8 +1156,10 @@ button,
 .weekly-review {
   display: grid;
   gap: 24px;
-  max-width: 920px;
-  margin: 0 auto;
+  /* The measure is already centred on .main. Centring again here pushed the
+     heading out of line with the date above it. */
+  max-width: none;
+  margin: 0;
   padding: 10px 0 32px;
 }
 .coach-section-title {
@@ -1155,9 +1170,9 @@ button,
 }
 .coach-section-title h2 {
   margin: 6px 0;
-  font-size: clamp(1.4rem, 3vw, 1.9rem);
-  line-height: 1.2;
-  letter-spacing: -0.04em;
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 .coach-section-title p {
   margin: 8px 0 0;
@@ -1646,14 +1661,25 @@ button,
 .training-mode .training-tabs {
   margin-bottom: 20px;
 }
+@media (min-width: 769px) {
+  /* The tabs grow to fill on a phone, where the strip scrolls. On a wide
+     screen that stranded two tabs at opposite ends of an empty rule. */
+  .training-tabs {
+    justify-content: flex-start;
+  }
+  .training-tabs a {
+    flex: 0 0 auto;
+  }
+}
 .training-start {
-  max-width: 680px;
+  /* Fills the shared measure; long prose is still held by .lead. */
+  max-width: none;
 }
 .training-start .page-heading {
   margin-bottom: 24px;
 }
 .training-start h1 {
-  font-size: 30px;
+  font-size: clamp(24px, 2vw, 30px);
 }
 .training-start .lead {
   font-size: 15px;

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { RunAgentInputSchema } from "@ag-ui/core";
+// 1.0 made the package entry zod-free; the validators moved to /schemas.
+import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 
 const contextFields = {
   submittedAt: z.iso.datetime().optional(),
@@ -30,6 +31,9 @@ export const turnInputSchema = z
 // context and thread ID must never become an authority for account data.
 const envelope = z
   .object({
+    // Protocol metadata the 1.0 client stamps on every run. Accepted and
+    // bounded, never used to decide anything about this account.
+    protocolVersion: z.string().max(32).optional(),
     threadId: z.string().min(1).max(128),
     runId: z.string().uuid(),
     messages: z

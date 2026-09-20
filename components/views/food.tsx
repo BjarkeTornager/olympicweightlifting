@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, MessageCircle, Utensils } from "@/components/ui/icons";
+import { Plus, MessageCircle } from "@/components/ui/icons";
 import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
@@ -113,6 +113,7 @@ export function FoodView({
   const [mealWindow, setMealWindow] = useState({ key: "", limit: 20 });
   const mealLimit = mealWindow.key === filterKey ? mealWindow.limit : 20;
   const meals = nutrition.meals.filter((m) => m.date === date);
+  const hasFood = meals.length > 0;
   const totals = totalNutrients(meals.flatMap((m) => m.items));
   const start = new Date(`${date}T12:00:00Z`);
   start.setUTCDate(start.getUTCDate() - 6);
@@ -123,19 +124,37 @@ export function FoodView({
   );
   return (
     <div className="food-page">
-      <div className="page-heading">
+      <div className="page-heading compact">
         <div>
-          <div className="eyebrow">
-            <Utensils size={14} /> YOUR FOOD JOURNAL
-          </div>
-          <h1>Fuel your day.</h1>
+          <h1>Food</h1>
           <p className="lead">
-            Log a meal, photograph your plate or tell Coach what you ate.
+            Log a meal, photograph your plate, or repeat a usual meal.
           </p>
         </div>
-        <Button onClick={() => go("coach")}>
-          <MessageCircle size={17} /> Tell Coach what I ate
-        </Button>
+        <div className="button-row">
+          <Button onClick={() => go("coach/capture")}>
+            <MessageCircle size={17} /> Log food
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setEditor({
+                id: uid(),
+                name: "",
+                date,
+                type: "lunch",
+                items: [blankItem()],
+                source: "manual",
+                estimated: false,
+                notes: "",
+                photoIds: [],
+                createdAt: new Date().toISOString(),
+              })
+            }
+          >
+            <Plus size={17} /> Add meal
+          </Button>
+        </div>
       </div>
       {error && (
         <div className="notice warning" role="alert">
@@ -170,26 +189,9 @@ export function FoodView({
         >
           Daily targets
         </Button>
-        <Button
-          onClick={() =>
-            setEditor({
-              id: uid(),
-              name: "",
-              date,
-              type: "lunch",
-              items: [blankItem()],
-              source: "manual",
-              estimated: false,
-              notes: "",
-              photoIds: [],
-              createdAt: new Date().toISOString(),
-            })
-          }
-        >
-          <Plus size={17} /> Add meal manually
-        </Button>
       </div>
-      <section className="food-completeness">
+      {(hasFood || nutrition.completeDays?.includes(date)) && (
+        <section className="food-completeness">
         <div>
           <strong>
             {nutrition.completeDays?.includes(date)
@@ -222,7 +224,8 @@ export function FoodView({
             ? "Mark as partial"
             : "Mark day complete"}
         </Button>
-      </section>
+        </section>
+      )}
       <details className="food-favourites">
         <summary>Favourite meals · {nutrition.favourites?.length ?? 0}</summary>
         <p className="fine-print">
@@ -268,37 +271,40 @@ export function FoodView({
           <p className="muted">Your go-to meals will appear here.</p>
         )}
       </details>
-      <div className="food-totals">
-        {keys.map((key) => (
-          <section className="panel" key={key}>
-            <span className="muted">{nutrientLabel[key]}</span>
-            <strong>{totals[key]}</strong>
-            <span>
-              {nutrition.targets[key] == null
-                ? "No daily target"
-                : `of ${nutrition.targets[key]}${key === "calories" ? " kcal" : " g"}`}
-            </span>
-            {nutrition.targets[key] != null && nutrition.targets[key]! > 0 && (
-              <progress
-                aria-label={`${key} toward target`}
-                value={Math.min(totals[key], nutrition.targets[key]!)}
-                max={nutrition.targets[key]!}
-              />
-            )}
-            {nutrition.targets[key] != null && (
-              <span className="fine-print">
-                {Math.abs(Math.round(nutrition.targets[key]! - totals[key]))}{" "}
-                {key === "calories" ? "kcal" : "g"}{" "}
-                {totals[key] > nutrition.targets[key]!
-                  ? "above target"
-                  : "remaining"}
+      {hasFood && (
+        <div className="food-totals">
+          {keys.map((key) => (
+            <section className="panel" key={key}>
+              <span className="muted">{nutrientLabel[key]}</span>
+              <strong>{totals[key]}</strong>
+              <span>
+                {nutrition.targets[key] == null
+                  ? "No daily target"
+                  : `of ${nutrition.targets[key]}${key === "calories" ? " kcal" : " g"}`}
               </span>
-            )}
-          </section>
-        ))}
-      </div>
+              {nutrition.targets[key] != null &&
+                nutrition.targets[key]! > 0 && (
+                  <progress
+                    aria-label={`${key} toward target`}
+                    value={Math.min(totals[key], nutrition.targets[key]!)}
+                    max={nutrition.targets[key]!}
+                  />
+                )}
+              {nutrition.targets[key] != null && (
+                <span className="fine-print">
+                  {Math.abs(Math.round(nutrition.targets[key]! - totals[key]))}{" "}
+                  {key === "calories" ? "kcal" : "g"}{" "}
+                  {totals[key] > nutrition.targets[key]!
+                    ? "above target"
+                    : "remaining"}
+                </span>
+              )}
+            </section>
+          ))}
+        </div>
+      )}
       <p className="fine-print">
-        {meals.length
+        {hasFood
           ? `${meals.length} meals logged. Totals reflect recorded food only.`
           : "No meals logged for this date. This does not mean you ate nothing."}{" "}
         Diet goal: {nutrition.targets.goal} weight. Photo estimates depend on

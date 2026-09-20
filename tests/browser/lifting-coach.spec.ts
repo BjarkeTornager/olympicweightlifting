@@ -28,17 +28,14 @@ test("a private lifting brief can be saved, revisited and cleared without changi
   const initial = emptyJournal(),
     current = await fixture(context, initial);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/#workout/choose");
+  await page.goto("/#workout");
   await page
-    .getByRole("navigation", { name: "Training navigation" })
-    .getByRole("link", { name: "Lifting coach", exact: true })
+    .getByRole("button", { name: "Lifting brief & video", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "A clear focus. A plan that fits." }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Lifting coach", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/#workout\/coaching$/);
   await expect(page.getByText(/No completed training recorded/)).toBeVisible();
   await page.getByRole("button", { name: "Add your brief" }).click();
   const dialog = page.getByRole("dialog");
@@ -152,10 +149,7 @@ test("lifting starters preserve a written draft and don't submit or disturb an a
     .getByRole("navigation", { name: "Primary" })
     .getByRole("link", { name: "Train", exact: true })
     .click();
-  await page
-    .getByRole("navigation", { name: "Training navigation" })
-    .getByRole("link", { name: "Lifting coach", exact: true })
-    .click();
+  await page.goto("/#workout/coaching");
   await page.getByRole("button", { name: "Build my plan" }).click();
   await expect(input).toHaveValue(
     `I have 45 minutes on Thursday.\n\n${liftingPrompt("plan")}`,

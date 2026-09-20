@@ -100,8 +100,14 @@ test("backup preview imports an active draft without duplicate records", async (
   await expect(
     page.getByLabel("Set 1 weight in kilograms", { exact: true }),
   ).toHaveValue("52.5");
-  await page.goto("/#dashboard");
-  await page.locator('a[href="#workout/gym_accessories"]').click();
+  await page.goto("/#workout/choose");
+  await page
+    .locator(".picker-card")
+    .filter({
+      has: page.getByRole("heading", { name: "Gym Accessories", exact: true }),
+    })
+    .getByRole("button", { name: "View programme" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Gym Accessories", exact: true }),
   ).toBeInViewport();
@@ -559,7 +565,7 @@ test("agent review saves once, syncs the journal and offers undo without reveali
   });
   const page = await context.newPage();
   try {
-    await page.goto("/");
+    await page.goto("/#coach");
     await expect(
       page.getByRole("heading", { name: "Coach", exact: true }),
     ).toBeVisible();

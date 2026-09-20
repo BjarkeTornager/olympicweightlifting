@@ -77,6 +77,15 @@ test("quick capture is reachable on phones, preserves a draft and can repeat and
   expect(state.nutrition.completeDays).not.toContain(today());
   await dialog.getByRole("button", { name: "Undo meal", exact: true }).click();
   await expect.poll(() => state.nutrition.meals.length).toBe(1);
+  await dialog.getByLabel("Portion for Morning oats").selectOption("0.5");
+  await dialog
+    .getByRole("button", { name: "I ate this: Morning oats" })
+    .click();
+  await expect.poll(() => state.nutrition.meals.length).toBe(2);
+  expect(state.nutrition.meals[1].items[0].calories).toBe(150);
+  expect(state.nutrition.meals[1].items[0].protein).toBe(5);
+  await dialog.getByRole("button", { name: "Undo meal", exact: true }).click();
+  await expect.poll(() => state.nutrition.meals.length).toBe(1);
   await dialog.getByRole("button", { name: "Type or dictate" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(input).toHaveValue("Slept seven hours and had oats.");
@@ -151,7 +160,7 @@ test("meal camera attaches a photo with logging intent without silently sending 
   );
   await expect(
     page.getByRole("textbox", { name: "Message your coach" }),
-  ).toHaveValue(/Log the attached photo as my meal/);
+  ).toHaveValue(/Log the food I ate in this image/);
   await expect.poll(() => uploads).toBe(1);
   await expect(
     page.getByRole("button", { name: "Send", exact: true }),
@@ -213,7 +222,12 @@ test("tracking setup is opt-in, reports unavailable push and shows a key once wi
   await expect(
     page.getByText("Key created. Waiting for your first successful import."),
   ).toBeVisible();
-  await page.getByText("Set up the iPhone Shortcut", { exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Set up the iPhone Shortcut",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByLabel("Sleep import endpoint")).toHaveValue(
     /\/api\/integrations\/apple-health\/sleep$/,
   );
@@ -231,6 +245,7 @@ test("tracking setup is opt-in, reports unavailable push and shows a key once wi
     .getByRole("button", { name: "Reminders & Apple Health", exact: true })
     .click();
   await expect(page.getByLabel("Sleep import key — shown once")).toHaveCount(0);
+  await page.getByRole("button", { name: "1. Connect", exact: true }).click();
   await page.getByRole("button", { name: "Disconnect Apple Health" }).click();
   await expect(
     page.getByText(

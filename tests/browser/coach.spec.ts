@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openTodayOverview } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -194,7 +194,7 @@ test.describe("focused Coach conversation", () => {
     ).toBeVisible();
     const composer = page.getByLabel("Message your coach");
     await composer.fill("I slept 7 hours 47 minutes last night.");
-    await page.getByRole("button", { name: "Today", exact: true }).click();
+    await openTodayOverview(page);
     await expect(
       page.getByRole("heading", { name: "A little direction for today." }),
     ).toBeVisible();

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openTodayOverview } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
 import { saveCheckin, offsetDate } from "../../lib/health";
@@ -6,7 +6,7 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
   page,
 }) => {
   await page.goto("/#coach");
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await openTodayOverview(page);
   await expect(
     page.getByRole("heading", { name: "A little direction for today." }),
   ).toBeVisible();
@@ -44,8 +44,11 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
   );
   await expect(page.locator(".today-summaries")).toContainText("6 h 30 min");
   await page.reload();
-  await page.getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByText("More from your journal", { exact: true }).click();
+  await openTodayOverview(page);
+  await page
+    .locator(".today-focus")
+    .getByText("More from your journal", { exact: true })
+    .click();
   await expect(page.locator(".today-more")).toContainText("500 ml water");
   await page
     .getByRole("button", { name: /^(Daily check-in|Update check-in)$/ })
@@ -189,9 +192,9 @@ test.describe("daily coach with a personal journal", () => {
     });
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.goto("/#coach");
-    await page.getByRole("button", { name: "Today", exact: true }).click();
+    await openTodayOverview(page);
     await expect(
-      page.getByText("Ready to help", { exact: true }),
+      page.getByRole("heading", { name: "Today", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".today-summaries")).toContainText("7 h 30 min");
     await page.screenshot({
@@ -223,6 +226,9 @@ test.describe("daily coach with a personal journal", () => {
     await page
       .getByRole("button", { name: "Plan my day", exact: false })
       .click();
+    expect(requests).toBe(0);
+    await expect(page).toHaveURL(/#coach$/);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(page.locator(".chat-assistant")).toContainText(
       "Choose your training",
     );

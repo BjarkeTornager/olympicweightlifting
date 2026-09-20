@@ -175,6 +175,16 @@ export function ImageLibrary({
             ? "Sleep reports, activity screenshots and health images, organised in your account."
             : "Meals, sleep reports and health screenshots, organised by what they show."}
       </p>
+      {scope === "food" && (
+        <p className="fine-print">
+          Uploading here saves photos in your library. To record what you ate
+          from several photos, use{" "}
+          <button className="text-link" onClick={() => go("coach/capture")}>
+            Log food
+          </button>{" "}
+          and choose meal photos.
+        </p>
+      )}
       {scope !== "all" && (
         <Button variant="ghost" onClick={() => go("images")}>
           All images & category review →

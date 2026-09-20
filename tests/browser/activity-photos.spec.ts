@@ -168,10 +168,7 @@ for (const source of ["workout", "coach", "coach-shortcut"] as const) {
       .click();
     release();
     await expect.poll(() => saves).toBe(1);
-    await page
-      .getByRole("navigation", { name: "Training navigation" })
-      .getByRole("link", { name: "Cardio", exact: true })
-      .click();
+    await page.goto("/#cardio");
     const entry = page.locator(".cardio-history");
     await expect(entry).toHaveCount(1);
     await entry.locator("summary").click();

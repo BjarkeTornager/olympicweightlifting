@@ -11,10 +11,10 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     createHash("sha256")
       .update(prompt.replace(coachStyle, "<COACH_STYLE>"))
       .digest("hex"),
-    // Active-set corrections, mixed answers and explicit reviews are covered by
-    // coach-workflow-fixes-database and the 2026-09-19 live workflow rerun.
+    // Multi-photo atomic saves, same-meal angles, retries and Undo are covered by
+    // the 2026-09-20 coach-direct-log-database regression baseline.
     // Historical GEPA scores are not an evaluation of this policy revision.
-    "bf0e1cc3723b31b6a318eafc191a68727548e32310914d22c39c47f6c2e04659",
+    "b49c47a4b002f69d0d2317daf9273cc16e5ee22880da51cd565d74062998562c",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

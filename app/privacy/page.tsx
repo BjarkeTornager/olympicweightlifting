@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 19 September 2026.</p>
+        <p className="lead">Last updated 20 September 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -86,6 +86,18 @@ export default function PrivacyPage() {
           included in model requests.
         </p>
         <p>
+          When TypeSafe routing is configured, Coach may send the latest message
+          and compact flags (photo count and whether a workout is open) to
+          TypeSafe’s Jev model so the app can choose a cheaper or stronger
+          OpenRouter model for that turn. Journal records, photos and earlier
+          conversation are not included in that routing call. If routing is
+          unavailable, Coach uses the configured model. See{" "}
+          <a href="https://typesafe.ai/legal/privacy-policy" className="underline">
+            TypeSafe’s privacy policy
+          </a>
+          .
+        </p>
+        <p>
           Conversation is stored with your account. The app removes conversation
           older than 90 days when you next use the assistant. Proposals
           temporarily include journal snapshots for safe save and undo; they
@@ -115,7 +127,7 @@ export default function PrivacyPage() {
           private to your account, synchronized and included in journal exports.
           Coach can retrieve it with your training evidence for lifting advice,
           sharing those details with your assistant provider. Edit or clear it
-          in Train → Lifting coach. Clearing the brief keeps earlier chats,
+          in Train → Lifting brief & video. Clearing the brief keeps earlier chats,
           approved memories and training records. Coach-proposed brief changes
           require your review before saving.
         </p>

@@ -23,7 +23,7 @@ export const imageUploadSchema = z
     date: foodDate,
     // Older clients did not disclose automatic provider processing.
     autoTag: z.boolean().default(false),
-    purpose: z.literal("lifting-video-frames").optional(),
+    purpose: z.enum(["lifting-video-frames", "meal-photo"]).optional(),
     image: z
       .string()
       .min(1)
@@ -33,7 +33,7 @@ export const imageUploadSchema = z
   .strict()
   .refine(
     (v) => !v.purpose || !v.autoTag,
-    "Video frames do not use automatic image classification.",
+    "An explicitly chosen image purpose does not use automatic classification.",
   );
 const fields = {
   id: foodPhotos.id,
@@ -107,7 +107,7 @@ export async function saveUserImage(
   const input = imageUploadSchema.parse(raw);
   const data = await normalizeImage(
     Buffer.from(input.image, "base64"),
-    Boolean(input.purpose),
+    input.purpose === "lifting-video-frames",
   );
   const digest = createHash("sha256").update(data).digest("hex");
   await readJournal(userId);
@@ -171,10 +171,18 @@ export async function saveUserImage(
         bytes: data.length,
         digest,
         data,
-        category: input.purpose ? "activity" : "unclassified",
+        category:
+          input.purpose === "meal-photo"
+            ? "food"
+            : input.purpose
+              ? "activity"
+              : "unclassified",
         classification: input.purpose
           ? {
-              tags: ["weightlifting", "video-frames"],
+              tags:
+                input.purpose === "meal-photo"
+                  ? ["meal"]
+                  : ["weightlifting", "video-frames"],
               source: "manual",
               status: "ready",
               confidence: "high",

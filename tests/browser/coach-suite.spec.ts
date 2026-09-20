@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openTodayOverview } from "./fixtures";
 import type { BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
@@ -60,7 +60,7 @@ test("Today and Week stay readable on mobile, expose evidence and respect partia
   await seed(context, state);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/#coach");
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await openTodayOverview(page);
   await expect(
     page.getByRole("heading", { name: "A little direction for today." }),
   ).toBeVisible();
@@ -73,7 +73,11 @@ test("Today and Week stay readable on mobile, expose evidence and respect partia
     fullPage: true,
   });
   for (const screen of ["Today", "Week"]) {
-    await page.getByRole("button", { name: screen, exact: true }).click();
+    if (screen === "Today") await openTodayOverview(page);
+    else
+      await page
+        .getByRole("button", { name: "Review my week", exact: true })
+        .click();
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       expect(
@@ -295,7 +299,7 @@ test("an agreed plan follows up on visits and dismissal survives reload", async 
   };
   const current = await seed(context, state);
   await page.goto("/#coach");
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await openTodayOverview(page);
   await expect(page.locator(".today-focus")).toContainText(
     "You agreed to try: Prepare lunch in the evening",
   );
@@ -309,6 +313,7 @@ test("an agreed plan follows up on visits and dismissal survives reload", async 
       .getByRole("button", { name: "Agreed plans", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
+  await openTodayOverview(page);
   await page
     .locator(".today-plans")
     .getByRole("button", { name: "Dismiss", exact: true })
@@ -320,7 +325,7 @@ test("an agreed plan follows up on visits and dismissal survives reload", async 
     .poll(() => current().profile.coaching!.plans![0].status)
     .toBe("dismissed");
   await page.reload();
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await openTodayOverview(page);
   await expect(page.locator(".today-focus")).not.toContainText(
     "You agreed to try",
   );

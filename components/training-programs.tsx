@@ -180,6 +180,30 @@ export function TrainingPrograms({
                 <Trash2 size={17} />
               </Button>
             </div>
+            <Button
+              variant="secondary"
+              disabled={state.program.activeProgramId === p.id}
+              onClick={async () => {
+                try {
+                  await update((s) => {
+                    if (!trainingPrograms(s).some((plan) => plan.id === p.id))
+                      throw Error("This programme is no longer available.");
+                    s.program.activeProgramId = p.id;
+                  });
+                  notify(`${p.name} will guide your next session.`);
+                } catch (e) {
+                  notify(
+                    e instanceof Error
+                      ? e.message
+                      : "Could not select this programme.",
+                  );
+                }
+              }}
+            >
+              {state.program.activeProgramId === p.id
+                ? "Your chosen programme"
+                : "Use this programme"}
+            </Button>
             <ProgramDetails
               program={p}
               renderAction={(day) => (
@@ -206,6 +230,7 @@ export function TrainingPrograms({
                               day.id,
                               date,
                             );
+                            s.program.activeProgramId = current.id;
                           });
                           go("workout");
                         } catch (e) {

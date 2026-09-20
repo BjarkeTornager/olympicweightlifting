@@ -117,11 +117,7 @@ test("Cardio on a phone: add, correct, filter, reload and delete while preservin
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
   });
-  await page.goto("/#workout");
-  await page
-    .getByRole("navigation", { name: "Training navigation" })
-    .getByRole("link", { name: "Cardio", exact: true })
-    .click();
+  await page.goto("/#cardio");
   await expect(
     page.getByRole("heading", { name: "Cardio & movement", exact: true }),
   ).toBeVisible();

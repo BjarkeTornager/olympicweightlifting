@@ -48,7 +48,7 @@ test("meal and ingredient tags survive editing and reload, filter history and re
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
   });
   await page.goto("/#food");
-  await page.getByRole("button", { name: "Add meal manually" }).click();
+  await page.getByRole("button", { name: "Add meal", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog
     .getByLabel("Meal name", { exact: true })

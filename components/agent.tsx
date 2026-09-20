@@ -49,11 +49,10 @@ import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { CardioDetails } from "./cardio";
-import { DailyOverview, CheckinDialog, CheckinDetails } from "./health";
+import { CheckinDialog, CheckinDetails } from "./health";
 import { AssistantText } from "./assistant-text";
 import { CoachVisuals } from "./coach-visuals";
 import { CoachMemoryBook } from "./coach-memory";
-import { WeeklyReview } from "./weekly-review";
 import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
 import { CoachOpening, CoachPreferences } from "./coach-opening";
 import { LiftingVideoDialog } from "./lifting-video-upload";
@@ -90,6 +89,7 @@ export function TrainingAgent({
   initialTrainingPrompt,
   initialVideoReview = false,
   initialCapture = false,
+  initialMemories,
 }: {
   journal: JournalController;
   onLogin: () => void;
@@ -103,6 +103,7 @@ export function TrainingAgent({
   initialTrainingPrompt?: string;
   initialVideoReview?: boolean;
   initialCapture?: boolean;
+  initialMemories?: "memories" | "plans";
 }) {
   const entryPrompt = initialSleepLog
     ? sleepLoggingPrompt(Boolean(initialPhotoId))
@@ -172,8 +173,10 @@ export function TrainingAgent({
   const attachmentButton = useRef<HTMLButtonElement>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(initialVideoReview);
-  const [memoriesOpen, setMemoriesOpen] = useState(false);
-  const [memoryTab, setMemoryTab] = useState<"memories" | "plans">("memories");
+  const [memoriesOpen, setMemoriesOpen] = useState(Boolean(initialMemories));
+  const [memoryTab, setMemoryTab] = useState<"memories" | "plans">(
+    initialMemories ?? "memories",
+  );
   function openMemories(tab: "memories" | "plans" = "memories") {
     setMemoryTab(tab);
     setMemoriesOpen(true);
@@ -206,6 +209,8 @@ export function TrainingAgent({
   const [loadingImage, setLoadingImage] = useState(Boolean(initialPhotoId));
   const [autoTag, setAutoTag] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const uploadInFlight = useRef(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
   const [captureOpen, setCaptureOpen] = useState(initialCapture);
   const [handledEntry, setHandledEntry] = useState(entryId);
@@ -216,6 +221,10 @@ export function TrainingAgent({
     setLoadingImage(Boolean(initialPhotoId));
     if (initialVideoReview) setVideoOpen(true);
     if (initialCapture) setCaptureOpen(true);
+    if (initialMemories) {
+      setMemoriesOpen(true);
+      setMemoryTab(initialMemories);
+    }
     if (entryPrompt) {
       setView("conversation");
       setMessage((current) =>
@@ -419,26 +428,58 @@ export function TrainingAgent({
     void journal.sync();
     if (!connectionReady.current) void refresh();
   };
-  const attach = async (file?: File) => {
-    if (!file || !accountId || photoIds.length >= 4) return;
+  const attach = async (input?: File | File[], purpose?: "meal-photo") => {
+    const files = input ? (Array.isArray(input) ? input : [input]) : [];
+    if (!files.length || !accountId || loadingImage || uploadInFlight.current)
+      return;
+    if (files.length + photoIds.length > 4) {
+      setError(
+        `Choose up to ${4 - photoIds.length} more photos. Nothing from this selection was uploaded.`,
+      );
+      return;
+    }
+    uploadInFlight.current = true;
     submittedDraft.current = null;
     setToolsOpen(false);
     setUploading(true);
     setError("");
     try {
-      const photo = await uploadUserImage(
-        file,
-        accountId,
-        today(),
-        "Uploaded image",
-        autoTag,
-      );
-      setPhotoIds((ids) => [...ids, photo.id]);
-      setImageDetails((old) => ({ ...old, [photo.id]: photo }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not upload photo.");
+      const failures: string[] = [];
+      for (const [index, file] of files.entries()) {
+        setUploadProgress(
+          files.length > 1
+            ? `Saving photo ${index + 1} of ${files.length}…`
+            : "",
+        );
+        try {
+          const photo = await uploadUserImage(
+            file,
+            accountId,
+            today(),
+            purpose ? "Meal photo" : "Uploaded image",
+            autoTag,
+            purpose,
+          );
+          setPhotoIds((ids) => [...new Set([...ids, photo.id])]);
+          setImageDetails((old) => ({ ...old, [photo.id]: photo }));
+        } catch (e) {
+          failures.push(
+            files.length === 1
+              ? e instanceof Error
+                ? e.message
+                : "Could not upload photo."
+              : `${file.name}: ${e instanceof Error ? e.message : "Could not upload photo."}`,
+          );
+        }
+      }
+      if (failures.length)
+        setError(
+          `${failures.join(" ")}${files.length > 1 ? " Other successfully uploaded photos are still attached. Retry only the failed photos before sending." : ""}`,
+        );
     } finally {
+      uploadInFlight.current = false;
       setUploading(false);
+      setUploadProgress("");
     }
   };
   const send = (provided?: string) => {
@@ -456,6 +497,7 @@ export function TrainingAgent({
                     )
                   ? "activity"
                   : "unclassified",
+            photoIds.length,
           )
         : "");
     if (!question || uploading || !ready || photoIds.length > 4) return;
@@ -775,7 +817,7 @@ export function TrainingAgent({
         key={`${accountId}:${today()}`}
         journal={journal}
         date={today()}
-        compact={turns.length > 0}
+        compact={turns.length > 0 || Boolean(journal.state?.activeWorkout)}
         disabled={busy || Boolean(acting) || uploading}
         onDiscuss={ask}
       />
@@ -800,26 +842,6 @@ export function TrainingAgent({
           </Button>
         </div>
         <div className="coach-navigation">
-          <nav aria-label="Coach views" className="coach-view-switch">
-            <button
-              aria-pressed={view === "conversation"}
-              onClick={() => setView("conversation")}
-            >
-              Conversation
-            </button>
-            <button
-              aria-pressed={view === "today"}
-              onClick={() => setView("today")}
-            >
-              Today
-            </button>
-            <button
-              aria-pressed={view === "week"}
-              onClick={() => setView("week")}
-            >
-              Week
-            </button>
-          </nav>
           <span className={`coach-connection ${ready ? "connected" : ""}`}>
             {ready
               ? "Ready to help"
@@ -855,33 +877,21 @@ export function TrainingAgent({
           );
         }}
         onPhoto={(file) => {
+          if (photoIds.length + (Array.isArray(file) ? file.length : 1) > 4) {
+            setError(
+              `Choose up to ${4 - photoIds.length} more photos. Nothing from this selection was uploaded.`,
+            );
+            return;
+          }
           draft(
-            "Log the attached photo as my meal, using labelled portion estimates.",
+            imageCoachPrompt(
+              "food",
+              photoIds.length + (Array.isArray(file) ? file.length : 1),
+            ),
           );
-          void attach(file);
+          void attach(file, "meal-photo");
         }}
       />
-      <div className="coach-today" hidden={view !== "today"}>
-        {view === "today" && (
-          <DailyOverview
-            journal={journal}
-            onMemories={(plans) => openMemories(plans ? "plans" : "memories")}
-            onCheckin={() => setCheckinDate(today())}
-            onAsk={ask}
-            go={go}
-            busy={busy || Boolean(acting) || uploading}
-          />
-        )}
-      </div>
-      <div className="coach-week" hidden={view !== "week"}>
-        {view === "week" && (
-          <WeeklyReview
-            journal={journal}
-            onAsk={ask}
-            busy={busy || Boolean(acting) || uploading}
-          />
-        )}
-      </div>
       <CheckinDialog
         journal={journal}
         date={checkinDate}
@@ -983,9 +993,21 @@ export function TrainingAgent({
                   <div className="coach-start">
                     <h2>What’s on your mind today?</h2>
                     <p>
-                      We can think it through together, or simply record what
-                      you want to remember.
+                      Ask a question, or record food, sleep or training.
                     </p>
+                    {journal.state?.activeWorkout && (
+                      <div className="notice">
+                        <div>
+                          <strong>
+                            {journal.state.activeWorkout.title} is in progress.
+                          </strong>
+                          <p>Logged sets are already saved on this device.</p>
+                        </div>
+                        <Button onClick={() => go("workout")}>
+                          Resume workout <ArrowRight size={17} />
+                        </Button>
+                      </div>
+                    )}
                     {opening}
                     <div className="agent-prompts">
                       {[
@@ -1306,7 +1328,7 @@ export function TrainingAgent({
                                         p.plan ? "plans" : "memories",
                                       )
                                     : p.entries
-                                      ? setView("today")
+                                      ? go("today")
                                       : go(
                                           p.liftingBrief !== undefined
                                             ? "workout/coaching"
@@ -1502,7 +1524,7 @@ export function TrainingAgent({
               <div className="notice coach-photo-progress" role="status">
                 <LoaderCircle size={18} className="spin" aria-hidden="true" />
                 {autoTag
-                  ? "Saving and tagging your photo…"
+                  ? uploadProgress || "Saving and tagging your photo…"
                   : "Saving your photo…"}
               </div>
             )}
@@ -1623,7 +1645,7 @@ export function TrainingAgent({
                 open={toolsOpen && visible}
                 onOpenChange={setToolsOpen}
                 title="Add photos to Coach"
-                description="Take a photo or choose an image. Your message stays here."
+                description="Take a photo or choose up to four images. Your message stays here."
                 className="coach-image-dialog"
                 onCloseAutoFocus={(event) => {
                   event.preventDefault();
@@ -1657,6 +1679,7 @@ export function TrainingAgent({
                       <input
                         type="file"
                         aria-label="Attach image"
+                        multiple
                         accept="image/*"
                         disabled={
                           uploading ||
@@ -1665,7 +1688,7 @@ export function TrainingAgent({
                           photoIds.length >= 4
                         }
                         onChange={(e) => {
-                          void attach(e.target.files?.[0]);
+                          void attach(Array.from(e.target.files ?? []));
                           e.target.value = "";
                         }}
                       />
@@ -1885,7 +1908,7 @@ export function TrainingAgent({
             Image library & categories <ArrowRight size={17} />
           </Button>
           <Button variant="secondary" onClick={() => go("workout/coaching")}>
-            Lifting coach <ArrowRight size={17} />
+            Lifting brief & video <ArrowRight size={17} />
           </Button>
           <Button variant="secondary" onClick={() => go("workout/choose")}>
             Programmes & routines <ArrowRight size={17} />

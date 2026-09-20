@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import type { CoachResponse, SavedVisual } from "../../lib/coach-visuals";
 
@@ -157,7 +157,7 @@ test("AG-UI streams rich Coach responses on a phone, preserves reading position 
   const navigation = page.getByRole("navigation", {
     name: "Mobile navigation",
   });
-  await navigation.getByRole("link", { name: "Food", exact: true }).click();
+  await openJournalArea(page, "Food");
   await navigation.getByRole("link", { name: "Coach", exact: true }).click();
   await expect
     .poll(() => page.locator(".conversation").evaluate((el) => el.scrollTop))

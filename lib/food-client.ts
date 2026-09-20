@@ -6,6 +6,7 @@ export async function uploadUserImage(
   date: string,
   label: string,
   autoTag = true,
+  purpose?: "meal-photo",
 ): Promise<UserImage> {
   if (!file.type.startsWith("image/") || file.size > 25 * 1024 * 1024)
     throw Error("Choose an image smaller than 25 MB.");
@@ -43,7 +44,8 @@ export async function uploadUserImage(
         image: imageData,
         date,
         label: label.trim().slice(0, 160) || "Uploaded image",
-        autoTag,
+        autoTag: purpose ? false : autoTag,
+        ...(purpose ? { purpose } : {}),
       }),
       signal: AbortSignal.timeout(45000),
     });

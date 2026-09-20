@@ -93,6 +93,128 @@ test(
     const hooks = { directLogging: true };
     try {
       await t.test(
+        "separate meal tool calls are rejected together and recovered into an atomic multi-photo bundle",
+        async () => {
+          const a = await user();
+          const pixels = (
+            await sharp({
+              create: {
+                width: 24,
+                height: 24,
+                channels: 3,
+                background: "#edd7ab",
+              },
+            })
+              .jpeg()
+              .toBuffer()
+          ).toString("base64");
+          const ids: string[] = [];
+          for (let i = 0; i < 2; i++) {
+            const saved = await saveUserImage(a, {
+              id: crypto.randomUUID(),
+              label: `Meal ${i}`,
+              date,
+              image: pixels,
+            });
+            await patchUserImage(a, saved.id, {
+              version: saved.version,
+              category: "food",
+              tags: [],
+            });
+            ids.push(saved.id);
+          }
+          const first = food([ids[0]]),
+            second = food([ids[1]]);
+          second.meal.name = "Afternoon coffee";
+          const request = {
+            ...input("Log the food I ate in these two photos"),
+            photoIds: ids,
+          };
+          let step = 0;
+          const result = await runTurn(
+            a,
+            request,
+            async (messages) => {
+              assert.equal(
+                messages.find((m) => m.images?.length)?.images?.length,
+                2,
+              );
+              if (step++ === 0)
+                return {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [call("food_journal", { from: date, to: date })],
+                };
+              if (step === 2)
+                return {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    call("log_entry", first),
+                    call("log_entry", second),
+                  ],
+                };
+              assert.match(
+                messages.at(-1)!.content,
+                /None of this batch was executed/,
+              );
+              assert.equal(
+                (await readJournal(a)).state.nutrition.meals.length,
+                0,
+              );
+              return {
+                role: "assistant",
+                content: "",
+                tool_calls: [
+                  call("log_entry", {
+                    kind: "record_bundle",
+                    entries: [first, second],
+                  }),
+                ],
+              };
+            },
+            hooks,
+          );
+          assert.equal(result.proposals[0].status, "saved");
+          let saved = await readJournal(a);
+          assert.deepEqual(
+            saved.state.nutrition.meals.map((m) => m.photoIds),
+            ids.map((id) => [id]),
+          );
+          assert.equal(saved.revision, 1);
+          await runTurn(
+            a,
+            request,
+            async () => {
+              throw Error("A retry must reuse the durable receipt");
+            },
+            hooks,
+          );
+          assert.equal((await readJournal(a)).state.nutrition.meals.length, 2);
+          await applyProposal(a, result.proposals[0].id, true);
+          saved = await readJournal(a);
+          assert.equal(saved.state.nutrition.meals.length, 0);
+          const same = await runTurn(
+            a,
+            {
+              ...input("These are two angles of the same meal", saved.revision),
+              photoIds: ids,
+            },
+            sequence(
+              [call("food_journal", { from: date, to: date })],
+              [call("log_entry", food(ids))],
+            ),
+            hooks,
+          );
+          assert.equal(same.proposals[0].status, "saved");
+          assert.equal((await readJournal(a)).state.nutrition.meals.length, 1);
+          assert.deepEqual(
+            (await readJournal(a)).state.nutrition.meals[0].photoIds,
+            ids,
+          );
+        },
+      );
+      await t.test(
         "uncertain tray portions do not block three reported eggs; a correction updates the saved meal",
         async () => {
           const a = await user();

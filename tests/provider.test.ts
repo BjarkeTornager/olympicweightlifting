@@ -158,6 +158,31 @@ test("Luna uses Azure's supported completion limit without excluding private too
       visual ? 3200 : 1800,
     );
   }
+  const routedTools = [
+    {
+      type: "function" as const,
+      function: {
+        name: "log_entry",
+        description: "Save an entry",
+        parameters: {},
+      },
+    },
+  ];
+  const terra = JSON.parse(
+    JSON.stringify(
+      modelRequest([], routedTools, config, {
+        model: "openai/gpt-5.6-terra",
+      }).body,
+    ),
+  );
+  assert.equal(terra.model, "openai/gpt-5.6-terra");
+  assert.equal(terra.max_completion_tokens, 1800);
+  assert.deepEqual(terra.provider, {
+    require_parameters: true,
+    data_collection: "deny",
+    zdr: true,
+  });
+  assert.equal(terra.tools[0].function.strict, false);
 });
 test("private photo content is adapted to OpenRouter and Ollama without public URLs", () => {
   const messages = [

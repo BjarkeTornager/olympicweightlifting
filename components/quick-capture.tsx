@@ -1,7 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
 import type { JournalController } from "./journal";
-import { repeatMeal, type Meal, type FavouriteMeal } from "@/lib/nutrition";
+import { repeatMeal } from "@/lib/nutrition";
+import { usualMeals } from "@/lib/usual-meals";
 import { today } from "@/lib/domain";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -19,7 +20,7 @@ export function QuickCapture({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onDescribe: () => void;
-  onPhoto: (file: File) => void;
+  onPhoto: (file: File | File[]) => void;
   photoDisabled: boolean;
 }) {
   const [notice, setNotice] = useState("");
@@ -28,14 +29,14 @@ export function QuickCapture({
   const inFlight = useRef(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [describe, setDescribe] = useState(false);
+  const [portions, setPortions] = useState<Record<string, number>>({});
   const nutrition = journal.state!.nutrition;
-  const candidates: (Meal | FavouriteMeal)[] = [
-    ...(nutrition.favourites ?? []),
-    ...[...nutrition.meals].reverse(),
-  ];
-  const meals = candidates
-    .filter((m, i) => candidates.findIndex((n) => n.name === m.name) === i)
-    .slice(0, 3);
+  const meals = usualMeals(
+    nutrition.meals,
+    nutrition.favourites ?? [],
+    new Date().getHours(),
+    today(),
+  );
   return (
     <Dialog
       open={open}
@@ -72,6 +73,30 @@ export function QuickCapture({
             }}
           />
         </label>
+        <label
+          className={`food-upload quick-capture-photo ${photoDisabled ? "disabled" : ""}`}
+        >
+          <Camera size={22} /> Choose meal photos
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            aria-label="Choose meal photos"
+            disabled={photoDisabled}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              if (!files.length) return;
+              if (files.length > 4) {
+                setError("Choose up to four meal photos at a time.");
+                return;
+              }
+              onPhoto(files);
+              setDescribe(true);
+              onOpenChange(false);
+            }}
+          />
+        </label>
         <Button
           variant="secondary"
           onClick={() => {
@@ -90,13 +115,28 @@ export function QuickCapture({
         <section className="quick-repeat" aria-label="Repeat a meal">
           <h3>Had this again?</h3>
           <p className="fine-print">
-            Adds the same portions to today. Tap only if you ate it.
+            Choose a portion, then tap only if you ate it.
           </p>
           {meals.map((meal) => (
             <div key={meal.id}>
               <span>
                 <strong>{meal.name}</strong>
                 <small>{meal.items.map((i) => i.portion).join(" · ")}</small>
+                <select
+                  aria-label={`Portion for ${meal.name}`}
+                  value={portions[meal.id] ?? 1}
+                  onChange={(e) =>
+                    setPortions((v) => ({
+                      ...v,
+                      [meal.id]: Number(e.target.value),
+                    }))
+                  }
+                >
+                  <option value={0.5}>Half portion</option>
+                  <option value={1}>Same portion</option>
+                  <option value={1.5}>One and a half</option>
+                  <option value={2}>Double portion</option>
+                </select>
               </span>
               <Button
                 variant="secondary"
@@ -110,6 +150,21 @@ export function QuickCapture({
                   setNotice("");
                   try {
                     const entry = repeatMeal(meal, today());
+                    const factor = portions[meal.id] ?? 1;
+                    if (factor !== 1) {
+                      entry.items = entry.items.map((item) => ({
+                        ...item,
+                        portion: `${factor} × ${item.portion}`.slice(0, 200),
+                        calories: item.calories * factor,
+                        protein: item.protein * factor,
+                        carbs: item.carbs * factor,
+                        fat: item.fat * factor,
+                      }));
+                      entry.notes =
+                        `${entry.notes ?? ""}\nRepeated at ${factor} times the saved portion.`
+                          .trim()
+                          .slice(0, 3000);
+                    }
                     await journal.update((state) => {
                       state.nutrition.meals.push(entry);
                       if (state.nutrition.completeDays)

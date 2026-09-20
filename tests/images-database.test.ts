@@ -110,6 +110,21 @@ test(
       );
       assert.equal(privateUpload.classification.source, "legacy");
       assert.equal(privateUpload.classification.status, "review");
+      const mealPhoto = await saveUserImage(
+        ids[0],
+        {
+          ...input,
+          id: crypto.randomUUID(),
+          purpose: "meal-photo",
+          autoTag: false,
+        },
+        async () => {
+          throw Error("Explicit meal uploads must not call the classifier");
+        },
+      );
+      assert.equal(mealPhoto.category, "food");
+      assert.equal(mealPhoto.classification.source, "manual");
+      assert.equal(mealPhoto.classification.status, "ready");
       const corrected = await patchUserImage(ids[0], uncertain.id, {
         category: "activity",
         tags: ["running"],
@@ -293,7 +308,10 @@ test(
         }),
         /linked to a meal/,
       );
-      assert.equal((await listFoodPhotos(ids[0])).length, 1);
+      assert.deepEqual(
+        (await listFoodPhotos(ids[0])).map((p) => p.id).sort(),
+        [food.id, mealPhoto.id].sort(),
+      );
     } finally {
       await pool.query("DELETE FROM users WHERE id = ANY($1::text[])", [ids]);
       await pool.end();

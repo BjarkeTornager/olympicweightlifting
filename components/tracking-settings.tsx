@@ -282,6 +282,7 @@ type HealthStatus = {
   lastResult?: string | null;
 };
 function HealthConnection({ journal }: { journal: JournalController }) {
+  const [step, setStep] = useState(1);
   const [status, setStatus] = useState<HealthStatus | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -300,6 +301,9 @@ function HealthConnection({ journal }: { journal: JournalController }) {
       .then((data: HealthStatus) => {
         if (alive) {
           setStatus(data);
+          setStep((current) =>
+            data.lastSyncAt ? 3 : data.connected && current === 1 ? 2 : current,
+          );
           setError("");
         }
       })
@@ -329,9 +333,26 @@ function HealthConnection({ journal }: { journal: JournalController }) {
         developer account needed. This first version imports sleep only.
       </p>
       <p className="fine-print">
-        Setup is manual once. Test while your phone is unlocked before adding an
-        automation; a locked phone or delayed Watch sync can prevent an import.
+        Follow the three steps below. Test while your phone is unlocked before
+        adding an automation; a locked phone or delayed Watch sync can prevent
+        an import.
       </p>
+      <nav className="sleep-setup-steps" aria-label="Sleep setup steps">
+        {[
+          [1, "Connect"],
+          [2, "Set up Shortcut"],
+          [3, "Test & automate"],
+        ].map(([number, label]) => (
+          <Button
+            key={number}
+            variant={step === number ? "default" : "secondary"}
+            aria-current={step === number ? "step" : undefined}
+            onClick={() => setStep(Number(number))}
+          >
+            {number}. {label}
+          </Button>
+        ))}
+      </nav>
       {status && (
         <div className="notice">
           <span>
@@ -347,7 +368,7 @@ function HealthConnection({ journal }: { journal: JournalController }) {
           </span>
         </div>
       )}
-      <div className="button-row">
+      <div className="button-row" hidden={step !== 1}>
         <Button
           disabled={busy || !status}
           variant="secondary"
@@ -363,6 +384,7 @@ function HealthConnection({ journal }: { journal: JournalController }) {
               );
               setToken(data.token);
               setStatus({ connected: true });
+              setStep(2);
             } catch (e) {
               setError(
                 e instanceof Error ? e.message : "Could not create a key.",
@@ -389,6 +411,7 @@ function HealthConnection({ journal }: { journal: JournalController }) {
                 );
                 setToken("");
                 setStatus({ connected: false });
+                setStep(1);
                 setNotice(
                   "Disconnected. Previously imported sleep stays in your journal.",
                 );
@@ -406,22 +429,12 @@ function HealthConnection({ journal }: { journal: JournalController }) {
             Disconnect Apple Health
           </Button>
         )}
-        <Button
-          variant="ghost"
-          disabled={busy}
-          onClick={() => {
-            setAttempt((v) => v + 1);
-            void journal.sync(true);
-          }}
-        >
-          Refresh sync status
-        </Button>
       </div>
-      <p className="fine-print">
+      <p className="fine-print" hidden={step !== 1}>
         Creating a key allows its holder to import sleep into your account.
         Replacing or disconnecting it disables the old key immediately.
       </p>
-      {token && (
+      {token && step === 2 && (
         <div className="form-stack tracking-key">
           <label>
             Sleep import key — shown once
@@ -438,8 +451,9 @@ function HealthConnection({ journal }: { journal: JournalController }) {
           </p>
         </div>
       )}
-      <details className="tracking-instructions">
-        <summary>Set up the iPhone Shortcut</summary>
+      <div className="tracking-instructions" hidden={step !== 2}>
+        <h4>Set up the iPhone Shortcut</h4>
+        {!status?.connected && <p>Create an import key in step 1 first.</p>}
         <p>
           Create a shortcut named “Send sleep to Lift Journal” in Apple’s
           Shortcuts app. The following values use the date you woke up.
@@ -471,16 +485,6 @@ function HealthConnection({ journal }: { journal: JournalController }) {
             <code>date</code> (formatted date), <code>timezone</code> (your time
             zone), and <code>samples</code> (the list).
           </li>
-          <li>
-            Show Result to inspect the response. Run once while unlocked, then
-            refresh the sync status above and compare the duration with Apple
-            Health.
-          </li>
-          <li>
-            After testing, add a morning personal automation to run this
-            shortcut. Keep a Home Screen shortcut for retrying while unlocked if
-            an automatic run fails.
-          </li>
         </ol>
         <label>
           Sleep import endpoint
@@ -502,14 +506,67 @@ function HealthConnection({ journal }: { journal: JournalController }) {
           The Shortcut needs testing on your iPhone. This connection does not
           read Apple Health directly from the browser or import workout sets.
         </p>
-      </details>
+        <Button onClick={() => setStep(3)}>
+          Shortcut ready — test connection
+        </Button>
+      </div>
+      {step === 3 && (
+        <div className="tracking-instructions">
+          <h4>Test before automating</h4>
+          <ol>
+            <li>
+              Open Apple Health and wait for your Watch to sync. Run the
+              Shortcut while your iPhone is unlocked and allow it to read sleep.
+            </li>
+            <li>
+              Add Show Result to the Shortcut to inspect its response. Then
+              refresh below and compare the imported duration with Apple Health.
+            </li>
+            <li>
+              After a successful check, create a morning personal automation in
+              Shortcuts to run it. Keep a Home Screen shortcut so you can retry
+              if needed.
+            </li>
+          </ol>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setAttempt((v) => v + 1);
+              void journal.sync(true);
+            }}
+          >
+            Refresh sync status
+          </Button>
+          <p role="status">
+            {status?.lastSyncAt
+              ? "A sleep import has reached your journal. Check the duration in Today before turning on your automation."
+              : "Waiting for your first successful import. Creating a key alone does not start automatic syncing."}
+          </p>
+          {status?.lastSyncAt && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                location.hash = "today";
+              }}
+            >
+              View sleep in Today
+            </Button>
+          )}
+        </div>
+      )}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}
     </section>
   );
 }
-export function TrackingSettings({ journal }: { journal: JournalController }) {
-  const [open, setOpen] = useState(false);
+export function TrackingSettings({
+  journal,
+  initiallyOpen = false,
+}: {
+  journal: JournalController;
+  initiallyOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
   return (
     <section className="panel tracking-settings">
       <h2>Less to remember</h2>
@@ -523,8 +580,8 @@ export function TrackingSettings({ journal }: { journal: JournalController }) {
       </Button>
       {open && (
         <>
-          <ReminderSettings accountId={journal.identity.id} />
           <HealthConnection journal={journal} />
+          <ReminderSettings accountId={journal.identity.id} />
         </>
       )}
     </section>

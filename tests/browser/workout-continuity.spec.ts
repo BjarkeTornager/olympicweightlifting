@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import type { BrowserContext } from "@playwright/test";
 import { emptyJournal, today } from "../../lib/domain";
@@ -128,8 +128,7 @@ test("Train exposes ongoing, programs and history on mobile; completed sets stil
   await expect(
     page.getByRole("heading", { name: "Lower body partial", exact: true }),
   ).toBeVisible();
-  const nav = page.getByRole("navigation", { name: "Training navigation" });
-  await nav.getByRole("link", { name: "History", exact: true }).click();
+  await openJournalArea(page, "History");
   await expect(
     page.getByRole("heading", { name: "Training history", exact: true }),
   ).toBeVisible();
@@ -139,10 +138,17 @@ test("Train exposes ongoing, programs and history on mobile; completed sets stil
   await expect(
     page
       .getByRole("navigation", { name: "Mobile navigation" })
-      .getByRole("link", { name: "Train", exact: true }),
+      .getByRole("link", { name: "Journal", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   expect(current().sessions).toHaveLength(0);
-  await nav.getByRole("link", { name: "Programs", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Mobile navigation" })
+    .getByRole("link", { name: "Train", exact: true })
+    .click();
+  await page
+    .getByRole("navigation", { name: "Training navigation" })
+    .getByRole("link", { name: "Programs", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Resume workout", exact: true }),
   ).toBeVisible();

@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import { emptyJournal } from "../../lib/domain";
 import { streamingFixture, type StreamWindow } from "./coach-stream";
 import type { Page } from "@playwright/test";
@@ -118,10 +118,7 @@ test("rapid messages run FIFO after fresh sync, preserve focus, and continue awa
     path: testInfo.outputPath("coach-message-queue.png"),
     fullPage: true,
   });
-  await page
-    .getByRole("navigation", { name: "Mobile navigation" })
-    .getByRole("link", { name: "Food", exact: true })
-    .click();
+  await openJournalArea(page, "Food");
   await expect(
     page.getByText("Coach is working… 2 queued", { exact: true }),
   ).toBeVisible();

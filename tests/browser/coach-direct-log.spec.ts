@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import { emptyJournal, today } from "../../lib/domain";
 import { streamingFixture, emit, type StreamWindow } from "./coach-stream";
 import type { ActionPreview } from "../../lib/agent/actions";
@@ -90,8 +90,7 @@ test("reported sleep saves during navigation, syncs the journal, and exposes Und
   await composer.fill("I slept 7.5 hours last night");
   await composer.press("Enter");
   await expect.poll(async () => (await requests(page)).length).toBe(1);
-  const nav = page.getByRole("navigation", { name: "Mobile navigation" });
-  await nav.getByRole("link", { name: "Food", exact: true }).click();
+  await openJournalArea(page, "Food");
   holdNext = true;
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect.poll(() => held).toBe(true);

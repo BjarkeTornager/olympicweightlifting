@@ -51,8 +51,10 @@ export const imagePatchSchema = z
     version: z.number().int().min(0),
   })
   .strict();
-export function imageCoachPrompt(category: ImageCategory) {
+export function imageCoachPrompt(category: ImageCategory, count = 1) {
   if (category === "activity") return activityLoggingPrompt(true);
+  if (category === "food" && count > 1)
+    return `Log the food I ate in all ${count} attached images now using their catalog dates and estimated nutrition. Inspect every image. Combine different angles of the same meal without counting it twice; save distinct meals together. Link each meal to its relevant photos. Label portion assumptions and let me correct details after saving.`;
   if (category === "food")
     return "Log the food I ate in this image now using its catalog date and estimated nutrition. Use the visible serving as the initial portion estimate, label assumptions, and let me correct details after saving.";
   if (category === "sleep")

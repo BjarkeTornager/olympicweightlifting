@@ -945,7 +945,7 @@ button,
     font-size: 14px;
   }
   .mobile-nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: 8px 10px max(8px, env(safe-area-inset-bottom));
     background: #fffffff5;
     border-top-color: var(--line);
@@ -2120,4 +2120,138 @@ html[data-keyboard-open] .quick-capture-bar {
   .tracking-fields {
     grid-template-columns: 1fr;
   }
+}
+
+/* The daily path keeps capture and the next session within a phone's first view. */
+.today-page {
+  max-width: 860px;
+  margin-inline: auto;
+  display: grid;
+  gap: 18px;
+}
+.today-page .page-heading {
+  margin-bottom: 0;
+}
+.today-capture {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.today-capture > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.today-page .training-quick-start {
+  margin: 0;
+  padding: 20px;
+}
+.today-page .training-quick-start h2 {
+  font-size: clamp(22px, 5vw, 30px);
+}
+.today-records {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.today-records button {
+  border: 1px solid var(--line);
+  background: var(--surface, #fff);
+  border-radius: 18px;
+  padding: 16px;
+  text-align: left;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.today-records strong {
+  font-size: 18px;
+  line-height: 1.25;
+}
+.today-records small,
+.today-week p {
+  color: var(--muted);
+  font-size: 13px;
+}
+.today-week {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.today-week h2 {
+  font-size: 18px;
+  margin: 0 0 7px;
+}
+.today-week p {
+  margin: 0 0 7px;
+}
+.journal-destinations {
+  margin-top: 20px;
+  max-width: 720px;
+}
+.journal-back {
+  display: inline-block;
+  margin: 0 0 18px;
+  font-size: 14px;
+}
+.account-settings {
+  margin-left: auto;
+}
+.quick-repeat select {
+  display: block;
+  margin-top: 8px;
+  min-height: 40px;
+  max-width: 100%;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .today-page {
+    gap: 14px;
+  }
+  .today-capture {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .today-capture > .button {
+    width: 100%;
+  }
+  .today-records button {
+    padding: 13px;
+  }
+  .today-records strong {
+    font-size: 16px;
+  }
+}
+
+.tracking-section [hidden] {
+  display: none;
+}
+.sleep-setup-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.tracking-instructions li {
+  margin-bottom: 12px;
+}
+
+.today-page .page-heading .lead {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.today-page .training-quick-start {
+  padding: 16px 0;
+}
+.today-page .training-quick-start > p {
+  margin-bottom: 10px;
+}
+.today-page .training-quick-start .button-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.today-page .training-quick-start .button {
+  padding-inline: 14px;
+  min-height: 44px;
+  font-size: 14px;
 }

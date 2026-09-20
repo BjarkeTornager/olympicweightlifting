@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import {
   createWorkout,
@@ -87,7 +87,7 @@ test("Train starts simply and the next set is visible without scrolling on phone
     expect(a11y.violations).toEqual([]);
     if (width === 768) {
       const nav = page.getByRole("navigation", { name: "Mobile navigation" });
-      await nav.getByRole("link", { name: "Food", exact: true }).click();
+      await openJournalArea(page, "Food");
       await expect(nav).toBeVisible();
       await nav.getByRole("link", { name: "Train", exact: true }).click();
       await expect(input).toBeInViewport();

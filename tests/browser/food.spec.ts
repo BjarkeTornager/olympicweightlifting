@@ -36,7 +36,7 @@ test("manual food logging, extra ingredients, correction, targets and locking on
     await page.getByLabel("Calories (kcal)", { exact: true }).fill("2300");
     await page.getByLabel("Protein (g)", { exact: true }).fill("150");
     await page.getByRole("button", { name: "Save targets" }).click();
-    await page.getByRole("button", { name: "Add meal manually" }).click();
+    await page.getByRole("button", { name: "Add meal", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Meal name", { exact: true }).fill("Lunch bowl");
     await dialog.getByLabel("Food name", { exact: true }).fill("Rice");
@@ -112,7 +112,7 @@ test("old device journals open Food without losing training data", async ({
 }) => {
   await page.goto("/#food");
   await expect(
-    page.getByRole("heading", { name: "Fuel your day." }),
+    page.getByRole("heading", { name: "Food", exact: true }),
   ).toBeVisible();
   await page.evaluate(async (state) => {
     const db = await new Promise<IDBDatabase>((resolve) => {
@@ -137,7 +137,7 @@ test("old device journals open Food without losing training data", async ({
   }, emptyJournal());
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Fuel your day." }),
+    page.getByRole("heading", { name: "Food", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("No meals logged for this date.", { exact: false }),

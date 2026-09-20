@@ -67,7 +67,11 @@ export function providerConfig() {
   };
 }
 export type ModelResponse = ModelMessage & { truncated?: boolean };
-export type ModelOptions = { purpose?: "video_review" };
+export type ModelOptions = { purpose?: "video_review"; model?: string };
+
+function openAiChatModel(model: string) {
+  return /^openai\/gpt-(5\.6|6)-/.test(model);
+}
 const messageSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().max(24000).default(""),
@@ -98,11 +102,12 @@ export function modelRequest(
       : tools.some((t) => t.function.name === "show_visual")
         ? 3200
         : 1800;
+  const model = options.model ?? config.model;
   if (config.kind === "openrouter")
     return {
       url: `${config.base}/chat/completions`,
       body: {
-        model: config.model,
+        model,
         messages: messages.map((m) => ({
           role: m.role,
           content: m.images?.length
@@ -128,30 +133,26 @@ export function modelRequest(
               }
             : {}),
         })),
-        // Our tools intentionally contain optional fields and are validated by
-        // Zod on the server. Prevent OpenAI routes from normalizing them into
-        // required strict-schema properties (e.g. an unreported set RPE).
-        tools:
-          config.model === "openai/gpt-5.6-luna"
-            ? tools.map((tool) => ({
-                ...tool,
-                function: { ...tool.function, strict: false },
-              }))
-            : tools,
+        // Optional tool fields are validated by Zod. Keep them non-strict on
+        // OpenAI Chat Completions models, including routed Luna/Terra/Astra.
+        tools: openAiChatModel(model)
+          ? tools.map((tool) => ({
+              ...tool,
+              function: { ...tool.function, strict: false },
+            }))
+          : tools,
         stream: false,
-        // Azure's Luna endpoints advertise only max_completion_tokens. Sending
-        // max_tokens excludes them when require_parameters and ZDR are enabled.
-        ...(config.model === "openai/gpt-5.6-luna"
+        // Azure OpenAI advertises max_completion_tokens. Sending max_tokens
+        // excludes those endpoints when require_parameters and ZDR are on.
+        ...(openAiChatModel(model)
           ? { max_completion_tokens: outputLimit }
           : { max_tokens: outputLimit }),
         provider: {
           require_parameters: true,
           data_collection: "deny",
           zdr: true,
-          // Prefer the EU endpoint tested for this model; fallbacks retain ZDR.
-          ...(config.model === "openai/gpt-5.6-luna"
-            ? { order: ["azure/eu"] }
-            : {}),
+          // Prefer the EU endpoint tested for Luna; other routed models keep ZDR.
+          ...(model === "openai/gpt-5.6-luna" ? { order: ["azure/eu"] } : {}),
         },
       },
     };

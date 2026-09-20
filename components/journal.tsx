@@ -18,18 +18,18 @@ import {
   Utensils,
   HeartPulse,
   Images,
-  SquaresFour,
   PersonSimpleRun,
 } from "@/components/ui/icons";
 import { trackKeyboardViewport } from "@/lib/keyboard-viewport";
 import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
-import { backup, days, today, createWorkout } from "@/lib/domain";
+import { backup, days, today, createWorkout, program } from "@/lib/domain";
 import { liftingPrompt } from "@/lib/lifting-coach";
 import { trainingPrograms } from "@/lib/training-programs";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
-import { Dashboard } from "./views/dashboard";
+import { Today } from "./today";
+import { WeeklyReview } from "./weekly-review";
 import { Workouts } from "./views/workouts";
 import { TrainingAgent } from "./agent";
 import { FoodView } from "./views/food";
@@ -44,9 +44,13 @@ import {
   downloadBackup,
 } from "./views/records";
 export type JournalController = ReturnType<typeof useJournal>;
-const navigation = [
-  { id: "coach", label: "Coach", icon: Sparkles },
+const primaryNavigation = [
+  { id: "today", label: "Today", icon: House },
   { id: "workout", label: "Train", icon: Dumbbell },
+  { id: "coach", label: "Coach", icon: Sparkles },
+  { id: "journal", label: "Journal", icon: BookOpen },
+];
+const journalNavigation = [
   { id: "food", label: "Food", icon: Utensils },
   { id: "health", label: "Health", icon: HeartPulse },
   { id: "history", label: "History", icon: History },
@@ -54,20 +58,23 @@ const navigation = [
   { id: "images", label: "Images", icon: Images },
   { id: "cardio", label: "Cardio", icon: PersonSimpleRun },
   { id: "library", label: "Exercises", icon: BookOpen },
-  { id: "dashboard", label: "Home", icon: House },
-  { id: "data", label: "Settings", icon: Settings },
 ];
-const primaryNavigation = navigation.slice(0, 4);
-const journalNavigation = navigation.slice(4);
+const navigation = [...primaryNavigation, ...journalNavigation, { id: "data" }];
 const navigationDescriptions: Record<string, string> = {
+  food: "Meals, favourites and nutrition",
+  health: "Sleep and daily check-ins",
   history: "Your logged workouts",
   progress: "Trends and personal bests",
   images: "Your private photo library",
   cardio: "Runs, rides and movement",
   library: "Exercise guides and videos",
-  dashboard: "Your training overview",
-  data: "Profile, preferences and access",
 };
+const canonicalRoute = (route: string) =>
+  ["", "dashboard", "coach/today"].includes(route)
+    ? "today"
+    : route === "coach/week"
+      ? "journal/week"
+      : route;
 const labels = {
   loading: "Opening journal",
   local: "Saved on this device",
@@ -86,22 +93,28 @@ export function Journal(props: PrivateSessionProps) {
     props.onSessionInvalid,
   );
   const { state, identity, status, auth, error } = journal;
-  const [route, setRoute] = useState("coach"),
+  const [route, setRoute] = useState("today"),
     [login, setLogin] = useState(false),
     [message, setMessage] = useState("");
-  const [moreOpen, setMoreOpen] = useState(false);
   // Navigation changes the Coach view, never the lifetime of its active run.
   // Keep entry intents stable while using other sections, including photo loads.
-  const [coachEntry, setCoachEntry] = useState({ route: "coach", id: 0 });
-  const moreButton = useRef<HTMLButtonElement>(null);
+  const [coachEntry, setCoachEntry] = useState<{
+    route: string;
+    id: number;
+    draft?: string;
+  }>({ route: "coach", id: 0 });
+  const draftIntent = useRef<string | undefined>(undefined);
   const [updateReady, setUpdateReady] = useState(false),
     [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   useEffect(() => {
     const changed = () => {
-      const next = location.hash.slice(1) || "coach";
+      const next = canonicalRoute(location.hash.slice(1));
       setRoute(next);
-      if (next.split("/")[0] === "coach")
-        setCoachEntry((entry) => ({ route: next, id: entry.id + 1 }));
+      if (next.split("/")[0] === "coach") {
+        const draft = draftIntent.current;
+        draftIntent.current = undefined;
+        setCoachEntry((entry) => ({ route: next, id: entry.id + 1, draft }));
+      }
       window.scrollTo({ top: 0, behavior: "instant" });
     };
     const activated = () => setUpdateReady(false);
@@ -138,6 +151,11 @@ export function Journal(props: PrivateSessionProps) {
     location.hash = target;
     window.scrollTo({ top: 0, behavior: "instant" });
   };
+  const askCoach = (question: string) => {
+    // Health context stays in memory, never in browser history or shared URLs.
+    draftIntent.current = question;
+    go("coach");
+  };
   const start = async (id: string, date = today()) => {
     if (!state) return;
     if (state.activeWorkout) {
@@ -145,6 +163,7 @@ export function Journal(props: PrivateSessionProps) {
       return;
     }
     await journal.update((s) => {
+      if (days.some((d) => d.id === id)) s.program.activeProgramId = program.id;
       s.activeWorkout = createWorkout(
         s,
         days.find((d) => d.id === id),
@@ -154,6 +173,9 @@ export function Journal(props: PrivateSessionProps) {
     go("workout");
   };
   const section = route.split("/")[0];
+  const activeNav = journalNavigation.some((n) => n.id === section)
+    ? "journal"
+    : section;
   return (
     <div
       className={`journal ${section === "coach" ? "coach-mode" : ""} ${section === "workout" ? "training-mode" : ""} ${state?.preferences.largeText ? "large-text" : ""}`}
@@ -169,7 +191,7 @@ export function Journal(props: PrivateSessionProps) {
         Skip to content
       </a>
       <aside className="sidebar">
-        <a className="brand" href="#coach">
+        <a className="brand" href="#today">
           <span className="brand-icon">
             <Dumbbell size={22} />
           </span>
@@ -178,27 +200,20 @@ export function Journal(props: PrivateSessionProps) {
           </span>
         </a>
         <nav aria-label="Primary" className="sidebar-navigation">
-          {[primaryNavigation, journalNavigation].map((group, index) => (
-            <div className="sidebar-nav-group" key={index}>
-              <span className="sidebar-label">
-                {index === 0 ? "Your day" : "Your journal"}
-              </span>
-              {group.map(({ id, label, icon: Icon }) => (
-                <a
-                  key={id}
-                  href={`#${id}`}
-                  className={`nav-item ${section === id ? "active" : ""}`}
-                  aria-current={section === id ? "page" : undefined}
-                >
-                  <Icon
-                    size={22}
-                    weight={section === id ? "fill" : "regular"}
-                    aria-hidden="true"
-                  />
-                  <span>{label}</span>
-                </a>
-              ))}
-            </div>
+          {primaryNavigation.map(({ id, label, icon: Icon }) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              className={`nav-item ${activeNav === id ? "active" : ""}`}
+              aria-current={activeNav === id ? "page" : undefined}
+            >
+              <Icon
+                size={22}
+                weight={activeNav === id ? "fill" : "regular"}
+                aria-hidden="true"
+              />
+              <span>{label}</span>
+            </a>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -232,6 +247,14 @@ export function Journal(props: PrivateSessionProps) {
                 })
               : "Your training space"}
           </span>
+          <Button
+            variant="ghost"
+            className="account-settings"
+            aria-label="Settings"
+            onClick={() => go("data")}
+          >
+            <Settings size={19} />
+          </Button>
           <button
             className={`sync-status ${status}`}
             onClick={() =>
@@ -382,11 +405,19 @@ export function Journal(props: PrivateSessionProps) {
               visible={section === "coach"}
               entryId={coachEntry.id}
               initialCapture={coachEntry.route === "coach/capture"}
+              initialMemories={
+                coachEntry.route === "coach/plans"
+                  ? "plans"
+                  : coachEntry.route === "coach/memories"
+                    ? "memories"
+                    : undefined
+              }
               initialVideoReview={/^coach\/lifting\/(video|technique)$/.test(
                 coachEntry.route,
               )}
               initialTrainingPrompt={
-                /^coach\/lifting\/(video|technique)$/.test(coachEntry.route)
+                coachEntry.draft ??
+                (/^coach\/lifting\/(video|technique)$/.test(coachEntry.route)
                   ? undefined
                   : coachEntry.route.startsWith("coach/lifting/")
                     ? liftingPrompt(coachEntry.route.split("/")[2])
@@ -394,7 +425,7 @@ export function Journal(props: PrivateSessionProps) {
                       ? "Help me build a reusable training program in Train. My goal is "
                       : coachEntry.route.startsWith("coach/training/")
                         ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
-                        : undefined
+                        : undefined)
               }
               initialCardioLog={
                 coachEntry.route === "coach/cardio" ||
@@ -416,55 +447,79 @@ export function Journal(props: PrivateSessionProps) {
               onLogin={() => setLogin(true)}
               go={go}
             />
-            {section === "dashboard" && (
-              <Dashboard state={state} onStart={start} go={go} />
+            {section === "today" && (
+              <Today journal={journal} go={go} onAsk={askCoach} />
             )}
-            {["workout", "history", "cardio"].includes(section) && (
+            {section === "journal" && (
+              <>
+                <div className="page-heading compact">
+                  <div>
+                    <h1>Journal</h1>
+                    <p className="lead">
+                      Your records, whenever you need them.
+                    </p>
+                  </div>
+                </div>
+                {route === "journal/week" ? (
+                  <WeeklyReview
+                    journal={journal}
+                    busy={false}
+                    onAsk={askCoach}
+                  />
+                ) : (
+                  <>
+                    <Button
+                      variant="secondary"
+                      onClick={() => go("journal/week")}
+                    >
+                      Your weekly review <ArrowUpRight size={18} />
+                    </Button>
+                    <nav
+                      className="journal-menu journal-destinations"
+                      aria-label="Journal destinations"
+                    >
+                      {journalNavigation.map(({ id, label, icon: Icon }) => (
+                        <a key={id} href={`#${id}`}>
+                          <span className="journal-menu-icon">
+                            <Icon size={24} />
+                          </span>
+                          <span>
+                            <strong>{label}</strong>
+                            <small>{navigationDescriptions[id]}</small>
+                          </span>
+                          <ArrowUpRight size={18} />
+                        </a>
+                      ))}
+                    </nav>
+                  </>
+                )}
+              </>
+            )}
+            {journalNavigation.some((n) => n.id === section) && (
+              <a className="journal-back" href="#journal">
+                ← Journal
+              </a>
+            )}
+            {section === "workout" && (
               <nav
                 className="activity-switch training-tabs"
                 aria-label="Training navigation"
               >
                 <a
                   href="#workout"
-                  aria-current={
-                    section === "workout" && route === "workout"
-                      ? "page"
-                      : undefined
-                  }
+                  aria-current={route === "workout" ? "page" : undefined}
                 >
-                  Ongoing{state.activeWorkout ? " •" : ""}
+                  Workout{state.activeWorkout ? " •" : ""}
                 </a>
                 <a
                   href="#workout/choose"
                   aria-current={
-                    section === "workout" &&
-                    route !== "workout" &&
-                    route !== "workout/coaching"
+                    route !== "workout" && route !== "workout/coaching"
                       ? "page"
                       : undefined
                   }
                 >
                   Programs
-                </a>
-                <a
-                  href="#workout/coaching"
-                  aria-current={
-                    route === "workout/coaching" ? "page" : undefined
-                  }
-                >
-                  Lifting coach
-                </a>
-                <a
-                  href="#history"
-                  aria-current={section === "history" ? "page" : undefined}
-                >
-                  History
-                </a>
-                <a
-                  href="#cardio"
-                  aria-current={section === "cardio" ? "page" : undefined}
-                >
-                  Cardio
                 </a>
               </nav>
             )}
@@ -524,6 +579,8 @@ export function Journal(props: PrivateSessionProps) {
             )}
             {section === "data" && (
               <SettingsView
+                key={route}
+                trackingOpen={route === "data/sleep"}
                 journal={journal}
                 onLogin={() => setLogin(true)}
                 notify={setMessage}
@@ -532,7 +589,7 @@ export function Journal(props: PrivateSessionProps) {
             {!navigation.some((n) => n.id === section) && (
               <div className="empty">
                 <h1>Let’s get you back to training.</h1>
-                <Button onClick={() => go("dashboard")}>Open Home</Button>
+                <Button onClick={() => go("today")}>Open Today</Button>
               </div>
             )}
           </>
@@ -543,85 +600,18 @@ export function Journal(props: PrivateSessionProps) {
           <a
             key={id}
             href={`#${id}`}
-            className={
-              section === id ||
-              (["cardio", "history"].includes(section) && id === "workout")
-                ? "active"
-                : ""
-            }
-            aria-current={
-              section === id ||
-              (["cardio", "history"].includes(section) && id === "workout")
-                ? "page"
-                : undefined
-            }
+            className={activeNav === id ? "active" : ""}
+            aria-current={activeNav === id ? "page" : undefined}
           >
             <Icon
               size={25}
-              weight={
-                section === id ||
-                (["cardio", "history"].includes(section) && id === "workout")
-                  ? "fill"
-                  : "regular"
-              }
+              weight={activeNav === id ? "fill" : "regular"}
               aria-hidden="true"
             />
             <span>{label}</span>
           </a>
         ))}
-        <button
-          className={
-            journalNavigation.some(
-              (item) =>
-                item.id === section && !["cardio", "history"].includes(section),
-            )
-              ? "active"
-              : ""
-          }
-          aria-label="More"
-          ref={moreButton}
-          aria-haspopup="dialog"
-          aria-expanded={moreOpen}
-          onClick={() => setMoreOpen(true)}
-        >
-          <SquaresFour
-            size={25}
-            aria-hidden="true"
-            weight={moreOpen ? "fill" : "regular"}
-          />
-          <span>More</span>
-        </button>
       </nav>
-      <Dialog
-        open={moreOpen}
-        onOpenChange={setMoreOpen}
-        title="Your journal"
-        description="Everything you’ve saved, in one place."
-        onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          moreButton.current?.focus({ preventScroll: true });
-        }}
-      >
-        <nav className="journal-menu" aria-label="More destinations">
-          {journalNavigation.map(({ id, label, icon: Icon }) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              aria-current={section === id ? "page" : undefined}
-              onClick={() => setMoreOpen(false)}
-            >
-              <span className="journal-menu-icon">
-                <Icon size={24} weight="duotone" aria-hidden="true" />
-              </span>
-              <span>
-                <strong>{label}</strong>
-                <small>{navigationDescriptions[id]}</small>
-              </span>
-              <ArrowUpRight size={18} aria-hidden="true" />
-            </a>
-          ))}
-        </nav>
-      </Dialog>
       <Dialog
         open={login}
         onOpenChange={setLogin}

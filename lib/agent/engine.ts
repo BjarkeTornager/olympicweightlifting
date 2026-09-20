@@ -41,7 +41,14 @@ import {
   type ActionPreview,
 } from "./actions";
 import { ApiError } from "./http";
-import { callModel, type ModelMessage, type ToolDefinition } from "./provider";
+import {
+  callModel,
+  type ModelMessage,
+  type ModelOptions,
+  type ModelResponse,
+  type ToolDefinition,
+} from "./provider";
+import { routeCoachTurn } from "./routing";
 import {
   siteHelp,
   systemPrompt,
@@ -356,7 +363,13 @@ export async function runTurn(
     photoIds?: string[];
     submittedAt?: string;
   },
-  model = callModel,
+  model: (
+    messages: ModelMessage[],
+    tools: ToolDefinition[],
+    signal: AbortSignal,
+    onText?: (delta: string) => void,
+    options?: ModelOptions,
+  ) => Promise<ModelResponse> = callModel,
   hooks: {
     emit?: EmitCoachEvent;
     signal?: AbortSignal;
@@ -542,6 +555,18 @@ export async function runTurn(
     let reply =
       "I couldn’t finish that request. Try a shorter question or use Train to log your session.";
     let mealReminderUsed = false;
+    const routed =
+      model === callModel
+        ? await routeCoachTurn({
+            message: input.message,
+            photoCount: photoIds.length,
+            activeWorkout: Boolean(snapshot.state.activeWorkout),
+            signal,
+          })
+        : null;
+    const modelOptions: ModelOptions | undefined = routed
+      ? { model: routed.model }
+      : undefined;
     for (let round = 0; round < 5; round++) {
       signal.throwIfAborted();
       const messageId = `${input.id}-${round}`;
@@ -567,6 +592,7 @@ export async function runTurn(
               emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta });
             }
           : undefined,
+        modelOptions,
       );
       signal.throwIfAborted();
       if (started) emit?.({ type: EventType.TEXT_MESSAGE_END, messageId });
@@ -602,6 +628,25 @@ export async function runTurn(
             tool_call_id: call.id,
             content: JSON.stringify({
               error: `Too many tool calls in one batch; none were executed. ${MAX_EXECUTED_TOOLS - calls} tool calls remain. Use ONE exercises call with queries:[...] for multiple exercise lookups, then prepare the program.`,
+            }),
+          });
+        continue;
+      }
+      if (
+        result.tool_calls.filter((call) =>
+          ["log_entry", "prepare_change"].includes(call.function.name),
+        ).length > 1
+      ) {
+        // A turn commits one change. Reject the whole batch instead of saving
+        // the first meal and silently abandoning the other photos/meals.
+        for (const call of result.tool_calls)
+          messages.push({
+            role: "tool",
+            tool_name: call.function.name,
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              error:
+                "None of this batch was executed. Combine the reported entries into ONE record_bundle in ONE log_entry call (or prepare_change for an explicitly requested preview). Read the relevant journals first. Different angles of one meal belong in a single meal with all relevant photoIds.",
             }),
           });
         continue;

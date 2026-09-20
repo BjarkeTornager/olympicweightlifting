@@ -698,10 +698,12 @@ export function LibraryView() {
   );
 }
 export function SettingsView({
+  trackingOpen = false,
   journal,
   onLogin,
   notify,
 }: {
+  trackingOpen?: boolean;
   journal: JournalController;
   onLogin: () => void;
   notify: (message: string) => void;
@@ -734,7 +736,7 @@ export function SettingsView({
         </div>
       </div>
       <div className="settings-grid">
-        <TrackingSettings journal={journal} />
+        <TrackingSettings journal={journal} initiallyOpen={trackingOpen} />
         {journal.auth.canInvite && <Invitations accountId={identity.id} />}
         <section className="panel">
           <h2>Your account</h2>

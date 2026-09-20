@@ -34,6 +34,7 @@ import {
 import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { NextSession } from "../next-session";
 import { Templates } from "../templates";
 import { RestTimer } from "../rest-timer";
 import { LiftingCoach } from "../lifting-coach";
@@ -168,66 +169,144 @@ export function Technique({ exerciseId }: { exerciseId: string }) {
     </>
   );
 }
+function personalBests(
+  completed: JournalState,
+  sessionId: string,
+): [string, number][] {
+  const session = completed.sessions.find((s) => s.id === sessionId);
+  if (!session) return [];
+  const found = new Map<string, number>();
+  for (const entry of session.exercises)
+    for (const set of entry.sets)
+      if (
+        isValidLoggedSet(set) &&
+        set.result !== "miss" &&
+        Number(set.weight) > (completed.prs[entry.exerciseId] ?? 0)
+      )
+        found.set(
+          entry.exerciseId,
+          Math.max(found.get(entry.exerciseId) ?? 0, Number(set.weight)),
+        );
+  return [...found];
+}
+
 export function Workouts(props: Props) {
-  const { state, route, onStart, go } = props;
+  const { state, route, onStart, go, notify } = props;
   const [date, setDate] = useState(today),
     [filter, setFilter] = useState("all");
+  const [finishedPrs, setFinishedPrs] = useState<[string, number][] | null>(
+    null,
+  );
+  const settlingPrs = useRef(false);
   const parameter = route.split("/")[1];
   const day = days.find((d) => d.id === parameter);
+  const settlePrs = async (usePrs: boolean) => {
+    const candidates = finishedPrs;
+    if (settlingPrs.current || !candidates?.length) return;
+    settlingPrs.current = true;
+    setFinishedPrs(null);
+    try {
+      if (usePrs)
+        await props.update((current) => {
+          for (const [id, weight] of candidates) current.prs[id] = weight;
+        });
+      go("history");
+      notify(
+        usePrs
+          ? "Workout finished. Personal bests updated."
+          : "Workout finished.",
+      );
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Could not update personal bests.");
+      go("history");
+    } finally {
+      settlingPrs.current = false;
+    }
+  };
+  const prDialog = (
+    <Dialog
+      open={Boolean(finishedPrs?.length)}
+      onOpenChange={(open) => {
+        if (!open && finishedPrs?.length) void settlePrs(false);
+      }}
+      title="Workout finished"
+      description="Your logged sets are in History. Confirm any new personal bests."
+    >
+      <div>
+        {(finishedPrs ?? []).map(([id, weight]) => (
+          <div className="load-row" key={id}>
+            <span>{exerciseName(id)}</span>
+            <strong>{weight} kg</strong>
+          </div>
+        ))}
+      </div>
+      <div className="button-row">
+        <Button onClick={() => void settlePrs(true)}>
+          Update personal bests
+        </Button>
+        <Button variant="secondary" onClick={() => void settlePrs(false)}>
+          Keep current PRs
+        </Button>
+      </div>
+    </Dialog>
+  );
   if (parameter === "coaching")
     return <LiftingCoach state={state} update={props.update} go={go} />;
   if (state.activeWorkout && !parameter)
-    return <ActiveWorkout key={state.activeWorkout.id} {...props} />;
-  if (!parameter) {
-    const suggested =
-      days.find((d) => d.weekday === new Date().getDay()) ??
-      days.find((d) => d.id === "monday")!;
     return (
-      <section className="training-start" aria-label="Start training">
-        <div className="page-heading compact">
-          <div>
-            <h1>Train</h1>
-            <p className="lead">Your next session, ready when you are.</p>
+      <>
+        <ActiveWorkout
+          key={state.activeWorkout.id}
+          {...props}
+          onFinished={(prs) => {
+            if (prs.length) setFinishedPrs(prs);
+            else {
+              go("history");
+              notify("Workout finished.");
+            }
+          }}
+        />
+        {prDialog}
+      </>
+    );
+  if (!parameter) {
+    return (
+      <>
+        <section className="training-start" aria-label="Start training">
+          <div className="page-heading compact">
+            <div>
+              <h1>Train</h1>
+              <p className="lead">Your next session, ready when you are.</p>
+            </div>
           </div>
-        </div>
-        <section
-          className="training-quick-start"
-          aria-label="Suggested session"
-        >
-          <span className="eyebrow">QUICK START</span>
-          <h2>{suggested.title}</h2>
-          <p className="muted">
-            {suggested.exercises.length} exercises · {suggested.focus}
-          </p>
-          <Button onClick={() => void onStart(suggested.id)}>
-            Start workout <ArrowRight size={18} />
-          </Button>
-          <Button variant="ghost" onClick={() => go("workout/choose")}>
-            Choose another
-          </Button>
+          <NextSession state={state} update={props.update} go={go} />
+          <div className="training-start-links">
+            <Button variant="secondary" onClick={() => void onStart("open")}>
+              <Plus size={18} /> Start empty workout
+            </Button>
+            <Button variant="ghost" onClick={() => go("workout/choose")}>
+              Your programs & routines <ArrowRight size={17} />
+            </Button>
+            <Button variant="ghost" onClick={() => go("workout/coaching")}>
+              Lifting brief & video <ArrowRight size={17} />
+            </Button>
+            <Button variant="ghost" onClick={() => go("history")}>
+              Training history <ArrowRight size={17} />
+            </Button>
+          </div>
+          <details className="training-other-activity">
+            <summary>
+              Log a walk, run or ride <ChevronDown size={17} />
+            </summary>
+            <ActivityPhotoUpload
+              accountId={props.accountId}
+              go={go}
+              showCoachLink
+            />
+          </details>
         </section>
-        <div className="training-start-links">
-          <Button variant="secondary" onClick={() => void onStart("open")}>
-            <Plus size={18} /> Start empty workout
-          </Button>
-          <Button variant="ghost" onClick={() => go("workout/choose")}>
-            Your programs & routines <ArrowRight size={17} />
-          </Button>
-          <Button variant="ghost" onClick={() => go("history")}>
-            Training history <ArrowRight size={17} />
-          </Button>
-        </div>
-        <details className="training-other-activity">
-          <summary>
-            Log a walk, run or ride <ChevronDown size={17} />
-          </summary>
-          <ActivityPhotoUpload
-            accountId={props.accountId}
-            go={go}
-            showCoachLink
-          />
-        </details>
-      </section>
+        {prDialog}
+      </>
     );
   }
   if (day) {
@@ -496,7 +575,14 @@ export function Workouts(props: Props) {
     </>
   );
 }
-function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
+function ActiveWorkout({
+  state,
+  update,
+  go,
+  notify,
+  accountId,
+  onFinished,
+}: Props & { onFinished: (prs: [string, number][]) => void }) {
   const draft = state.activeWorkout!;
   const [expanded, setExpanded] = useState(
       draft.activeExerciseId ??
@@ -515,8 +601,7 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
     [add, setAdd] = useState(""),
     [loggingActivity, setLoggingActivity] = useState<CardioActivity | null>(
       null,
-    ),
-    [candidates, setCandidates] = useState<[string, number][]>([]);
+    );
   const activityChoice = cardioActivitySchema.safeParse(
     add.startsWith("activity:") ? add.slice("activity:".length) : undefined,
   );
@@ -536,44 +621,19 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
       0,
     ),
     total = draft.exercises.reduce((n, e) => n + e.sets.length, 0);
-  const saveFinished = async (usePrs: boolean) => {
+  const complete = async () => {
     try {
+      let found: [string, number][] = [];
       await update((current) => {
         const completed = finishWorkout(current);
-        if (usePrs)
-          for (const [id, weight] of candidates) completed.prs[id] = weight;
+        found = personalBests(
+          completed,
+          draft.editingSessionId ?? draft.id,
+        );
         return completed;
       });
       setFinish(false);
-      setCandidates([]);
-      go("history");
-      notify("Workout saved.");
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Could not finish workout.");
-    }
-  };
-  const complete = async () => {
-    try {
-      const completed = finishWorkout(state);
-      const prs = new Map<string, number>();
-      const session = completed.sessions.find(
-        (s) => s.id === (draft.editingSessionId ?? draft.id),
-      )!;
-      for (const e of session.exercises)
-        for (const s of e.sets)
-          if (
-            isValidLoggedSet(s) &&
-            s.result !== "miss" &&
-            Number(s.weight) > (completed.prs[e.exerciseId] ?? 0)
-          )
-            prs.set(
-              e.exerciseId,
-              Math.max(prs.get(e.exerciseId) ?? 0, Number(s.weight)),
-            );
-      if (prs.size) {
-        setFinish(false);
-        setCandidates([...prs]);
-      } else await saveFinished(false);
+      onFinished(found);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Could not finish workout.");
       setFinish(false);
@@ -910,6 +970,14 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
                     <summary>
                       Exercise details <ChevronDown size={17} />
                     </summary>
+                    <div className="button-row">
+                      <Button
+                        variant="ghost"
+                        onClick={() => go("coach/lifting/video")}
+                      >
+                        Get technique feedback
+                      </Button>
+                    </div>
                     <div className="button-row exercise-order">
                       {[-1, 1].map((direction) => (
                         <Button
@@ -1197,7 +1265,7 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
         open={finish}
         onOpenChange={setFinish}
         title="Finish your workout?"
-        description={`You've logged ${logged} of ${total} sets. Finish to move this workout to History. Unlogged sets stay unrecorded; a partial session will not unlock a load increase.`}
+        description={`You've logged ${logged} of ${total} sets. Finishing marks this session complete. Unlogged sets stay unrecorded; a partial session will not unlock a load increase.`}
       >
         <div className="button-row">
           <Button onClick={() => void complete()}>Finish workout</Button>
@@ -1227,33 +1295,6 @@ function ActiveWorkout({ state, update, go, notify, accountId }: Props) {
           </Button>
           <Button variant="secondary" onClick={() => setDiscard(false)}>
             Keep training
-          </Button>
-        </div>
-      </Dialog>
-      <Dialog
-        open={candidates.length > 0}
-        onOpenChange={(open) => {
-          if (!open) {
-            setCandidates([]);
-          }
-        }}
-        title="A new personal best?"
-        description="These logged weights exceed your recorded PRs. Confirm the lifts you want to keep as personal bests."
-      >
-        <div>
-          {candidates.map(([id, weight]) => (
-            <div className="load-row" key={id}>
-              <span>{exerciseName(id)}</span>
-              <strong>{weight} kg</strong>
-            </div>
-          ))}
-        </div>
-        <div className="button-row">
-          <Button onClick={() => void saveFinished(true)}>
-            Update personal bests
-          </Button>
-          <Button variant="secondary" onClick={() => void saveFinished(false)}>
-            Keep current PRs
           </Button>
         </div>
       </Dialog>

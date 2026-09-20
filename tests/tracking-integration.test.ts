@@ -20,6 +20,7 @@ test(
       BETTER_AUTH_SECRET: "test-only-secret-".repeat(4),
       BETTER_AUTH_URL: "http://localhost:3000",
       DAILY_REMINDERS_WORKER: "1",
+      AGENT_PROVIDER: "",
     });
     const keys = webpush.generateVAPIDKeys();
     process.env.WEB_PUSH_PUBLIC_KEY = keys.publicKey;
@@ -36,6 +37,7 @@ test(
     const sleep =
       await import("../app/api/integrations/apple-health/sleep/route");
     const reminders = await import("../app/api/reminders/route");
+    const tracking = await import("../app/api/tracking/status/route");
     const { deliverReminders } = await import("../lib/reminder-worker");
     const users: { id: string; cookie: string }[] = [];
     const req = (
@@ -90,6 +92,24 @@ test(
         });
       }
       const [a, b] = users;
+      assert.equal(
+        (
+          await tracking.GET(
+            new Request("http://localhost:3000/api/tracking/status"),
+          )
+        ).status,
+        401,
+      );
+      assert.equal(
+        (await tracking.GET(req({ id: a.id, cookie: b.cookie }))).status,
+        401,
+      );
+      const emptyStatus = await tracking.GET(req(b));
+      assert.match(emptyStatus.headers.get("Cache-Control")!, /no-store/);
+      assert.deepEqual(await emptyStatus.json(), {
+        notices: [],
+        sleep: { connected: false },
+      });
       assert.equal(
         (await connection.POST(req(a, "POST", {}, "https://evil.test"))).status,
         403,
@@ -176,6 +196,14 @@ test(
         (await (await connection.GET(req(a))).json()).lastResult,
         "failed",
       );
+      const failedStatus = await (await tracking.GET(req(a))).json();
+      assert.equal(failedStatus.notices[0].code, "sleep_failed");
+      assert.equal(failedStatus.sleep.connected, true);
+      assert.ok(!JSON.stringify(failedStatus).includes(token));
+      assert.deepEqual(await (await tracking.GET(req(b))).json(), {
+        notices: [],
+        sleep: { connected: false },
+      });
       const replacement = (await (await connection.POST(req(a, "POST"))).json())
         .token;
       assert.equal(

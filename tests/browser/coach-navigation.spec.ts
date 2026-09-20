@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -78,9 +78,11 @@ test("Coach finishes while navigating and editing Health, preserves review safet
   await expect.poll(() => requestCount(page)).toBe(1);
   await composer.fill("My next question is about lunch");
   for (const destination of ["Train", "Food", "Health"]) {
-    await mobile(page)
-      .getByRole("link", { name: destination, exact: true })
-      .click();
+    if (destination === "Train")
+      await mobile(page)
+        .getByRole("link", { name: destination, exact: true })
+        .click();
+    else await openJournalArea(page, destination);
     await expect(
       page.getByText("Coach is working…", { exact: true }),
     ).toBeVisible();
@@ -244,7 +246,7 @@ test("Photo and sleep entry links preserve a running turn and the next draft; le
   await page.getByRole("button", { name: "Log sleep with Coach" }).click();
   await expect(composer).toHaveValue(/^Keep this next draft\n\n/);
   await expect(composer).toHaveValue(/sleep/);
-  await mobile(page).getByRole("link", { name: "Food", exact: true }).click();
+  await openJournalArea(page, "Food");
   // Simulate the catalog's exact in-site photo link, with no document reload.
   await page.evaluate((id) => {
     location.hash = `coach/photo/${id}`;
@@ -326,7 +328,7 @@ for (const action of ["sign-out", "account-switch"] as const) {
     await composer.fill("Private question from account A");
     await composer.press("Enter");
     await expect.poll(() => requestCount(page)).toBe(1);
-    await mobile(page).getByRole("link", { name: "Food", exact: true }).click();
+    await openJournalArea(page, "Food");
     expect(await aborted(page)).toBe(false);
     currentUser =
       action === "sign-out"
@@ -386,7 +388,7 @@ test("Legacy Coach requests also finish away from chat, and interrupted replies 
   await composer.fill("Help with my week");
   await composer.press("Enter");
   await expect.poll(() => requests).toBe(1);
-  await mobile(page).getByRole("link", { name: "Food", exact: true }).click();
+  await openJournalArea(page, "Food");
   await expect(
     page.getByText("Coach is working…", { exact: true }),
   ).toBeVisible();

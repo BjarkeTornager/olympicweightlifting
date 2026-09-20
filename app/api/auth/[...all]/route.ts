@@ -5,8 +5,7 @@ import {
   appendAuthTicket,
   issueAuthTicket,
   redeemAuthTicket,
-  runGoogleCallback,
-  takeSessionToken,
+  sessionTokenFromResponse,
 } from "@/lib/auth-ticket";
 export const dynamic = "force-dynamic";
 
@@ -64,22 +63,12 @@ function failedSignIn(response?: Response) {
   return new Response(null, { status: 303, headers });
 }
 
-async function finishGoogleNavigation(response: Response, token?: string) {
+async function finishGoogleNavigation(response: Response) {
   // Do not set the session cookie on this Google bounce. Hand a short-lived
   // ticket to the journal page, which sets the cookie on a first-party fetch
   // and only then checks /api/session.
   const destination = sameOriginDestination(response.headers.get("Location"));
-  token ??= takeSessionToken();
-  if (!token && !destination.includes("signin=failed")) {
-    const { getPool } = await import("@/lib/db");
-    for (let attempt = 0; attempt < 8 && !token; attempt++) {
-      if (attempt) await new Promise((resolve) => setTimeout(resolve, 40));
-      const latest = await getPool().query(
-        "SELECT token FROM auth_sessions WHERE expires_at > now() ORDER BY created_at DESC LIMIT 1",
-      );
-      token = latest.rows[0]?.token as string | undefined;
-    }
-  }
+  const token = sessionTokenFromResponse(response);
   if (!token) {
     console.error(JSON.stringify({ event: "google_callback_missing_token" }));
     return failedSignIn(response);
@@ -155,23 +144,20 @@ async function handle(request: Request) {
         );
     }
     if (googleCallback) {
-      const result = await runGoogleCallback(async () => {
-        try {
-          const response = await getAuth().handler(request);
-          return { response, token: takeSessionToken() };
-        } catch {
-          return { response: undefined, token: undefined };
-        }
-      });
-      if (!result.response) return failedSignIn();
-      if (result.response.status >= 400) return failedSignIn(result.response);
-      if (result.response.status >= 300) {
-        const location = result.response.headers.get("Location") ?? "";
-        if (/signin=failed|[?&]error=/.test(location))
-          return failedSignIn(result.response);
-        return await finishGoogleNavigation(result.response, result.token);
+      let response: Response;
+      try {
+        response = await getAuth().handler(request);
+      } catch {
+        return failedSignIn();
       }
-      return result.response;
+      if (response.status >= 400) return failedSignIn(response);
+      if (response.status >= 300) {
+        const location = response.headers.get("Location") ?? "";
+        if (/signin=failed|[?&]error=/.test(location))
+          return failedSignIn(response);
+        return await finishGoogleNavigation(response);
+      }
+      return response;
     }
     return await getAuth().handler(request);
   } catch {

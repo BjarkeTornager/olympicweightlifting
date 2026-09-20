@@ -21,16 +21,23 @@ export function requireCurrentCoach(request: Request) {
       426,
     );
 }
+// For endpoints that expose nothing account-specific (such as the public
+// Maps browser key). A 401 here signs the browser out, so use it only where a
+// missing session is the sole reason to refuse.
+export async function requireSignedIn(request: Request) {
+  const user = (await getAuth().api.getSession({ headers: request.headers }))
+    ?.user;
+  if (!user || !(await userAllowed(user)))
+    throw new ApiError("Sign in to use your personal journal.", 401);
+  return user;
+}
 export async function requireAthlete(request: Request, mutation = false) {
   if (mutation) {
     const origin = new URL(process.env.BETTER_AUTH_URL ?? request.url).origin;
     if (request.headers.get("origin") !== origin)
       throw new ApiError("Untrusted request origin.", 403);
   }
-  const user = (await getAuth().api.getSession({ headers: request.headers }))
-    ?.user;
-  if (!user || !(await userAllowed(user)))
-    throw new ApiError("Sign in to use your personal journal.", 401);
+  const user = await requireSignedIn(request);
   if (request.headers.get("x-journal-account") !== user.id)
     throw new ApiError("Your account changed. Reload before continuing.", 401);
   return user;

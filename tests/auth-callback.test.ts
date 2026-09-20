@@ -22,11 +22,13 @@ test(
       BETTER_AUTH_SECRET: "callback-test-only-secret-".repeat(4),
       GOOGLE_CLIENT_ID: "synthetic-google-client",
       GOOGLE_CLIENT_SECRET: "synthetic-google-secret",
+      GOOGLE_MAPS_API_KEY: "synthetic-maps-key",
     });
     const { getAuth } = await import("../lib/auth");
     const { getPool } = await import("../lib/db");
     const { GET, POST } = await import("../app/api/auth/[...all]/route");
     const { GET: session } = await import("../app/api/session/route");
+    const { GET: mapsConfig } = await import("../app/api/maps/config/route");
     const auth = getAuth();
     const context = await auth.$context;
     const google = context.socialProviders.find(
@@ -170,6 +172,22 @@ test(
           }),
         );
         assert.equal((await current.json()).user.email, ownerEmail);
+
+        // Coach loads the Maps key while rendering a saved route, without the
+        // journal account header. A 401 here locks the app and returns the
+        // person to the sign-in screen, so a signed-in browser must get the key
+        // and only a browser with no session may be refused.
+        const maps = await mapsConfig(
+          new Request(`${origin}/api/maps/config`, {
+            headers: { Cookie: cookie(completed) },
+          }),
+        );
+        assert.equal(maps.status, 200);
+        assert.deepEqual(await maps.json(), { key: "synthetic-maps-key" });
+        const anonymousMaps = await mapsConfig(
+          new Request(`${origin}/api/maps/config`),
+        );
+        assert.equal(anonymousMaps.status, 401);
       }
 
       // Invalid state must still take the library's safe failure redirect.

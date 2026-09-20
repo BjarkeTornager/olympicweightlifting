@@ -54,17 +54,28 @@ export default function MobileSignIn() {
             "Content-Type": "application/json",
             ...(user ? { "X-Journal-Account": user.id } : {}),
           },
+          credentials: "include",
+          redirect: "manual",
           body: JSON.stringify(
             user
               ? parameters
               : {
                   provider: "google",
+                  disableRedirect: true,
                   callbackURL: `/mobile?${new URLSearchParams(parameters)}`,
                   errorCallbackURL: "/?signin=failed",
                 },
           ),
         },
       );
+      if (response.type === "opaqueredirect") {
+        const target = response.headers.get("Location");
+        if (target) {
+          location.assign(target);
+          return;
+        }
+        throw Error("Could not open Google sign-in. Please try again.");
+      }
       const data = await response.json();
       if (!response.ok)
         throw Error(data.error ?? "This journal is invitation only.");

@@ -60,9 +60,19 @@ function Landing({
       const response = await fetch(`/api/auth/${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        redirect: "manual",
         body: JSON.stringify(body),
         cache: "no-store",
       });
+      if (response.type === "opaqueredirect") {
+        const target = response.headers.get("Location");
+        if (target) {
+          location.assign(target);
+          return;
+        }
+        throw Error("Could not open Google sign-in. Please try again.");
+      }
       const result = await response.json();
       if (!response.ok)
         throw Error("Could not sign in. Check your invitation and try again.");
@@ -121,6 +131,7 @@ function Landing({
                 onClick={() =>
                   void signIn("sign-in/social", {
                     provider: "google",
+                    disableRedirect: true,
                     callbackURL: location.origin + "/" + location.hash,
                     errorCallbackURL: location.origin + "/?signin=failed",
                   })

@@ -33,6 +33,7 @@ test("native sign-in bridge requires app proof and preserves it through Google l
   await expect(page.locator("main").getByRole("alert")).toHaveText("Invitation required");
   expect(request).toEqual({
     provider: "google",
+    disableRedirect: true,
     callbackURL: path,
     errorCallbackURL: "/?signin=failed",
   });

@@ -72,6 +72,10 @@ for (const path of paths) {
     assert.match(body, /Your health/);
     assert.doesNotMatch(body, /class="private-shell/);
     assert.ok(r.headers.get("strict-transport-security"));
+    const csp = r.headers.get("content-security-policy") ?? "";
+    assert.match(csp, /form-action[^;]*'self'/);
+    assert.match(csp, /form-action[^;]*https:\/\/accounts\.google\.com/);
+    assert.match(csp, /connect-src[^;]*'self'/);
   }
   if (
     [

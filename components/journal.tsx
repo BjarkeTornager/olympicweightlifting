@@ -625,8 +625,11 @@ export function Journal(props: PrivateSessionProps) {
               const response = await fetch("/api/auth/sign-in/social", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                redirect: "manual",
                 body: JSON.stringify({
                   provider: "google",
+                  disableRedirect: true,
                   callbackURL: location.origin,
                 }),
               });

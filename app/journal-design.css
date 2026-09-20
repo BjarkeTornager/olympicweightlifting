@@ -249,9 +249,9 @@ button,
   /* One centred measure. The column used to sit flush left inside a much wider
      area, so every rule and tab strip overhung the content beside dead space. */
   max-width: 1040px;
-  /* globals.css sets margin:auto here, and on a grid item the block-axis auto
+  /* Only the inline axis centres. A block-axis auto margin on this grid item
      centred short screens vertically, leaving a band of empty space above the
-     date on Train and Progress. Only the inline axis should centre. */
+     date on Train and Progress. */
   margin: 0 auto;
   padding: 20px 48px 72px;
   align-self: stretch;

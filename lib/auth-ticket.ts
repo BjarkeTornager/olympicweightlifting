@@ -1,4 +1,6 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { serializeSignedCookie } from "better-call";
 
 const TTL_SECONDS = 90;
 
@@ -23,24 +25,60 @@ export function sessionTokenFromSetCookie(cookies: string[]) {
     const eq = pair.indexOf("=");
     if (eq < 1) continue;
     const name = pair.slice(0, eq).trim();
-    if (
-      name === "better-auth.session_token" ||
-      name === "__Secure-better-auth.session_token"
-    )
-      return pair.slice(eq + 1);
+    if (!name.includes("session_token") || name.includes("session_token."))
+      continue;
+    return pair.slice(eq + 1);
   }
 }
 
-export function sessionCookieHeader(token: string) {
-  const parts = [
-    `${sessionCookieName()}=${token}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${60 * 60 * 24 * 30}`,
-  ];
-  if (secureCookies()) parts.push("Secure");
-  return parts.join("; ");
+export function appendAuthTicket(destination: string, ticket: string) {
+  const url = new URL(destination);
+  url.searchParams.set("auth", ticket);
+  return url.href;
+}
+
+export function allSetCookies(response: Response) {
+  const found: string[] = [];
+  try {
+    found.push(...response.headers.getSetCookie());
+  } catch {
+    /* Headers.getSetCookie is missing in some runtimes */
+  }
+  if (!found.length)
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "set-cookie") found.push(value);
+    });
+  return found;
+}
+
+const googleCallbackStore = new AsyncLocalStorage<{ token?: string }>();
+let fallbackToken: string | undefined;
+
+export function runGoogleCallback<T>(fn: () => T) {
+  return googleCallbackStore.run({}, fn);
+}
+
+export function rememberSessionToken(token: string | undefined) {
+  if (!token) return;
+  const store = googleCallbackStore.getStore();
+  if (store) store.token = token;
+  fallbackToken = token;
+}
+
+export function takeSessionToken() {
+  const token = googleCallbackStore.getStore()?.token ?? fallbackToken;
+  fallbackToken = undefined;
+  return token;
+}
+
+export async function sessionCookieHeader(token: string) {
+  return serializeSignedCookie(sessionCookieName(), token, secret(), {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 30,
+    secure: secureCookies(),
+  });
 }
 
 export function issueAuthTicket(sessionToken: string) {

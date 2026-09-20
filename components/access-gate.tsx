@@ -229,6 +229,26 @@ function Landing({
   );
 }
 
+async function claimAuthTicket() {
+  const params = new URLSearchParams(location.search);
+  const ticket = params.get("auth");
+  if (!ticket) return;
+  params.delete("auth");
+  const search = params.toString();
+  history.replaceState(
+    null,
+    "",
+    `${location.pathname}${search ? `?${search}` : ""}${location.hash}`,
+  );
+  await fetch("/api/auth/complete", {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticket }),
+  }).catch(() => undefined);
+}
+
 export function AccessGate() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -333,8 +353,15 @@ export function AccessGate() {
     try {
       localStorage.removeItem("lift-cloud:identity");
     } catch {}
-    const initial = setTimeout(() => void verify(true), 0);
+    let ready = false;
+    const boot = async () => {
+      await claimAuthTicket();
+      ready = true;
+      await verify(true);
+    };
+    const initial = setTimeout(() => void boot(), 0);
     const show = () => {
+      if (!ready) return;
       if (document.visibilityState === "visible") void verify(true);
     };
     const hide = () => {
@@ -350,7 +377,7 @@ export function AccessGate() {
       setPhase("unavailable");
     };
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") void verify();
+      if (ready && document.visibilityState === "visible") void verify();
     }, 15000);
     window.addEventListener("lift-session-invalid", lock);
     window.addEventListener("online", show);

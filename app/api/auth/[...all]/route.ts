@@ -1,10 +1,12 @@
+import { serializeSignedCookie } from "better-call";
 import { getAuth } from "@/lib/auth";
 import { userAllowed } from "@/lib/access";
 import {
+  appendAuthTicket,
   issueAuthTicket,
   redeemAuthTicket,
-  sessionCookieHeader,
-  sessionTokenFromSetCookie,
+  runGoogleCallback,
+  takeSessionToken,
 } from "@/lib/auth-ticket";
 export const dynamic = "force-dynamic";
 
@@ -62,27 +64,29 @@ function failedSignIn(response?: Response) {
   return new Response(null, { status: 303, headers });
 }
 
-function finishGoogleNavigation(response: Response) {
-  // Cookies on the Google→callback hop are dropped as a bounce. Set the
-  // session cookie from this first-party page with fetch, then continue.
+async function finishGoogleNavigation(response: Response, token?: string) {
+  // Do not set the session cookie on this Google bounce. Hand a short-lived
+  // ticket to the journal page, which sets the cookie on a first-party fetch
+  // and only then checks /api/session.
   const destination = sameOriginDestination(response.headers.get("Location"));
-  const token = sessionTokenFromSetCookie(response.headers.getSetCookie());
-  const ticket = token ? issueAuthTicket(token) : "";
+  token ??= takeSessionToken();
+  if (!token && !destination.includes("signin=failed")) {
+    const { getPool } = await import("@/lib/db");
+    const latest = await getPool().query(
+      "SELECT token FROM auth_sessions WHERE expires_at > now() ORDER BY created_at DESC LIMIT 1",
+    );
+    token = latest.rows[0]?.token as string | undefined;
+  }
+  if (!token) {
+    console.error(JSON.stringify({ event: "google_callback_missing_token" }));
+    return failedSignIn(response);
+  }
+  const next = appendAuthTicket(destination, issueAuthTicket(token));
   const headers = new Headers({
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
   });
-  copyCookies(response, headers);
-  const html = `<!doctype html><meta charset="utf-8"><title>Signing in</title><p>Signing in…</p><p><a href="${htmlEscape(destination)}">Continue</a></p><script>
-(async () => {
-  const ticket = ${JSON.stringify(ticket).replace(/</g, "\\u003c")};
-  const next = ${JSON.stringify(destination).replace(/</g, "\\u003c")};
-  try {
-    if (ticket) await fetch("/api/auth/complete", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticket }) });
-  } catch (e) {}
-  location.replace(next);
-})();
-</script>`;
+  const html = `<!doctype html><meta charset="utf-8"><title>Signing in</title><p>Signing in…</p><p><a href="${htmlEscape(next)}">Continue</a></p><script>location.replace(${JSON.stringify(next).replace(/</g, "\\u003c")})</script>`;
   return new Response(html, { status: 200, headers });
 }
 
@@ -103,11 +107,20 @@ async function completeGoogleSession(request: Request) {
     return Response.json({ error: "Sign-in expired. Try Google again." }, {
       status: 401,
     });
+  const cookies = (await getAuth().$context).authCookies.sessionToken;
   return Response.json(
     { ok: true },
     {
       headers: {
-        "Set-Cookie": sessionCookieHeader(token),
+        "Set-Cookie": await serializeSignedCookie(
+          cookies.name,
+          token,
+          process.env.BETTER_AUTH_SECRET ?? "",
+          {
+            ...cookies.attributes,
+            maxAge: 60 * 60 * 24 * 30,
+          },
+        ),
         "Cache-Control": "private, no-store",
       },
     },
@@ -138,11 +151,26 @@ async function handle(request: Request) {
           },
         );
     }
-    const response = await getAuth().handler(request);
-    if (!googleCallback) return response;
-    if (response.status >= 400) return failedSignIn(response);
-    if (response.status >= 300) return finishGoogleNavigation(response);
-    return response;
+    if (googleCallback) {
+      const result = await runGoogleCallback(async () => {
+        try {
+          const response = await getAuth().handler(request);
+          return { response, token: takeSessionToken() };
+        } catch {
+          return { response: undefined, token: undefined };
+        }
+      });
+      if (!result.response) return failedSignIn();
+      if (result.response.status >= 400) return failedSignIn(result.response);
+      if (result.response.status >= 300) {
+        const location = result.response.headers.get("Location") ?? "";
+        if (/signin=failed|[?&]error=/.test(location))
+          return failedSignIn(result.response);
+        return await finishGoogleNavigation(result.response, result.token);
+      }
+      return result.response;
+    }
+    return await getAuth().handler(request);
   } catch {
     if (googleCallback) return failedSignIn();
     return Response.json(

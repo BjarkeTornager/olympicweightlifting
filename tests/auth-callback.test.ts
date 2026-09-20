@@ -62,7 +62,16 @@ test(
     const cookie = (response: Response) =>
       response.headers
         .getSetCookie()
-        .map((value) => value.split(";")[0])
+        .map((value) => {
+          const pair = value.split(";")[0] ?? "";
+          const eq = pair.indexOf("=");
+          if (eq < 0) return pair;
+          try {
+            return `${pair.slice(0, eq + 1)}${decodeURIComponent(pair.slice(eq + 1))}`;
+          } catch {
+            return pair;
+          }
+        })
         .join("; ");
     const states: string[] = [];
     let ip = 0;
@@ -77,6 +86,7 @@ test(
           },
           body: JSON.stringify({
             provider: "google",
+            disableRedirect: true,
             callbackURL,
             errorCallbackURL: `${origin}/?signin=failed`,
           }),
@@ -135,9 +145,12 @@ test(
         assert.match(response.headers.get("content-type") ?? "", /text\/html/);
         const html = await response.text();
         assert.match(html, /Signing in/);
-        assert.match(html, /\/api\/auth\/complete/);
-        assert.ok(html.includes(callbackURL));
-        const ticket = html.match(/const ticket = "([^"]+)"/)?.[1];
+        assert.match(html, /[?&]auth=/);
+        const next = html.match(/location\.replace\("([^"]+)"\)/)?.[1];
+        assert.ok(next);
+        const ticket = new URL(next.replaceAll("\\u003c", "<")).searchParams.get(
+          "auth",
+        );
         assert.ok(ticket);
         const completed = await POST(
           new Request(`${origin}/api/auth/complete`, {
@@ -165,8 +178,8 @@ test(
           `${origin}/api/auth/callback/google?code=synthetic&state=invalid`,
         ),
       );
-      assert.equal(invalid.status, 200);
-      assert.match(await invalid.text(), /signin=failed/);
+      assert.equal(invalid.status, 303);
+      assert.equal(invalid.headers.get("location"), "/?signin=failed");
 
       // Unexpected exceptions also return a page on a browser callback; API
       // callers must retain JSON errors rather than receiving an HTML redirect.

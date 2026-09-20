@@ -12,11 +12,27 @@ export default function MobileSignIn() {
   } | null>(null);
   useEffect(() => {
     let active = true;
-    void Promise.resolve().then(() => {
+    void Promise.resolve().then(async () => {
       if (!active) return;
       const params = new URLSearchParams(location.search),
+        ticket = params.get("auth") ?? "",
         challenge = params.get("challenge") ?? "",
         state = params.get("state") ?? "";
+      if (ticket) {
+        params.delete("auth");
+        history.replaceState(
+          null,
+          "",
+          `${location.pathname}?${params.toString()}`,
+        );
+        await fetch("/api/auth/complete", {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticket }),
+        }).catch(() => undefined);
+      }
       if (
         !/^[A-Za-z0-9_-]{43}$/.test(challenge) ||
         !/^[A-Za-z0-9_-]{32,128}$/.test(state)

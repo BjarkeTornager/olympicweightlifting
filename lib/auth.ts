@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
 import { getDb, getPool } from "./db";
 import { assertAccessConfigured, emailAllowed, userAllowed } from "./access";
+import { rememberSessionToken } from "./auth-ticket";
 import * as schema from "./db/schema";
 export const localPasswordEnabled = () =>
   process.env.NODE_ENV !== "production" &&
@@ -94,6 +95,9 @@ export function getAuth() {
               throw new APIError("FORBIDDEN", {
                 message: "This journal is invitation only.",
               });
+            rememberSessionToken(
+              typeof session.token === "string" ? session.token : undefined,
+            );
           },
         },
       },

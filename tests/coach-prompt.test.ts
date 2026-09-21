@@ -15,9 +15,13 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // the 2026-09-20 coach-direct-log-database regression baseline.
     // Historical GEPA scores are not an evaluation of this policy revision.
     // Revised 2026-09-20 for plan_route direction/parkBias/variant guidance only.
-    // The health, privacy, evidence and action policy text is byte-identical;
-    // the sole prompt diff is the route-planning paragraph (route-plan.test.ts).
-    "2a1b7f3d63f06210c91bada52a8503c2cf7b6171d221bb334bfb04fb1c0c2459",
+    // Revised 2026-09-21 to add search_web: Coach may now read public web pages.
+    // Deliberate scope change, reviewed. The only prompt diff is one added
+    // paragraph; the health, privacy, evidence and action text is unchanged.
+    // It forbids personal data in a query, treats results as untrusted
+    // reference text rather than instructions or records about this athlete,
+    // and keeps medical claims and logging out of scope (web-search.test.ts).
+    "26d0baaf4e3f669a5ba8c2fa78c87a8db1f0f98e3f593bf01d27279100b68ebe",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

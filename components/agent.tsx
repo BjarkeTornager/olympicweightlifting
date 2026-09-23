@@ -37,7 +37,7 @@ import { CoachMemoryBook } from "./coach-memory";
 import { LiftingVideoDialog } from "./lifting-video-upload";
 import { QuickCapture } from "./quick-capture";
 import { CoachTurn, type Turn } from "./coach-turn";
-import { proposalNeedsReview } from "./coach-proposal";
+import { proposalNeedsReview } from "@/lib/coach-proposals";
 import {
   CoachQueue,
   MAX_QUEUED_MESSAGES,

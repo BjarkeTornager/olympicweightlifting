@@ -10,10 +10,8 @@ import {
   Dumbbell,
   History,
   House,
-  LogIn,
   Settings,
   Sparkles,
-  Undo2,
   WifiOff,
   Utensils,
   HeartPulse,
@@ -23,11 +21,8 @@ import {
 import { trackKeyboardViewport } from "@/lib/keyboard-viewport";
 import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
-import { backup, days, today, createWorkout, program } from "@/lib/domain";
-import { liftingPrompt } from "@/lib/lifting-coach";
-import { trainingPrograms } from "@/lib/training-programs";
+import { days, today, createWorkout, program } from "@/lib/domain";
 import { Button } from "./ui/button";
-import { Dialog } from "./ui/dialog";
 import { Today } from "./today";
 import { WeeklyReview } from "./weekly-review";
 import { Workouts } from "./views/workouts";
@@ -40,7 +35,10 @@ import { HistoryView } from "./views/history";
 import { ProgressView } from "./views/progress";
 import { LibraryView } from "./views/library";
 import { SettingsView } from "./views/settings";
-import { downloadBackup } from "@/lib/download-backup";
+import { coachEntryIntent } from "@/lib/coach-entry";
+import { useServiceWorkerUpdate } from "@/lib/use-service-worker";
+import { SignInDialog } from "./sign-in-dialog";
+import { SaveDetail, SyncConflictNotice } from "./journal-banners";
 export type JournalController = ReturnType<typeof useJournal>;
 const primaryNavigation = [
   { id: "today", label: "Today", icon: House },
@@ -102,8 +100,7 @@ export function Journal(props: PrivateSessionProps) {
     draft?: string;
   }>({ route: "coach", id: 0 });
   const draftIntent = useRef<string | undefined>(undefined);
-  const [updateReady, setUpdateReady] = useState(false),
-    [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
+  const { updateReady, activate: activateUpdate } = useServiceWorkerUpdate();
   useEffect(() => {
     const changed = () => {
       const next = canonicalRoute(location.hash.slice(1));
@@ -115,34 +112,9 @@ export function Journal(props: PrivateSessionProps) {
       }
       window.scrollTo({ top: 0, behavior: "instant" });
     };
-    const activated = () => setUpdateReady(false);
     changed();
     window.addEventListener("hashchange", changed);
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-      navigator.serviceWorker.addEventListener("controllerchange", activated);
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then((reg) => {
-          setWorker(reg);
-          if (reg.waiting && navigator.serviceWorker.controller)
-            setUpdateReady(true);
-          reg.addEventListener("updatefound", () =>
-            reg.installing?.addEventListener("statechange", () => {
-              if (reg.waiting && navigator.serviceWorker.controller)
-                setUpdateReady(true);
-            }),
-          );
-        })
-        .catch(() => {});
-    }
-    return () => {
-      window.removeEventListener("hashchange", changed);
-      if ("serviceWorker" in navigator)
-        navigator.serviceWorker.removeEventListener(
-          "controllerchange",
-          activated,
-        );
-    };
+    return () => window.removeEventListener("hashchange", changed);
   }, []);
   useEffect(trackKeyboardViewport, []);
   const go = (target: string) => {
@@ -274,66 +246,17 @@ export function Journal(props: PrivateSessionProps) {
             <span>{labels[status]}</span>
           </button>
         </header>
-        {state && (journal.record?.dirty || journal.record?.undo) && (
-          <div className="save-detail">
-            <span>
-              {section === "workout" ? (
-                journal.record?.dirty ? (
-                  "Changes waiting to sync"
-                ) : (
-                  "Last change saved"
-                )
-              ) : (
-                <>
-                  {journal.record?.dirty
-                    ? "Changes waiting to sync"
-                    : identity && journal.record?.lastSyncedAt
-                      ? `Cloud checked ${new Date(journal.record.lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                      : "This browser holds your offline copy"}{" "}
-                  · Device saved{" "}
-                  {new Date(state.updatedAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </>
-              )}
-            </span>
-            {journal.record?.undo && !journal.record.conflict && (
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  void journal
-                    .undo()
-                    .then(() => setMessage("Last change undone."))
-                    .catch((e) => setMessage(e.message))
-                }
-              >
-                <Undo2 size={15} />
-                Undo last change
-              </Button>
-            )}
-          </div>
-        )}
+        <SaveDetail
+          journal={journal}
+          compact={section === "workout"}
+          onMessage={setMessage}
+        />
         {updateReady && (
           <div className="notice">
             <span>
               A new version is ready. Your saved workout will be kept.
             </span>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                if (!worker?.waiting) {
-                  setUpdateReady(false);
-                  return;
-                }
-                navigator.serviceWorker.addEventListener(
-                  "controllerchange",
-                  () => location.reload(),
-                  { once: true },
-                );
-                worker?.waiting?.postMessage({ type: "ACTIVATE" });
-              }}
-            >
+            <Button variant="secondary" onClick={activateUpdate}>
               Reload update
             </Button>
           </div>
@@ -351,45 +274,7 @@ export function Journal(props: PrivateSessionProps) {
             </button>
           </div>
         )}
-        {journal.record?.conflict && (
-          <div className="notice warning">
-            <div>
-              <strong>Another device has newer changes.</strong>
-              <p>
-                Your work is still saved here. Export both copies before
-                choosing which version to sync.
-              </p>
-              <div className="button-row">
-                <Button
-                  variant="secondary"
-                  onClick={() => downloadBackup(backup(state!), "this-device")}
-                >
-                  Export this device
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    downloadBackup(
-                      backup(journal.record!.conflict!.state),
-                      "server-copy",
-                    )
-                  }
-                >
-                  Export server copy
-                </Button>
-                <Button onClick={() => void journal.resolveConflict("local")}>
-                  Use this device’s version
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => void journal.resolveConflict("server")}
-                >
-                  Use server version
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        <SyncConflictNotice journal={journal} />
         {!state ? (
           <div className="opening">
             <Dumbbell size={40} />
@@ -402,45 +287,7 @@ export function Journal(props: PrivateSessionProps) {
               key={identity?.id ?? "guest"}
               visible={section === "coach"}
               entryId={coachEntry.id}
-              initialCapture={coachEntry.route === "coach/capture"}
-              initialMemories={
-                coachEntry.route === "coach/plans"
-                  ? "plans"
-                  : coachEntry.route === "coach/memories"
-                    ? "memories"
-                    : undefined
-              }
-              initialVideoReview={/^coach\/lifting\/(video|technique)$/.test(
-                coachEntry.route,
-              )}
-              initialTrainingPrompt={
-                coachEntry.draft ??
-                (/^coach\/lifting\/(video|technique)$/.test(coachEntry.route)
-                  ? undefined
-                  : coachEntry.route.startsWith("coach/lifting/")
-                    ? liftingPrompt(coachEntry.route.split("/")[2])
-                    : coachEntry.route === "coach/training/new"
-                      ? "Help me build a reusable training program in Train. My goal is "
-                      : coachEntry.route.startsWith("coach/training/")
-                        ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === coachEntry.route.split("/")[2])?.name ?? "my program"}”: `
-                        : undefined)
-              }
-              initialCardioLog={
-                coachEntry.route === "coach/cardio" ||
-                /^coach\/photo\/[^/]+\/cardio(?:\/log)?$/.test(coachEntry.route)
-              }
-              initialActivityPhotoLog={/^coach\/photo\/[^/]+\/cardio\/log$/.test(
-                coachEntry.route,
-              )}
-              initialSleepLog={
-                coachEntry.route === "coach/sleep" ||
-                /^coach\/photo\/[^/]+\/sleep$/.test(coachEntry.route)
-              }
-              initialPhotoId={
-                coachEntry.route.startsWith("coach/photo/")
-                  ? coachEntry.route.split("/")[2]
-                  : undefined
-              }
+              {...coachEntryIntent(coachEntry.route, state, coachEntry.draft)}
               journal={journal}
               onLogin={() => setLogin(true)}
               go={go}
@@ -610,93 +457,12 @@ export function Journal(props: PrivateSessionProps) {
           </a>
         ))}
       </nav>
-      <Dialog
+      <SignInDialog
         open={login}
         onOpenChange={setLogin}
-        title="Your training. Everywhere."
-        description="Sign in to keep your journal in sync across devices. Bring existing device workouts across from Settings."
-      >
-        {auth.google ? (
-          <Button
-            className="full"
-            onClick={async () => {
-              const response = await fetch("/api/auth/sign-in/social", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                redirect: "manual",
-                body: JSON.stringify({
-                  provider: "google",
-                  disableRedirect: true,
-                  callbackURL: location.origin,
-                }),
-              });
-              const result = await response.json();
-              if (result.url) location.href = result.url;
-              else setMessage(result.message ?? "Sign-in is unavailable.");
-            }}
-          >
-            <LogIn size={18} />
-            Continue with Google
-          </Button>
-        ) : (
-          !auth.localPassword && (
-            <p className="notice">
-              Cloud sign-in is being configured. You can keep training and
-              export your journal from Settings.
-            </p>
-          )
-        )}
-        {auth.localPassword && (
-          <form
-            className="form-stack"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              const response = await fetch(
-                `/api/auth/${data.get("mode") === "create" ? "sign-up" : "sign-in"}/email`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    email: data.get("email"),
-                    password: data.get("password"),
-                    name: "Local athlete",
-                  }),
-                },
-              );
-              const result = await response.json();
-              if (!response.ok)
-                setMessage(result.message ?? "Could not sign in.");
-              else location.reload();
-            }}
-          >
-            <p className="muted">Local development sign-in</p>
-            <label>
-              Email
-              <input name="email" type="email" required autoComplete="email" />
-            </label>
-            <label>
-              Password
-              <input
-                name="password"
-                type="password"
-                minLength={12}
-                required
-                autoComplete="current-password"
-              />
-            </label>
-            <label>
-              Action
-              <select name="mode">
-                <option value="signin">Sign in</option>
-                <option value="create">Create local account</option>
-              </select>
-            </label>
-            <Button type="submit">Continue</Button>
-          </form>
-        )}
-      </Dialog>
+        auth={auth}
+        onMessage={setMessage}
+      />
     </div>
   );
 }

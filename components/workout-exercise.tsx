@@ -275,6 +275,7 @@ export function WorkoutExercise({
       : entry.sets.findIndex((set) => !isValidLoggedSet(set)),
   );
   const nextSet = entry.sets[nextSetIndex];
+  const allRecorded = entry.sets.every(isValidLoggedSet);
   return (
     <article className={`exercise-card ${active ? "expanded" : ""}`}>
       <button
@@ -308,11 +309,31 @@ export function WorkoutExercise({
         <div className="exercise-body">
           {nextSet && (
             <>
-              <p className="current-set-label">
-                {entry.sets.every(isValidLoggedSet)
-                  ? "All sets recorded"
-                  : `Set ${nextSetIndex + 1} of ${entry.sets.length}`}
-              </p>
+              <div className="current-set-heading">
+                <p className="current-set-label">
+                  {allRecorded
+                    ? "All sets recorded"
+                    : `Set ${nextSetIndex + 1} of ${entry.sets.length}`}
+                </p>
+                {/* The label above states the position; the dots only add an
+                    at-a-glance view of made and missed sets. */}
+                <ol className="set-dots" aria-hidden="true">
+                  {entry.sets.map((set, i) => (
+                    <li
+                      key={set.id}
+                      data-state={
+                        set.result === "miss"
+                          ? "miss"
+                          : isValidLoggedSet(set)
+                            ? "made"
+                            : i === nextSetIndex && !allRecorded
+                              ? "current"
+                              : "open"
+                      }
+                    />
+                  ))}
+                </ol>
+              </div>
               <WorkoutSet
                 key="focused-set"
                 set={nextSet}

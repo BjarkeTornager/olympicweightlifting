@@ -20,3 +20,6 @@ public/sw.js
 ios/**/xcuserdata/
 *.xcuserstate
 ios/DerivedData/
+
+# Python bytecode from the video scripts
+__pycache__/

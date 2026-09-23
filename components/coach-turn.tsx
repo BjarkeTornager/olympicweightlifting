@@ -1,23 +1,13 @@
 "use client";
 import { LoaderCircle, Sparkles, Square } from "@/components/ui/icons";
-import type { ActionPreview } from "@/lib/agent/actions";
-import type { SavedVisual } from "@/lib/coach-visuals";
+import type { Turn } from "@/lib/coach-turns";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
 import { FoodPhotoImage } from "./food-photo";
 import { AssistantText } from "./assistant-text";
 import { AguiVisuals } from "./agui-components";
 import { CoachProposal } from "./coach-proposal";
 
-export type Turn = {
-  id: string;
-  question: string;
-  reply?: string;
-  proposals?: ActionPreview[];
-  status: string;
-  photoIds?: string[];
-  visuals?: SavedVisual[];
-  activity?: string;
-};
+export type { Turn };
 
 export function CoachTurn({
   turn: t,

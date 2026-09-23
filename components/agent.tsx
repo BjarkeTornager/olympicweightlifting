@@ -1,30 +1,22 @@
 "use client";
 import { privateFetch } from "@/lib/private-fetch";
-import { getLocal } from "@/lib/local";
 import { useConversationScroll } from "@/lib/use-conversation-scroll";
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCoachConnection } from "@/lib/use-coach-connection";
+import { useCoachRun } from "@/lib/use-coach-run";
+import { markProposal, mergeSavedTurns } from "@/lib/coach-turns";
+import { coachBackgroundStatus, coachConnectionHint } from "@/lib/coach-status";
 import {
   ArrowRight,
   MessageCircle,
   Send,
   Sparkles,
-  Moon,
   Plus,
-  Utensils,
   MoreHorizontal,
   ChevronDown,
-  X,
   LoaderCircle,
   CalendarDays,
   Table2,
-  Dumbbell,
 } from "@/components/ui/icons";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
@@ -37,8 +29,6 @@ import {
   sleepLoggingPrompt,
   type UserImage,
 } from "@/lib/images";
-import { ImageBadge } from "./image-library";
-import { FoodPhotoImage } from "./food-photo";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { CheckinDialog } from "./health";
@@ -53,10 +43,14 @@ import {
   MAX_QUEUED_MESSAGES,
   QUEUE_FULL_MESSAGE,
   queuedMessage,
-  type QueuedMessage,
 } from "./coach-queue";
 import { CoachImageTools } from "./coach-image-tools";
 import { CoachOptions } from "./coach-options";
+import {
+  ComposerAttachments,
+  ComposerQuickActions,
+  ComposerReconnect,
+} from "./coach-composer";
 export function TrainingAgent({
   journal,
   onLogin,
@@ -93,43 +87,15 @@ export function TrainingAgent({
       : (initialTrainingPrompt ?? "");
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(entryPrompt),
-    [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const [connection, setConnection] = useState<{
-      enabled: boolean;
-      provider: string | null;
-      protocol?: string;
-    } | null>(null),
-    [clear, setClear] = useState(false);
+  const [clear, setClear] = useState(false);
   const [acting, setActing] = useState<string | null>(null),
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
-  const activeRun = useRef<AbortController | null>(null);
-  const [queue, setQueue] = useState<QueuedMessage[]>([]);
-  const [failedMessage, setFailedMessage] = useState<QueuedMessage | null>(
-    null,
-  );
-  const [activeId, setActiveId] = useState<string | null>(null);
   // A submitted draft cannot be accepted twice before React clears the composer.
   const submittedDraft = useRef<string | null>(null);
   const submittedVideoReviews = useRef(new Set<string>());
   const submittedActivityPhotos = useRef(new Set<string>());
-  const queueSize = useRef(queue.length);
-  useEffect(() => {
-    queueSize.current = queue.length;
-  }, [queue.length]);
-  // Account changes/sign-out still unmount this controller and cancel the run.
-  // Internal navigation only removes the view below, preserving work and drafts.
-  useEffect(
-    () => () => {
-      activeRun.current?.abort();
-      activeRun.current = null;
-    },
-    [],
-  );
-  const [backgroundResult, setBackgroundResult] = useState<
-    "ready" | "failed" | null
-  >(null);
   const [view, setView] = useState<"conversation" | "today" | "week">(
     "conversation",
   );
@@ -225,8 +191,45 @@ export function TrainingAgent({
       setCheckinDate(null);
     }
   }
-  if (visible && backgroundResult) setBackgroundResult(null);
   const accountId = journal.identity?.id;
+  const coach = useCoachConnection(accountId, (saved) =>
+    setTurns((current) => mergeSavedTurns(saved, current)),
+  );
+  const { connection, headers } = coach;
+  const connectionLoading = coach.loading,
+    connectionError = coach.error;
+  const pending = Boolean(
+    journal.record?.dirty ||
+    journal.record?.pending ||
+    journal.record?.conflict,
+  );
+  const ready = Boolean(
+    accountId &&
+    connection?.enabled &&
+    !pending &&
+    !loadingImage &&
+    journal.status === "synced",
+  );
+  const run = useCoachRun({
+    accountId,
+    journal,
+    connection,
+    headers,
+    ready,
+    acting,
+    setActing,
+    setTurns,
+    setError,
+    setNotice,
+  });
+  const { queue, failedMessage, busy, backgroundResult, enqueue } = run;
+  // Opening Coach acknowledges a reply that finished in the background.
+  if (visible && backgroundResult) run.setBackgroundResult(null);
+  // Read by the photo loader, which must not restart when the queue changes.
+  const queueSize = useRef(queue.length);
+  useEffect(() => {
+    queueSize.current = queue.length;
+  }, [queue.length]);
   useEffect(() => {
     if (!initialPhotoId || !accountId) return;
     const abort = new AbortController();
@@ -260,10 +263,9 @@ export function TrainingAgent({
               );
             }
             submittedActivityPhotos.current.add(image.id);
-            setQueue((waiting) => [
-              ...waiting,
+            enqueue(
               queuedMessage(image.id, activityLoggingPrompt(true), [image.id]),
-            ]);
+            );
             setView("conversation");
             setNotice(
               "Activity photo queued. Coach will log the visible details with Undo.",
@@ -295,113 +297,23 @@ export function TrainingAgent({
     accountId,
     initialActivityPhotoLog,
     initialCardioLog,
+    enqueue,
   ]);
-  const headers = useCallback(
-    () => ({
-      "Content-Type": "application/json",
-      "X-Journal-Account": accountId ?? "",
-    }),
-    [accountId],
-  );
-  const [connectionLoading, setConnectionLoading] = useState(true);
-  const [connectionError, setConnectionError] = useState("");
-  const connectionRequest = useRef<AbortController | null>(null);
-  const connectionReady = useRef(false);
-  const refresh = useCallback(async () => {
-    if (!accountId || connectionRequest.current) return;
-    const controller = new AbortController();
-    connectionRequest.current = controller;
-    setConnectionLoading(true);
-    setConnectionError("");
-    try {
-      const r = await privateFetch("/api/agent", {
-        headers: headers(),
-        cache: "no-store",
-        signal: AbortSignal.any([
-          controller.signal,
-          AbortSignal.timeout(10000),
-        ]),
-      });
-      const data = await r.json();
-      if (!r.ok) throw Error("Coach couldn’t connect. Please try again.");
-      controller.signal.throwIfAborted();
-      connectionReady.current = Boolean(data.enabled);
-      setConnection({
-        enabled: data.enabled,
-        provider: data.provider,
-        protocol: data.protocol,
-      });
-      setTurns((current) => [
-        ...data.turns.filter((t: Turn) => !current.some((v) => v.id === t.id)),
-        ...current,
-      ]);
-    } catch {
-      if (!controller.signal.aborted) {
-        connectionReady.current = false;
-        setConnectionError("Coach couldn’t connect. Your draft is still here.");
-      }
-    } finally {
-      if (connectionRequest.current === controller) {
-        connectionRequest.current = null;
-        if (!controller.signal.aborted) setConnectionLoading(false);
-      }
-    }
-  }, [accountId, headers]);
-  useEffect(() => {
-    const retry = () => {
-      if (!connectionReady.current && document.visibilityState === "visible")
-        void refresh();
-    };
-    const initial = setTimeout(() => void refresh(), 0);
-    const interval = setInterval(retry, 15000);
-    window.addEventListener("online", retry);
-    window.addEventListener("pageshow", retry);
-    document.addEventListener("visibilitychange", retry);
-    return () => {
-      connectionRequest.current?.abort();
-      connectionRequest.current = null;
-      clearTimeout(initial);
-      clearInterval(interval);
-      window.removeEventListener("online", retry);
-      window.removeEventListener("pageshow", retry);
-      document.removeEventListener("visibilitychange", retry);
-    };
-  }, [refresh]);
-  const pending = Boolean(
-    journal.record?.dirty ||
-    journal.record?.pending ||
-    journal.record?.conflict,
-  );
-  const ready = Boolean(
-    accountId &&
-    connection?.enabled &&
-    !pending &&
-    !loadingImage &&
-    journal.status === "synced",
-  );
   const reconnecting = connectionLoading || journal.status === "syncing";
-  const connectionHint = journal.record?.conflict
-    ? "Choose which journal version to keep before messaging Coach."
-    : pending
-      ? "Sync your pending changes before messaging Coach. Your draft is still here."
-      : journal.status === "offline"
-        ? "You’re offline. Reconnect to send your message. Your draft is still here."
-        : journal.status !== "synced"
-          ? "Your journal hasn’t connected yet. Reconnect to send your message."
-          : connectionError
-            ? connectionError
-            : connectionLoading
-              ? "Connecting to Coach… Your draft is still here."
-              : !connection?.enabled
-                ? "Coach is temporarily unavailable. Try reconnecting in a moment."
-                : loadingImage
-                  ? "Loading your attached image…"
-                  : "";
+  const connectionHint = coachConnectionHint({
+    conflict: Boolean(journal.record?.conflict),
+    pending,
+    journalStatus: journal.status,
+    connectionError,
+    connecting: connectionLoading,
+    enabled: Boolean(connection?.enabled),
+    loadingImage,
+  });
   const reconnect = () => {
     // Recheck independently: neither failure should prevent the other recovery.
     // Never submit the draft or save a proposal as a side effect of reconnecting.
     void journal.sync();
-    if (!connectionReady.current) void refresh();
+    coach.reconnect();
   };
   const attach = async (input?: File | File[], purpose?: "meal-photo") => {
     const files = input ? (Array.isArray(input) ? input : [input]) : [];
@@ -484,7 +396,7 @@ export function TrainingAgent({
     if (submittedDraft.current === signature) return;
     submittedDraft.current = signature;
     const job = queuedMessage(crypto.randomUUID(), question, [...photoIds]);
-    setQueue((waiting) => [...waiting, job]);
+    enqueue(job);
     setMessage("");
     setPhotoIds([]);
     setImageDetails({});
@@ -494,182 +406,8 @@ export function TrainingAgent({
     // Keep keyboard focus so another message can follow immediately.
     input.current?.focus({ preventScroll: true });
   };
-  const execute = async (job: QueuedMessage) => {
-    const { id, question, photoIds: attachments } = job;
-    const abort = new AbortController();
-    activeRun.current = abort;
-    setActiveId(id);
-    setBusy(true);
-    setBackgroundResult(null);
-    setError("");
-    setTurns((old) => [
-      ...old.filter((t) => t.id !== id),
-      { id, question, photoIds: attachments, status: "running" },
-    ]);
-    try {
-      const { runCoach } = await import("@/lib/coach-client");
-      // Read the committed local snapshot after the preceding run's fresh sync.
-      // A render captured before that sync can still contain an older revision.
-      const record = await getLocal(accountId!);
-      abort.signal.throwIfAborted();
-      if (record.dirty || record.pending || record.conflict)
-        throw Error("Sync your journal changes, then retry this message.");
-      const payload = {
-        id,
-        message: question,
-        revision: record.revision,
-        timezone: job.timezone,
-        submittedAt: job.submittedAt,
-        photoIds: attachments,
-      };
-      const signal = AbortSignal.any([
-        abort.signal,
-        AbortSignal.timeout(110000),
-      ]);
-      const result =
-        connection?.protocol === "ag-ui"
-          ? await runCoach(accountId!, payload, signal, (update) => {
-              if (signal.aborted) return;
-              setTurns((old) =>
-                old.map((t) =>
-                  t.id === id
-                    ? {
-                        ...t,
-                        ...(update.reply !== undefined
-                          ? { reply: update.reply }
-                          : {}),
-                        ...(update.activity
-                          ? { activity: update.activity }
-                          : {}),
-                        ...(update.visual &&
-                        !(t.visuals ?? []).some(
-                          (v) => v.id === update.visual!.id,
-                        )
-                          ? {
-                              visuals: [
-                                ...(t.visuals ?? []),
-                                update.visual,
-                              ].slice(0, 3),
-                            }
-                          : {}),
-                      }
-                    : t,
-                ),
-              );
-            })
-          : await (async () => {
-              // Compatibility during rolling releases; never retry a failed run
-              // using a second transport, which could prepare duplicate changes.
-              const r = await privateFetch("/api/agent", {
-                method: "POST",
-                headers: headers(),
-                body: JSON.stringify(payload),
-                signal,
-              });
-              const data = await r.json();
-              if (!r.ok)
-                throw Error(
-                  data.error ??
-                    "The assistant could not complete that request.",
-                );
-              return data;
-            })();
-      setTurns((old) =>
-        old.map((t) =>
-          t.id === id
-            ? { id, question, photoIds: attachments, ...result, status: "done" }
-            : t,
-        ),
-      );
-      setBackgroundResult("ready");
-      setFailedMessage(null);
-      if (result.proposals.some((p: ActionPreview) => p.status === "saved"))
-        await journal.sync(true);
-    } catch (e) {
-      // A dropped stream can occur after the save committed. Read the durable
-      // receipt before offering a retry, and reuse this run ID if still unknown.
-      if (activeRun.current !== abort) return;
-      try {
-        const recovered = await privateFetch(
-          `/api/agent?turnId=${encodeURIComponent(id)}`,
-          {
-            headers: headers(),
-            signal: AbortSignal.timeout(10000),
-          },
-        );
-        const data = await recovered.json();
-        if (recovered.ok && data.turn?.status === "done" && data.turn.reply) {
-          setTurns((old) => old.map((t) => (t.id === id ? data.turn : t)));
-          setFailedMessage(null);
-          setBackgroundResult("ready");
-          await journal.sync(true);
-          return;
-        }
-      } catch {
-        /* Offline: keep the same run ID to prevent duplicate saves. */
-      }
-      setFailedMessage(job);
-      setError(
-        abort.signal.aborted
-          ? "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice."
-          : e instanceof Error
-            ? e.message
-            : "The request failed. Your journal is safe.",
-      );
-      setBackgroundResult("failed");
-      setTurns((old) =>
-        old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
-      );
-      void journal.sync();
-    } finally {
-      if (activeRun.current === abort) {
-        activeRun.current = null;
-        setActiveId(null);
-        setBusy(false);
-      }
-    }
-  };
-  // The effect event sees the latest account, connection and journal controller.
-  // Only this drain starts requests; accepting messages never starts a parallel run.
-  const drain = useEffectEvent(() => {
-    if (activeRun.current || failedMessage || !ready || acting || !queue.length)
-      return;
-    const next = queue[0];
-    setQueue((waiting) => waiting.filter((job) => job.id !== next.id));
-    void execute(next);
-  });
-  useEffect(() => {
-    const timer = setTimeout(() => drain(), 0);
-    return () => clearTimeout(timer);
-  }, [queue, busy, failedMessage, ready, acting]);
-  useEffect(() => {
-    if (!busy && !queue.length && !failedMessage) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [busy, queue.length, failedMessage]);
-  const retryFailed = () => {
-    if (!failedMessage || busy || !ready) return;
-    setQueue((waiting) => [failedMessage, ...waiting]);
-    setFailedMessage(null);
-    setError("");
-  };
-  const skipFailed = async () => {
-    if (busy || !failedMessage) return;
-    setActing("queue-sync");
-    await journal.sync(true);
-    setFailedMessage(null);
-    setActing(null);
-    setError("");
-    setNotice(
-      "Retry skipped. Check your journal for any entry that was already saved.",
-    );
-  };
   const apply = async (p: ActionPreview, undo = false) => {
-    if (pending || acting || activeRun.current) return;
+    if (pending || acting || run.running()) return;
     setActing(p.id);
     setError("");
     setNotice("");
@@ -682,20 +420,7 @@ export function TrainingAgent({
       });
       const data = await r.json();
       if (!r.ok) throw Error(data.error ?? "Could not save this change.");
-      setTurns((old) =>
-        old.map((t) => ({
-          ...t,
-          ...(undo && t.proposals?.some((v) => v.id === p.id && v.automatic)
-            ? {
-                reply:
-                  "Undone. Your journal has been restored to before this change.",
-              }
-            : {}),
-          proposals: t.proposals?.map((v) =>
-            v.id === p.id ? { ...v, status: data.status } : v,
-          ),
-        })),
-      );
+      setTurns((old) => markProposal(old, p.id, data.status, undo));
       await journal.sync(true);
       setNotice(
         undo
@@ -735,23 +460,14 @@ export function TrainingAgent({
     }
   };
   if (!visible) {
-    const status = failedMessage
-      ? "Coach needs your attention"
-      : busy
-        ? queue.length
-          ? `Coach is working… ${queue.length} queued`
-          : "Coach is working…"
-        : queue.length
-          ? `${queue.length} messages waiting for Coach`
-          : acting
-            ? "Coach is saving your change…"
-            : uploading || loadingImage
-              ? "Coach is preparing your photo…"
-              : backgroundResult === "ready"
-                ? "Your Coach reply is ready"
-                : backgroundResult === "failed"
-                  ? "Coach needs your attention"
-                  : null;
+    const status = coachBackgroundStatus({
+      failed: Boolean(failedMessage),
+      busy,
+      queued: queue.length,
+      acting: Boolean(acting),
+      preparingPhoto: uploading || loadingImage,
+      result: backgroundResult,
+    });
     return status ? (
       <div className="coach-background-status">
         <span role="status">
@@ -1021,8 +737,8 @@ export function TrainingAgent({
                     key={t.id}
                     turn={t}
                     accountId={accountId}
-                    active={busy && t.id === activeId}
-                    onStop={() => activeRun.current?.abort()}
+                    active={busy && t.id === run.activeId}
+                    onStop={run.stop}
                     proposal={{
                       now,
                       ready,
@@ -1043,11 +759,9 @@ export function TrainingAgent({
                 queue={queue}
                 failedMessage={failedMessage}
                 disabled={busy || !ready || Boolean(acting)}
-                onRetry={retryFailed}
-                onSkip={() => void skipFailed()}
-                onRemove={(id) =>
-                  setQueue((waiting) => waiting.filter((job) => job.id !== id))
-                }
+                onRetry={run.retryFailed}
+                onSkip={() => void run.skipFailed()}
+                onRemove={run.remove}
               />
             )}
             {error && (
@@ -1107,50 +821,12 @@ export function TrainingAgent({
                 Press Enter to send. Use Shift+Enter for a new line.
               </span>
               <div className="composer-actions">
-                <div className="composer-quick-actions">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={uploading || loadingImage}
-                    onClick={() =>
-                      draft(
-                        "Log what I ate with sensible portion estimates. Save it now, label assumptions, and let me correct details afterward.",
-                      )
-                    }
-                  >
-                    <Utensils size={16} /> <span>Log food</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={uploading || loadingImage}
-                    onClick={() =>
-                      draft(
-                        message.trim()
-                          ? "Please use this to log my sleep. Ask about any unclear date or time asleep and save the entry."
-                          : sleepLoggingPrompt(photoIds.length > 0),
-                      )
-                    }
-                  >
-                    <Moon size={16} /> <span>Log sleep</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={uploading || loadingImage}
-                    onClick={() =>
-                      draft(
-                        photoIds.length
-                          ? "Log my workout from the attached photo and any details I provided."
-                          : message.trim()
-                            ? "Please log this workout."
-                            : "Log my workout: ",
-                      )
-                    }
-                  >
-                    <Dumbbell size={16} /> <span>Add workout</span>
-                  </Button>
-                </div>
+                <ComposerQuickActions
+                  disabled={uploading || loadingImage}
+                  hasText={Boolean(message.trim())}
+                  photoCount={photoIds.length}
+                  onDraft={draft}
+                />
                 <div className="composer-send-controls">
                   <Button
                     type="button"
@@ -1213,62 +889,24 @@ export function TrainingAgent({
                 />
               </Dialog>
               {photoIds.length > 0 && accountId && (
-                <>
-                  {photoIds.length > 4 && (
-                    <p className="error-text" role="alert">
-                      Choose up to four photos for this message. Remove an
-                      attachment to send.
-                    </p>
-                  )}
-                  <div className="coach-attachment-strip">
-                    {photoIds.map((id) => (
-                      <div key={id}>
-                        <FoodPhotoImage
-                          id={id}
-                          accountId={accountId}
-                          label="Image ready to send"
-                        />
-                        {imageDetails[id] && (
-                          <ImageBadge image={imageDetails[id]} />
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          aria-label="Remove attachment"
-                          onClick={() =>
-                            setPhotoIds((ids) => ids.filter((v) => v !== id))
-                          }
-                        >
-                          <X size={16} />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="fine-print">
-                    Attached images are shared with{" "}
-                    {connection?.provider ?? "your assistant provider"} when you
-                    send. Copies stay in your{" "}
-                    <a href="#images">private image library</a>.
-                  </p>
-                </>
+                <ComposerAttachments
+                  photoIds={photoIds}
+                  accountId={accountId}
+                  imageDetails={imageDetails}
+                  provider={connection?.provider}
+                  onRemove={(id) =>
+                    setPhotoIds((ids) => ids.filter((v) => v !== id))
+                  }
+                />
               )}
               {!ready && (
-                <div className="coach-reconnect" role="status">
-                  <p className="fine-print">{connectionHint}</p>
-                  {journal.error && (
-                    <p className="fine-print">{journal.error}</p>
-                  )}
-                  {!loadingImage && !journal.record?.conflict && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={reconnecting}
-                      onClick={reconnect}
-                    >
-                      {reconnecting ? "Reconnecting…" : "Reconnect Coach"}
-                    </Button>
-                  )}
-                </div>
+                <ComposerReconnect
+                  hint={connectionHint}
+                  journalError={journal.error}
+                  canReconnect={!loadingImage && !journal.record?.conflict}
+                  reconnecting={reconnecting}
+                  onReconnect={reconnect}
+                />
               )}
             </form>
             <p className="coach-composer-note">
@@ -1304,14 +942,13 @@ export function TrainingAgent({
                 "Your queue is full. Let Coach finish a message first.",
               );
             submittedVideoReviews.current.add(id);
-            setQueue((waiting) => [
-              ...waiting,
+            enqueue(
               queuedMessage(
                 id,
                 prompt,
                 photos.map((photo) => photo.id),
               ),
-            ]);
+            );
             setView("conversation");
             setToolsOpen(false);
             setVideoOpen(false);

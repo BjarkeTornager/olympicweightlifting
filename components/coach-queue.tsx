@@ -2,31 +2,14 @@
 import { ChevronDown, X } from "@/components/ui/icons";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
 import { Button } from "./ui/button";
+import { MAX_QUEUED_MESSAGES, type QueuedMessage } from "@/lib/coach-queue";
 
-export type QueuedMessage = {
-  id: string;
-  question: string;
-  photoIds: string[];
-  timezone: string;
-  submittedAt: string;
-};
-export const MAX_QUEUED_MESSAGES = 20;
-export const QUEUE_FULL_MESSAGE =
-  "Your queue is full. Let Coach finish a message or remove a queued message.";
-
-export function queuedMessage(
-  id: string,
-  question: string,
-  photoIds: string[],
-): QueuedMessage {
-  return {
-    id,
-    question,
-    photoIds,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    submittedAt: new Date().toISOString(),
-  };
-}
+export {
+  MAX_QUEUED_MESSAGES,
+  QUEUE_FULL_MESSAGE,
+  queuedMessage,
+  type QueuedMessage,
+} from "@/lib/coach-queue";
 
 const messageLabel = (job: QueuedMessage) =>
   videoFeedbackLabel(job.question, job.photoIds.length) ?? job.question;

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { Plus, MessageCircle } from "@/components/ui/icons";
+import { Plus, MessageCircle, Flame } from "@/components/ui/icons";
+import { AreaIcon } from "../ui/area-icon";
 import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
@@ -21,8 +22,29 @@ import {
   MealForm,
   blankFoodItem,
   nutrientKeys,
-  nutrientLabel,
 } from "../food-forms";
+
+const macroLabel = { protein: "Protein", carbs: "Carbs", fat: "Fat" };
+
+// Progress toward a daily target; nothing is drawn without one.
+function TargetBar({
+  nutrient,
+  value,
+  target,
+}: {
+  nutrient: string;
+  value: number;
+  target: number | null;
+}) {
+  if (target == null || target <= 0) return null;
+  return (
+    <progress
+      aria-label={`${nutrient} toward target`}
+      value={Math.min(value, target)}
+      max={target}
+    />
+  );
+}
 import { ImageLibrary } from "../image-library";
 import { FoodPhotoImage } from "../food-photo";
 import { Button } from "../ui/button";
@@ -80,6 +102,15 @@ export function FoodView({
     Number.isNaN(start.getTime()) ? date : start.toISOString().slice(0, 10),
     date,
   );
+  const target = (key: (typeof nutrientKeys)[number]) =>
+    nutrition.targets[key] ?? null;
+  const remaining = (key: (typeof nutrientKeys)[number]) => {
+    const goal = target(key)!;
+    const unit = key === "calories" ? "kcal" : "g";
+    const diff = Math.abs(Math.round(goal - totals[key]));
+    return `${diff.toLocaleString("en-GB")} ${unit} ${totals[key] > goal ? "above target" : "remaining"}`;
+  };
+  const weekMax = Math.max(1, ...week.days.map((day) => day.calories));
   return (
     <div className="food-page">
       <div className="page-heading compact">
@@ -148,8 +179,62 @@ export function FoodView({
           Daily targets
         </Button>
       </div>
+      {hasFood && (
+        <section className="food-totals" aria-label={`Food totals for ${date}`}>
+          <div className="food-calories">
+            <span className="area-tile-heading">
+              <AreaIcon area="food" icon={Flame} size="sm" />
+              <span>Calories</span>
+            </span>
+            <p>
+              <strong>{totals.calories.toLocaleString("en-GB")}</strong>
+              <span>
+                {target("calories") == null
+                  ? "kcal · no daily target"
+                  : `of ${target("calories")!.toLocaleString("en-GB")} kcal`}
+              </span>
+            </p>
+            <TargetBar
+              nutrient="calories"
+              value={totals.calories}
+              target={target("calories")}
+            />
+            {target("calories") != null && (
+              <span className="fine-print">{remaining("calories")}</span>
+            )}
+          </div>
+          <div className="food-macros">
+            {(["protein", "carbs", "fat"] as const).map((key) => (
+              <div key={key} data-macro={key}>
+                <span>{macroLabel[key]}</span>
+                <strong>
+                  {totals[key]} <small>g</small>
+                </strong>
+                <TargetBar
+                  nutrient={key}
+                  value={totals[key]}
+                  target={target(key)}
+                />
+                <small>
+                  {target(key) == null ? "No daily target" : remaining(key)}
+                </small>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      <p className="fine-print">
+        {hasFood
+          ? `${meals.length} meals logged. Totals reflect recorded food only.`
+          : "No meals logged for this date. This does not mean you ate nothing."}{" "}
+        Diet goal: {nutrition.targets.goal} weight. Photo estimates depend on
+        portions, ingredients and cooking fats.
+      </p>
       {(hasFood || nutrition.completeDays?.includes(date)) && (
-        <section className="food-completeness">
+        <section
+          className="food-completeness"
+          data-complete={nutrition.completeDays?.includes(date) || undefined}
+        >
           <div>
             <strong>
               {nutrition.completeDays?.includes(date)
@@ -186,90 +271,6 @@ export function FoodView({
           </Button>
         </section>
       )}
-      <details className="food-favourites">
-        <summary>Favourite meals · {nutrition.favourites?.length ?? 0}</summary>
-        <p className="fine-print">
-          Save a logged meal as a favourite, then reuse its portions and
-          ingredient tags. Review before logging; old photos are not copied.
-        </p>
-        {(nutrition.favourites ?? []).map((meal) => (
-          <article className="food-favourite" key={meal.id}>
-            <div>
-              <strong>{meal.name}</strong>
-              <small>
-                {meal.type} · {totalNutrients(meal.items).calories} kcal
-                {meal.estimated ? " · estimated" : ""}
-              </small>
-            </div>
-            <div className="button-row">
-              <Button
-                variant="secondary"
-                onClick={() => setEditor(repeatMeal(meal, date))}
-              >
-                Review & log
-              </Button>
-              <Button
-                variant="ghost"
-                aria-label={`Remove favourite ${meal.name}`}
-                onClick={() =>
-                  void run(async () => {
-                    await journal.update((s) => {
-                      s.nutrition.favourites = (
-                        s.nutrition.favourites ?? []
-                      ).filter((m) => m.id !== meal.id);
-                    });
-                    setNotice("Favourite removed. Logged meals are kept.");
-                  })
-                }
-              >
-                Remove
-              </Button>
-            </div>
-          </article>
-        ))}
-        {!nutrition.favourites?.length && (
-          <p className="muted">Your go-to meals will appear here.</p>
-        )}
-      </details>
-      {hasFood && (
-        <div className="food-totals">
-          {nutrientKeys.map((key) => (
-            <section className="panel" key={key}>
-              <span className="muted">{nutrientLabel[key]}</span>
-              <strong>{totals[key]}</strong>
-              <span>
-                {nutrition.targets[key] == null
-                  ? "No daily target"
-                  : `of ${nutrition.targets[key]}${key === "calories" ? " kcal" : " g"}`}
-              </span>
-              {nutrition.targets[key] != null &&
-                nutrition.targets[key]! > 0 && (
-                  <progress
-                    aria-label={`${key} toward target`}
-                    value={Math.min(totals[key], nutrition.targets[key]!)}
-                    max={nutrition.targets[key]!}
-                  />
-                )}
-              {nutrition.targets[key] != null && (
-                <span className="fine-print">
-                  {Math.abs(Math.round(nutrition.targets[key]! - totals[key]))}{" "}
-                  {key === "calories" ? "kcal" : "g"}{" "}
-                  {totals[key] > nutrition.targets[key]!
-                    ? "above target"
-                    : "remaining"}
-                </span>
-              )}
-            </section>
-          ))}
-        </div>
-      )}
-      <p className="fine-print">
-        {hasFood
-          ? `${meals.length} meals logged. Totals reflect recorded food only.`
-          : "No meals logged for this date. This does not mean you ate nothing."}{" "}
-        Diet goal: {nutrition.targets.goal} weight. Photo estimates depend on
-        portions, ingredients and cooking fats.
-      </p>
       <section className="panel">
         <h2>{allDates ? "Your meals" : `Meals · ${date}`}</h2>
         <div className="food-search-controls">
@@ -332,27 +333,9 @@ export function FoodView({
         {filteredMeals.slice(0, mealLimit).map((meal) => (
           <article className="food-meal" key={meal.id}>
             <MealDetails meal={meal} />
-            <Button
-              variant="ghost"
-              disabled={(nutrition.favourites?.length ?? 0) >= 50}
-              onClick={() =>
-                void run(async () => {
-                  const favourite = favouriteFromMeal(meal);
-                  await journal.update((s) => {
-                    s.nutrition.favourites = [
-                      ...(s.nutrition.favourites ?? []),
-                      favourite,
-                    ];
-                  });
-                  setNotice(`${meal.name} saved to Favourite meals.`);
-                })
-              }
-            >
-              Save as favourite
-            </Button>
-            <div className="food-photo-strip">
-              {accountId &&
-                meal.photoIds.map((id) => (
+            {accountId && meal.photoIds.length > 0 && (
+              <div className="food-photo-strip">
+                {meal.photoIds.map((id) => (
                   <FoodPhotoImage
                     key={`${accountId}:${id}`}
                     id={id}
@@ -361,8 +344,9 @@ export function FoodView({
                     description={`${meal.type} · ${meal.date}`}
                   />
                 ))}
-            </div>
-            <div className="button-row">
+              </div>
+            )}
+            <div className="food-meal-actions">
               <Button
                 type="button"
                 variant="secondary"
@@ -371,8 +355,27 @@ export function FoodView({
                 Edit meal
               </Button>
               <Button
+                variant="ghost"
+                disabled={(nutrition.favourites?.length ?? 0) >= 50}
+                onClick={() =>
+                  void run(async () => {
+                    const favourite = favouriteFromMeal(meal);
+                    await journal.update((s) => {
+                      s.nutrition.favourites = [
+                        ...(s.nutrition.favourites ?? []),
+                        favourite,
+                      ];
+                    });
+                    setNotice(`${meal.name} saved to Favourite meals.`);
+                  })
+                }
+              >
+                Save as favourite
+              </Button>
+              <Button
                 type="button"
                 variant="ghost"
+                className="food-meal-delete"
                 onClick={() => setRemoveMealId(meal.id)}
               >
                 Delete meal
@@ -391,6 +394,51 @@ export function FoodView({
           Show more meals ({filteredMeals.length - mealLimit} remaining)
         </Button>
       )}
+      <details className="food-favourites">
+        <summary>Favourite meals · {nutrition.favourites?.length ?? 0}</summary>
+        <p className="fine-print">
+          Save a logged meal as a favourite, then reuse its portions and
+          ingredient tags. Review before logging; old photos are not copied.
+        </p>
+        {(nutrition.favourites ?? []).map((meal) => (
+          <article className="food-favourite" key={meal.id}>
+            <div>
+              <strong>{meal.name}</strong>
+              <small>
+                {meal.type} · {totalNutrients(meal.items).calories} kcal
+                {meal.estimated ? " · estimated" : ""}
+              </small>
+            </div>
+            <div className="button-row">
+              <Button
+                variant="secondary"
+                onClick={() => setEditor(repeatMeal(meal, date))}
+              >
+                Review & log
+              </Button>
+              <Button
+                variant="ghost"
+                aria-label={`Remove favourite ${meal.name}`}
+                onClick={() =>
+                  void run(async () => {
+                    await journal.update((s) => {
+                      s.nutrition.favourites = (
+                        s.nutrition.favourites ?? []
+                      ).filter((m) => m.id !== meal.id);
+                    });
+                    setNotice("Favourite removed. Logged meals are kept.");
+                  })
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          </article>
+        ))}
+        {!nutrition.favourites?.length && (
+          <p className="muted">Your go-to meals will appear here.</p>
+        )}
+      </details>
       <section className="panel">
         <h2>Last 7 days</h2>
         <p>
@@ -401,10 +449,21 @@ export function FoodView({
         </p>
         <div className="food-week">
           {week.days.map((day) => (
-            <button key={day.date} onClick={() => setDate(day.date)}>
-              <span>{day.date.slice(5)}</span>
+            <button
+              key={day.date}
+              aria-pressed={day.date === date}
+              onClick={() => setDate(day.date)}
+            >
+              <span className="food-week-bar" aria-hidden="true">
+                <span
+                  style={{
+                    height: `${Math.round((day.calories / weekMax) * 100)}%`,
+                  }}
+                />
+              </span>
               <strong>{day.calories} kcal</strong>
               <small>{day.protein} g protein</small>
+              <span>{day.date.slice(5)}</span>
             </button>
           ))}
         </div>

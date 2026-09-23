@@ -4,7 +4,7 @@ import type { ActionPreview } from "@/lib/agent/actions";
 import { exerciseName } from "@/lib/domain";
 import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
-import { MealDetails } from "./views/food";
+import { MealDetails } from "./meal-details";
 import { CardioDetails } from "./cardio";
 import { CheckinDetails } from "./health";
 import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";

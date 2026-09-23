@@ -4,7 +4,7 @@ import { formatSleepDuration } from "@/lib/health";
 import { formatDuration } from "@/lib/cardio";
 import { totalNutrients } from "@/lib/nutrition";
 import { exerciseName } from "@/lib/domain";
-import { MealDetails } from "./views/food";
+import { MealDetails } from "./meal-details";
 import { CheckinDetails } from "./health";
 import { CardioDetails } from "./cardio";
 import { LiftingBriefDetails } from "./lifting-brief";

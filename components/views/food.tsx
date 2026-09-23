@@ -14,59 +14,19 @@ import {
   mealTypes,
   foodGroups,
   type Meal,
-  type FoodItem,
 } from "@/lib/nutrition";
-import { FoodTags, FoodTagEditor } from "../food-tags";
+import { MealDetails } from "../meal-details";
+import {
+  DietTargetsForm,
+  MealForm,
+  blankFoodItem,
+  nutrientKeys,
+  nutrientLabel,
+} from "../food-forms";
 import { ImageLibrary } from "../image-library";
 import { FoodPhotoImage } from "../food-photo";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
-const keys = ["calories", "protein", "carbs", "fat"] as const;
-const nutrientLabel = {
-  calories: "Calories (kcal)",
-  protein: "Protein (g)",
-  carbs: "Carbs (g)",
-  fat: "Fat (g)",
-};
-const blankItem = (): FoodItem => ({
-  name: "",
-  portion: "",
-  calories: 0,
-  protein: 0,
-  carbs: 0,
-  fat: 0,
-  classification: { foodGroups: [], ingredients: [] },
-});
-export function MealDetails({ meal }: { meal: Meal }) {
-  const total = totalNutrients(meal.items);
-  return (
-    <div className="meal-details">
-      <p>
-        <strong>{meal.name}</strong> · {meal.date} · {meal.type}
-      </p>
-      {meal.items.map((item, i) => (
-        <div className="food-item-summary" key={i}>
-          <span>
-            {item.name} · {item.portion}
-          </span>
-          <span>
-            {item.calories} kcal · P {item.protein} g · C {item.carbs} g · F{" "}
-            {item.fat} g
-          </span>
-          <FoodTags value={item.classification} />
-        </div>
-      ))}
-      <p>
-        <strong>{total.calories} kcal</strong> · {total.protein} g protein ·{" "}
-        {total.carbs} g carbs · {total.fat} g fat
-      </p>
-      <p className="fine-print">
-        {meal.estimated ? "Estimated nutrition" : "Nutrition entered manually"}
-        {meal.notes ? ` · ${meal.notes}` : ""}
-      </p>
-    </div>
-  );
-}
 export function FoodView({
   journal,
   onLogin,
@@ -84,9 +44,7 @@ export function FoodView({
     [notice, setNotice] = useState("");
   const [targets, setTargets] = useState(nutrition.targets),
     [showTargets, setShowTargets] = useState(false);
-  const [remove, setRemove] = useState<{ kind: "meal"; id: string } | null>(
-    null,
-  );
+  const [removeMealId, setRemoveMealId] = useState<string | null>(null);
   const run = async (work: () => Promise<unknown>, message?: string) => {
     setError("");
     setNotice("");
@@ -143,7 +101,7 @@ export function FoodView({
                 name: "",
                 date,
                 type: "lunch",
-                items: [blankItem()],
+                items: [blankFoodItem()],
                 source: "manual",
                 estimated: false,
                 notes: "",
@@ -192,38 +150,40 @@ export function FoodView({
       </div>
       {(hasFood || nutrition.completeDays?.includes(date)) && (
         <section className="food-completeness">
-        <div>
-          <strong>
+          <div>
+            <strong>
+              {nutrition.completeDays?.includes(date)
+                ? "Food log marked complete"
+                : "Is everything logged for this day?"}
+            </strong>
+            <p className="fine-print">
+              Only days you mark complete enter weekly intake averages. Editing
+              food reopens the day. Portions can still be estimates.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            disabled={date > today() || Boolean(journal.record?.conflict)}
+            onClick={() =>
+              void run(async () => {
+                const complete = nutrition.completeDays?.includes(date);
+                await journal.update((s) => {
+                  s.nutrition.completeDays = complete
+                    ? (s.nutrition.completeDays ?? []).filter((d) => d !== date)
+                    : [...(s.nutrition.completeDays ?? []), date];
+                });
+                setNotice(
+                  complete
+                    ? "Day marked partial."
+                    : "Food day marked complete.",
+                );
+              })
+            }
+          >
             {nutrition.completeDays?.includes(date)
-              ? "Food log marked complete"
-              : "Is everything logged for this day?"}
-          </strong>
-          <p className="fine-print">
-            Only days you mark complete enter weekly intake averages. Editing
-            food reopens the day. Portions can still be estimates.
-          </p>
-        </div>
-        <Button
-          variant="secondary"
-          disabled={date > today() || Boolean(journal.record?.conflict)}
-          onClick={() =>
-            void run(async () => {
-              const complete = nutrition.completeDays?.includes(date);
-              await journal.update((s) => {
-                s.nutrition.completeDays = complete
-                  ? (s.nutrition.completeDays ?? []).filter((d) => d !== date)
-                  : [...(s.nutrition.completeDays ?? []), date];
-              });
-              setNotice(
-                complete ? "Day marked partial." : "Food day marked complete.",
-              );
-            })
-          }
-        >
-          {nutrition.completeDays?.includes(date)
-            ? "Mark as partial"
-            : "Mark day complete"}
-        </Button>
+              ? "Mark as partial"
+              : "Mark day complete"}
+          </Button>
         </section>
       )}
       <details className="food-favourites">
@@ -273,7 +233,7 @@ export function FoodView({
       </details>
       {hasFood && (
         <div className="food-totals">
-          {keys.map((key) => (
+          {nutrientKeys.map((key) => (
             <section className="panel" key={key}>
               <span className="muted">{nutrientLabel[key]}</span>
               <strong>{totals[key]}</strong>
@@ -413,7 +373,7 @@ export function FoodView({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setRemove({ kind: "meal", id: meal.id })}
+                onClick={() => setRemoveMealId(meal.id)}
               >
                 Delete meal
               </Button>
@@ -474,10 +434,11 @@ export function FoodView({
         description="Enter portions and nutrition from labels, or correct the assistant’s estimates."
       >
         {editor && (
-          <form
-            className="food-form"
-            onSubmit={(event) => {
-              event.preventDefault();
+          <MealForm
+            meal={editor}
+            error={error}
+            onChange={setEditor}
+            onSubmit={() =>
               void run(async () => {
                 const meal = mealSchema.parse(editor);
                 if (meal.date > today())
@@ -496,193 +457,9 @@ export function FoodView({
                   ];
                 });
                 setEditor(null);
-              }, "Meal saved to your journal.");
-            }}
-          >
-            {error && <p role="alert">{error}</p>}
-            <label>
-              Meal name
-              <input
-                required
-                maxLength={160}
-                value={editor.name}
-                onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-              />
-            </label>
-            <div className="food-fields">
-              <label>
-                Meal date
-                <input
-                  required
-                  type="date"
-                  max={today()}
-                  value={editor.date}
-                  onChange={(e) =>
-                    setEditor({ ...editor, date: e.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Meal type
-                <select
-                  value={editor.type}
-                  onChange={(e) =>
-                    setEditor({
-                      ...editor,
-                      type: e.target.value as Meal["type"],
-                    })
-                  }
-                >
-                  {mealTypes.map((type) => (
-                    <option key={type}>{type}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {editor.items.map((item, index) => (
-              <fieldset key={index}>
-                <legend>Food {index + 1}</legend>
-                <label>
-                  Food name
-                  <input
-                    required
-                    value={item.name}
-                    maxLength={160}
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        items: editor.items.map((v, i) =>
-                          i === index ? { ...v, name: e.target.value } : v,
-                        ),
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  Portion
-                  <input
-                    required
-                    value={item.portion}
-                    maxLength={200}
-                    placeholder="150 g cooked / 1 medium bowl"
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        items: editor.items.map((v, i) =>
-                          i === index ? { ...v, portion: e.target.value } : v,
-                        ),
-                      })
-                    }
-                  />
-                </label>
-                <FoodTagEditor
-                  key={`${editor.id}:${index}:${item.name}:${item.portion}`}
-                  value={item.classification}
-                  onChange={(classification) =>
-                    setEditor({
-                      ...editor,
-                      items: editor.items.map((v, i) =>
-                        i === index ? { ...v, classification } : v,
-                      ),
-                    })
-                  }
-                />
-                <div className="food-fields">
-                  {keys.map((key) => (
-                    <label key={key}>
-                      {nutrientLabel[key]}
-                      <input
-                        required
-                        type="number"
-                        min={0}
-                        step="0.1"
-                        max={
-                          key === "calories"
-                            ? 10000
-                            : key === "carbs"
-                              ? 2000
-                              : 1000
-                        }
-                        value={item[key]}
-                        onChange={(e) =>
-                          setEditor({
-                            ...editor,
-                            items: editor.items.map((v, i) =>
-                              i === index
-                                ? ({
-                                    ...v,
-                                    [key]:
-                                      e.target.value === ""
-                                        ? ""
-                                        : Number(e.target.value),
-                                  } as FoodItem)
-                                : v,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                  ))}
-                </div>
-                {editor.items.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() =>
-                      setEditor({
-                        ...editor,
-                        items: editor.items.filter((_, i) => i !== index),
-                      })
-                    }
-                  >
-                    Remove food {index + 1}
-                  </Button>
-                )}
-              </fieldset>
-            ))}
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={editor.items.length >= 30}
-              onClick={() =>
-                setEditor({ ...editor, items: [...editor.items, blankItem()] })
-              }
-            >
-              Add another food
-            </Button>
-            <label>
-              Notes / portion assumptions
-              <textarea
-                value={editor.notes}
-                maxLength={3000}
-                onChange={(e) =>
-                  setEditor({ ...editor, notes: e.target.value })
-                }
-              />
-            </label>
-            <label className="food-check">
-              <input
-                type="checkbox"
-                checked={editor.estimated}
-                onChange={(e) =>
-                  setEditor({ ...editor, estimated: e.target.checked })
-                }
-              />{" "}
-              Nutrition is estimated
-            </label>
-            {editor.photoIds.length > 0 && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  setEditor({ ...editor, photoIds: [], source: "manual" })
-                }
-              >
-                Remove photo links
-              </Button>
-            )}
-            <Button type="submit">Save meal</Button>
-          </form>
+              }, "Meal saved to your journal.")
+            }
+          />
         )}
       </Dialog>
       <Dialog
@@ -691,100 +468,51 @@ export function FoodView({
         title="Your daily targets"
         description="Choose targets that fit your own plan. Leave a field blank to track without a target."
       >
-        <form
-          className="food-form"
-          onSubmit={(e) => {
-            e.preventDefault();
+        <DietTargetsForm
+          targets={targets}
+          onChange={setTargets}
+          onSubmit={() =>
             void run(async () => {
               const value = dietTargetsSchema.parse(targets);
               await journal.update((s) => {
                 s.nutrition.targets = value;
               });
               setShowTargets(false);
-            }, "Daily targets saved.");
-          }}
-        >
-          <label>
-            Diet goal
-            <select
-              value={targets.goal}
-              onChange={(e) =>
-                setTargets({
-                  ...targets,
-                  goal: e.target.value as typeof targets.goal,
-                })
-              }
-            >
-              <option value="maintain">Maintain weight</option>
-              <option value="lose">Lose weight</option>
-              <option value="gain">Gain weight</option>
-            </select>
-          </label>
-          <div className="food-fields">
-            {keys.map((key) => (
-              <label key={key}>
-                {nutrientLabel[key]}
-                <input
-                  type="number"
-                  min={0}
-                  step="0.1"
-                  max={
-                    key === "calories" ? 10000 : key === "carbs" ? 2000 : 1000
-                  }
-                  value={targets[key] ?? ""}
-                  onChange={(e) =>
-                    setTargets({
-                      ...targets,
-                      [key]:
-                        e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </label>
-            ))}
-          </div>
-          <p className="fine-print">
-            The goal label does not calculate a calorie deficit or change your
-            targets automatically.
-          </p>
-          <Button type="submit">Save targets</Button>
-        </form>
+            }, "Daily targets saved.")
+          }
+        />
       </Dialog>
       <Dialog
-        open={Boolean(remove)}
+        open={Boolean(removeMealId)}
         onOpenChange={(open) => {
-          if (!open) setRemove(null);
+          if (!open) setRemoveMealId(null);
         }}
-        title={`Delete ${remove?.kind ?? "entry"}?`}
-        description={
-          remove?.kind === "meal"
-            ? "Removes this meal from your daily totals. Its photos stay in your library."
-            : "Removes this photo from your private library. Download a copy first if you want to keep it."
-        }
+        title="Delete meal?"
+        description="Removes this meal from your daily totals. Its photos stay in your library."
       >
         <Button
           type="button"
           variant="danger"
           onClick={() =>
             void run(async () => {
-              if (!remove) return;
-              if (remove.kind === "meal")
-                await journal.update((s) => {
-                  if (s.nutrition.completeDays)
-                    s.nutrition.completeDays = s.nutrition.completeDays.filter(
-                      (d) =>
-                        d !==
-                        s.nutrition.meals.find((m) => m.id === remove.id)?.date,
-                    );
-                  s.nutrition.meals = s.nutrition.meals.filter(
-                    (m) => m.id !== remove.id,
+              if (!removeMealId) return;
+              await journal.update((s) => {
+                const date = s.nutrition.meals.find(
+                  (m) => m.id === removeMealId,
+                )?.date;
+                if (s.nutrition.completeDays)
+                  s.nutrition.completeDays = s.nutrition.completeDays.filter(
+                    (d) => d !== date,
                   );
-                });
-              setRemove(null);
+                s.nutrition.meals = s.nutrition.meals.filter(
+                  (m) => m.id !== removeMealId,
+                );
+              });
+              setRemoveMealId(null);
             }, "Entry deleted.")
           }
         >
-          Delete {remove?.kind}
+          Delete meal
         </Button>
         {error && <p role="alert">{error}</p>}
       </Dialog>

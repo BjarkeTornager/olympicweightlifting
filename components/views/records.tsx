@@ -32,7 +32,7 @@ import type { JournalState, Workout } from "@/lib/model";
 import type { JournalController } from "../journal";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
-import { Technique } from "./workouts";
+import { Technique } from "../technique";
 import {
   searchExercises,
   exerciseMuscles,

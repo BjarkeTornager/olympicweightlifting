@@ -438,15 +438,15 @@ textarea {
 }.coach-workspace .conversation-turn {
   gap: 22px;
 }.coach-workspace .chat-user {
-  background: var(--surface-subtle);
-  color: var(--ink);
+  background: var(--accent-solid);
+  color: var(--on-solid);
   font-size: 15px;
   line-height: 1.65;
   padding: 13px 18px;
   border-radius: 22px 22px 5px 22px;
   max-width: 86%;
 }.coach-workspace .assistant-mark {
-  color: var(--ink);
+  color: var(--coach);
   font-size: 12px;
   gap: 8px;
   font-weight: 650;
@@ -2296,5 +2296,50 @@ textarea {
   flex-shrink: 0;
   accent-color: var(--accent-solid);
 }
+
+/* Coach: your messages as accent bubbles, replies as cards. */
+.coach-workspace .chat-assistant {
+  max-width: min(94%, 760px);
+  padding: 14px 18px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px 22px 22px 22px;
+  background: var(--surface);
+}
+.coach-workspace .chat-user a { color: inherit; text-decoration: underline; }
+
+/* Health: three glanceable tiles instead of three full-width panels. */
+.health-summary-grid { gap: 10px; }
+.health-summary-grid .panel { padding: 16px; gap: 6px; align-content: start; }
+.health-summary-grid .panel > span:not(.area-icon) { color: var(--area); font-weight: 620; font-size: 13px; }
+.health-summary-grid strong { font-size: 28px; font-weight: 720; letter-spacing: -0.03em; }
+.health-summary-grid p { margin: 0; }
+@media (max-width: 767px) {
+  .health-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .health-summary-grid .panel { padding: 12px; }
+  .health-summary-grid strong { font-size: 22px; flex-wrap: wrap; gap: 3px; }
+  .health-summary-grid p { font-size: 11px; }
+}
+
+/* Progress: personal-best tiles lead; the full list is one grouped card. */
+.stat-card { border: 1px solid var(--card-border); background: var(--surface); }
+.stat-card::before { display: none; }
+.stat-card .eyebrow { color: var(--train); }
+.stat-card .stat-number { color: var(--ink); }
+.pr-list.list-card { gap: 0; padding: 4px 16px; }
+.pr-list.list-card .pr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.pr-list.list-card .pr-row:last-child { border-bottom: 0; }
+.pr-list.list-card .pr-row > span { font-weight: 560; }
+.pr-list.list-card .pr-row > strong { font-size: 17px; }
 }
 

@@ -51,7 +51,7 @@ export function ProgressView({ state, update, notify }: Props) {
     <>
       <div className="page-heading compact">
         <div>
-          <h1>See your progress.</h1>
+          <h1>Progress</h1>
           <p className="lead">
             Your strength records and cardio activity, in one place.
           </p>
@@ -60,16 +60,15 @@ export function ProgressView({ state, update, notify }: Props) {
           Edit personal bests
         </Button>
       </div>
-      <CardioProgress state={state} compact />
-      <TrainingInsights state={state} />
       <div className="stats-grid">
         {[
-          { label: "SNATCH", value: state.prs.snatch },
-          { label: "CLEAN & JERK", value: state.prs.clean_and_jerk },
-          { label: "TOTAL", value: total },
+          { label: "Snatch", value: state.prs.snatch },
+          { label: "Clean & jerk", value: state.prs.clean_and_jerk },
+          { label: "Total", value: total },
         ].map((item, i) => (
           <div
             className={`stat-card ${["blue", "red", "gold"][i]}`}
+            data-area="train"
             key={item.label}
           >
             <span className="eyebrow">{item.label}</span>
@@ -81,6 +80,8 @@ export function ProgressView({ state, update, notify }: Props) {
           </div>
         ))}
       </div>
+      <CardioProgress state={state} compact />
+      <TrainingInsights state={state} />
       <section className="panel chart-panel">
         <div className="section-top">
           <div>
@@ -131,10 +132,15 @@ export function ProgressView({ state, update, notify }: Props) {
                     x2="740"
                     y1={240 - n * 52.5}
                     y2={240 - n * 52.5}
-                    stroke="#dde3e2"
+                    style={{ stroke: "var(--line)" }}
                     strokeDasharray="4 6"
                   />
-                  <text x="5" y={244 - n * 52.5} fill="#62717a" fontSize="13">
+                  <text
+                    x="5"
+                    y={244 - n * 52.5}
+                    style={{ fill: "var(--ink-2)" }}
+                    fontSize="13"
+                  >
                     {Math.round((max * n) / 4)}
                   </text>
                 </g>
@@ -142,7 +148,7 @@ export function ProgressView({ state, update, notify }: Props) {
               <polyline
                 points={positions.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
-                stroke="#245d77"
+                style={{ stroke: "var(--train)" }}
                 strokeWidth="3"
                 strokeLinejoin="round"
               />
@@ -152,7 +158,7 @@ export function ProgressView({ state, update, notify }: Props) {
                     cx={p.x}
                     cy={p.y}
                     r="5"
-                    fill="#245d77"
+                    style={{ fill: "var(--train)" }}
                     stroke="white"
                     strokeWidth="2"
                   />
@@ -161,14 +167,19 @@ export function ProgressView({ state, update, notify }: Props) {
                   </title>
                 </g>
               ))}
-              <text x="50" y="275" fill="#62717a" fontSize="13">
+              <text
+                x="50"
+                y="275"
+                style={{ fill: "var(--ink-2)" }}
+                fontSize="13"
+              >
                 {points[0].date}
               </text>
               <text
                 x="730"
                 y="275"
                 textAnchor="end"
-                fill="#62717a"
+                style={{ fill: "var(--ink-2)" }}
                 fontSize="13"
               >
                 {points.at(-1)?.date}
@@ -198,9 +209,9 @@ export function ProgressView({ state, update, notify }: Props) {
       <div className="section-top spaced">
         <h2>Personal bests</h2>
       </div>
-      <div className="pr-list">
+      <div className="pr-list list-card">
         {PR_DEFINITIONS.map((p) => (
-          <div className="panel pr-row" key={p.exerciseId}>
+          <div className="pr-row" key={p.exerciseId}>
             <span>{p.label}</span>
             <strong>
               {state.prs[p.exerciseId] || "—"}

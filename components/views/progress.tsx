@@ -51,7 +51,6 @@ export function ProgressView({ state, update, notify }: Props) {
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">PROGRESS, SESSION BY SESSION</div>
           <h1>See your progress.</h1>
           <p className="lead">
             Your strength records and cardio activity, in one place.

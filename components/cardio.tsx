@@ -407,7 +407,7 @@ export function CardioProgress({
     <section className="panel cardio-progress" aria-label="Cardio progress">
       <div className="cardio-section-heading">
         <div>
-          <div className="eyebrow">MOVEMENT · LAST 7 DAYS</div>
+          <div className="eyebrow">Movement · last 7 days</div>
           <h2>Cardio at a glance</h2>
         </div>
         <Activity size={22} aria-hidden="true" />
@@ -523,7 +523,6 @@ export function CardioView({
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">YOUR ACTIVE LIFE</div>
           <h1>Cardio & movement</h1>
           <p className="lead">
             Your runs, rides, walks and everything in between.

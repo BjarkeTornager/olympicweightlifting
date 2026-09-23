@@ -261,7 +261,7 @@ export function DailyOverview({
     <section className="today-focus" aria-label="Your daily health overview">
       <div className="coach-section-title">
         <div>
-          <span className="eyebrow">YOUR DAILY COACH</span>
+          <span className="eyebrow">Your daily coach</span>
           <h2>A little direction for today.</h2>
           <p className="muted">Your next step, with room to live your day.</p>
         </div>
@@ -384,7 +384,7 @@ export function HealthView({
       <div className="page-heading">
         <div>
           <div className="eyebrow">
-            <HeartPulse size={15} /> YOUR HEALTH JOURNAL
+            <HeartPulse size={15} /> Your health journal
           </div>
           <h1>Notice your patterns.</h1>
           <p className="lead">

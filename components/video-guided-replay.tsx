@@ -465,7 +465,7 @@ export function GuidedReplay({
             return i === 0 ? (
               <article key={moment.id} className="video-coaching-card primary">
                 <span className="eyebrow">
-                  YOUR NEXT STEP
+                  Your next step
                   {moment.attemptLabel ? ` · ${moment.attemptLabel}` : ""}
                 </span>
                 <h3>{moment.title}</h3>

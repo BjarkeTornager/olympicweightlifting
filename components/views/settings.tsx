@@ -47,7 +47,6 @@ export function SettingsView({
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">YOUR JOURNAL, YOURS TO KEEP</div>
           <h1>Make yourself at home.</h1>
           <p className="lead">
             Your profile, account and health journal backups.

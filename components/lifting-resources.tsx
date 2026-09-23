@@ -15,7 +15,7 @@ export function LiftingResources({ go }: { go: (route: string) => void }) {
       >
         <div className="panel">
           <Play size={24} aria-hidden="true" />
-          <span className="eyebrow">TECHNIQUE · EXPERIMENTAL</span>
+          <span className="eyebrow">Technique · experimental</span>
           <h2>See what to work on next.</h2>
           <p>
             Show Coach a short part of your lift. Get feedback on what went well
@@ -31,7 +31,7 @@ export function LiftingResources({ go }: { go: (route: string) => void }) {
         </div>
         <div className="panel">
           <Utensils size={24} aria-hidden="true" />
-          <span className="eyebrow">NUTRITION FOR LIFTING</span>
+          <span className="eyebrow">Nutrition for lifting</span>
           <h2>Fuel the session. Support recovery.</h2>
           <p>
             Connect your meals and preferences with your training. Get practical

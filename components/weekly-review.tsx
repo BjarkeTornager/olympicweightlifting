@@ -30,7 +30,7 @@ export function WeeklyReview({
     <section className="weekly-review" aria-label="Your weekly review">
       <div className="coach-section-title">
         <div>
-          <span className="eyebrow">A MOMENT TO REFLECT</span>
+          <span className="eyebrow">A moment to reflect</span>
           <h2>Your week, with perspective.</h2>
         </div>
       </div>
@@ -61,7 +61,7 @@ export function WeeklyReview({
         </Button>
       </div>
       <article className="week-reflection">
-        <span className="eyebrow">WHAT YOU BUILT</span>
+        <span className="eyebrow">What you built</span>
         <h3>
           {activity
             ? `${activity} recorded ${activity === 1 ? "session" : "sessions"} to build on.`
@@ -138,7 +138,7 @@ export function WeeklyReview({
         </p>
       </section>
       <article className="week-next">
-        <span className="eyebrow">ONE OPTIONAL ADJUSTMENT</span>
+        <span className="eyebrow">One optional adjustment</span>
         <h3>Keep what fits. Change one thing.</h3>
         <p>
           {journal.state?.profile.coaching?.focus

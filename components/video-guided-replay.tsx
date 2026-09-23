@@ -171,6 +171,28 @@ export function GuidedReplay({
         presented.current = v.currentTime;
       if (presented.current !== null) draw.current(presented.current);
     };
+    // Firefox can present a paused seek without a video-frame callback, which
+    // would leave the overlay hidden until playback. If the decoder hasn't
+    // reported the requested frame shortly after seeking, use the settled
+    // position. WebKit's callback normally arrives first, so this is a no-op.
+    let settle = 0;
+    const seeked = () => {
+      refresh();
+      window.clearTimeout(settle);
+      if (!hasFrameCallback) return;
+      settle = window.setTimeout(() => {
+        if (
+          closed ||
+          !v.paused ||
+          v.seeking ||
+          v.readyState < 2 ||
+          pending.current === null
+        )
+          return;
+        presented.current = v.currentTime;
+        draw.current(v.currentTime);
+      }, 250);
+    };
     if (hasFrameCallback) frame = v.requestVideoFrameCallback(receive);
     else {
       const tick = () => {
@@ -179,14 +201,15 @@ export function GuidedReplay({
       };
       fallback = requestAnimationFrame(tick);
     }
-    v.addEventListener("seeked", refresh);
+    v.addEventListener("seeked", seeked);
     v.addEventListener("loadeddata", refresh);
     v.addEventListener("pause", refresh);
     return () => {
       closed = true;
       if (hasFrameCallback) v.cancelVideoFrameCallback(frame);
       cancelAnimationFrame(fallback);
-      v.removeEventListener("seeked", refresh);
+      window.clearTimeout(settle);
+      v.removeEventListener("seeked", seeked);
       v.removeEventListener("loadeddata", refresh);
       v.removeEventListener("pause", refresh);
       for (const image of imageCache.values()) image.onload = null;

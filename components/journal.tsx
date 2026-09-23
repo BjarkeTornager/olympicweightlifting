@@ -36,13 +36,11 @@ import { FoodView } from "./views/food";
 import { CardioView } from "./cardio";
 import { HealthView } from "./health";
 import { ImageLibrary } from "./image-library";
-import {
-  HistoryView,
-  ProgressView,
-  LibraryView,
-  SettingsView,
-  downloadBackup,
-} from "./views/records";
+import { HistoryView } from "./views/history";
+import { ProgressView } from "./views/progress";
+import { LibraryView } from "./views/library";
+import { SettingsView } from "./views/settings";
+import { downloadBackup } from "@/lib/download-backup";
 export type JournalController = ReturnType<typeof useJournal>;
 const primaryNavigation = [
   { id: "today", label: "Today", icon: House },

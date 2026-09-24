@@ -2350,5 +2350,53 @@ h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 700; }
 .chat-assistant, .coach-workspace .chat-assistant { border-radius: 4px 16px 16px 16px; }
 .coach-workspace .chat-user { border-radius: 16px 16px 4px 16px; }
 .stats-grid { margin-bottom: 16px; }
+
+/* Exercise library: compact rows, details on demand. The old cards put
+   purpose and cues for all 53 movements on one very long page. */
+.library-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 4px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.library-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.library-card:last-child { border-bottom: 0; }
+.library-card h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.library-card-main .fine-print { margin: 2px 0 0; }
+.library-card-more { grid-column: 1 / -1; }
+.library-card-more > summary { font-size: 13px; font-weight: 560; color: var(--ink-2); min-height: 32px; display: flex; align-items: center; cursor: pointer; }
+.library-card-more .cues { margin: 6px 0 10px; }
+
+/* Photo upload folded behind "Add photos" on Food and Health. */
+details.image-upload-area > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+details.image-upload-area > summary::-webkit-details-marker { display: none; }
+details.image-upload-area > summary::before { content: "+"; font-size: 18px; line-height: 1; color: var(--accent); }
+details.image-upload-area[open] > summary { margin-bottom: 12px; }
+details.image-upload-area:not([open]) { border: 0; padding: 0; background: none; }
 }
 

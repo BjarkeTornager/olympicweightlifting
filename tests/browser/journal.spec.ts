@@ -234,7 +234,7 @@ test.describe("authenticated offline shell", () => {
       await page.goto(`${origin}/#library`);
       await expect(page.locator(".public-landing")).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Your technique library." }),
+        page.getByRole("heading", { name: "Exercises", level: 1 }),
       ).toHaveCount(0);
       await new Promise<void>((resolve) =>
         proxy.listen(address.port, "127.0.0.1", resolve),

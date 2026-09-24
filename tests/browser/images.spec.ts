@@ -119,6 +119,7 @@ test.describe("private image collections", () => {
     const account = await imageAccount(context, "sleep");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/#food");
+    await page.getByText("Add photos", { exact: true }).click();
     await page
       .getByLabel("Photo label", { exact: true })
       .fill("Last night sleep");

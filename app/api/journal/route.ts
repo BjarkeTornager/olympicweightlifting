@@ -1,6 +1,7 @@
 import { foodSnapshotForClient } from "@/lib/food-compatibility";
 import { userAllowed } from "@/lib/access";
 import { z } from "zod";
+import { logFailure } from "@/lib/error-log";
 import { getAuth } from "@/lib/auth";
 import { journalSchema } from "@/lib/model";
 import {
@@ -146,14 +147,12 @@ export async function PUT(request: Request) {
         },
         { status: 400 },
       );
-    console.error(
-      JSON.stringify({
-        event: "journal_save_failed",
-        type: error instanceof Error ? error.name : "unknown",
-      }),
-    );
+    const incident = logFailure("journal_save_failed", error);
     return Response.json(
-      { error: "Sync is unavailable. Changes are saved on this device." },
+      {
+        error: "Sync is unavailable. Changes are saved on this device.",
+        incident,
+      },
       { status: 503 },
     );
   }

@@ -277,6 +277,7 @@ test.describe("authenticated photo UI", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/#food");
     await page.getByLabel("Food date", { exact: true }).fill("2026-09-06");
+    await page.getByText("Add photos", { exact: true }).click();
     await page.getByLabel("Photo label", { exact: true }).fill("Lunch plate");
     await page.getByLabel("Upload image", { exact: true }).setInputFiles({
       name: "plate.jpg",

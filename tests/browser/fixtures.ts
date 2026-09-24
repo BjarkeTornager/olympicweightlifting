@@ -31,6 +31,9 @@ export const test = base.extend<{
       await context.route("**/api/tracking/status", (r) =>
         r.fulfill({ json: { notices: [], sleep: { connected: false } } }),
       );
+      await context.route("**/api/health", (r) =>
+        r.fulfill({ json: { status: "ok", version: "2.0.0", commit: null } }),
+      );
       await context.route("**/api/maps/config", (r) =>
         r.fulfill({ json: { key: "test-maps-key" } }),
       );

@@ -2,7 +2,7 @@
 import { TrackingSettings } from "../tracking-settings";
 import { Invitations } from "../invitations";
 import { privateFetch } from "@/lib/private-fetch";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Download,
   FileUp,
@@ -286,6 +286,7 @@ export function SettingsView({
             <RefreshCw size={17} />
             Refresh app
           </Button>
+          <AppVersion />
         </section>
         <section className="panel">
           <h2>Privacy</h2>
@@ -435,4 +436,18 @@ function DeviceSettings({
       </Dialog>
     </div>
   );
+}
+
+// The deployed commit, so "is my fix live?" has an answer on the phone.
+function AppVersion() {
+  const [commit, setCommit] = useState<string | null>(null);
+  useEffect(() => {
+    const abort = new AbortController();
+    fetch("/api/health", { cache: "no-store", signal: abort.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setCommit(data?.commit ?? null))
+      .catch(() => {});
+    return () => abort.abort();
+  }, []);
+  return commit ? <p className="fine-print">Running version {commit}</p> : null;
 }

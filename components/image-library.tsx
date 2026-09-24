@@ -187,14 +187,20 @@ export function ImageLibrary({
       )}
       {scope !== "all" && (
         <Button variant="ghost" onClick={() => go("images")}>
-          All images & category review →
+          All images & category review
         </Button>
       )}
       {!accountId ? (
         <Button onClick={onLogin}>Sign in to save images</Button>
       ) : (
         <>
-          <div className="image-upload-area">
+          {/* Folded on Food and Health so the day's records lead; the
+              Images page is for uploading, so it starts open there. */}
+          <details
+            className="image-upload-area"
+            open={scope === "all" || undefined}
+          >
+            <summary>Add photos</summary>
             <div className="food-toolbar">
               {!suppliedDate && (
                 <label>
@@ -264,7 +270,7 @@ export function ImageLibrary({
               screenshot.
             </p>
             {busy && <p role="status">Saving image or updating tags…</p>}
-          </div>
+          </details>
           {notice && (
             <div role="status" className="notice">
               {notice}{" "}

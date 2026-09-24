@@ -24,6 +24,7 @@ import {
   type VideoRefinementCheckpoint,
 } from "./checkpoint";
 import { automaticFeedback } from "./feedback";
+import { logFailure } from "../error-log";
 export { reviewMessages } from "./review";
 // Stored size of a review: playback media, sampled frames and analysis JSON.
 function reviewBytes(
@@ -467,15 +468,18 @@ export async function runVideoJob(
         .where(fence);
       return;
     }
-    console.warn(
-      JSON.stringify({
-        event: "video_job_failed",
+    logFailure(
+      "video_job_failed",
+      error,
+      {
+        video: job.id,
         reason: signal.aborted
           ? "interrupted"
           : error instanceof ApiError
             ? "review_error"
             : "processing_or_provider_error",
-      }),
+      },
+      "warn",
     );
     const [saved] = await getDb().select().from(liftingVideos).where(fence);
     // A deleted/revoked account or superseded lease must never restart a job.

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ArrowUpRight, Dumbbell, Search } from "@/components/ui/icons";
+import { ArrowUpRight, Search } from "@/components/ui/icons";
 import { EXERCISES } from "@/lib/domain";
 import { Button } from "../ui/button";
 import { Technique } from "../technique";
@@ -27,10 +27,9 @@ export function LibraryView() {
     <>
       <div className="page-heading compact">
         <div>
-          <h1>Your technique library.</h1>
+          <h1>Exercises</h1>
           <p className="lead">
-            Gym essentials and Olympic lifts. Find your movement, learn the
-            technique and make it part of your routine.
+            Gym essentials and Olympic lifts, with technique videos and cues.
           </p>
         </div>
       </div>
@@ -94,26 +93,23 @@ export function LibraryView() {
         )}
       </div>
       <div className="library-grid">
-        {items.map((e, i) => (
-          <article className="panel library-card" key={e.id}>
-            <div className="section-top">
-              <span className={`program-index index-${i % 4}`}>
-                <Dumbbell size={22} />
-              </span>
-              <span className="pill">{e.category}</span>
+        {items.map((e) => (
+          <article className="library-card" key={e.id}>
+            <div className="library-card-main">
+              <h2>{e.name}</h2>
+              <p className="fine-print">
+                {[e.category, ...e.equipment].join(", ")}
+              </p>
             </div>
-            <h2>{e.name}</h2>
-            <p className="fine-print">
-              {e.equipment.join(" · ") || "Choose a variation"}
-            </p>
-            <p className="muted">{e.purpose}</p>
-            <ul className="cues">
-              {e.cues.map((c) => (
-                <li key={c}>{c}</li>
-              ))}
-            </ul>
-            <div className="section-top">
-              <Technique exerciseId={e.id} />
+            <Technique exerciseId={e.id} />
+            <details className="library-card-more">
+              <summary>How to perform it</summary>
+              <p className="muted">{e.purpose}</p>
+              <ul className="cues">
+                {e.cues.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
               {e.sourceUrl && (
                 <a
                   className="text-link"
@@ -121,10 +117,10 @@ export function LibraryView() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {e.sourceName} <ArrowUpRight size={16} />
+                  {e.sourceName} guide <ArrowUpRight size={16} />
                 </a>
               )}
-            </div>
+            </details>
           </article>
         ))}
       </div>

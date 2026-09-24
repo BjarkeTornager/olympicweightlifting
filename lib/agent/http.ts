@@ -1,5 +1,6 @@
 import { userAllowed } from "@/lib/access";
 import { z } from "zod";
+import { logFailure } from "../error-log";
 import { getAuth } from "../auth";
 import { RevisionConflict, MissingMealPhoto } from "../server";
 import { ProviderError } from "./provider";
@@ -88,16 +89,12 @@ export function apiFailure(error: unknown) {
       { error: "Check your message and try again." },
       { status: 400 },
     );
-  console.error(
-    JSON.stringify({
-      event: "agent_request_failed",
-      type: error instanceof Error ? error.name : "unknown",
-    }),
-  );
+  const incident = logFailure("agent_request_failed", error);
   return Response.json(
     {
       error:
         "The assistant is temporarily unavailable. Your journal is safe; you can keep logging in Train.",
+      incident,
     },
     { status: 503 },
   );

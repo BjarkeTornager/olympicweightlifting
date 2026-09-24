@@ -3,11 +3,37 @@ import localFont from "next/font/local";
 import "./globals.css";
 import "./journal-design.css";
 import "./theme.css";
-const inter = localFont({
-  src: "./fonts/InterVariable.woff2",
+const barlow = localFont({
+  src: [
+    { path: "./fonts/Barlow-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/Barlow-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/Barlow-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/Barlow-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-journal",
-  weight: "100 900",
-  style: "normal",
+  display: "swap",
+  adjustFontFallback: "Arial",
+});
+// Titles, weights and reps: condensed like plate markings and scoreboards.
+const barlowCondensed = localFont({
+  src: [
+    {
+      path: "./fonts/BarlowCondensed-500.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "./fonts/BarlowCondensed-600.woff2",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "./fonts/BarlowCondensed-700.woff2",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-display",
   display: "swap",
   adjustFontFallback: "Arial",
 });
@@ -36,7 +62,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html
+      lang="en"
+      className={`${barlow.variable} ${barlowCondensed.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

@@ -1,13 +1,7 @@
 "use client";
 import { CombineSessions } from "../combine-sessions";
 import { useState } from "react";
-import {
-  ArrowRight,
-  ChevronDown,
-  Download,
-  Dumbbell,
-  Trash2,
-} from "@/components/ui/icons";
+import { ChevronDown, Download, Dumbbell, Trash2 } from "@/components/ui/icons";
 import { backup, EXERCISES, exerciseName } from "@/lib/domain";
 import type { JournalState, Workout } from "@/lib/model";
 import type { JournalController } from "../journal";
@@ -51,9 +45,7 @@ export function HistoryView({
       </div>
       {state.activeWorkout && (
         <div className="history-resume">
-          <Button onClick={() => go("workout")}>
-            Resume ongoing workout <ArrowRight size={17} />
-          </Button>
+          <Button onClick={() => go("workout")}>Resume ongoing workout</Button>
         </div>
       )}
       <div className="history-toolbar">
@@ -109,7 +101,7 @@ export function HistoryView({
               Export journal
             </Button>
             <a className="text-link" href="#cardio">
-              Cardio activity history <ArrowRight size={16} />
+              Cardio activity history
             </a>
           </div>
         </details>
@@ -258,7 +250,7 @@ export function HistoryView({
           </h2>
           <p>Start a session or import your existing journal from Settings.</p>
           <Button onClick={() => go("workout/choose")}>
-            Choose a programme <ArrowRight size={18} />
+            Choose a programme
           </Button>
         </div>
       )}

@@ -2,15 +2,10 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Dumbbell,
-  LockKeyhole,
-  LogIn,
-  Sparkles,
-  ArrowRight,
-} from "@/components/ui/icons";
+import { Dumbbell, LockKeyhole, LogIn } from "@/components/ui/icons";
 import type { Identity } from "@/lib/model";
 import { Button } from "./ui/button";
+import { WhistleIcon } from "./ui/journal-icons";
 
 export type AuthOptions = {
   google: boolean;
@@ -121,9 +116,7 @@ function Landing({
                   Connect to verify your session. Your journal stays locked
                   until you’re signed in.
                 </p>
-                <Button onClick={retry}>
-                  Check connection <ArrowRight size={17} />
-                </Button>
+                <Button onClick={retry}>Check connection</Button>
               </>
             ) : auth.google ? (
               <Button
@@ -197,7 +190,7 @@ function Landing({
           aria-label="What your journal brings together"
         >
           <span className="coach-avatar">
-            <Sparkles size={24} />
+            <WhistleIcon size={24} />
           </span>
           <h2>A clearer picture of your day.</h2>
           <p>One conversation connects the details that matter to you.</p>

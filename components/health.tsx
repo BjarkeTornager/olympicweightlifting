@@ -5,8 +5,6 @@ import { CardioProgress } from "./cardio";
 import { ImageLibrary } from "./image-library";
 import { useState } from "react";
 import {
-  ArrowRight,
-  Activity,
   Check,
   Droplets,
   Dumbbell,
@@ -14,7 +12,6 @@ import {
   Moon,
   Plus,
   Scale,
-  Sparkles,
   Utensils,
 } from "@/components/ui/icons";
 import type { JournalController } from "./journal";
@@ -28,8 +25,8 @@ import {
   type CheckinPatch,
 } from "@/lib/health";
 import { Button } from "./ui/button";
-import { AreaIcon } from "./ui/area-icon";
 import { Dialog } from "./ui/dialog";
+import { WhistleIcon } from "./ui/journal-icons";
 
 const energyNames = ["Very low", "Low", "Okay", "Good", "Great"];
 const sorenessNames = ["None", "Mild", "Moderate", "High", "Very high"];
@@ -283,7 +280,7 @@ export function DailyOverview({
             )
           }
         >
-          <Sparkles size={17} /> Plan my day
+          <WhistleIcon size={17} /> Plan my day
         </Button>
         <Button variant="secondary" onClick={onCheckin}>
           {view.checkin ? "Update check-in" : "Daily check-in"}
@@ -297,7 +294,6 @@ export function DailyOverview({
             <strong>{state.activeWorkout.title}</strong>
             <span>{state.activeWorkout.date} · Continue your draft</span>
           </span>
-          <ArrowRight size={18} />
         </button>
       )}
       <div className="today-summaries" aria-label="Today’s logged entries">
@@ -399,8 +395,7 @@ export function HealthView({
         </div>
       </div>
       <div className="health-summary-grid">
-        <section className="panel" data-area="sleep">
-          <AreaIcon area="sleep" icon={Moon} size="sm" />
+        <section className="panel">
           <span>Sleep · 14 days</span>
           <strong>
             {view.sleepAverage ?? "—"}
@@ -412,8 +407,7 @@ export function HealthView({
               : "Log sleep to build your picture"}
           </p>
         </section>
-        <section className="panel" data-area="health">
-          <AreaIcon area="health" icon={Scale} size="sm" />
+        <section className="panel">
           <span>Bodyweight</span>
           <strong>
             {view.latestWeight?.value ?? "—"}
@@ -423,8 +417,7 @@ export function HealthView({
             {view.latestWeight?.date ?? "No measurement in the last 14 days"}
           </p>
         </section>
-        <section className="panel" data-area="coach">
-          <AreaIcon area="coach" icon={Activity} size="sm" />
+        <section className="panel">
           <span>Check-ins</span>
           <strong>
             {view.recentCheckins.length}
@@ -477,7 +470,7 @@ export function HealthView({
         <div className="section-top">
           <h2>Your check-ins</h2>
           <button className="text-link" onClick={() => go("coach")}>
-            Talk with Coach <ArrowRight size={16} />
+            Talk with Coach
           </button>
         </div>
         {!records.length && (

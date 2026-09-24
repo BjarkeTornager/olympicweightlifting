@@ -1,11 +1,12 @@
 "use client";
-import { LoaderCircle, Sparkles, Square } from "@/components/ui/icons";
+import { LoaderCircle, Square } from "@/components/ui/icons";
 import type { Turn } from "@/lib/coach-turns";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
 import { FoodPhotoImage } from "./food-photo";
 import { AssistantText } from "./assistant-text";
 import { AguiVisuals } from "./agui-components";
 import { CoachProposal } from "./coach-proposal";
+import { WhistleIcon } from "./ui/journal-icons";
 
 export type { Turn };
 
@@ -45,7 +46,7 @@ export function CoachTurn({
       {(t.reply || Boolean(t.visuals?.length)) && (
         <div className="chat-assistant">
           <span className="assistant-mark">
-            <Sparkles size={16} /> Lift Journal
+            <WhistleIcon size={16} /> Coach
           </span>
           {t.reply && <AssistantText text={t.reply} />}
           {Boolean(t.visuals?.length) && (

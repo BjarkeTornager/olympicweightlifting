@@ -1,18 +1,7 @@
 "use client";
 import { useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  Dumbbell,
-  Plus,
-} from "@/components/ui/icons";
-import {
-  today,
-  createEntry,
-  finishWorkout,
-  replanDraft,
-} from "@/lib/domain";
+import { Check, ChevronDown, Dumbbell, Plus } from "@/components/ui/icons";
+import { today, createEntry, finishWorkout, replanDraft } from "@/lib/domain";
 import { isValidLoggedSet } from "@/js/progression.js";
 import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
 import { Button } from "./ui/button";
@@ -308,7 +297,7 @@ export function ActiveWorkout({
             ))}
           </ul>
           <a className="text-link" href="#cardio">
-            View activity history <ArrowRight size={16} />
+            View activity history
           </a>
         </section>
       )}

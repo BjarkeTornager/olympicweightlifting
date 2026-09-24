@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   ArrowDown,
-  ArrowRight,
   Check,
   ChevronDown,
   Copy,
@@ -472,7 +471,7 @@ export function WorkoutExercise({
             </div>
           </details>
           <Button variant="secondary" className="full" onClick={onComplete}>
-            Complete {exerciseName(entry.exerciseId)} <ArrowRight size={18} />
+            Complete {exerciseName(entry.exerciseId)}
           </Button>
         </div>
       )}

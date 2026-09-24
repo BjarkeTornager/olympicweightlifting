@@ -1,12 +1,6 @@
 "use client";
 import { useState } from "react";
-import {
-  Activity,
-  ArrowRight,
-  Check,
-  Plus,
-  Trash2,
-} from "@/components/ui/icons";
+import { Activity, Check, Plus, Trash2 } from "@/components/ui/icons";
 import { today } from "@/lib/domain";
 import { offsetDate } from "@/lib/health";
 import {
@@ -490,7 +484,7 @@ export function CardioProgress({
       )}
       {compact && (
         <a className="text-link" href="#cardio">
-          Open cardio & movement <ArrowRight size={16} />
+          Open cardio & movement
         </a>
       )}
     </section>

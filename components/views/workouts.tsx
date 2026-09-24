@@ -2,16 +2,11 @@
 import { useRef, useState } from "react";
 import {
   ArrowLeft,
-  ArrowRight,
-  ArrowUpRight,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
-  History,
-  Play,
   Plus,
 } from "@/components/ui/icons";
-import { AreaIcon } from "../ui/area-icon";
+import { LogbookIcon, TickedLogIcon, WhistleIcon } from "../ui/journal-icons";
 import { days, today, program, exerciseName } from "@/lib/domain";
 import { planProgramDay } from "@/js/progression.js";
 import type { JournalState } from "@/lib/model";
@@ -137,22 +132,17 @@ export function Workouts(props: Props) {
           <div className="list-card">
             {(
               [
-                [
-                  "workout/choose",
-                  "Your programs & routines",
-                  CalendarDays,
-                  "train",
-                ],
-                ["workout/coaching", "Lifting brief & video", Play, "coach"],
-                ["history", "Training history", History, "neutral"],
+                ["workout/choose", "Your programs & routines", LogbookIcon],
+                ["workout/coaching", "Lifting brief & video", WhistleIcon],
+                ["history", "Training history", TickedLogIcon],
               ] as const
-            ).map(([route, label, icon, area]) => (
+            ).map(([route, label, Icon]) => (
               <button
                 key={route}
                 className="list-row"
                 onClick={() => go(route)}
               >
-                <AreaIcon area={area} icon={icon} size="sm" />
+                <Icon size={22} />
                 <span>{label}</span>
                 <ChevronRight size={17} aria-hidden="true" />
               </button>
@@ -221,7 +211,7 @@ export function Workouts(props: Props) {
               />
             </label>
             <Button onClick={() => void onStart(day.id, date)}>
-              Start this programme <ArrowRight size={18} />
+              Start this programme
             </Button>
           </div>
         )}
@@ -295,9 +285,7 @@ export function Workouts(props: Props) {
         </div>
         <div className="button-row">
           <Button asChild variant="ghost">
-            <a href="#library">
-              Exercise library <ArrowUpRight size={18} />
-            </a>
+            <a href="#library">Exercise library</a>
           </Button>
           <Button
             variant="secondary"
@@ -321,9 +309,7 @@ export function Workouts(props: Props) {
               sets logged
             </p>
           </div>
-          <Button onClick={() => go("workout")}>
-            Resume workout <ArrowRight size={17} />
-          </Button>
+          <Button onClick={() => go("workout")}>Resume workout</Button>
         </div>
       ) : null}
       <Templates
@@ -420,7 +406,6 @@ export function Workouts(props: Props) {
                     }
                   >
                     {state.activeWorkout ? "View programme" : "Start session"}
-                    <ArrowUpRight size={18} />
                   </Button>
                   {!state.activeWorkout && (
                     <Button

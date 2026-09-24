@@ -7,10 +7,8 @@ import { useCoachRun } from "@/lib/use-coach-run";
 import { markProposal, mergeSavedTurns } from "@/lib/coach-turns";
 import { coachBackgroundStatus, coachConnectionHint } from "@/lib/coach-status";
 import {
-  ArrowRight,
   MessageCircle,
   Send,
-  Sparkles,
   Plus,
   MoreHorizontal,
   ChevronDown,
@@ -51,6 +49,7 @@ import {
   ComposerQuickActions,
   ComposerReconnect,
 } from "./coach-composer";
+import { WhistleIcon } from "./ui/journal-icons";
 export function TrainingAgent({
   journal,
   onLogin,
@@ -474,7 +473,7 @@ export function TrainingAgent({
           {busy || acting || uploading || loadingImage ? (
             <LoaderCircle size={18} className="spin" aria-hidden="true" />
           ) : (
-            <Sparkles size={18} aria-hidden="true" />
+            <WhistleIcon size={18} aria-hidden="true" />
           )}
           {status}
         </span>
@@ -485,7 +484,7 @@ export function TrainingAgent({
             showLatest();
           }}
         >
-          Open Coach <ArrowRight size={16} aria-hidden="true" />
+          Open Coach
         </a>
       </div>
     ) : null;
@@ -511,7 +510,7 @@ export function TrainingAgent({
       <header className="coach-header">
         <div className="coach-title">
           <span className="coach-avatar" aria-hidden="true">
-            <Sparkles size={25} weight="duotone" />
+            <WhistleIcon size={25} />
           </span>
           <div>
             <h1>Coach</h1>
@@ -686,7 +685,7 @@ export function TrainingAgent({
                           <p>Logged sets are already saved on this device.</p>
                         </div>
                         <Button onClick={() => go("workout")}>
-                          Resume workout <ArrowRight size={17} />
+                          Resume workout
                         </Button>
                       </div>
                     )}
@@ -706,7 +705,6 @@ export function TrainingAgent({
                         >
                           <Icon size={24} weight="duotone" aria-hidden="true" />
                           <span>{text}</span>
-                          <ArrowRight size={16} aria-hidden="true" />
                         </button>
                       ))}
                     </div>

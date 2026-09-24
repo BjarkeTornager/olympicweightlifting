@@ -8,8 +8,8 @@ import { TrackingStatus } from "./tracking-status";
 import { NextSession } from "./next-session";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
-import { Plus, Moon, Utensils, ArrowRight, ChevronRight } from "./ui/icons";
-import { AreaIcon } from "./ui/area-icon";
+import { Plus, ChevronRight } from "./ui/icons";
+import { BarbellIcon, BowlIcon, SleepIcon } from "./ui/journal-icons";
 
 export function Today({
   journal,
@@ -32,12 +32,14 @@ export function Today({
       meal.items.reduce((sum, item) => sum + Number(item.calories || 0), 0),
     0,
   );
+  const trainedDays = week.days.filter(
+    (d) => d.strength.length + d.cardio.length > 0,
+  ).length;
   return (
     <div className="today-page">
       <div className="page-heading compact">
         <div>
           <h1>Today</h1>
-          <p className="lead">Log, train, or check in.</p>
         </div>
       </div>
       <div className="today-capture">
@@ -47,56 +49,56 @@ export function Today({
         <span>A photo, a sentence, or your usual meal.</span>
       </div>
       <NextSession state={state} update={journal.update} go={go} />
-      <section className="today-records" aria-label="Today's food and sleep">
-        <button
-          className="area-tile"
-          data-area="food"
-          onClick={() => go("food")}
-        >
-          <span className="area-tile-heading">
-            <AreaIcon area="food" icon={Utensils} size="sm" />
-            <span>Food</span>
-            <ChevronRight size={16} aria-hidden="true" />
+      <section
+        className="today-records list-card"
+        aria-label="Today's food and sleep"
+      >
+        <button className="list-row today-record" onClick={() => go("food")}>
+          <BowlIcon size={22} />
+          <span>
+            <strong>Food</strong>
+            <small>
+              {meals.length
+                ? `${meals.length} ${meals.length === 1 ? "meal" : "meals"} recorded${state.nutrition.completeDays?.includes(date) ? ", day complete" : ""}`
+                : "Add what you remember"}
+            </small>
           </span>
-          <strong>
+          <span className="today-record-value">
             {meals.length ? (
               <>
                 {Math.round(kcal).toLocaleString("en-GB")} <small>kcal</small>
               </>
             ) : (
-              "Nothing recorded yet"
+              <small>Nothing recorded yet</small>
             )}
-          </strong>
-          <small>
-            {meals.length
-              ? `${meals.length} ${meals.length === 1 ? "meal" : "meals"} recorded${state.nutrition.completeDays?.includes(date) ? " · day complete" : ""}`
-              : "Add what you remember"}
-          </small>
+          </span>
+          <ChevronRight size={17} aria-hidden="true" />
         </button>
         <button
-          className="area-tile"
-          data-area="sleep"
+          className="list-row today-record"
           onClick={() =>
             go(sleep?.sleepHours == null ? "coach/sleep" : "health")
           }
         >
-          <span className="area-tile-heading">
-            <AreaIcon area="sleep" icon={Moon} size="sm" />
-            <span>Sleep</span>
-            <ChevronRight size={16} aria-hidden="true" />
+          <SleepIcon size={22} />
+          <span>
+            <strong>Sleep</strong>
+            <small>
+              {sleep?.sleepImport
+                ? "From Apple Health"
+                : sleep?.sleepHours != null
+                  ? "Your reported sleep"
+                  : "Connect Apple Health or log sleep"}
+            </small>
           </span>
-          <strong>
-            {sleep?.sleepHours == null
-              ? "Not recorded"
-              : formatSleepDuration(sleep.sleepHours)}
-          </strong>
-          <small>
-            {sleep?.sleepImport
-              ? "From Apple Health"
-              : sleep?.sleepHours != null
-                ? "Your reported sleep"
-                : "Connect Apple Health or log sleep"}
-          </small>
+          <span className="today-record-value">
+            {sleep?.sleepHours == null ? (
+              <small>Not recorded</small>
+            ) : (
+              formatSleepDuration(sleep.sleepHours)
+            )}
+          </span>
+          <ChevronRight size={17} aria-hidden="true" />
         </button>
       </section>
       <TrackingStatus accountId={journal.identity.id} go={go} />
@@ -104,32 +106,64 @@ export function Today({
         <div className="today-week-heading">
           <h2>Your last seven days</h2>
           <Button variant="ghost" onClick={() => go("journal/week")}>
-            Review my week <ArrowRight size={17} />
+            Review my week
           </Button>
         </div>
-        <dl className="today-week-stats">
-          <div data-area="train">
-            <dt>Sessions</dt>
-            <dd>{week.strengthSessions + week.cardioSessions}</dd>
-          </div>
-          <div data-area="sleep">
-            <dt>Nights</dt>
-            <dd>
-              {week.sleepNights}
-              <small>/7</small>
-            </dd>
-          </div>
-          <div data-area="food">
-            <dt>Food days</dt>
-            <dd>
-              {week.foodLoggedDays}
-              <small>/7</small>
-            </dd>
-          </div>
-        </dl>
+        <ol className="week-strip">
+          {week.days.map((d) => {
+            const day = new Date(`${d.date}T12:00:00`);
+            const trained = d.strength.length + d.cardio.length > 0;
+            const slept = d.checkin?.sleepHours ?? null;
+            const ate = d.meals.length > 0;
+            return (
+              <li key={d.date} data-today={d.date === date || undefined}>
+                <span className="week-strip-day" aria-hidden="true">
+                  {day.toLocaleDateString("en-GB", { weekday: "narrow" })}
+                </span>
+                <span
+                  className="week-strip-mark"
+                  data-on={trained || undefined}
+                  aria-hidden="true"
+                >
+                  <BarbellIcon size={18} active={trained} />
+                </span>
+                <span className="week-strip-sleep" aria-hidden="true">
+                  {slept == null ? "–" : slept.toFixed(1)}
+                </span>
+                <span
+                  className="week-strip-food"
+                  data-on={ate || undefined}
+                  aria-hidden="true"
+                />
+                <span className="sr-only">
+                  {day.toLocaleDateString("en-GB", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })}
+                  : {trained ? "trained" : "no training recorded"},{" "}
+                  {slept == null
+                    ? "sleep not recorded"
+                    : `${formatSleepDuration(slept)} sleep`}
+                  , {ate ? "food logged" : "no food logged"}.
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+        <p className="week-strip-key" aria-hidden="true">
+          <span>
+            <BarbellIcon size={14} active /> trained
+          </span>
+          <span>7.4 = hours slept</span>
+          <span>
+            <i className="week-strip-food" data-on /> food logged
+          </span>
+        </p>
         <p className="fine-print">
-          Missing entries stay unknown. Your review shows the records behind
-          each comparison.
+          Trained on {trainedDays} of 7 days, with sleep on {week.sleepNights}{" "}
+          nights and food on {week.foodLoggedDays} days. Missing entries stay
+          unknown.
         </p>
       </section>
       <details className="today-extra">

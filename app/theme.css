@@ -1,7 +1,8 @@
 /* Colour tokens for the light and dark themes. Unlayered so they define the
    palette for every layer; components only ever reference these names.
    Each family has a readable foreground (base), a fill that carries white
-   text (solid), a soft tint for backgrounds, and a border (line). */
+   text (solid), a soft tint for backgrounds, and a border (line).
+   The accent is the blue of the 20 kg competition plate. */
 :root {
   color-scheme: light dark;
 
@@ -16,6 +17,8 @@
   --ink-2: #555b66;
   --ink-3: #60666f;
   --on-solid: #ffffff;
+  /* Knock-out lines inside filled icons match the surface behind them. */
+  --nav-cut: var(--surface);
   /* Dark panels with white text, e.g. the video stage. Stays dark in both themes. */
   --inverse: #1d2129;
   --inverse-hover: #2c313b;
@@ -23,11 +26,11 @@
   --shadow-float: 0 8px 28px #15171c14, 0 1px 3px #15171c0f;
   --shadow-dialog: 0 24px 72px #15171c2e;
 
-  --accent: #2f62d9;
-  --accent-solid: #2f62d9;
-  --accent-hover: #2753bd;
-  --accent-soft: #e9effc;
-  --accent-line: #c7d5f5;
+  --accent: #1649b8;
+  --accent-solid: #1649b8;
+  --accent-hover: #113d9c;
+  --accent-soft: #e8eefb;
+  --accent-line: #c3d2f2;
 
   --success: #18703f;
   --success-solid: #1a7843;
@@ -43,22 +46,22 @@
   --warning-solid: #9a6a06;
   --warning-soft: #fdf3dc;
   --warning-line: #f0dca6;
-
-  /* One hue per area of the journal, used for its icon tile and highlights. */
-  --train: #a14c06;
-  --train-soft: #fdf0e4;
-  --food: #166f48;
-  --food-soft: #e3f4ec;
-  --sleep: #6246c9;
-  --sleep-soft: #efebfc;
-  --sleep-solid: #6246c9;
-  --sleep-line: #d6ccf6;
-  --cardio: #c8304a;
-  --cardio-soft: #fdeaed;
-  --health: #096b6b;
-  --health-soft: #e0f4f4;
-  --health-solid: #096b6b;
-  --health-line: #b7e1e1;
+  /* Areas of the journal share the one accent; colour is kept for state
+     (made, missed, warnings), not decoration. */
+  --train: var(--accent);
+  --train-soft: var(--accent-soft);
+  --food: var(--accent);
+  --food-soft: var(--accent-soft);
+  --sleep: var(--accent);
+  --sleep-soft: var(--accent-soft);
+  --sleep-solid: var(--accent-solid);
+  --sleep-line: var(--accent-line);
+  --cardio: var(--accent);
+  --cardio-soft: var(--accent-soft);
+  --health: var(--accent);
+  --health-soft: var(--accent-soft);
+  --health-solid: var(--accent-solid);
+  --health-line: var(--accent-line);
   --coach: var(--accent);
   --coach-soft: var(--accent-soft);
 }
@@ -81,9 +84,9 @@
     --shadow-float: 0 8px 28px #00000066, 0 1px 3px #0000004d;
     --shadow-dialog: 0 24px 72px #000000a6;
 
-    --accent: #86a8ff;
-    --accent-solid: #3d6be0;
-    --accent-hover: #4d79ea;
+    --accent: #8eaefc;
+    --accent-solid: #2d5fd6;
+    --accent-hover: #3a6be0;
     --accent-soft: #1b2540;
     --accent-line: #2f3f6a;
 
@@ -101,20 +104,5 @@
     --warning-solid: #9a6a06;
     --warning-soft: #2d2413;
     --warning-line: #54431f;
-
-    --train: #ffa564;
-    --train-soft: #33230f;
-    --food: #64cf9d;
-    --food-soft: #12291f;
-    --sleep: #ad9bff;
-    --sleep-soft: #221c3d;
-    --sleep-solid: #6a50d4;
-    --sleep-line: #3b3168;
-    --cardio: #ff8597;
-    --cardio-soft: #331820;
-    --health: #5ad2d2;
-    --health-soft: #0f2a2a;
-    --health-solid: #0e7f7f;
-    --health-line: #1e4b4b;
   }
 }

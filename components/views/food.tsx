@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, MessageCircle, Flame } from "@/components/ui/icons";
-import { AreaIcon } from "../ui/area-icon";
+import { Plus, MessageCircle } from "@/components/ui/icons";
 import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
@@ -182,10 +181,7 @@ export function FoodView({
       {hasFood && (
         <section className="food-totals" aria-label={`Food totals for ${date}`}>
           <div className="food-calories">
-            <span className="area-tile-heading">
-              <AreaIcon area="food" icon={Flame} size="sm" />
-              <span>Calories</span>
-            </span>
+            <span className="food-calories-label">Calories</span>
             <p>
               <strong>{totals.calories.toLocaleString("en-GB")}</strong>
               <span>

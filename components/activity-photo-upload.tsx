@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Images, Sparkles } from "./ui/icons";
+import { Camera, Images } from "./ui/icons";
 import { Button } from "./ui/button";
 import { uploadUserImage } from "@/lib/food-client";
 import { today } from "@/lib/domain";
 import { authorizeActivityPhoto } from "@/lib/activity-photo-client";
+import { WhistleIcon } from "./ui/journal-icons";
 
 export function ActivityPhotoUpload({
   accountId,
@@ -80,7 +81,7 @@ export function ActivityPhotoUpload({
       </div>
       {showCoachLink && (
         <Button variant="ghost" onClick={() => go("coach/cardio")}>
-          <Sparkles size={17} /> Log with Coach
+          <WhistleIcon size={17} /> Log with Coach
         </Button>
       )}
       <input

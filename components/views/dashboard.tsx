@@ -1,7 +1,5 @@
 "use client";
 import {
-  ArrowRight,
-  ArrowUpRight,
   CalendarDays,
   Check,
   Dumbbell,
@@ -97,7 +95,6 @@ export function Dashboard({
             onClick={() => (active ? go("workout") : void onStart(day.id))}
           >
             {active ? "Resume workout" : "Start workout"}
-            <ArrowUpRight size={20} />
           </Button>
           <div className="plate-lines" aria-hidden="true">
             <span />
@@ -137,14 +134,14 @@ export function Dashboard({
             <span>usual weekly sessions</span>
           </div>
           <button className="text-link" onClick={() => go("history")}>
-            View your training <ArrowRight size={16} />
+            View your training
           </button>
         </section>
       </div>
       <div className="section-top spaced">
         <h2>Your numbers</h2>
         <a className="text-link" href="#progress">
-          View progress <ArrowUpRight size={16} />
+          View progress
         </a>
       </div>
       <div className="stats-grid">
@@ -167,7 +164,7 @@ export function Dashboard({
       <div className="section-top spaced">
         <h2>Find your next session</h2>
         <a className="text-link" href="#workout/choose">
-          All programmes <ArrowUpRight size={16} />
+          All programmes
         </a>
       </div>
       <div className="program-grid">
@@ -187,7 +184,6 @@ export function Dashboard({
                 <h3>{d.title}</h3>
                 <p>{d.exercises.length} exercises</p>
               </div>
-              <ArrowUpRight size={20} />
             </a>
           ))}
       </div>
@@ -196,7 +192,7 @@ export function Dashboard({
           <div className="section-top">
             <h2>Recent training</h2>
             <a className="text-link" href="#history">
-              View all <ArrowRight size={16} />
+              View all
             </a>
           </div>
           {recent.length ? (

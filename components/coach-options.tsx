@@ -1,5 +1,4 @@
 "use client";
-import { ArrowRight } from "@/components/ui/icons";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { CoachPreferences } from "./coach-opening";
@@ -38,7 +37,7 @@ export function CoachOptions({
   return (
     <div className="coach-options">
       <Button variant="secondary" onClick={onOpenMemories}>
-        What Coach remembers & agreed plans <ArrowRight size={17} />
+        What Coach remembers & agreed plans
       </Button>
       <CoachPreferences
         key={preferencesKey}
@@ -47,7 +46,7 @@ export function CoachOptions({
       />
       {destinations.map(([route, label]) => (
         <Button key={route} variant="secondary" onClick={() => go(route)}>
-          {label} <ArrowRight size={17} />
+          {label}
         </Button>
       ))}
       <p className="fine-print">

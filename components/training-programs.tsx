@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ArrowRight, ChevronDown, Play, Sparkles, Trash2 } from "./ui/icons";
+import { ChevronDown, Play, Trash2 } from "./ui/icons";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { exerciseName } from "@/lib/domain";
@@ -19,6 +19,7 @@ import {
 import type { JournalState, WorkoutTemplate } from "@/lib/model";
 import type { TrainingReview } from "@/lib/agent/actions";
 import type { JournalController } from "./journal";
+import { WhistleIcon } from "./ui/journal-icons";
 
 function RoutineDetails({ routine }: { routine: WorkoutTemplate }) {
   return (
@@ -157,7 +158,7 @@ export function TrainingPrograms({
           </p>
         </div>
         <Button variant="secondary" onClick={() => go("coach/training/new")}>
-          <Sparkles size={17} />
+          <WhistleIcon size={17} />
           Build with Coach
         </Button>
       </div>
@@ -249,7 +250,6 @@ export function TrainingPrograms({
                   {!!day.cardio?.length && (
                     <Button variant="secondary" onClick={() => go("cardio")}>
                       Cardio & movement
-                      <ArrowRight size={17} />
                     </Button>
                   )}
                 </div>
@@ -259,7 +259,7 @@ export function TrainingPrograms({
               variant="ghost"
               onClick={() => go(`coach/training/${p.id}`)}
             >
-              <Sparkles size={17} />
+              <WhistleIcon size={17} />
               Edit with Coach
             </Button>
           </article>

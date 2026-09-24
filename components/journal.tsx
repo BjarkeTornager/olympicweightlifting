@@ -1,30 +1,31 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUpRight,
   ChevronRight,
-  BarChart3,
-  BookOpen,
   Check,
   Cloud,
   CloudOff,
-  Dumbbell,
-  History,
-  House,
   Settings,
-  Sparkles,
   WifiOff,
-  Utensils,
-  HeartPulse,
-  Images,
-  PersonSimpleRun,
 } from "@/components/ui/icons";
+import {
+  BarbellIcon,
+  BowlIcon,
+  GaugeIcon,
+  KettlebellIcon,
+  LogbookIcon,
+  PhotoIcon,
+  RisingBarsIcon,
+  ShoeIcon,
+  TickedLogIcon,
+  TodayIcon,
+  WhistleIcon,
+} from "./ui/journal-icons";
 import { trackKeyboardViewport } from "@/lib/keyboard-viewport";
 import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
 import { days, today, createWorkout, program } from "@/lib/domain";
 import { Button } from "./ui/button";
-import { AreaIcon } from "./ui/area-icon";
 import { Today } from "./today";
 import { WeeklyReview } from "./weekly-review";
 import { Workouts } from "./views/workouts";
@@ -43,20 +44,20 @@ import { SignInDialog } from "./sign-in-dialog";
 import { SaveDetail, SyncConflictNotice } from "./journal-banners";
 export type JournalController = ReturnType<typeof useJournal>;
 const primaryNavigation = [
-  { id: "today", label: "Today", icon: House },
-  { id: "workout", label: "Train", icon: Dumbbell },
-  { id: "coach", label: "Coach", icon: Sparkles },
-  { id: "journal", label: "Journal", icon: BookOpen },
+  { id: "today", label: "Today", icon: TodayIcon },
+  { id: "workout", label: "Train", icon: BarbellIcon },
+  { id: "coach", label: "Coach", icon: WhistleIcon },
+  { id: "journal", label: "Journal", icon: LogbookIcon },
 ];
 const journalNavigation = [
-  { id: "food", label: "Food", icon: Utensils, area: "food" },
-  { id: "health", label: "Health", icon: HeartPulse, area: "health" },
-  { id: "history", label: "History", icon: History, area: "train" },
-  { id: "progress", label: "Progress", icon: BarChart3, area: "coach" },
-  { id: "images", label: "Images", icon: Images, area: "neutral" },
-  { id: "cardio", label: "Cardio", icon: PersonSimpleRun, area: "cardio" },
-  { id: "library", label: "Exercises", icon: BookOpen, area: "neutral" },
-] as const;
+  { id: "food", label: "Food", icon: BowlIcon },
+  { id: "health", label: "Health", icon: GaugeIcon },
+  { id: "history", label: "History", icon: TickedLogIcon },
+  { id: "progress", label: "Progress", icon: RisingBarsIcon },
+  { id: "images", label: "Images", icon: PhotoIcon },
+  { id: "cardio", label: "Cardio", icon: ShoeIcon },
+  { id: "library", label: "Exercises", icon: KettlebellIcon },
+];
 const navigation = [...primaryNavigation, ...journalNavigation, { id: "data" }];
 const navigationDescriptions: Record<string, string> = {
   food: "Meals, favourites and nutrition",
@@ -165,7 +166,7 @@ export function Journal(props: PrivateSessionProps) {
       <aside className="sidebar">
         <a className="brand" href="#today">
           <span className="brand-icon">
-            <Dumbbell size={22} />
+            <BarbellIcon size={22} active />
           </span>
           <span>
             Lift<span className="brand-light">Journal</span>
@@ -179,11 +180,7 @@ export function Journal(props: PrivateSessionProps) {
               className={`nav-item ${activeNav === id ? "active" : ""}`}
               aria-current={activeNav === id ? "page" : undefined}
             >
-              <Icon
-                size={22}
-                weight={activeNav === id ? "fill" : "regular"}
-                aria-hidden="true"
-              />
+              <Icon size={22} active={activeNav === id} />
               <span>{label}</span>
             </a>
           ))}
@@ -204,7 +201,6 @@ export function Journal(props: PrivateSessionProps) {
                 {identity ? "Your private space" : "Sign in for device sync"}
               </small>
             </span>
-            <ArrowUpRight size={16} />
           </button>
         </div>
       </aside>
@@ -279,7 +275,7 @@ export function Journal(props: PrivateSessionProps) {
         <SyncConflictNotice journal={journal} />
         {!state ? (
           <div className="opening">
-            <Dumbbell size={40} />
+            <BarbellIcon size={40} />
             <h1>Opening your journal…</h1>
             <p>Your training will appear here.</p>
           </div>
@@ -319,15 +315,17 @@ export function Journal(props: PrivateSessionProps) {
                       variant="secondary"
                       onClick={() => go("journal/week")}
                     >
-                      Your weekly review <ArrowUpRight size={18} />
+                      Your weekly review
                     </Button>
                     <nav
                       className="journal-menu journal-destinations"
                       aria-label="Journal destinations"
                     >
-                      {journalNavigation.map(({ id, label, icon, area }) => (
+                      {journalNavigation.map(({ id, label, icon: Icon }) => (
                         <a key={id} href={`#${id}`}>
-                          <AreaIcon area={area} icon={icon} size="lg" />
+                          <span className="journal-menu-icon">
+                            <Icon size={26} />
+                          </span>
                           <span>
                             <strong>{label}</strong>
                             <small>{navigationDescriptions[id]}</small>
@@ -448,11 +446,7 @@ export function Journal(props: PrivateSessionProps) {
             className={activeNav === id ? "active" : ""}
             aria-current={activeNav === id ? "page" : undefined}
           >
-            <Icon
-              size={25}
-              weight={activeNav === id ? "fill" : "regular"}
-              aria-hidden="true"
-            />
+            <Icon size={25} active={activeNav === id} />
             <span>{label}</span>
           </a>
         ))}

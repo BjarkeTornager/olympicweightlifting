@@ -1,9 +1,10 @@
 "use client";
 import { useState, useId } from "react";
-import { ArrowRight, ChevronDown, Sparkles } from "@/components/ui/icons";
+import { ChevronDown } from "@/components/ui/icons";
 import { coachSuggestion, coachingSchema } from "@/lib/coaching";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
+import { WhistleIcon } from "./ui/journal-icons";
 
 export function CoachOpening({
   journal,
@@ -49,7 +50,7 @@ export function CoachOpening({
         aria-controls={detailId}
         onClick={() => setOpen(!open)}
       >
-        <Sparkles size={17} aria-hidden="true" />
+        <WhistleIcon size={17} aria-hidden="true" />
         <span>
           <small>A THOUGHT FOR TODAY</small>
           <strong>{suggestion.title}</strong>
@@ -65,7 +66,7 @@ export function CoachOpening({
             disabled={disabled}
             onClick={() => onDiscuss(suggestion.prompt)}
           >
-            Talk it through <ArrowRight size={15} />
+            Talk it through
           </Button>
           <button
             title="Hide this suggestion for today on this device"

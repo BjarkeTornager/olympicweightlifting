@@ -68,7 +68,6 @@ export function ProgressView({ state, update, notify }: Props) {
         ].map((item, i) => (
           <div
             className={`stat-card ${["blue", "red", "gold"][i]}`}
-            data-area="train"
             key={item.label}
           >
             <span className="eyebrow">{item.label}</span>

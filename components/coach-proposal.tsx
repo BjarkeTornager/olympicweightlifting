@@ -1,5 +1,5 @@
 "use client";
-import { ArrowRight, Check, ChevronDown, Undo2 } from "@/components/ui/icons";
+import { Check, ChevronDown, Undo2 } from "@/components/ui/icons";
 import type { ActionPreview } from "@/lib/agent/actions";
 import { exerciseName } from "@/lib/domain";
 import { formatSet } from "@/lib/training";
@@ -219,7 +219,7 @@ export function CoachProposal({
                   : go(proposalRoute(p))
               }
             >
-              {proposalRouteLabel(p)} <ArrowRight size={17} />
+              {proposalRouteLabel(p)}
             </Button>
           </div>
           <p className="fine-print">
@@ -258,8 +258,7 @@ export function CoachProposal({
         >
           {p.workoutReview.status === "ongoing"
             ? "Continue workout"
-            : "View training history"}{" "}
-          <ArrowRight size={17} />
+            : "View training history"}
         </Button>
       )}
     </section>

@@ -68,10 +68,6 @@ body {
   margin: 0;
   color: var(--ink);
   font-family: var(--font-journal), Arial, sans-serif;
-  font-optical-sizing: auto;
-  font-feature-settings:
-    "cv05" 1,
-    "cv08" 1;
   font-variant-numeric: lining-nums tabular-nums;
   font-size: 16px;
   line-height: 1.6;

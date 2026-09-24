@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ArrowRight, Dumbbell, Sparkles } from "./ui/icons";
+import { Dumbbell } from "./ui/icons";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { LiftingBriefDetails } from "./lifting-brief";
@@ -13,6 +13,7 @@ import {
   type LiftingBriefInput,
 } from "@/lib/lifting-coach";
 import type { JournalState } from "@/lib/model";
+import { WhistleIcon } from "./ui/journal-icons";
 
 type Update = (
   fn: (state: JournalState) => JournalState | void,
@@ -294,7 +295,7 @@ export function LiftingCoach({
             </span>
           </div>
           <Button variant="secondary" onClick={() => go("workout")}>
-            Continue <ArrowRight size={17} />
+            Continue
           </Button>
         </div>
       )}
@@ -338,7 +339,6 @@ export function LiftingCoach({
                 <strong>{title}</strong>
                 <small>{description}</small>
               </span>
-              <ArrowRight size={18} />
             </button>
           ))}
         </section>
@@ -359,7 +359,7 @@ export function LiftingCoach({
             variant="secondary"
             onClick={() => go("coach/lifting/review")}
           >
-            <Sparkles size={16} /> Review with Coach
+            <WhistleIcon size={16} /> Review with Coach
           </Button>
         </div>
         <p className="muted">
@@ -452,10 +452,10 @@ export function LiftingCoach({
         )}
         <div className="button-row">
           <Button variant="ghost" onClick={() => go("history")}>
-            Training history <ArrowRight size={16} />
+            Training history
           </Button>
           <Button variant="ghost" onClick={() => go("workout/choose")}>
-            Your programs <ArrowRight size={16} />
+            Your programs
           </Button>
         </div>
       </section>

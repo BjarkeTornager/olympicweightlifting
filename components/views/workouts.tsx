@@ -1,56 +1,29 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
-  ArrowUp,
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
-  Check,
+  CalendarDays,
   ChevronDown,
-  Copy,
-  Dumbbell,
-  Plus,
+  ChevronRight,
+  History,
   Play,
-  Trash2,
-  X,
+  Plus,
 } from "@/components/ui/icons";
-import {
-  days,
-  today,
-  program,
-  EXERCISES,
-  exerciseName,
-  createEntry,
-  finishWorkout,
-  replanDraft,
-} from "@/lib/domain";
-import {
-  isValidLoggedSet,
-  planProgramDay,
-  updatePendingSets,
-  wholeKilograms,
-} from "@/js/progression.js";
-import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
+import { AreaIcon } from "../ui/area-icon";
+import { days, today, program, exerciseName } from "@/lib/domain";
+import { planProgramDay } from "@/js/progression.js";
+import type { JournalState } from "@/lib/model";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { NextSession } from "../next-session";
 import { Templates } from "../templates";
-import { RestTimer } from "../rest-timer";
 import { LiftingCoach } from "../lifting-coach";
 import { TrainingPrograms } from "../training-programs";
-import { ExercisePicker } from "../exercise-picker";
-import { exerciseLoggingNotes } from "@/lib/exercises";
-import { formatSet } from "@/lib/training";
-import { ActivityForm } from "../cardio";
 import { ActivityPhotoUpload } from "../activity-photo-upload";
-import {
-  cardioActivitySchema,
-  cardioLabels,
-  cardioTitle,
-  formatDuration,
-  type CardioActivity,
-} from "@/lib/cardio";
+import { ActiveWorkout } from "../active-workout";
+import { Technique } from "../technique";
 type Update = (
   fn: (state: JournalState) => JournalState | void,
 ) => Promise<void>;
@@ -63,132 +36,6 @@ type Props = {
   onStart: (id: string, date?: string) => Promise<void>;
   notify: (message: string) => void;
 };
-export function NumericInput({
-  label,
-  value,
-  onChange,
-  step = "any",
-}: {
-  label: string;
-  value: string | number | null | undefined;
-  onChange: (v: string) => void;
-  step?: string;
-}) {
-  const [text, setText] = useState(String(value ?? ""));
-  const focused = useRef(false);
-  useEffect(() => {
-    if (!focused.current) setText(String(value ?? ""));
-  }, [value]);
-  return (
-    <input
-      aria-label={label}
-      type="number"
-      inputMode="decimal"
-      min="0"
-      step={step}
-      value={text}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-      }}
-      onChange={(e) => {
-        setText(e.target.value);
-        onChange(e.target.value);
-      }}
-    />
-  );
-}
-export function Technique({ exerciseId }: { exerciseId: string }) {
-  const [open, setOpen] = useState(false);
-  const ex = EXERCISES.find((e) => e.id === exerciseId);
-  if (!ex?.videoId)
-    return (
-      <span className="fine-print">
-        Choose an exercise variation with your coach.
-      </span>
-    );
-  return (
-    <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
-        <Play size={16} />
-        Technique
-      </Button>
-      <Dialog
-        open={open}
-        onOpenChange={setOpen}
-        title={ex.name}
-        description={ex.purpose}
-      >
-        <p className="fine-print">
-          Instruction by {ex.sourceName}
-          {ex.videoTitle ? ` · ${ex.videoTitle}` : ""}
-        </p>
-        <div className="video-frame">
-          {open && (
-            <iframe
-              title={`${ex.name} technique demonstration`}
-              src={`https://www.youtube-nocookie.com/embed/${ex.videoId}?rel=0&playsinline=1`}
-              allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          )}
-        </div>
-        {ex.videoNote && <p className="fine-print">{ex.videoNote}</p>}
-        <ul className="cues">
-          {ex.cues.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-        <p className="exercise-logging-note">
-          <strong>How to log</strong> {ex.loggingNotes}
-        </p>
-        <div className="button-row">
-          <Button asChild variant="secondary">
-            <a
-              href={`https://www.youtube.com/watch?v=${ex.videoId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Open YouTube <ArrowUpRight size={16} />
-            </a>
-          </Button>
-          {ex.sourceUrl && (
-            <a
-              className="text-link"
-              href={ex.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {ex.sourceName} guide <ArrowUpRight size={16} />
-            </a>
-          )}
-        </div>
-      </Dialog>
-    </>
-  );
-}
-function personalBests(
-  completed: JournalState,
-  sessionId: string,
-): [string, number][] {
-  const session = completed.sessions.find((s) => s.id === sessionId);
-  if (!session) return [];
-  const found = new Map<string, number>();
-  for (const entry of session.exercises)
-    for (const set of entry.sets)
-      if (
-        isValidLoggedSet(set) &&
-        set.result !== "miss" &&
-        Number(set.weight) > (completed.prs[entry.exerciseId] ?? 0)
-      )
-        found.set(
-          entry.exerciseId,
-          Math.max(found.get(entry.exerciseId) ?? 0, Number(set.weight)),
-        );
-  return [...found];
-}
 
 export function Workouts(props: Props) {
   const { state, route, onStart, go, notify } = props;
@@ -217,7 +64,9 @@ export function Workouts(props: Props) {
           : "Workout finished.",
       );
     } catch (e) {
-      notify(e instanceof Error ? e.message : "Could not update personal bests.");
+      notify(
+        e instanceof Error ? e.message : "Could not update personal bests.",
+      );
       go("history");
     } finally {
       settlingPrs.current = false;
@@ -284,15 +133,30 @@ export function Workouts(props: Props) {
             <Button variant="secondary" onClick={() => void onStart("open")}>
               <Plus size={18} /> Start empty workout
             </Button>
-            <Button variant="ghost" onClick={() => go("workout/choose")}>
-              Your programs & routines <ArrowRight size={17} />
-            </Button>
-            <Button variant="ghost" onClick={() => go("workout/coaching")}>
-              Lifting brief & video <ArrowRight size={17} />
-            </Button>
-            <Button variant="ghost" onClick={() => go("history")}>
-              Training history <ArrowRight size={17} />
-            </Button>
+          </div>
+          <div className="list-card">
+            {(
+              [
+                [
+                  "workout/choose",
+                  "Your programs & routines",
+                  CalendarDays,
+                  "train",
+                ],
+                ["workout/coaching", "Lifting brief & video", Play, "coach"],
+                ["history", "Training history", History, "neutral"],
+              ] as const
+            ).map(([route, label, icon, area]) => (
+              <button
+                key={route}
+                className="list-row"
+                onClick={() => go(route)}
+              >
+                <AreaIcon area={area} icon={icon} size="sm" />
+                <span>{label}</span>
+                <ChevronRight size={17} aria-hidden="true" />
+              </button>
+            ))}
           </div>
           <details className="training-other-activity">
             <summary>
@@ -327,8 +191,8 @@ export function Workouts(props: Props) {
         <div className="page-heading compact">
           <div>
             <div className="eyebrow">
-              {day.id === "saturday" ? "WITH YOUR COACH" : "ON YOUR OWN"} ·{" "}
-              {day.exercises.length} EXERCISES
+              {day.id === "saturday" ? "With your coach" : "On your own"} ·{" "}
+              {day.exercises.length} exercises
             </div>
             <h1>{day.title}</h1>
             <p className="lead">{day.focus}</p>
@@ -424,7 +288,6 @@ export function Workouts(props: Props) {
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">YOUR TRAINING</div>
           <h1>Choose your session.</h1>
           <p className="lead">
             Build a gym routine, start an open workout or follow your programme.
@@ -447,7 +310,7 @@ export function Workouts(props: Props) {
       {state.activeWorkout ? (
         <div className="notice ongoing-workout-card">
           <div>
-            <span className="eyebrow">ONGOING WORKOUT</span>
+            <span className="eyebrow">Ongoing workout</span>
             <strong>{state.activeWorkout.title}</strong>
             <p>
               {state.activeWorkout.date} ·{" "}
@@ -573,731 +436,5 @@ export function Workouts(props: Props) {
           })}
       </div>
     </>
-  );
-}
-function ActiveWorkout({
-  state,
-  update,
-  go,
-  notify,
-  accountId,
-  onFinished,
-}: Props & { onFinished: (prs: [string, number][]) => void }) {
-  const draft = state.activeWorkout!;
-  const [expanded, setExpanded] = useState(
-      draft.activeExerciseId ??
-        draft.exercises.find((entry) =>
-          entry.sets.some((set) => !isValidLoggedSet(set)),
-        )?.id ??
-        draft.exercises[0]?.id ??
-        "",
-    ),
-    [reviewingSets, setReviewingSets] = useState<Record<string, string>>({}),
-    [restDuration, setRestDuration] = useState(
-      state.preferences.restSeconds ?? 90,
-    ),
-    [finish, setFinish] = useState(false),
-    [discard, setDiscard] = useState(false),
-    [add, setAdd] = useState(""),
-    [loggingActivity, setLoggingActivity] = useState<CardioActivity | null>(
-      null,
-    );
-  const activityChoice = cardioActivitySchema.safeParse(
-    add.startsWith("activity:") ? add.slice("activity:".length) : undefined,
-  );
-  const selectedActivity = activityChoice.success ? activityChoice.data : null;
-  const dayActivities = state.cardio.sessions.filter(
-    (s) => s.date === draft.date,
-  );
-  const save = (fn: (s: JournalState) => void) =>
-    void update(fn).catch((e) => notify(e.message));
-  const changeEntry = (id: string, fn: (e: Entry) => void) =>
-    save((s) => {
-      const entry = s.activeWorkout?.exercises.find((e) => e.id === id);
-      if (entry) fn(entry);
-    });
-  const logged = draft.exercises.reduce(
-      (n, e) => n + e.sets.filter(isValidLoggedSet).length,
-      0,
-    ),
-    total = draft.exercises.reduce((n, e) => n + e.sets.length, 0);
-  const complete = async () => {
-    try {
-      let found: [string, number][] = [];
-      await update((current) => {
-        const completed = finishWorkout(current);
-        found = personalBests(
-          completed,
-          draft.editingSessionId ?? draft.id,
-        );
-        return completed;
-      });
-      setFinish(false);
-      onFinished(found);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "Could not finish workout.");
-      setFinish(false);
-    }
-  };
-  return (
-    <section className="focused-workout" aria-label="Ongoing workout">
-      <div className="page-heading compact workout-heading">
-        <div>
-          <h1>{draft.title}</h1>
-          <p className="lead">
-            {logged} of {total} sets logged · {draft.date}
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          aria-label="Finish workout"
-          onClick={() => setFinish(true)}
-        >
-          Finish <Check size={18} />
-        </Button>
-      </div>
-      <div className="session-progress">
-        <span style={{ width: `${total ? (logged / total) * 100 : 0}%` }} />
-      </div>
-      <div className="exercise-stack">
-        {draft.exercises.map((entry, index) => {
-          const active = expanded === entry.id;
-          const previous = [...state.sessions]
-            .filter(
-              (w) => w.id !== draft.editingSessionId && w.date <= draft.date,
-            )
-            .sort((a, b) => b.date.localeCompare(a.date))
-            .flatMap((w) => w.exercises)
-            .find((e) => e.exerciseId === entry.exerciseId);
-          // Keep the current row stable while correcting an earlier set. Editing
-          // clears that set's result, but must not unmount its input mid-keystroke.
-          const reviewedIndex = entry.sets.findIndex(
-            (set) => set.id === reviewingSets[entry.id],
-          );
-          const nextSetIndex = Math.max(
-            0,
-            reviewedIndex >= 0
-              ? reviewedIndex
-              : entry.sets.findIndex((set) => !isValidLoggedSet(set)),
-          );
-          const nextSet = entry.sets[nextSetIndex];
-          const renderSet = (
-            set: Entry["sets"][number],
-            i: number,
-            focused = false,
-          ) => (
-            <div
-              className={`set-group ${focused ? "focus-set" : ""} ${set.result === "success" || set.logged ? "logged" : ""} ${set.result === "miss" ? "missed" : ""}`}
-              key={focused ? "focused-set" : set.id}
-            >
-              <div className="set-row">
-                <span className="set-number">{i + 1}</span>
-                <label className="set-weight-field">
-                  {focused && <span>Weight · kg</span>}
-                  <NumericInput
-                    label={`Set ${i + 1} weight in kilograms`}
-                    value={set.weight}
-                    onChange={(value) =>
-                      changeEntry(entry.id, (e) =>
-                        updatePendingSets(e, set.id, "weight", value),
-                      )
-                    }
-                  />
-                </label>
-                <label className="set-reps-field">
-                  {focused && <span>Reps</span>}
-                  <NumericInput
-                    label={`Set ${i + 1} repetitions`}
-                    value={set.reps}
-                    step="1"
-                    onChange={(value) =>
-                      changeEntry(entry.id, (e) =>
-                        updatePendingSets(e, set.id, "reps", value),
-                      )
-                    }
-                  />
-                </label>
-                <div className="result-buttons">
-                  <button
-                    className={
-                      set.result === "success" || set.logged ? "made" : ""
-                    }
-                    aria-label={`Log set ${i + 1} as made`}
-                    aria-pressed={
-                      set.result === "success" || Boolean(set.logged)
-                    }
-                    onClick={() =>
-                      changeEntry(entry.id, (e) => {
-                        const s = e.sets.find((s) => s.id === set.id)!;
-                        if (
-                          !isValidLoggedSet({
-                            ...s,
-                            result: "success",
-                            logged: true,
-                          })
-                        )
-                          throw Error(
-                            "Enter a weight and whole repetitions before logging the set.",
-                          );
-                        s.result = "success";
-                        s.logged = true;
-                        s.touched = true;
-                      })
-                    }
-                  >
-                    <Check size={20} />
-                    {focused && (
-                      <span>
-                        {isValidLoggedSet(set) && set.result !== "miss"
-                          ? "Made"
-                          : "Log set"}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    className={set.result === "miss" ? "miss" : ""}
-                    aria-label={`Set ${i + 1} missed`}
-                    aria-pressed={set.result === "miss"}
-                    onClick={() =>
-                      changeEntry(entry.id, (e) => {
-                        const s = e.sets.find((s) => s.id === set.id)!;
-                        if (!isValidLoggedSet({ ...s, result: "miss" }))
-                          throw Error(
-                            "Enter the attempted weight before logging a miss.",
-                          );
-                        s.result = "miss";
-                        s.logged = false;
-                        s.touched = true;
-                      })
-                    }
-                  >
-                    <X size={19} />
-                    {focused && <span>Miss</span>}
-                  </button>
-                </div>
-              </div>
-              <details className="set-options">
-                <summary>Set options</summary>
-                <div className="adjustments">
-                  {[-5, -2, 2, 5].map((delta) => (
-                    <button
-                      key={delta}
-                      onClick={() =>
-                        changeEntry(entry.id, (e) => {
-                          const s = e.sets.find((s) => s.id === set.id)!;
-                          updatePendingSets(
-                            e,
-                            set.id,
-                            "weight",
-                            String(
-                              Math.max(0, wholeKilograms(s.weight) + delta),
-                            ),
-                          );
-                        })
-                      }
-                    >
-                      {delta > 0 ? "+" : ""}
-                      {delta} kg
-                      <small>
-                        {delta > 0 ? "+" : ""}
-                        {delta / 2} / side
-                      </small>
-                    </button>
-                  ))}
-                </div>
-                <div className="set-extra">
-                  <label>
-                    RPE (optional)
-                    <NumericInput
-                      label={`Set ${i + 1} RPE`}
-                      value={set.rpe}
-                      step="0.5"
-                      onChange={(value) =>
-                        changeEntry(entry.id, (e) =>
-                          updatePendingSets(e, set.id, "rpe", value),
-                        )
-                      }
-                    />
-                  </label>
-                  <Button
-                    variant="ghost"
-                    disabled={i === 0}
-                    onClick={() =>
-                      changeEntry(entry.id, (e) => {
-                        const prior = e.sets[i - 1];
-                        updatePendingSets(
-                          e,
-                          set.id,
-                          "weight",
-                          String(prior.weight),
-                        );
-                        updatePendingSets(
-                          e,
-                          set.id,
-                          "reps",
-                          String(prior.reps),
-                        );
-                      })
-                    }
-                  >
-                    <Copy size={16} />
-                    Previous set
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      changeEntry(entry.id, (e) => {
-                        e.sets = e.sets.filter((s) => s.id !== set.id);
-                        e.completed = false;
-                      })
-                    }
-                  >
-                    <Trash2 size={16} />
-                    Remove
-                  </Button>
-                </div>
-              </details>
-            </div>
-          );
-          return (
-            <article
-              className={`exercise-card ${active ? "expanded" : ""}`}
-              key={entry.id}
-            >
-              <button
-                className="exercise-toggle"
-                onClick={() => {
-                  setReviewingSets({});
-                  setExpanded(active ? "" : entry.id);
-                }}
-                aria-expanded={active}
-              >
-                <span
-                  className={`exercise-number ${entry.completed ? "complete" : ""}`}
-                >
-                  {entry.completed ? (
-                    <Check size={20} />
-                  ) : (
-                    String(index + 1).padStart(2, "0")
-                  )}
-                </span>
-                <span>
-                  <strong>{exerciseName(entry.exerciseId)}</strong>
-                  <small>
-                    {entry.prescribed.targetSets ?? entry.sets.length} sets ×{" "}
-                    {entry.prescribed.targetReps ??
-                      entry.prescribed.reps ??
-                      "—"}{" "}
-                    reps ·{" "}
-                    {entry.prescribed.targetWeight !== "" &&
-                    entry.prescribed.targetWeight != null
-                      ? `${entry.prescribed.targetWeight} kg`
-                      : "Choose load"}
-                  </small>
-                </span>
-                <ChevronDown size={20} />
-              </button>
-              {active && (
-                <div className="exercise-body">
-                  {nextSet && (
-                    <>
-                      <p className="current-set-label">
-                        {entry.sets.every(isValidLoggedSet)
-                          ? "All sets recorded"
-                          : `Set ${nextSetIndex + 1} of ${entry.sets.length}`}
-                      </p>
-                      {renderSet(nextSet, nextSetIndex, true)}
-                    </>
-                  )}
-                  <RestTimer
-                    key={accountId}
-                    accountId={accountId}
-                    duration={restDuration}
-                    onDurationChange={setRestDuration}
-                  />
-                  {entry.sets.length > 1 && (
-                    <details
-                      className="other-workout-sets"
-                      onToggle={(event) => {
-                        const open = event.currentTarget.open;
-                        setReviewingSets((current) => {
-                          const next = { ...current };
-                          if (open && nextSet) next[entry.id] = nextSet.id;
-                          else delete next[entry.id];
-                          return next;
-                        });
-                      }}
-                    >
-                      <summary>
-                        Review other sets ({entry.sets.length - 1}){" "}
-                        <ChevronDown size={17} />
-                      </summary>
-                      <div className="set-labels">
-                        <span>SET</span>
-                        <span>WEIGHT · KG</span>
-                        <span>REPS</span>
-                        <span>RESULT</span>
-                      </div>
-                      {entry.sets.map((set, i) =>
-                        i === nextSetIndex ? null : renderSet(set, i),
-                      )}
-                    </details>
-                  )}
-                  <div className="section-top">
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        changeEntry(entry.id, (e) => {
-                          const last = e.sets.at(-1);
-                          e.sets.push({
-                            id: crypto.randomUUID(),
-                            weight: String(last?.weight ?? ""),
-                            reps: String(last?.reps ?? 1),
-                            rpe: "",
-                            result: "",
-                            touched: false,
-                          });
-                          e.completed = false;
-                        })
-                      }
-                    >
-                      <Plus size={17} />
-                      Add set
-                    </Button>
-                    <Technique exerciseId={entry.exerciseId} />
-                  </div>
-                  <details className="exercise-help">
-                    <summary>
-                      Exercise details <ChevronDown size={17} />
-                    </summary>
-                    <div className="button-row">
-                      <Button
-                        variant="ghost"
-                        onClick={() => go("coach/lifting/video")}
-                      >
-                        Get technique feedback
-                      </Button>
-                    </div>
-                    <div className="button-row exercise-order">
-                      {[-1, 1].map((direction) => (
-                        <Button
-                          key={direction}
-                          variant="ghost"
-                          disabled={
-                            index + direction < 0 ||
-                            index + direction >= draft.exercises.length
-                          }
-                          aria-label={`Move ${exerciseName(entry.exerciseId)} ${direction < 0 ? "up" : "down"}`}
-                          onClick={() =>
-                            save((s) => {
-                              const entries = s.activeWorkout!.exercises;
-                              const from = entries.findIndex(
-                                  (e) => e.id === entry.id,
-                                ),
-                                to = from + direction;
-                              if (from >= 0 && to >= 0 && to < entries.length)
-                                [entries[from], entries[to]] = [
-                                  entries[to],
-                                  entries[from],
-                                ];
-                            })
-                          }
-                        >
-                          {direction < 0 ? (
-                            <ArrowUp size={17} />
-                          ) : (
-                            <ArrowDown size={17} />
-                          )}
-                          Move {direction < 0 ? "up" : "down"}
-                        </Button>
-                      ))}
-                    </div>
-                    <p className="muted">{entry.prescribed.notes}</p>
-                    {previous && (
-                      <p className="previous">
-                        Last session:{" "}
-                        {previous.sets
-                          .filter(isValidLoggedSet)
-                          .map((s) => formatSet(s.weight, s.reps))
-                          .join(" · ") || "No logged sets"}
-                      </p>
-                    )}
-                    <p className="exercise-logging-note">
-                      {exerciseLoggingNotes(entry.exerciseId)}
-                    </p>
-                  </details>
-                  <details className="notes">
-                    <summary>Notes & coach cue</summary>
-                    <div className="form-grid">
-                      <label>
-                        Your notes
-                        <textarea
-                          value={entry.athleteNotes}
-                          onChange={(e) =>
-                            changeEntry(entry.id, (item) => {
-                              item.athleteNotes = e.target.value;
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Coach cue
-                        <textarea
-                          value={entry.coachCue}
-                          onChange={(e) =>
-                            changeEntry(entry.id, (item) => {
-                              item.coachCue = e.target.value;
-                            })
-                          }
-                        />
-                      </label>
-                    </div>
-                  </details>
-                  <Button
-                    variant="secondary"
-                    className="full"
-                    onClick={() => {
-                      if (
-                        !entry.sets.length ||
-                        !entry.sets.every(isValidLoggedSet)
-                      ) {
-                        notify(
-                          "Log every remaining set before completing this exercise, or finish a partial workout.",
-                        );
-                        return;
-                      }
-                      changeEntry(entry.id, (e) => {
-                        e.completed = true;
-                      });
-                      setReviewingSets({});
-                      setExpanded(draft.exercises[index + 1]?.id ?? entry.id);
-                    }}
-                  >
-                    Complete {exerciseName(entry.exerciseId)}{" "}
-                    <ArrowRight size={18} />
-                  </Button>
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
-      <details className="panel session-details">
-        <summary>
-          Workout details <ChevronDown size={17} />
-        </summary>
-        <div className="form-grid">
-          <label>
-            Training date
-            <input
-              type="date"
-              value={draft.date}
-              onChange={(e) =>
-                save((s) => {
-                  if (e.target.value && s.activeWorkout) {
-                    s.activeWorkout.date = e.target.value;
-                    replanDraft(s);
-                  }
-                })
-              }
-            />
-          </label>
-          <label>
-            Recovery today
-            <select
-              value={draft.recovery}
-              onChange={(e) =>
-                save((s) => {
-                  s.activeWorkout!.recovery = e.target.value as
-                    "auto" | "limited";
-                  replanDraft(s);
-                })
-              }
-            >
-              <option value="auto">Automatic · follow programme</option>
-              <option value="limited">Limited · repeat previous loads</option>
-            </select>
-          </label>
-        </div>
-        <div className="button-row">
-          <Button asChild variant="secondary">
-            <a href="#workout/gym_accessories">Gym Accessories</a>
-          </Button>
-          <Button asChild variant="ghost">
-            <a href="#workout/choose">All programmes</a>
-          </Button>
-          <Button variant="danger" onClick={() => setDiscard(true)}>
-            Discard draft
-          </Button>
-        </div>
-        <ActivityPhotoUpload accountId={accountId} go={go} />
-      </details>
-      <div className="panel add-exercise">
-        <ExercisePicker
-          label="Add an exercise or activity"
-          value={add}
-          onChange={setAdd}
-          includeActivities
-        />
-        <Button
-          variant="secondary"
-          disabled={!add}
-          onClick={() => {
-            if (selectedActivity) {
-              setLoggingActivity(selectedActivity);
-              return;
-            }
-            save((s) => {
-              const ex: ProgramExercise = {
-                exerciseId: add,
-                sets: 3,
-                reps: "5",
-                defaultReps: 5,
-                initialWeight: "",
-                notes: "Choose a comfortable working weight.",
-                priority: 99,
-                recommendation: "Manual",
-                videoRef: add,
-              };
-              const entry = createEntry(
-                ex,
-                s,
-                s.activeWorkout!.programDayId,
-                s.activeWorkout!.date,
-              );
-              s.activeWorkout!.exercises.push(entry);
-              setReviewingSets({});
-              setExpanded(entry.id);
-            });
-          }}
-        >
-          <Plus size={18} />
-          {selectedActivity
-            ? `Log ${cardioLabels[selectedActivity]}`
-            : "Add exercise"}
-        </Button>
-      </div>
-      {dayActivities.length > 0 && (
-        <section className="panel" aria-label="Movement on this training day">
-          <h2>Movement · {draft.date}</h2>
-          <ul className="cardio-breakdown">
-            {dayActivities.map((activity) => (
-              <li key={activity.id}>
-                <strong>{cardioTitle(activity)}</strong>
-                <span>
-                  {formatDuration(activity.durationSeconds)}
-                  {activity.distanceKm == null
-                    ? ""
-                    : ` · ${activity.distanceKm} km`}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <a className="text-link" href="#cardio">
-            View activity history <ArrowRight size={16} />
-          </a>
-        </section>
-      )}
-      <Dialog
-        open={loggingActivity !== null}
-        onOpenChange={(open) => {
-          if (!open) setLoggingActivity(null);
-        }}
-        title={
-          loggingActivity
-            ? `Log ${cardioLabels[loggingActivity]}`
-            : "Log activity"
-        }
-      >
-        {loggingActivity && (
-          <ActivityForm
-            journal={{ update }}
-            entry={null}
-            initialActivity={loggingActivity}
-            initialDate={draft.date > today() ? today() : draft.date}
-            onClose={() => setLoggingActivity(null)}
-            onSaved={(activity) => {
-              setAdd("");
-              notify(
-                `${cardioLabels[activity]} saved to your activity history.`,
-              );
-            }}
-          />
-        )}
-      </Dialog>
-      <details className="panel notes">
-        <summary>Session notes</summary>
-        <div className="form-grid">
-          <label>
-            Athlete notes
-            <textarea
-              value={draft.athleteNotes}
-              onChange={(e) =>
-                save((s) => {
-                  s.activeWorkout!.athleteNotes = e.target.value;
-                })
-              }
-            />
-          </label>
-          <label>
-            Overall coach notes
-            <textarea
-              value={draft.coachNotes}
-              onChange={(e) =>
-                save((s) => {
-                  s.activeWorkout!.coachNotes = e.target.value;
-                })
-              }
-            />
-          </label>
-        </div>
-      </details>
-      <div className="workout-dock">
-        <span>
-          <Dumbbell size={18} />
-          <strong>{logged}</strong> / {total} sets logged
-        </span>
-        <Button onClick={() => setFinish(true)}>
-          Finish workout <Check size={18} />
-        </Button>
-      </div>
-      <Dialog
-        open={finish}
-        onOpenChange={setFinish}
-        title="Finish your workout?"
-        description={`You've logged ${logged} of ${total} sets. Finishing marks this session complete. Unlogged sets stay unrecorded; a partial session will not unlock a load increase.`}
-      >
-        <div className="button-row">
-          <Button onClick={() => void complete()}>Finish workout</Button>
-          <Button variant="secondary" onClick={() => setFinish(false)}>
-            Keep training
-          </Button>
-        </div>
-      </Dialog>
-      <Dialog
-        open={discard}
-        onOpenChange={setDiscard}
-        title="Discard this draft?"
-        description="This removes the unfinished workout from your journal. Completed training history stays saved."
-      >
-        <div className="button-row">
-          <Button
-            variant="danger"
-            onClick={async () => {
-              await update((s) => {
-                s.activeWorkout = null;
-              });
-              setDiscard(false);
-              go("workout/choose");
-            }}
-          >
-            Discard draft
-          </Button>
-          <Button variant="secondary" onClick={() => setDiscard(false)}>
-            Keep training
-          </Button>
-        </div>
-      </Dialog>
-    </section>
   );
 }

@@ -80,7 +80,7 @@ export function Invitations({ accountId }: { accountId: string }) {
       className="panel invitation-panel"
       aria-labelledby="invitations-title"
     >
-      <div className="eyebrow">OWNER ONLY</div>
+      <div className="eyebrow">Owner only</div>
       <h2 id="invitations-title">Invitations</h2>
       <p>
         Choose who can join. Each person signs in with Google and gets their own

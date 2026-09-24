@@ -569,7 +569,7 @@ export function TrackingSettings({
   const [open, setOpen] = useState(initiallyOpen);
   return (
     <section className="panel tracking-settings">
-      <h2>Less to remember</h2>
+      <h2>Reminders</h2>
       <p>Optional reminders and sleep imports, with you in control.</p>
       <Button
         variant="secondary"

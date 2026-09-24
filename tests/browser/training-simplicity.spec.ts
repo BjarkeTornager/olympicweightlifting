@@ -127,6 +127,7 @@ test("focused sets preserve exact loads, explicit misses, correction, Undo, relo
     .click();
   await expect(page.getByText("Set 2 of 6", { exact: true })).toBeVisible();
   await page.getByLabel("Set 2 missed", { exact: true }).click();
+  await expect(page.getByText("Set 3 of 6", { exact: true })).toBeVisible();
   await expect(page.locator(".sync-status.synced")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Set 3 of 6", { exact: true })).toBeVisible();

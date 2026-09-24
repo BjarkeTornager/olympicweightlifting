@@ -275,7 +275,7 @@ export function LiftingCoach({
       <div className="page-heading compact">
         <div>
           <div className="eyebrow">
-            <Dumbbell size={16} /> YOUR LIFTING
+            <Dumbbell size={16} /> Your lifting
           </div>
           <h1>A clear focus. A plan that fits.</h1>
           <p className="lead">

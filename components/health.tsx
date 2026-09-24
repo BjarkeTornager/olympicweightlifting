@@ -28,6 +28,7 @@ import {
   type CheckinPatch,
 } from "@/lib/health";
 import { Button } from "./ui/button";
+import { AreaIcon } from "./ui/area-icon";
 import { Dialog } from "./ui/dialog";
 
 const energyNames = ["Very low", "Low", "Okay", "Good", "Great"];
@@ -261,7 +262,7 @@ export function DailyOverview({
     <section className="today-focus" aria-label="Your daily health overview">
       <div className="coach-section-title">
         <div>
-          <span className="eyebrow">YOUR DAILY COACH</span>
+          <span className="eyebrow">Your daily coach</span>
           <h2>A little direction for today.</h2>
           <p className="muted">Your next step, with room to live your day.</p>
         </div>
@@ -383,10 +384,7 @@ export function HealthView({
     <div className="health-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">
-            <HeartPulse size={15} /> YOUR HEALTH JOURNAL
-          </div>
-          <h1>Notice your patterns.</h1>
+          <h1>Health</h1>
           <p className="lead">
             Sleep, energy and recovery, in your own words and numbers.
           </p>
@@ -401,9 +399,9 @@ export function HealthView({
         </div>
       </div>
       <div className="health-summary-grid">
-        <section className="panel">
-          <Moon size={20} />
-          <span>Sleep · last 14 days</span>
+        <section className="panel" data-area="sleep">
+          <AreaIcon area="sleep" icon={Moon} size="sm" />
+          <span>Sleep · 14 days</span>
           <strong>
             {view.sleepAverage ?? "—"}
             <small>hours</small>
@@ -414,9 +412,9 @@ export function HealthView({
               : "Log sleep to build your picture"}
           </p>
         </section>
-        <section className="panel">
-          <Scale size={20} />
-          <span>Latest bodyweight</span>
+        <section className="panel" data-area="health">
+          <AreaIcon area="health" icon={Scale} size="sm" />
+          <span>Bodyweight</span>
           <strong>
             {view.latestWeight?.value ?? "—"}
             <small>kg</small>
@@ -425,9 +423,9 @@ export function HealthView({
             {view.latestWeight?.date ?? "No measurement in the last 14 days"}
           </p>
         </section>
-        <section className="panel">
-          <Activity size={20} />
-          <span>Check-in rhythm</span>
+        <section className="panel" data-area="coach">
+          <AreaIcon area="coach" icon={Activity} size="sm" />
+          <span>Check-ins</span>
           <strong>
             {view.recentCheckins.length}
             <small>/ 14 days</small>

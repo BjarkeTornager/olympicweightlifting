@@ -1,39 +1,26 @@
 "use client";
 import { privateFetch } from "@/lib/private-fetch";
-import { getLocal } from "@/lib/local";
 import { useConversationScroll } from "@/lib/use-conversation-scroll";
-import type { SavedVisual } from "@/lib/coach-visuals";
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCoachConnection } from "@/lib/use-coach-connection";
+import { useCoachRun } from "@/lib/use-coach-run";
+import { markProposal, mergeSavedTurns } from "@/lib/coach-turns";
+import { coachBackgroundStatus, coachConnectionHint } from "@/lib/coach-status";
 import {
   ArrowRight,
-  Check,
   MessageCircle,
   Send,
   Sparkles,
-  Undo2,
-  Camera,
-  Moon,
   Plus,
-  Utensils,
   MoreHorizontal,
   ChevronDown,
-  X,
   LoaderCircle,
-  Square,
   CalendarDays,
   Table2,
-  Dumbbell,
 } from "@/components/ui/icons";
 import type { JournalController } from "./journal";
 import type { ActionPreview } from "@/lib/agent/actions";
-import { exerciseName, today } from "@/lib/domain";
+import { today } from "@/lib/domain";
 import { uploadUserImage } from "@/lib/food-client";
 import { consumeActivityPhoto } from "@/lib/activity-photo-client";
 import {
@@ -42,40 +29,28 @@ import {
   sleepLoggingPrompt,
   type UserImage,
 } from "@/lib/images";
-import { ImageBadge } from "./image-library";
-import { FoodPhotoImage } from "./food-photo";
-import { MealDetails } from "./views/food";
-import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
-import { CardioDetails } from "./cardio";
-import { CheckinDialog, CheckinDetails } from "./health";
-import { AssistantText } from "./assistant-text";
-import { AguiVisuals } from "./agui-components";
+import { CheckinDialog } from "./health";
+import { CoachOpening } from "./coach-opening";
 import { CoachMemoryBook } from "./coach-memory";
-import { CoachEntryDetails, coachEntrySummary } from "./coach-review-details";
-import { CoachOpening, CoachPreferences } from "./coach-opening";
 import { LiftingVideoDialog } from "./lifting-video-upload";
-import { videoFeedbackLabel } from "@/lib/lifting-video";
 import { QuickCapture } from "./quick-capture";
-type Turn = {
-  id: string;
-  question: string;
-  reply?: string;
-  proposals?: ActionPreview[];
-  status: string;
-  photoIds?: string[];
-  visuals?: SavedVisual[];
-  activity?: string;
-};
-type QueuedMessage = {
-  id: string;
-  question: string;
-  photoIds: string[];
-  timezone: string;
-  submittedAt: string;
-};
-const MAX_QUEUED_MESSAGES = 20;
+import { CoachTurn, type Turn } from "./coach-turn";
+import { proposalNeedsReview } from "@/lib/coach-proposals";
+import {
+  CoachQueue,
+  MAX_QUEUED_MESSAGES,
+  QUEUE_FULL_MESSAGE,
+  queuedMessage,
+} from "./coach-queue";
+import { CoachImageTools } from "./coach-image-tools";
+import { CoachOptions } from "./coach-options";
+import {
+  ComposerAttachments,
+  ComposerQuickActions,
+  ComposerReconnect,
+} from "./coach-composer";
 export function TrainingAgent({
   journal,
   onLogin,
@@ -112,43 +87,15 @@ export function TrainingAgent({
       : (initialTrainingPrompt ?? "");
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(entryPrompt),
-    [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const [connection, setConnection] = useState<{
-      enabled: boolean;
-      provider: string | null;
-      protocol?: string;
-    } | null>(null),
-    [clear, setClear] = useState(false);
+  const [clear, setClear] = useState(false);
   const [acting, setActing] = useState<string | null>(null),
     [notice, setNotice] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
-  const activeRun = useRef<AbortController | null>(null);
-  const [queue, setQueue] = useState<QueuedMessage[]>([]);
-  const [failedMessage, setFailedMessage] = useState<QueuedMessage | null>(
-    null,
-  );
-  const [activeId, setActiveId] = useState<string | null>(null);
   // A submitted draft cannot be accepted twice before React clears the composer.
   const submittedDraft = useRef<string | null>(null);
   const submittedVideoReviews = useRef(new Set<string>());
   const submittedActivityPhotos = useRef(new Set<string>());
-  const queueSize = useRef(queue.length);
-  useEffect(() => {
-    queueSize.current = queue.length;
-  }, [queue.length]);
-  // Account changes/sign-out still unmount this controller and cancel the run.
-  // Internal navigation only removes the view below, preserving work and drafts.
-  useEffect(
-    () => () => {
-      activeRun.current?.abort();
-      activeRun.current = null;
-    },
-    [],
-  );
-  const [backgroundResult, setBackgroundResult] = useState<
-    "ready" | "failed" | null
-  >(null);
   const [view, setView] = useState<"conversation" | "today" | "week">(
     "conversation",
   );
@@ -191,7 +138,7 @@ export function TrainingAgent({
   const { conversation, content, showLatest, readHistory, remember } =
     useConversationScroll(newestId, visible && view === "conversation");
   const needsReview = (proposal: ActionPreview) =>
-    !proposal.status && new Date(proposal.expiresAt).getTime() > now;
+    proposalNeedsReview(proposal, now);
   const reviewCount = turns.reduce(
     (count, turn) => count + (turn.proposals?.filter(needsReview).length ?? 0),
     0,
@@ -244,8 +191,45 @@ export function TrainingAgent({
       setCheckinDate(null);
     }
   }
-  if (visible && backgroundResult) setBackgroundResult(null);
   const accountId = journal.identity?.id;
+  const coach = useCoachConnection(accountId, (saved) =>
+    setTurns((current) => mergeSavedTurns(saved, current)),
+  );
+  const { connection, headers } = coach;
+  const connectionLoading = coach.loading,
+    connectionError = coach.error;
+  const pending = Boolean(
+    journal.record?.dirty ||
+    journal.record?.pending ||
+    journal.record?.conflict,
+  );
+  const ready = Boolean(
+    accountId &&
+    connection?.enabled &&
+    !pending &&
+    !loadingImage &&
+    journal.status === "synced",
+  );
+  const run = useCoachRun({
+    accountId,
+    journal,
+    connection,
+    headers,
+    ready,
+    acting,
+    setActing,
+    setTurns,
+    setError,
+    setNotice,
+  });
+  const { queue, failedMessage, busy, backgroundResult, enqueue } = run;
+  // Opening Coach acknowledges a reply that finished in the background.
+  if (visible && backgroundResult) run.setBackgroundResult(null);
+  // Read by the photo loader, which must not restart when the queue changes.
+  const queueSize = useRef(queue.length);
+  useEffect(() => {
+    queueSize.current = queue.length;
+  }, [queue.length]);
   useEffect(() => {
     if (!initialPhotoId || !accountId) return;
     const abort = new AbortController();
@@ -279,16 +263,9 @@ export function TrainingAgent({
               );
             }
             submittedActivityPhotos.current.add(image.id);
-            setQueue((waiting) => [
-              ...waiting,
-              {
-                id: image.id,
-                question: activityLoggingPrompt(true),
-                photoIds: [image.id],
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                submittedAt: new Date().toISOString(),
-              },
-            ]);
+            enqueue(
+              queuedMessage(image.id, activityLoggingPrompt(true), [image.id]),
+            );
             setView("conversation");
             setNotice(
               "Activity photo queued. Coach will log the visible details with Undo.",
@@ -320,113 +297,23 @@ export function TrainingAgent({
     accountId,
     initialActivityPhotoLog,
     initialCardioLog,
+    enqueue,
   ]);
-  const headers = useCallback(
-    () => ({
-      "Content-Type": "application/json",
-      "X-Journal-Account": accountId ?? "",
-    }),
-    [accountId],
-  );
-  const [connectionLoading, setConnectionLoading] = useState(true);
-  const [connectionError, setConnectionError] = useState("");
-  const connectionRequest = useRef<AbortController | null>(null);
-  const connectionReady = useRef(false);
-  const refresh = useCallback(async () => {
-    if (!accountId || connectionRequest.current) return;
-    const controller = new AbortController();
-    connectionRequest.current = controller;
-    setConnectionLoading(true);
-    setConnectionError("");
-    try {
-      const r = await privateFetch("/api/agent", {
-        headers: headers(),
-        cache: "no-store",
-        signal: AbortSignal.any([
-          controller.signal,
-          AbortSignal.timeout(10000),
-        ]),
-      });
-      const data = await r.json();
-      if (!r.ok) throw Error("Coach couldn’t connect. Please try again.");
-      controller.signal.throwIfAborted();
-      connectionReady.current = Boolean(data.enabled);
-      setConnection({
-        enabled: data.enabled,
-        provider: data.provider,
-        protocol: data.protocol,
-      });
-      setTurns((current) => [
-        ...data.turns.filter((t: Turn) => !current.some((v) => v.id === t.id)),
-        ...current,
-      ]);
-    } catch {
-      if (!controller.signal.aborted) {
-        connectionReady.current = false;
-        setConnectionError("Coach couldn’t connect. Your draft is still here.");
-      }
-    } finally {
-      if (connectionRequest.current === controller) {
-        connectionRequest.current = null;
-        if (!controller.signal.aborted) setConnectionLoading(false);
-      }
-    }
-  }, [accountId, headers]);
-  useEffect(() => {
-    const retry = () => {
-      if (!connectionReady.current && document.visibilityState === "visible")
-        void refresh();
-    };
-    const initial = setTimeout(() => void refresh(), 0);
-    const interval = setInterval(retry, 15000);
-    window.addEventListener("online", retry);
-    window.addEventListener("pageshow", retry);
-    document.addEventListener("visibilitychange", retry);
-    return () => {
-      connectionRequest.current?.abort();
-      connectionRequest.current = null;
-      clearTimeout(initial);
-      clearInterval(interval);
-      window.removeEventListener("online", retry);
-      window.removeEventListener("pageshow", retry);
-      document.removeEventListener("visibilitychange", retry);
-    };
-  }, [refresh]);
-  const pending = Boolean(
-    journal.record?.dirty ||
-    journal.record?.pending ||
-    journal.record?.conflict,
-  );
-  const ready = Boolean(
-    accountId &&
-    connection?.enabled &&
-    !pending &&
-    !loadingImage &&
-    journal.status === "synced",
-  );
   const reconnecting = connectionLoading || journal.status === "syncing";
-  const connectionHint = journal.record?.conflict
-    ? "Choose which journal version to keep before messaging Coach."
-    : pending
-      ? "Sync your pending changes before messaging Coach. Your draft is still here."
-      : journal.status === "offline"
-        ? "You’re offline. Reconnect to send your message. Your draft is still here."
-        : journal.status !== "synced"
-          ? "Your journal hasn’t connected yet. Reconnect to send your message."
-          : connectionError
-            ? connectionError
-            : connectionLoading
-              ? "Connecting to Coach… Your draft is still here."
-              : !connection?.enabled
-                ? "Coach is temporarily unavailable. Try reconnecting in a moment."
-                : loadingImage
-                  ? "Loading your attached image…"
-                  : "";
+  const connectionHint = coachConnectionHint({
+    conflict: Boolean(journal.record?.conflict),
+    pending,
+    journalStatus: journal.status,
+    connectionError,
+    connecting: connectionLoading,
+    enabled: Boolean(connection?.enabled),
+    loadingImage,
+  });
   const reconnect = () => {
     // Recheck independently: neither failure should prevent the other recovery.
     // Never submit the draft or save a proposal as a side effect of reconnecting.
     void journal.sync();
-    if (!connectionReady.current) void refresh();
+    coach.reconnect();
   };
   const attach = async (input?: File | File[], purpose?: "meal-photo") => {
     const files = input ? (Array.isArray(input) ? input : [input]) : [];
@@ -502,22 +389,14 @@ export function TrainingAgent({
         : "");
     if (!question || uploading || !ready || photoIds.length > 4) return;
     if (queue.length >= MAX_QUEUED_MESSAGES) {
-      setError(
-        "Your queue is full. Let Coach finish a message or remove a queued message.",
-      );
+      setError(QUEUE_FULL_MESSAGE);
       return;
     }
     const signature = JSON.stringify([question, photoIds]);
     if (submittedDraft.current === signature) return;
     submittedDraft.current = signature;
-    const job: QueuedMessage = {
-      id: crypto.randomUUID(),
-      question,
-      photoIds: [...photoIds],
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      submittedAt: new Date().toISOString(),
-    };
-    setQueue((waiting) => [...waiting, job]);
+    const job = queuedMessage(crypto.randomUUID(), question, [...photoIds]);
+    enqueue(job);
     setMessage("");
     setPhotoIds([]);
     setImageDetails({});
@@ -527,180 +406,8 @@ export function TrainingAgent({
     // Keep keyboard focus so another message can follow immediately.
     input.current?.focus({ preventScroll: true });
   };
-  const execute = async (job: QueuedMessage) => {
-    const { id, question, photoIds: attachments } = job;
-    const abort = new AbortController();
-    activeRun.current = abort;
-    setActiveId(id);
-    setBusy(true);
-    setBackgroundResult(null);
-    setError("");
-    setTurns((old) => [
-      ...old.filter((t) => t.id !== id),
-      { id, question, photoIds: attachments, status: "running" },
-    ]);
-    try {
-      const { runCoach } = await import("@/lib/coach-client");
-      // Read the committed local snapshot after the preceding run's fresh sync.
-      // A render captured before that sync can still contain an older revision.
-      const record = await getLocal(accountId!);
-      abort.signal.throwIfAborted();
-      if (record.dirty || record.pending || record.conflict)
-        throw Error("Sync your journal changes, then retry this message.");
-      const payload = {
-        id,
-        message: question,
-        revision: record.revision,
-        timezone: job.timezone,
-        submittedAt: job.submittedAt,
-        photoIds: attachments,
-      };
-      const signal = AbortSignal.any([
-        abort.signal,
-        AbortSignal.timeout(110000),
-      ]);
-      const result =
-        connection?.protocol === "ag-ui"
-          ? await runCoach(accountId!, payload, signal, (update) => {
-              if (signal.aborted) return;
-              setTurns((old) =>
-                old.map((t) =>
-                  t.id === id
-                    ? {
-                        ...t,
-                        ...(update.reply !== undefined
-                          ? { reply: update.reply }
-                          : {}),
-                        ...(update.activity
-                          ? { activity: update.activity }
-                          : {}),
-                        ...(update.visual &&
-                        !(t.visuals ?? []).some((v) => v.id === update.visual!.id)
-                          ? {
-                              visuals: [
-                                ...(t.visuals ?? []),
-                                update.visual,
-                              ].slice(0, 3),
-                            }
-                          : {}),
-                      }
-                    : t,
-                ),
-              );
-            })
-          : await (async () => {
-              // Compatibility during rolling releases; never retry a failed run
-              // using a second transport, which could prepare duplicate changes.
-              const r = await privateFetch("/api/agent", {
-                method: "POST",
-                headers: headers(),
-                body: JSON.stringify(payload),
-                signal,
-              });
-              const data = await r.json();
-              if (!r.ok)
-                throw Error(
-                  data.error ??
-                    "The assistant could not complete that request.",
-                );
-              return data;
-            })();
-      setTurns((old) =>
-        old.map((t) =>
-          t.id === id
-            ? { id, question, photoIds: attachments, ...result, status: "done" }
-            : t,
-        ),
-      );
-      setBackgroundResult("ready");
-      setFailedMessage(null);
-      if (result.proposals.some((p: ActionPreview) => p.status === "saved"))
-        await journal.sync(true);
-    } catch (e) {
-      // A dropped stream can occur after the save committed. Read the durable
-      // receipt before offering a retry, and reuse this run ID if still unknown.
-      if (activeRun.current !== abort) return;
-      try {
-        const recovered = await privateFetch(
-          `/api/agent?turnId=${encodeURIComponent(id)}`,
-          {
-            headers: headers(),
-            signal: AbortSignal.timeout(10000),
-          },
-        );
-        const data = await recovered.json();
-        if (recovered.ok && data.turn?.status === "done" && data.turn.reply) {
-          setTurns((old) => old.map((t) => (t.id === id ? data.turn : t)));
-          setFailedMessage(null);
-          setBackgroundResult("ready");
-          await journal.sync(true);
-          return;
-        }
-      } catch {
-        /* Offline: keep the same run ID to prevent duplicate saves. */
-      }
-      setFailedMessage(job);
-      setError(
-        abort.signal.aborted
-          ? "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice."
-          : e instanceof Error
-            ? e.message
-            : "The request failed. Your journal is safe.",
-      );
-      setBackgroundResult("failed");
-      setTurns((old) =>
-        old.map((t) => (t.id === id ? { ...t, status: "failed" } : t)),
-      );
-      void journal.sync();
-    } finally {
-      if (activeRun.current === abort) {
-        activeRun.current = null;
-        setActiveId(null);
-        setBusy(false);
-      }
-    }
-  };
-  // The effect event sees the latest account, connection and journal controller.
-  // Only this drain starts requests; accepting messages never starts a parallel run.
-  const drain = useEffectEvent(() => {
-    if (activeRun.current || failedMessage || !ready || acting || !queue.length)
-      return;
-    const next = queue[0];
-    setQueue((waiting) => waiting.filter((job) => job.id !== next.id));
-    void execute(next);
-  });
-  useEffect(() => {
-    const timer = setTimeout(() => drain(), 0);
-    return () => clearTimeout(timer);
-  }, [queue, busy, failedMessage, ready, acting]);
-  useEffect(() => {
-    if (!busy && !queue.length && !failedMessage) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [busy, queue.length, failedMessage]);
-  const retryFailed = () => {
-    if (!failedMessage || busy || !ready) return;
-    setQueue((waiting) => [failedMessage, ...waiting]);
-    setFailedMessage(null);
-    setError("");
-  };
-  const skipFailed = async () => {
-    if (busy || !failedMessage) return;
-    setActing("queue-sync");
-    await journal.sync(true);
-    setFailedMessage(null);
-    setActing(null);
-    setError("");
-    setNotice(
-      "Retry skipped. Check your journal for any entry that was already saved.",
-    );
-  };
   const apply = async (p: ActionPreview, undo = false) => {
-    if (pending || acting || activeRun.current) return;
+    if (pending || acting || run.running()) return;
     setActing(p.id);
     setError("");
     setNotice("");
@@ -713,20 +420,7 @@ export function TrainingAgent({
       });
       const data = await r.json();
       if (!r.ok) throw Error(data.error ?? "Could not save this change.");
-      setTurns((old) =>
-        old.map((t) => ({
-          ...t,
-          ...(undo && t.proposals?.some((v) => v.id === p.id && v.automatic)
-            ? {
-                reply:
-                  "Undone. Your journal has been restored to before this change.",
-              }
-            : {}),
-          proposals: t.proposals?.map((v) =>
-            v.id === p.id ? { ...v, status: data.status } : v,
-          ),
-        })),
-      );
+      setTurns((old) => markProposal(old, p.id, data.status, undo));
       await journal.sync(true);
       setNotice(
         undo
@@ -766,23 +460,14 @@ export function TrainingAgent({
     }
   };
   if (!visible) {
-    const status = failedMessage
-      ? "Coach needs your attention"
-      : busy
-        ? queue.length
-          ? `Coach is working… ${queue.length} queued`
-          : "Coach is working…"
-        : queue.length
-          ? `${queue.length} messages waiting for Coach`
-          : acting
-            ? "Coach is saving your change…"
-            : uploading || loadingImage
-              ? "Coach is preparing your photo…"
-              : backgroundResult === "ready"
-                ? "Your Coach reply is ready"
-                : backgroundResult === "failed"
-                  ? "Coach needs your attention"
-                  : null;
+    const status = coachBackgroundStatus({
+      failed: Boolean(failedMessage),
+      busy,
+      queued: queue.length,
+      acting: Boolean(acting),
+      preparingPhoto: uploading || loadingImage,
+      result: backgroundResult,
+    });
     return status ? (
       <div className="coach-background-status">
         <span role="status">
@@ -991,9 +676,7 @@ export function TrainingAgent({
                 {!turns.length && (
                   <div className="coach-start">
                     <h2>What’s on your mind today?</h2>
-                    <p>
-                      Ask a question, or record food, sleep or training.
-                    </p>
+                    <p>Ask a question, or record food, sleep or training.</p>
                     {journal.state?.activeWorkout && (
                       <div className="notice">
                         <div>
@@ -1050,464 +733,36 @@ export function TrainingAgent({
                   </Button>
                 )}
                 {turns.slice(-visibleCount).map((t) => (
-                  <article className="conversation-turn" key={t.id}>
-                    <div className="chat-user">
-                      <span className="sr-only">You: </span>
-                      {videoFeedbackLabel(
-                        t.question,
-                        t.photoIds?.length ?? 0,
-                      ) ?? t.question}
-                      {accountId && (
-                        <div className="food-photo-strip">
-                          {t.photoIds?.map((id) => (
-                            <FoodPhotoImage
-                              key={`${accountId}:${id}`}
-                              id={id}
-                              accountId={accountId}
-                              label="Attached image"
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {(t.reply || Boolean(t.visuals?.length)) && (
-                      <div className="chat-assistant">
-                        <span className="assistant-mark">
-                          <Sparkles size={16} /> Lift Journal
-                        </span>
-                        {t.reply && <AssistantText text={t.reply} />}
-                        {Boolean(t.visuals?.length) && (
-                          <AguiVisuals
-                            visuals={t.visuals!}
-                            accountId={accountId}
-                          />
-                        )}
-                      </div>
-                    )}
-                    {t.status === "running" && (
-                      <div className="coach-run-activity">
-                        <p role="status">
-                          {busy && t.id === activeId && (
-                            <LoaderCircle size={15} aria-hidden="true" />
-                          )}
-                          {busy && t.id === activeId
-                            ? (t.activity ?? "Looking through your journal…")
-                            : "This request has not completed. You can ask again."}
-                        </p>
-                        {busy && t.id === activeId && (
-                          <button
-                            onClick={() => activeRun.current?.abort()}
-                            aria-label="Stop response"
-                          >
-                            <Square size={12} aria-hidden="true" />
-                            Stop
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {t.status === "failed" && (
-                      <p className="fine-print">
-                        This reply was interrupted. Reconnect to check its saved
-                        status.
-                      </p>
-                    )}
-                    {t.proposals?.map((p) => (
-                      <section
-                        key={p.id}
-                        className={`agent-proposal ${p.status ?? "pending"}`}
-                        aria-label={
-                          p.status === "saved" && p.automatic
-                            ? "Saved journal entry"
-                            : "Review journal change"
-                        }
-                        data-needs-review={needsReview(p)}
-                      >
-                        <details
-                          key={`${p.id}-${p.status ?? "pending"}`}
-                          open={p.status ? undefined : true}
-                        >
-                          <summary className="proposal-summary">
-                            <span className="eyebrow">
-                              {p.status === "saved"
-                                ? "SAVED"
-                                : p.status === "undone"
-                                  ? "UNDONE"
-                                  : "REVIEW BEFORE SAVING"}
-                            </span>
-                            <h2>{p.title}</h2>
-                            <ChevronDown size={18} aria-hidden="true" />
-                          </summary>
-                          <div className="proposal-body">
-                            <p>{p.detail}</p>
-                            {p.entries && (
-                              <div className="coach-bundle">
-                                {p.entries.map((entry, i) => (
-                                  <details
-                                    key={i}
-                                    className="coach-bundle-entry"
-                                  >
-                                    <summary>
-                                      <span>
-                                        {String(i + 1).padStart(2, "0")}
-                                      </span>
-                                      <div>
-                                        <strong>
-                                          {entry.meal
-                                            ? `${entry.meal.name} · ${entry.meal.type}`
-                                            : entry.checkin
-                                              ? `${entry.title} · ${entry.checkin.date}`
-                                              : entry.cardio
-                                                ? entry.title
-                                                : (entry.workout?.title ??
-                                                  entry.title)}
-                                        </strong>
-                                        <small>
-                                          {coachEntrySummary(entry)}
-                                        </small>
-                                      </div>
-                                      <ChevronDown size={16} />
-                                    </summary>
-                                    <div>
-                                      <p className="fine-print">
-                                        {entry.detail}
-                                      </p>
-                                      <CoachEntryDetails
-                                        entry={entry}
-                                        accountId={accountId}
-                                      />
-                                    </div>
-                                  </details>
-                                ))}
-                              </div>
-                            )}
-                            {(p.memory ||
-                              p.plan ||
-                              p.training ||
-                              p.liftingBrief !== undefined) && (
-                              <CoachEntryDetails
-                                entry={{
-                                  title: p.title,
-                                  detail: p.detail,
-                                  workout: null,
-                                  memory: p.memory,
-                                  plan: p.plan,
-                                  training: p.training,
-                                  liftingBrief: p.liftingBrief,
-                                }}
-                              />
-                            )}
-                            {p.cardio && (
-                              <CardioDetails
-                                entry={p.cardio}
-                                accountId={accountId}
-                              />
-                            )}
-                            {p.checkin && (
-                              <>
-                                <p className="proposal-date">
-                                  Check-in · {p.checkin.date}
-                                </p>
-                                <CheckinDetails checkin={p.checkin} />
-                              </>
-                            )}
-                            {p.meal && <MealDetails meal={p.meal} />}
-                            {p.targets && (
-                              <div className="meal-details">
-                                <p>Goal: {p.targets.goal} weight</p>
-                                {(
-                                  [
-                                    "calories",
-                                    "protein",
-                                    "carbs",
-                                    "fat",
-                                  ] as const
-                                ).map((key) => (
-                                  <p key={key}>
-                                    {key}: {p.targets![key] ?? "No target"}
-                                    {p.targets![key] != null
-                                      ? key === "calories"
-                                        ? " kcal"
-                                        : " g"
-                                      : ""}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                            {p.workout && (
-                              <>
-                                <div className="proposal-date">
-                                  <strong>{p.workout.title}</strong>
-                                  <span>{p.workout.date}</span>
-                                </div>
-                                {p.workoutReview && (
-                                  <p className="workout-review-status">
-                                    <strong>
-                                      {p.workoutReview.status === "ongoing"
-                                        ? "Ongoing · continue in Train"
-                                        : "Completed · training history"}
-                                    </strong>
-                                  </p>
-                                )}
-                                {p.workoutReview?.sources && (
-                                  <div className="workout-merge-sources">
-                                    <strong>Entries being combined</strong>
-                                    <ul>
-                                      {p.workoutReview.sources.map((source) => (
-                                        <li key={source.id}>
-                                          {source.title} · {source.date} ·{" "}
-                                          {source.sets} sets
-                                        </li>
-                                      ))}
-                                    </ul>
-                                    <p>
-                                      All sets and notes are retained. These
-                                      entries become one workout.
-                                    </p>
-                                  </div>
-                                )}
-                                {p.workout.exercises.map((e) => (
-                                  <div className="proposal-exercise" key={e.id}>
-                                    <h3>{exerciseName(e.exerciseId)}</h3>
-                                    <div className="set-chips">
-                                      {e.sets.map((s) => (
-                                        <span key={s.id}>
-                                          {formatSet(s.weight, s.reps)}
-                                          {s.result === "miss"
-                                            ? " · miss"
-                                            : s.result
-                                              ? " · made"
-                                              : " · planned"}
-                                          {s.rpe ? ` · RPE ${s.rpe}` : ""}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                                {p.workout.athleteNotes && (
-                                  <p>{p.workout.athleteNotes}</p>
-                                )}
-                              </>
-                            )}
-                            <div className="button-row">
-                              {!p.status && (
-                                <Button
-                                  disabled={
-                                    !ready ||
-                                    Boolean(acting) ||
-                                    busy ||
-                                    new Date(p.expiresAt).getTime() < now
-                                  }
-                                  onClick={() => void apply(p)}
-                                >
-                                  <Check size={17} />
-                                  {acting === p.id
-                                    ? "Saving…"
-                                    : p.entries
-                                      ? `Save all ${p.entries.length} entries`
-                                      : "Save this change"}
-                                </Button>
-                              )}
-                              {p.status === "saved" && !p.automatic && (
-                                <Button
-                                  variant="secondary"
-                                  disabled={pending || Boolean(acting) || busy}
-                                  onClick={() => void apply(p, true)}
-                                >
-                                  <Undo2 size={17} />
-                                  {p.entries
-                                    ? "Undo all entries"
-                                    : "Undo this change"}
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                onClick={() =>
-                                  p.memory || p.plan
-                                    ? openMemories(
-                                        p.plan ? "plans" : "memories",
-                                      )
-                                    : p.entries
-                                      ? go("today")
-                                      : go(
-                                          p.liftingBrief !== undefined
-                                            ? "workout/coaching"
-                                            : p.training
-                                              ? "workout/choose"
-                                              : p.cardio
-                                                ? "cardio"
-                                                : p.checkin
-                                                  ? "health"
-                                                  : p.meal || p.targets
-                                                    ? "food"
-                                                    : p.workoutReview
-                                                      ? p.workoutReview
-                                                          .status === "ongoing"
-                                                        ? "workout"
-                                                        : "history"
-                                                      : p.workout &&
-                                                          p.workout.exercises.some(
-                                                            (e) =>
-                                                              e.sets.some(
-                                                                (s) =>
-                                                                  !s.result,
-                                                              ),
-                                                          )
-                                                        ? "workout"
-                                                        : "history",
-                                        )
-                                }
-                              >
-                                {p.liftingBrief !== undefined
-                                  ? "Open lifting coach"
-                                  : p.training
-                                    ? "Open Train"
-                                    : p.workoutReview?.status === "ongoing"
-                                      ? "Open ongoing workout"
-                                      : p.workoutReview
-                                        ? "Open training history"
-                                        : "Open journal"}{" "}
-                                <ArrowRight size={17} />
-                              </Button>
-                            </div>
-                            <p className="fine-print">
-                              {p.status
-                                ? "Undo is available for 24 hours while no later journal change has been saved."
-                                : `Proposal expires ${new Date(p.expiresAt).toLocaleString()}. A newer journal change requires a fresh proposal.`}
-                            </p>
-                          </div>
-                        </details>
-                        {p.status === "saved" && p.automatic && (
-                          <div className="button-row coach-saved-actions">
-                            <span className="fine-print">
-                              Saved to your account
-                            </span>
-                            <Button
-                              variant="ghost"
-                              disabled={
-                                pending ||
-                                Boolean(acting) ||
-                                busy ||
-                                new Date(p.expiresAt).getTime() < now
-                              }
-                              onClick={() => void apply(p, true)}
-                            >
-                              <Undo2 size={17} />
-                              {acting === p.id
-                                ? "Undoing…"
-                                : p.entries
-                                  ? "Undo all entries"
-                                  : "Undo"}
-                            </Button>
-                          </div>
-                        )}
-                        {p.status === "saved" && p.workoutReview && (
-                          <Button
-                            className="saved-workout-link"
-                            variant="ghost"
-                            onClick={() =>
-                              go(
-                                p.workoutReview!.status === "ongoing"
-                                  ? "workout"
-                                  : "history",
-                              )
-                            }
-                          >
-                            {p.workoutReview.status === "ongoing"
-                              ? "Continue workout"
-                              : "View training history"}{" "}
-                            <ArrowRight size={17} />
-                          </Button>
-                        )}
-                      </section>
-                    ))}
-                  </article>
+                  <CoachTurn
+                    key={t.id}
+                    turn={t}
+                    accountId={accountId}
+                    active={busy && t.id === run.activeId}
+                    onStop={run.stop}
+                    proposal={{
+                      now,
+                      ready,
+                      pending,
+                      busy,
+                      acting,
+                      onApply: (p, undo) => void apply(p, undo),
+                      onOpenMemories: openMemories,
+                      go,
+                    }}
+                  />
                 ))}
               </div>
             </div>
 
             {(queue.length > 0 || failedMessage) && (
-              <section className="coach-queue" aria-label="Message queue">
-                <details open={failedMessage ? true : undefined}>
-                  <summary>
-                    <span role="status">
-                      {failedMessage
-                        ? "Queue paused"
-                        : `${queue.length} queued`}
-                    </span>
-                    <span>
-                      View messages <ChevronDown size={14} />
-                    </span>
-                  </summary>
-                  <p>
-                    <span>
-                      {failedMessage
-                        ? "Retry the interrupted message or skip it to continue."
-                        : queue.length >= MAX_QUEUED_MESSAGES
-                          ? "Your queue is full. Remove a message or let Coach catch up."
-                          : "Coach will reply in order. Keep this tab open; you can explore the site."}
-                    </span>
-                  </p>
-                  {failedMessage && (
-                    <div className="coach-queue-failed">
-                      <p>
-                        {videoFeedbackLabel(
-                          failedMessage.question,
-                          failedMessage.photoIds.length,
-                        ) ?? failedMessage.question}
-                      </p>
-                      <div>
-                        <Button
-                          variant="secondary"
-                          disabled={busy || !ready || Boolean(acting)}
-                          onClick={retryFailed}
-                        >
-                          Retry message
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={busy || !ready || Boolean(acting)}
-                          onClick={() => void skipFailed()}
-                        >
-                          Skip and continue
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  {queue.length > 0 && (
-                    <ol>
-                      {queue.map((job, index) => (
-                        <li key={job.id}>
-                          <span>
-                            <strong>{index + 1}.</strong>{" "}
-                            {videoFeedbackLabel(
-                              job.question,
-                              job.photoIds.length,
-                            ) ?? job.question}
-                            {job.photoIds.length > 0 && (
-                              <small>
-                                {" "}
-                                · {job.photoIds.length} attached{" "}
-                                {job.photoIds.length === 1 ? "image" : "images"}
-                              </small>
-                            )}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            aria-label={`Remove queued message ${index + 1}`}
-                            onClick={() =>
-                              setQueue((waiting) =>
-                                waiting.filter((item) => item.id !== job.id),
-                              )
-                            }
-                          >
-                            <X size={16} />
-                          </Button>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </details>
-              </section>
+              <CoachQueue
+                queue={queue}
+                failedMessage={failedMessage}
+                disabled={busy || !ready || Boolean(acting)}
+                onRetry={run.retryFailed}
+                onSkip={() => void run.skipFailed()}
+                onRemove={run.remove}
+              />
             )}
             {error && (
               <div className="notice warning" role="alert">
@@ -1566,50 +821,12 @@ export function TrainingAgent({
                 Press Enter to send. Use Shift+Enter for a new line.
               </span>
               <div className="composer-actions">
-                <div className="composer-quick-actions">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={uploading || loadingImage}
-                    onClick={() =>
-                      draft(
-                        "Log what I ate with sensible portion estimates. Save it now, label assumptions, and let me correct details afterward.",
-                      )
-                    }
-                  >
-                    <Utensils size={16} /> <span>Log food</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={uploading || loadingImage}
-                    onClick={() =>
-                      draft(
-                        message.trim()
-                          ? "Please use this to log my sleep. Ask about any unclear date or time asleep and save the entry."
-                          : sleepLoggingPrompt(photoIds.length > 0),
-                      )
-                    }
-                  >
-                    <Moon size={16} /> <span>Log sleep</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={uploading || loadingImage}
-                    onClick={() =>
-                      draft(
-                        photoIds.length
-                          ? "Log my workout from the attached photo and any details I provided."
-                          : message.trim()
-                            ? "Please log this workout."
-                            : "Log my workout: ",
-                      )
-                    }
-                  >
-                    <Dumbbell size={16} /> <span>Add workout</span>
-                  </Button>
-                </div>
+                <ComposerQuickActions
+                  disabled={uploading || loadingImage}
+                  hasText={Boolean(message.trim())}
+                  photoCount={photoIds.length}
+                  onDraft={draft}
+                />
                 <div className="composer-send-controls">
                   <Button
                     type="button"
@@ -1651,162 +868,45 @@ export function TrainingAgent({
                   attachmentButton.current?.focus({ preventScroll: true });
                 }}
               >
-                <div id="coach-image-tools" className="coach-image-tools">
-                  <div className="food-attachments">
-                    <label className="food-upload">
-                      <Camera size={17} />{" "}
-                      {uploading ? "Saving & tagging…" : "Take photo"}
-                      <input
-                        type="file"
-                        aria-label="Take photo"
-                        accept="image/*"
-                        capture="environment"
-                        disabled={
-                          uploading ||
-                          loadingImage ||
-                          !accountId ||
-                          photoIds.length >= 4
-                        }
-                        onChange={(e) => {
-                          void attach(e.target.files?.[0]);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                    <label className="food-upload">
-                      Attach image
-                      <input
-                        type="file"
-                        aria-label="Attach image"
-                        multiple
-                        accept="image/*"
-                        disabled={
-                          uploading ||
-                          loadingImage ||
-                          !accountId ||
-                          photoIds.length >= 4
-                        }
-                        onChange={(e) => {
-                          void attach(Array.from(e.target.files ?? []));
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <div className="coach-image-more">
-                    <a href="#images" onClick={() => setToolsOpen(false)}>
-                      Image library & categories
-                    </a>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={uploading || loadingImage}
-                      onClick={() => {
-                        setToolsOpen(false);
-                        draft(activityLoggingPrompt(photoIds.length > 0));
-                      }}
-                    >
-                      Log walk, run or ride
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={!accountId || uploading || loadingImage}
-                      onClick={() => {
-                        setToolsOpen(false);
-                        setVideoOpen(true);
-                      }}
-                    >
-                      Review lifting video
-                    </Button>
-                  </div>
-                  {photoIds.length >= 4 && (
-                    <p className="fine-print" role="status">
-                      Four photos are attached. Send this message or remove an
-                      attachment to add another.
-                    </p>
-                  )}
-                  {!accountId && (
-                    <p className="fine-print" role="status">
-                      Sign in to attach private photos.
-                    </p>
-                  )}
-                  <label className="image-auto-tag">
-                    <input
-                      type="checkbox"
-                      checked={autoTag}
-                      disabled={uploading}
-                      onChange={(e) => setAutoTag(e.target.checked)}
-                    />{" "}
-                    Tag uploads automatically
-                  </label>
-                  <p className="fine-print">
-                    Automatic tagging sends each new image to{" "}
-                    {connection?.provider ??
-                      "your configured assistant provider"}{" "}
-                    to identify food, sleep, activity or other content. Turn it
-                    off to save in Needs review. No journal entry is created by
-                    tagging.
-                  </p>
-                </div>
+                <CoachImageTools
+                  signedIn={Boolean(accountId)}
+                  uploading={uploading}
+                  loadingImage={loadingImage}
+                  attachmentsFull={photoIds.length >= 4}
+                  autoTag={autoTag}
+                  provider={connection?.provider}
+                  onAutoTagChange={setAutoTag}
+                  onAttach={(files) => void attach(files)}
+                  onClose={() => setToolsOpen(false)}
+                  onLogActivity={() => {
+                    setToolsOpen(false);
+                    draft(activityLoggingPrompt(photoIds.length > 0));
+                  }}
+                  onReviewVideo={() => {
+                    setToolsOpen(false);
+                    setVideoOpen(true);
+                  }}
+                />
               </Dialog>
               {photoIds.length > 0 && accountId && (
-                <>
-                  {photoIds.length > 4 && (
-                    <p className="error-text" role="alert">
-                      Choose up to four photos for this message. Remove an
-                      attachment to send.
-                    </p>
-                  )}
-                  <div className="coach-attachment-strip">
-                    {photoIds.map((id) => (
-                      <div key={id}>
-                        <FoodPhotoImage
-                          id={id}
-                          accountId={accountId}
-                          label="Image ready to send"
-                        />
-                        {imageDetails[id] && (
-                          <ImageBadge image={imageDetails[id]} />
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          aria-label="Remove attachment"
-                          onClick={() =>
-                            setPhotoIds((ids) => ids.filter((v) => v !== id))
-                          }
-                        >
-                          <X size={16} />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="fine-print">
-                    Attached images are shared with{" "}
-                    {connection?.provider ?? "your assistant provider"} when you
-                    send. Copies stay in your{" "}
-                    <a href="#images">private image library</a>.
-                  </p>
-                </>
+                <ComposerAttachments
+                  photoIds={photoIds}
+                  accountId={accountId}
+                  imageDetails={imageDetails}
+                  provider={connection?.provider}
+                  onRemove={(id) =>
+                    setPhotoIds((ids) => ids.filter((v) => v !== id))
+                  }
+                />
               )}
               {!ready && (
-                <div className="coach-reconnect" role="status">
-                  <p className="fine-print">{connectionHint}</p>
-                  {journal.error && (
-                    <p className="fine-print">{journal.error}</p>
-                  )}
-                  {!loadingImage && !journal.record?.conflict && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={reconnecting}
-                      onClick={reconnect}
-                    >
-                      {reconnecting ? "Reconnecting…" : "Reconnect Coach"}
-                    </Button>
-                  )}
-                </div>
+                <ComposerReconnect
+                  hint={connectionHint}
+                  journalError={journal.error}
+                  canReconnect={!loadingImage && !journal.record?.conflict}
+                  reconnecting={reconnecting}
+                  onReconnect={reconnect}
+                />
               )}
             </form>
             <p className="coach-composer-note">
@@ -1826,7 +926,7 @@ export function TrainingAgent({
             !ready
               ? connectionHint
               : queue.length >= MAX_QUEUED_MESSAGES
-                ? "Your queue is full. Let Coach finish a message or remove a queued message."
+                ? QUEUE_FULL_MESSAGE
                 : undefined
           }
           onClose={() => setVideoOpen(false)}
@@ -1842,16 +942,13 @@ export function TrainingAgent({
                 "Your queue is full. Let Coach finish a message first.",
               );
             submittedVideoReviews.current.add(id);
-            setQueue((waiting) => [
-              ...waiting,
-              {
+            enqueue(
+              queuedMessage(
                 id,
-                question: prompt,
-                photoIds: photos.map((photo) => photo.id),
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                submittedAt: new Date().toISOString(),
-              },
-            ]);
+                prompt,
+                photos.map((photo) => photo.id),
+              ),
+            );
             setView("conversation");
             setToolsOpen(false);
             setVideoOpen(false);
@@ -1880,67 +977,30 @@ export function TrainingAgent({
         onOpenChange={setOptionsOpen}
         title="Coach options"
       >
-        <div className="coach-options">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setOptionsOpen(false);
-              openMemories();
-            }}
-          >
-            What Coach remembers & agreed plans <ArrowRight size={17} />
-          </Button>
-          <CoachPreferences
-            key={`${accountId}:${optionsOpen}`}
-            journal={journal}
-            disabled={
-              busy || Boolean(acting) || Boolean(journal.record?.conflict)
-            }
-          />
-          <Button variant="secondary" onClick={() => go("cardio")}>
-            Cardio & movement <ArrowRight size={17} />
-          </Button>
-          <Button variant="secondary" onClick={() => go("health")}>
-            Health history <ArrowRight size={17} />
-          </Button>
-          <Button variant="secondary" onClick={() => go("images")}>
-            Image library & categories <ArrowRight size={17} />
-          </Button>
-          <Button variant="secondary" onClick={() => go("workout/coaching")}>
-            Lifting brief & video <ArrowRight size={17} />
-          </Button>
-          <Button variant="secondary" onClick={() => go("workout/choose")}>
-            Programmes & routines <ArrowRight size={17} />
-          </Button>
-          <Button variant="secondary" onClick={() => go("library")}>
-            Exercise library <ArrowRight size={17} />
-          </Button>
-          <p className="fine-print">
-            Coach can make mistakes. Your chat, attached images and relevant
-            journal entries are sent to{" "}
-            {connection?.provider ?? "your assistant provider"} when you ask for
-            help. Saved images are also shared when you ask Coach to read or
-            analyse them; simply showing a gallery does not share their pixels.{" "}
-            <a href="/privacy">Read our privacy policy</a>.
-          </p>
-          {turns.length > 0 && (
-            <Button
-              variant="ghost"
-              disabled={
-                busy ||
-                Boolean(acting) ||
-                queue.length > 0 ||
-                Boolean(failedMessage)
-              }
-              onClick={() => {
-                setOptionsOpen(false);
-                setClear(true);
-              }}
-            >
-              Clear conversation
-            </Button>
-          )}
-        </div>
+        <CoachOptions
+          journal={journal}
+          preferencesKey={`${accountId}:${optionsOpen}`}
+          provider={connection?.provider}
+          disabled={
+            busy || Boolean(acting) || Boolean(journal.record?.conflict)
+          }
+          showClear={turns.length > 0}
+          clearDisabled={
+            busy ||
+            Boolean(acting) ||
+            queue.length > 0 ||
+            Boolean(failedMessage)
+          }
+          onOpenMemories={() => {
+            setOptionsOpen(false);
+            openMemories();
+          }}
+          onClear={() => {
+            setOptionsOpen(false);
+            setClear(true);
+          }}
+          go={go}
+        />
       </Dialog>
       <Dialog
         open={clear}

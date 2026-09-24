@@ -109,7 +109,7 @@ export default function MobileSignIn() {
   }
   return (
     <main className="mx-auto max-w-md px-6 py-20">
-      <p className="eyebrow">LIFT JOURNAL FOR IPHONE</p>
+      <p className="eyebrow">Lift Journal for iPhone</p>
       <h1 className="mt-4">Your health, with you.</h1>
       <p className="lead mt-4">
         Connect the iPhone app to your private journal. Access is limited to the

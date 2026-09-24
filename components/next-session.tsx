@@ -3,7 +3,8 @@ import { useState } from "react";
 import type { JournalState } from "@/lib/model";
 import { nextTraining, startNextTraining } from "@/lib/next-training";
 import type { JournalController } from "./journal";
-import { ArrowRight } from "./ui/icons";
+import { ArrowRight, Dumbbell } from "./ui/icons";
+import { AreaIcon } from "./ui/area-icon";
 import { Button } from "./ui/button";
 
 export function NextSession({
@@ -20,8 +21,11 @@ export function NextSession({
     [error, setError] = useState("");
   return (
     <section className="training-quick-start" aria-label="Suggested session">
-      <span className="eyebrow">
-        {state.activeWorkout ? "READY TO RESUME" : "NEXT IN YOUR PROGRAMME"}
+      <span className="area-tile-heading">
+        <AreaIcon area="train" icon={Dumbbell} size="sm" />
+        <span className="eyebrow">
+          {state.activeWorkout ? "Ready to resume" : "Next in your programme"}
+        </span>
       </span>
       <h2>{state.activeWorkout?.title ?? next.title}</h2>
       <p className="muted">

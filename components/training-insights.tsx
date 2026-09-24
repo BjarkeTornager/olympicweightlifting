@@ -25,7 +25,12 @@ export function TrainingInsights({ state }: { state: JournalState }) {
           sets and reps, with no added load.
         </p>
         {weeks.length ? (
-          <div className="table-scroll">
+          <div
+            className="table-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label="Weekly training volume table"
+          >
             <table className="training-table">
               <thead>
                 <tr>

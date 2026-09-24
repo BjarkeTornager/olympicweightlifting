@@ -61,7 +61,7 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
     .getByRole("button", { name: "Health history", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Notice your patterns." }),
+    page.getByRole("heading", { name: "Health", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".health-records article")).toHaveCount(1);
   await expect(page.locator(".health-records article")).toContainText(

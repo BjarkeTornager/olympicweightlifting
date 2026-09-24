@@ -64,10 +64,10 @@ export function CoachProposal({
         <summary className="proposal-summary">
           <span className="eyebrow">
             {p.status === "saved"
-              ? "SAVED"
+              ? "Saved"
               : p.status === "undone"
-                ? "UNDONE"
-                : "REVIEW BEFORE SAVING"}
+                ? "Undone"
+                : "Review before saving"}
           </span>
           <h2>{p.title}</h2>
           <ChevronDown size={18} aria-hidden="true" />

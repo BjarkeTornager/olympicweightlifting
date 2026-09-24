@@ -47,8 +47,7 @@ export function SettingsView({
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">YOUR JOURNAL, YOURS TO KEEP</div>
-          <h1>Make yourself at home.</h1>
+          <h1>Settings</h1>
           <p className="lead">
             Your profile, account and health journal backups.
           </p>
@@ -208,7 +207,7 @@ export function SettingsView({
           <span className="program-index">
             <Download size={24} />
           </span>
-          <h2>A copy you can keep.</h2>
+          <h2>Export backup</h2>
           <p className="muted">
             Export your strength training, cardio, food, health check-ins and
             unfinished workout in one portable JSON file.
@@ -225,7 +224,7 @@ export function SettingsView({
           <span className="program-index index-1">
             <FileUp size={24} />
           </span>
-          <h2>Bring your training with you.</h2>
+          <h2>Import backup</h2>
           <p className="muted">
             Import a Lift Journal backup from the original website or another
             device. You’ll review it before anything is saved.

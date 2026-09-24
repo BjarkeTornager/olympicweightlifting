@@ -245,7 +245,7 @@ test.describe("private access boundaries", () => {
     await page.goto("/#data");
     await page.reload();
     await expect(
-      page.getByRole("heading", { name: "Make yourself at home." }),
+      page.getByRole("heading", { name: "Settings", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "All changes synced", exact: true }),

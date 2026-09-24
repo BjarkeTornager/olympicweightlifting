@@ -3,7 +3,7 @@ import { CombineSessions } from "../combine-sessions";
 import { useState } from "react";
 import {
   ArrowRight,
-  ArrowUpRight,
+  ChevronDown,
   Download,
   Dumbbell,
   Trash2,
@@ -43,7 +43,6 @@ export function HistoryView({
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">YOUR TRAINING STORY</div>
           <h1>Training history</h1>
           <p className="lead">
             {state.sessions.length} saved strength sessions. Every one counts.
@@ -143,7 +142,7 @@ export function HistoryView({
                       : "Completed"}
                   </small>
                 </span>
-                <ArrowUpRight size={20} />
+                <ChevronDown size={20} aria-hidden="true" />
               </summary>
               <div className="history-content">
                 {s.exercises.map((e) => (

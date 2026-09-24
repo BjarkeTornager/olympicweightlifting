@@ -4,9 +4,14 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
+  CalendarDays,
   ChevronDown,
+  ChevronRight,
+  History,
+  Play,
   Plus,
 } from "@/components/ui/icons";
+import { AreaIcon } from "../ui/area-icon";
 import { days, today, program, exerciseName } from "@/lib/domain";
 import { planProgramDay } from "@/js/progression.js";
 import type { JournalState } from "@/lib/model";
@@ -128,15 +133,30 @@ export function Workouts(props: Props) {
             <Button variant="secondary" onClick={() => void onStart("open")}>
               <Plus size={18} /> Start empty workout
             </Button>
-            <Button variant="ghost" onClick={() => go("workout/choose")}>
-              Your programs & routines <ArrowRight size={17} />
-            </Button>
-            <Button variant="ghost" onClick={() => go("workout/coaching")}>
-              Lifting brief & video <ArrowRight size={17} />
-            </Button>
-            <Button variant="ghost" onClick={() => go("history")}>
-              Training history <ArrowRight size={17} />
-            </Button>
+          </div>
+          <div className="list-card">
+            {(
+              [
+                [
+                  "workout/choose",
+                  "Your programs & routines",
+                  CalendarDays,
+                  "train",
+                ],
+                ["workout/coaching", "Lifting brief & video", Play, "coach"],
+                ["history", "Training history", History, "neutral"],
+              ] as const
+            ).map(([route, label, icon, area]) => (
+              <button
+                key={route}
+                className="list-row"
+                onClick={() => go(route)}
+              >
+                <AreaIcon area={area} icon={icon} size="sm" />
+                <span>{label}</span>
+                <ChevronRight size={17} aria-hidden="true" />
+              </button>
+            ))}
           </div>
           <details className="training-other-activity">
             <summary>
@@ -171,8 +191,8 @@ export function Workouts(props: Props) {
         <div className="page-heading compact">
           <div>
             <div className="eyebrow">
-              {day.id === "saturday" ? "WITH YOUR COACH" : "ON YOUR OWN"} ·{" "}
-              {day.exercises.length} EXERCISES
+              {day.id === "saturday" ? "With your coach" : "On your own"} ·{" "}
+              {day.exercises.length} exercises
             </div>
             <h1>{day.title}</h1>
             <p className="lead">{day.focus}</p>
@@ -268,7 +288,6 @@ export function Workouts(props: Props) {
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">YOUR TRAINING</div>
           <h1>Choose your session.</h1>
           <p className="lead">
             Build a gym routine, start an open workout or follow your programme.
@@ -291,7 +310,7 @@ export function Workouts(props: Props) {
       {state.activeWorkout ? (
         <div className="notice ongoing-workout-card">
           <div>
-            <span className="eyebrow">ONGOING WORKOUT</span>
+            <span className="eyebrow">Ongoing workout</span>
             <strong>{state.activeWorkout.title}</strong>
             <p>
               {state.activeWorkout.date} ·{" "}

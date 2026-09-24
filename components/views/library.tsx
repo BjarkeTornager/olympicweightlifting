@@ -27,7 +27,6 @@ export function LibraryView() {
     <>
       <div className="page-heading compact">
         <div>
-          <div className="eyebrow">MOVE WITH INTENT</div>
           <h1>Your technique library.</h1>
           <p className="lead">
             Gym essentials and Olympic lifts. Find your movement, learn the

@@ -155,7 +155,7 @@ function ReviewResult({
         <details>
           <summary>Optional bar measurements</summary>
           <section aria-label="Bar measurements">
-            <p className="eyebrow">EXPERIMENTAL BAR TRACKING</p>
+            <p className="eyebrow">Experimental bar tracking</p>
             <p className="fine-print">{t.reason}</p>
             <dl className="video-metrics">
               <div>

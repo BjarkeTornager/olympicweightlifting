@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  ChevronRight,
   BarChart3,
   BookOpen,
   Check,
@@ -23,6 +24,7 @@ import { useJournal } from "@/lib/use-journal";
 import type { PrivateSessionProps } from "./access-gate";
 import { days, today, createWorkout, program } from "@/lib/domain";
 import { Button } from "./ui/button";
+import { AreaIcon } from "./ui/area-icon";
 import { Today } from "./today";
 import { WeeklyReview } from "./weekly-review";
 import { Workouts } from "./views/workouts";
@@ -47,14 +49,14 @@ const primaryNavigation = [
   { id: "journal", label: "Journal", icon: BookOpen },
 ];
 const journalNavigation = [
-  { id: "food", label: "Food", icon: Utensils },
-  { id: "health", label: "Health", icon: HeartPulse },
-  { id: "history", label: "History", icon: History },
-  { id: "progress", label: "Progress", icon: BarChart3 },
-  { id: "images", label: "Images", icon: Images },
-  { id: "cardio", label: "Cardio", icon: PersonSimpleRun },
-  { id: "library", label: "Exercises", icon: BookOpen },
-];
+  { id: "food", label: "Food", icon: Utensils, area: "food" },
+  { id: "health", label: "Health", icon: HeartPulse, area: "health" },
+  { id: "history", label: "History", icon: History, area: "train" },
+  { id: "progress", label: "Progress", icon: BarChart3, area: "coach" },
+  { id: "images", label: "Images", icon: Images, area: "neutral" },
+  { id: "cardio", label: "Cardio", icon: PersonSimpleRun, area: "cardio" },
+  { id: "library", label: "Exercises", icon: BookOpen, area: "neutral" },
+] as const;
 const navigation = [...primaryNavigation, ...journalNavigation, { id: "data" }];
 const navigationDescriptions: Record<string, string> = {
   food: "Meals, favourites and nutrition",
@@ -323,16 +325,14 @@ export function Journal(props: PrivateSessionProps) {
                       className="journal-menu journal-destinations"
                       aria-label="Journal destinations"
                     >
-                      {journalNavigation.map(({ id, label, icon: Icon }) => (
+                      {journalNavigation.map(({ id, label, icon, area }) => (
                         <a key={id} href={`#${id}`}>
-                          <span className="journal-menu-icon">
-                            <Icon size={24} />
-                          </span>
+                          <AreaIcon area={area} icon={icon} size="lg" />
                           <span>
                             <strong>{label}</strong>
                             <small>{navigationDescriptions[id]}</small>
                           </span>
-                          <ArrowUpRight size={18} />
+                          <ChevronRight size={18} aria-hidden="true" />
                         </a>
                       ))}
                     </nav>

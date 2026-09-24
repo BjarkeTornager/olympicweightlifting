@@ -55,7 +55,6 @@ export function Dashboard({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">YOUR PLATFORM</div>
           <h1>
             Every session
             <br />
@@ -71,7 +70,7 @@ export function Dashboard({
         <section className="training-card">
           <div className="card-top">
             <span className="eyebrow">
-              {active ? "PICK UP WHERE YOU LEFT OFF" : "ON THE PROGRAMME"}
+              {active ? "Pick up where you left off" : "On the programme"}
             </span>
             <span className="pill dark">
               {selected.id === "saturday" ? "COACHED" : "SOLO"}

@@ -1,0 +1,120 @@
+/* Colour tokens for the light and dark themes. Unlayered so they define the
+   palette for every layer; components only ever reference these names.
+   Each family has a readable foreground (base), a fill that carries white
+   text (solid), a soft tint for backgrounds, and a border (line). */
+:root {
+  color-scheme: light dark;
+
+  --canvas: #f2f3f7;
+  --surface: #ffffff;
+  --surface-2: #f6f7f9;
+  --surface-3: #eceef2;
+  --line: #e4e6eb;
+  --line-strong: #cdd1d8;
+  --card-border: transparent;
+  --ink: #15171c;
+  --ink-2: #555b66;
+  --ink-3: #60666f;
+  --on-solid: #ffffff;
+  /* Dark panels with white text, e.g. the video stage. Stays dark in both themes. */
+  --inverse: #1d2129;
+  --inverse-hover: #2c313b;
+  --scrim: #0d0f1366;
+  --shadow-float: 0 8px 28px #15171c14, 0 1px 3px #15171c0f;
+  --shadow-dialog: 0 24px 72px #15171c2e;
+
+  --accent: #2f62d9;
+  --accent-solid: #2f62d9;
+  --accent-hover: #2753bd;
+  --accent-soft: #e9effc;
+  --accent-line: #c7d5f5;
+
+  --success: #18703f;
+  --success-solid: #1a7843;
+  --success-soft: #e5f4ea;
+  --success-line: #bfe3cc;
+
+  --danger: #c23434;
+  --danger-solid: #c23434;
+  --danger-soft: #fcebea;
+  --danger-line: #f3c7c5;
+
+  --warning: #8a5d00;
+  --warning-solid: #9a6a06;
+  --warning-soft: #fdf3dc;
+  --warning-line: #f0dca6;
+
+  /* One hue per area of the journal, used for its icon tile and highlights. */
+  --train: #a14c06;
+  --train-soft: #fdf0e4;
+  --food: #166f48;
+  --food-soft: #e3f4ec;
+  --sleep: #6246c9;
+  --sleep-soft: #efebfc;
+  --sleep-solid: #6246c9;
+  --sleep-line: #d6ccf6;
+  --cardio: #c8304a;
+  --cardio-soft: #fdeaed;
+  --health: #096b6b;
+  --health-soft: #e0f4f4;
+  --health-solid: #096b6b;
+  --health-line: #b7e1e1;
+  --coach: var(--accent);
+  --coach-soft: var(--accent-soft);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #0d0f13;
+    --surface: #171a20;
+    --surface-2: #1d2027;
+    --surface-3: #262a32;
+    --line: #2a2e37;
+    --line-strong: #3a3f4a;
+    --card-border: #262a33;
+    --ink: #eef0f4;
+    --ink-2: #a8aeb9;
+    --ink-3: #8f96a1;
+    --scrim: #000000a6;
+    --inverse: #262b35;
+    --inverse-hover: #323845;
+    --shadow-float: 0 8px 28px #00000066, 0 1px 3px #0000004d;
+    --shadow-dialog: 0 24px 72px #000000a6;
+
+    --accent: #86a8ff;
+    --accent-solid: #3d6be0;
+    --accent-hover: #4d79ea;
+    --accent-soft: #1b2540;
+    --accent-line: #2f3f6a;
+
+    --success: #6fd29a;
+    --success-solid: #1f7a45;
+    --success-soft: #13291d;
+    --success-line: #21492f;
+
+    --danger: #ff8a8a;
+    --danger-solid: #c23a3a;
+    --danger-soft: #331a1b;
+    --danger-line: #5a2b2b;
+
+    --warning: #e8bb5f;
+    --warning-solid: #9a6a06;
+    --warning-soft: #2d2413;
+    --warning-line: #54431f;
+
+    --train: #ffa564;
+    --train-soft: #33230f;
+    --food: #64cf9d;
+    --food-soft: #12291f;
+    --sleep: #ad9bff;
+    --sleep-soft: #221c3d;
+    --sleep-solid: #6a50d4;
+    --sleep-line: #3b3168;
+    --cardio: #ff8597;
+    --cardio-soft: #331820;
+    --health: #5ad2d2;
+    --health-soft: #0f2a2a;
+    --health-solid: #0e7f7f;
+    --health-line: #1e4b4b;
+  }
+}

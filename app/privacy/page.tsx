@@ -244,6 +244,16 @@ export default function PrivacyPage() {
           account.
         </p>
         <p>
+          For a workout recorded with GPS, such as an outdoor walk, run or ride,
+          the app also reads its route. The phone simplifies the track to at
+          most 200 points and uses Apple Maps on the device to name the start,
+          end and farthest point; the simplified track and those place names are
+          stored with the activity. Coach receives the place names, never the
+          coordinates. When a route is shown on a map on the website, Google
+          Maps draws it in your browser. A route is deleted with its activity,
+          with the workout in Apple Health, or with your account.
+        </p>
+        <p>
           Before Coach first sends anything, the iPhone app asks your permission
           to share data with third-party AI: your messages, the photos you
           attach, and relevant journal records, including imported Apple Health

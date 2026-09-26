@@ -8,6 +8,7 @@ struct TodayView: View {
   @Environment(AppModel.self) private var model
   @State private var showingAccount = false
   @State private var showingCheckin = false
+  @State private var healthNeedsAccess = false
 
   var body: some View {
     List {
@@ -44,6 +45,9 @@ struct TodayView: View {
     .sheet(isPresented: $showingAccount) { AccountView() }
     .sheet(isPresented: $showingCheckin) { CheckinSheet(existing: model.today?.checkin) }
     .sensoryFeedback(.success, trigger: model.saves)
+    .task(id: model.health.lastSync) {
+      healthNeedsAccess = model.health.connected ? await HealthSync.shared.needsAccess() : false
+    }
   }
 
   private var logMenu: some View {
@@ -92,6 +96,19 @@ struct TodayView: View {
             }
           }
         }
+      } else if model.health.connected && healthNeedsAccess {
+        NavigationLink {
+          HealthView()
+        } label: {
+          HStack(spacing: 12) {
+            IconBadge(symbol: "map.fill", tint: .green)
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Add your workout routes")
+              Text("See where you walked, ran or rode, and talk it over with Coach")
+                .font(.subheadline).foregroundStyle(.secondary)
+            }
+          }
+        }
       }
       NavigationLink(value: Trend.sleep) { SleepCard(today: today) }
       NavigationLink(value: Trend.heart) { HeartCard(today: today) }
@@ -120,7 +137,17 @@ struct TodayView: View {
     .headerProminence(.increased)
     Section {
       TrainingCard(today: today)
-      ForEach(today.activities, id: \.id) { ActivityRow(activity: $0) }
+      ForEach(today.activities, id: \.id) { activity in
+        if activity.hasRoute == true {
+          NavigationLink {
+            ActivityRouteView(id: activity.id, title: activity.title)
+          } label: {
+            ActivityRow(activity: activity)
+          }
+        } else {
+          ActivityRow(activity: activity)
+        }
+      }
     } header: {
       Text("Training")
     } footer: {
@@ -359,6 +386,12 @@ struct ActivityRow: View {
           if activity.fromAppleHealth { AppleHealthMark() }
         }
         Text(details).font(.subheadline).foregroundStyle(.secondary)
+        if let route = activity.routeText {
+          Text("\(Image(systemName: "map")) \(route)")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+        }
       }
     }
     .accessibilityElement(children: .combine)

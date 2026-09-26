@@ -181,6 +181,20 @@ export function buildOpenApi() {
       "/api/v1/coach": {
         get: { operationId: "getCoach", responses: ok("CoachHistory") },
       },
+      "/api/v1/activities/{id}/route": {
+        get: {
+          operationId: "getActivityRoute",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: ok("CoachVisual"),
+        },
+      },
       "/api/agent/action": {
         post: {
           operationId: "applyProposal",

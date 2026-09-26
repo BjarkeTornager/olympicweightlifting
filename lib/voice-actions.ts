@@ -22,6 +22,7 @@ import {
 import { applyProposal } from "./agent/engine";
 import { ApiError } from "./agent/http";
 import { VOICE_PREFIX } from "./coach-tasks";
+import { routeNotesFor } from "./workout-routes";
 
 // Saves requested by the voice coach. They skip a second model: each tool call
 // becomes one ordinary journal action, checked by the same guards and saved
@@ -332,7 +333,15 @@ export async function runVoiceTool(
   if (input.name === "read_journal") {
     const { from, to } = voiceToolArgs.read_journal.parse(input.args);
     const { state } = await readJournal(userId);
-    return { ok: true, data: journalForVoice(state, from, to) };
+    return {
+      ok: true,
+      data: journalForVoice(
+        state,
+        from,
+        to,
+        await routeNotesFor(userId, state, from, to),
+      ),
+    };
   }
   if (input.name === "list_photos") {
     const { from, to } = voiceToolArgs.list_photos.parse(input.args);

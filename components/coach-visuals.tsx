@@ -203,7 +203,9 @@ export const CoachVisuals = memo(function CoachVisuals({
                     : visual.kind === "photo_gallery"
                       ? "Your photos"
                       : visual.kind === "route_map"
-                        ? "Suggested route"
+                        ? visual.recorded
+                          ? "Recorded route"
+                          : "Suggested route"
                         : "At a glance"}
               </span>
               <h3>{visual.title}</h3>

@@ -84,6 +84,32 @@ export const healthWorkoutImports = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.workoutId] })],
 );
+// The GPS track Apple Health recorded for an imported workout, simplified on
+// the phone, with place names looked up on the phone. Kept out of the journal
+// document so every journal read and save stays small.
+export const healthWorkoutRoutes = pgTable(
+  "health_workout_routes",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workoutId: text("workout_id").notNull(),
+    cardioId: text("cardio_id").notNull(),
+    path: jsonb("path").$type<[number, number][]>().notNull(),
+    distanceKm: numeric("distance_km", { mode: "number" }).notNull(),
+    startPlace: text("start_place"),
+    endPlace: text("end_place"),
+    farthestPlace: text("farthest_place"),
+    digest: text("digest").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.workoutId] }),
+    index("health_workout_routes_cardio_idx").on(t.userId, t.cardioId),
+  ],
+);
 export const foodPhotos = pgTable(
   "food_photos",
   {

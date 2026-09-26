@@ -44,7 +44,12 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // app are recorded measurements Coach may use and attribute; it still
     // must not claim live monitoring or medical records, or read heart rate
     // clinically (native-api.test.ts covers the imported data).
-    "7bab066b42c733ef170a1c70e51e29956ab83724b50a19858e38d68ca08261d9",
+    // Revised 2026-09-26, deliberate and reviewed: two added sentences let
+    // Coach name the places of a GPS route Apple Health recorded and show
+    // it with show_activity_route; it still never infers a route for an
+    // entry without one (workout-routes-database.test.ts). Health, privacy
+    // and evidence text is unchanged.
+    "d77b9c323c36ae9c2fb5a10779cafad607c4ac7be45617d54c0df7f3a82caf9e",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

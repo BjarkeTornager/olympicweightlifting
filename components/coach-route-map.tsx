@@ -10,6 +10,7 @@ const activityWord = {
   run: "run",
   walk: "walk",
   bike: "ride",
+  other: "route",
 } as const;
 
 export function routeDurationLabel(seconds: number) {
@@ -31,15 +32,22 @@ export function CoachRouteSummary({
         <strong>
           {visual.distanceKm} km {activityWord[visual.activity]}
         </strong>
-        <span> · {routeDurationLabel(visual.durationSeconds)}</span>
+        <span>
+          {" "}
+          ·{" "}
+          {visual.recorded
+            ? routeDurationLabel(visual.durationSeconds).replace("about ", "")
+            : routeDurationLabel(visual.durationSeconds)}
+        </span>
         {visual.targetKm != null && (
-          <span>
-            {" "}
-            · requested {visual.targetKm} km
-          </span>
+          <span> · requested {visual.targetKm} km</span>
         )}
       </p>
-      <p className="fine-print">Arrows on the map show the running direction.</p>
+      <p className="fine-print">
+        {visual.recorded
+          ? "Recorded by Apple Health. Arrows show the direction you went."
+          : "Arrows on the map show the running direction."}
+      </p>
       <ol>
         {visual.stops.map((stop, i) => (
           <li key={`${stop.lat}:${stop.lng}:${i}`}>

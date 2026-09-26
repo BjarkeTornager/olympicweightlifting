@@ -337,6 +337,43 @@
         }
       }
     },
+    "/api/v1/activities/{id}/route": {
+      "get": {
+        "operationId": "getActivityRoute",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachVisual"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/action": {
       "post": {
         "operationId": "applyProposal",
@@ -492,6 +529,12 @@
           },
           "fromAppleHealth": {
             "type": "boolean"
+          },
+          "hasRoute": {
+            "type": "boolean"
+          },
+          "routeText": {
+            "type": "string"
           }
         },
         "required": [
@@ -695,6 +738,12 @@
           "durationSeconds": {
             "type": "integer"
           },
+          "loop": {
+            "type": "boolean"
+          },
+          "recorded": {
+            "type": "boolean"
+          },
           "path": {
             "type": "array",
             "items": {
@@ -892,6 +941,47 @@
           "date"
         ]
       },
+      "HealthRoute": {
+        "type": "object",
+        "properties": {
+          "workoutId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "path": {
+            "minItems": 2,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "minItems": 2,
+              "maxItems": 2,
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "startPlace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "endPlace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "farthestPlace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "workoutId",
+          "path"
+        ]
+      },
       "HealthSyncRequest": {
         "type": "object",
         "properties": {
@@ -932,6 +1022,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "routes": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthRoute"
+            }
           }
         },
         "required": [
@@ -960,6 +1058,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WorkoutSyncResult"
+            }
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RouteSyncResult"
             }
           }
         },
@@ -1164,6 +1268,9 @@
             "type": "string"
           },
           "fromAppleHealth": {
+            "type": "boolean"
+          },
+          "hasRoute": {
             "type": "boolean"
           }
         },
@@ -1575,6 +1682,23 @@
           "lat",
           "lng",
           "label"
+        ]
+      },
+      "RouteSyncResult": {
+        "type": "object",
+        "properties": {
+          "workoutId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "result": {
+            "type": "string",
+            "description": "One of: saved, unchanged, skipped, pending. Treat others as unknown."
+          }
+        },
+        "required": [
+          "workoutId",
+          "result"
         ]
       },
       "SessionInfo": {

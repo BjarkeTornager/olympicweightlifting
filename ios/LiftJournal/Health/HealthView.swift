@@ -8,6 +8,7 @@ struct HealthView: View {
   @Environment(AppModel.self) private var model
   @State private var trigger = false
   @State private var requestError: String?
+  @State private var needsAccess = false
 
   var body: some View {
     List {
@@ -29,12 +30,29 @@ struct HealthView: View {
         Label("Resting heart rate, heart rate variability and average heart rate", systemImage: "heart.fill")
         Label("Steps and active energy", systemImage: "flame.fill")
         Label("Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", systemImage: "figure.run")
+        Label("Routes of outdoor workouts, simplified, with place names from Apple Maps", systemImage: "map.fill")
       }
       if !model.health.available {
         Section {
           Text("Apple Health isn't available on this device.").foregroundStyle(.secondary)
         }
       } else if model.health.connected {
+        if needsAccess {
+          Section {
+            Button {
+              trigger.toggle()
+            } label: {
+              Label("Allow workout routes", systemImage: "map.fill")
+            }
+            if let requestError {
+              Text(requestError).foregroundStyle(.red).font(.subheadline)
+            }
+          } footer: {
+            Text(
+              "Lift Journal can now show where you walked, ran or rode, and Coach can talk about it. Apple asks once for the new permission."
+            )
+          }
+        }
         Section {
           LabeledContent("Status") {
             if model.health.syncing {
@@ -90,6 +108,7 @@ struct HealthView: View {
     }
     .navigationTitle("Apple Health")
     .navigationBarTitleDisplayMode(.inline)
+    .task { needsAccess = await HealthSync.shared.needsAccess() }
     .healthDataAccessRequest(
       store: HealthSync.shared.store,
       readTypes: HealthSync.readTypes,
@@ -97,6 +116,7 @@ struct HealthView: View {
     ) { result in
       switch result {
       case .success:
+        needsAccess = false
         Task { await model.healthConnected() }
       case .failure(let error):
         requestError = error.localizedDescription

@@ -85,7 +85,8 @@
       "averageHeartRate": 148,
       "maxHeartRate": 171,
       "caloriesKcal": 612,
-      "fromAppleHealth": true
+      "fromAppleHealth": true,
+      "hasRoute": false
     }
   ],
   "sessionsThisWeek": 2,

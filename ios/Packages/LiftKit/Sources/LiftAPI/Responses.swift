@@ -89,6 +89,14 @@ extension Operations.SyncHealth.Output {
     }
   }
 }
+extension Operations.GetActivityRoute.Output {
+  public func value() throws -> Components.Schemas.CoachVisual {
+    switch self {
+    case .ok(let ok): try ok.body.json
+    case .default(let status, let failure): throw APIFailure(status: status, body: try? failure.body.json)
+    }
+  }
+}
 extension Operations.GetCoach.Output {
   public func value() throws -> Components.Schemas.CoachHistory {
     switch self {

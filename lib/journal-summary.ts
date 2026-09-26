@@ -1,5 +1,6 @@
 import type { JournalState } from "./model";
 import { formatLitres, hydrationForDay } from "./hydration";
+import { describeRoute, type RouteNote } from "./route-summary";
 
 // A compact, complete picture of the journal for a date range, shared by
 // both coaches: every entry with the ids needed to correct it.
@@ -11,8 +12,14 @@ export const dayRange = (from: string, to: string) => {
 };
 
 // What the voice coach sees of the journal: compact, with the ids it needs
-// to correct an entry, and photo ids it can look at with view_photo.
-export function journalForVoice(state: JournalState, from: string, to: string) {
+// to correct an entry, and photo ids it can look at with view_photo. Routes
+// are the place names of GPS tracks imported from Apple Health, by entry id.
+export function journalForVoice(
+  state: JournalState,
+  from: string,
+  to: string,
+  routes: Map<string, RouteNote> = new Map(),
+) {
   const inRange = dayRange(from, to);
   // Only what was actually done: planned exercises without sets are left out.
   const sets = (w: JournalState["sessions"][number]) =>
@@ -83,6 +90,7 @@ export function journalForVoice(state: JournalState, from: string, to: string) {
     activities: state.cardio.sessions
       .filter((c) => inRange(c.date))
       .map((c) => ({
+        activity_id: c.id,
         date: c.date,
         activity: c.activity,
         title: c.title || undefined,
@@ -92,6 +100,8 @@ export function journalForVoice(state: JournalState, from: string, to: string) {
         max_heart_rate: c.maxHeartRate ?? undefined,
         calories_kcal: c.caloriesKcal ?? undefined,
         elevation_gain_m: c.elevationGainM ?? undefined,
+        // Recorded by GPS; the map can be shown with show_activity_route.
+        route: routes.get(c.id),
       })),
     // Measured by the athlete's watch or phone and imported from Apple
     // Health: resting heart rate, heart rate variability, the day's average
@@ -114,8 +124,12 @@ export function journalForVoice(state: JournalState, from: string, to: string) {
 
 // Today in full, with what has been eaten so far against the targets, so a
 // coach never has to ask for what is already recorded.
-export function dayForCoach(state: JournalState, date: string) {
-  const day = journalForVoice(state, date, date);
+export function dayForCoach(
+  state: JournalState,
+  date: string,
+  routes?: Map<string, RouteNote>,
+) {
+  const day = journalForVoice(state, date, date, routes);
   const eaten = day.meals.reduce(
     (t, m) => {
       for (const i of m.items) {
@@ -174,7 +188,7 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
     );
   for (const a of day.activities)
     parts.push(
-      `Activity: ${a.title ?? a.activity}, ${a.minutes} min${a.distance_km != null ? `, ${a.distance_km} km` : ""}${a.average_heart_rate != null ? `, ${a.average_heart_rate} bpm average` : ""}`,
+      `Activity: ${a.title ?? a.activity}, ${a.minutes} min${a.distance_km != null ? `, ${a.distance_km} km` : ""}${a.average_heart_rate != null ? `, ${a.average_heart_rate} bpm average` : ""}${a.route && describeRoute(a.route) ? `, ${describeRoute(a.route)}` : ""}`,
     );
   for (const v of day.heart_and_movement) {
     const heart = [

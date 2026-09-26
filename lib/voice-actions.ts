@@ -7,6 +7,7 @@ import { readJournal, writeJournal } from "./server";
 import { cardioActivitySchema } from "./cardio";
 import { foodGroupSchema } from "./nutrition";
 import { bodyGoalsInputSchema } from "./body-goals";
+import { drinkInputSchema } from "./hydration";
 import type { JournalState } from "./model";
 import { prepareAction, type ActionPreview } from "./agent/actions";
 import type { AgentAction } from "./agent/action-schema";
@@ -146,6 +147,11 @@ export const voiceToolArgs = {
   delete_meal: z.object({ summary: summarySchema, meal_id: z.string().uuid() }),
   log_meal: mealArgs,
   update_meal: mealArgs.extend({ meal_id: z.string().uuid() }),
+  log_drink: drinkInputSchema.extend({ summary: summarySchema }),
+  delete_drink: z.object({
+    summary: summarySchema,
+    drink_id: z.string().uuid(),
+  }),
   log_sleep: z.object({
     summary: summarySchema,
     date,
@@ -229,6 +235,16 @@ export function voiceAction(
     case "delete_meal": {
       const a = voiceToolArgs.delete_meal.parse(raw);
       return { kind: "delete_meal", mealId: a.meal_id };
+    }
+    case "log_drink": {
+      const { summary: _summary, ...drink } =
+        voiceToolArgs.log_drink.parse(raw);
+      void _summary;
+      return { kind: "log_drink", drink };
+    }
+    case "delete_drink": {
+      const a = voiceToolArgs.delete_drink.parse(raw);
+      return { kind: "delete_drink", drinkId: a.drink_id };
     }
     case "log_sleep": {
       const a = voiceToolArgs.log_sleep.parse(raw);
@@ -374,9 +390,11 @@ export async function runVoiceTool(
         ? action.meal.date
         : "checkin" in action
           ? action.checkin.date
-          : "cardio" in action
-            ? action.cardio.date
-            : input.today;
+          : "drink" in action
+            ? action.drink.date
+            : "cardio" in action
+              ? action.cardio.date
+              : input.today;
   const { summary } = z
     .object({ summary: summarySchema })
     .passthrough()

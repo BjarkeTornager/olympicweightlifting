@@ -1,3 +1,4 @@
+import { hydrationForDay } from "../hydration";
 import {
   recentConversations,
   searchConversations,
@@ -264,7 +265,10 @@ export async function runReadTool(
     }
     case "health_overview": {
       const a = specifications.health_overview.schema.parse(args);
-      const output = dailyHealth(state, a.date);
+      const output = {
+        ...dailyHealth(state, a.date),
+        hydration: hydrationForDay(state, a.date),
+      };
       reads.healthDates.add(a.date);
       return output;
     }

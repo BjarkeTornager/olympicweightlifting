@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cardioSummary, cardioTitle } from "./cardio";
 import { foodDate, totalNutrients } from "./nutrition";
+import { drinkSchema } from "./hydration";
 import type { JournalState } from "./model";
 
 const values = {
@@ -50,7 +51,11 @@ export const checkinSchema = z
     "Enter at least one check-in value or note",
   );
 export const healthSchema = z
-  .object({ checkins: z.array(checkinSchema).max(5000).default([]) })
+  .object({
+    checkins: z.array(checkinSchema).max(5000).default([]),
+    // Optional so journals and clients from before drink tracking still parse.
+    drinks: z.array(drinkSchema).max(20000).optional(),
+  })
   .superRefine((v, ctx) => {
     if (new Set(v.checkins.map((c) => c.date)).size !== v.checkins.length)
       ctx.addIssue({

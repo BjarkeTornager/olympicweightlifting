@@ -111,6 +111,8 @@ export async function writeJournal(
         state.profile.coaching.plans ??= previous.profile.coaching.plans;
       }
       state.nutrition.favourites ??= previous.nutrition.favourites;
+      // An app from before drink tracking omits drinks; that is not deletion.
+      state.health.drinks ??= previous.health.drinks;
       state.nutrition.completeDays ??= previous.nutrition.completeDays?.filter(
         (date) =>
           canonicalJson(

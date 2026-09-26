@@ -1,4 +1,5 @@
 import type { JournalState } from "./model";
+import { formatLitres, hydrationForDay } from "./hydration";
 
 // A compact, complete picture of the journal for a date range, shared by
 // both coaches: every entry with the ids needed to correct it.
@@ -70,6 +71,15 @@ export function journalForVoice(state: JournalState, from: string, to: string) {
         bodyweight: c.bodyweight,
         notes: c.notes,
       })),
+    drinks: (state.health.drinks ?? [])
+      .filter((d) => inRange(d.date))
+      .map((d) => ({
+        drink_id: d.id,
+        date: d.date,
+        ml: d.ml,
+        kind: d.kind,
+        name: d.name,
+      })),
     activities: state.cardio.sessions
       .filter((c) => inRange(c.date))
       .map((c) => ({
@@ -100,9 +110,15 @@ export function dayForCoach(state: JournalState, date: string) {
     { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
   );
   const round = (n: number) => Math.round(n);
+  const water = hydrationForDay(state, date);
   return {
     date,
     ...day,
+    hydration: {
+      totalMl: water.totalMl,
+      targetMl: water.targetMl,
+      recorded: water.recorded,
+    },
     eatenSoFar: {
       calories: round(eaten.calories),
       protein_g: round(eaten.protein_g),
@@ -133,6 +149,10 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
     );
   for (const c of day.checkins)
     if (c.sleep_hours != null) parts.push(`Sleep: ${c.sleep_hours} h`);
+  if (day.hydration.recorded)
+    parts.push(
+      `Drinks: ${formatLitres(day.hydration.totalMl)} of about ${formatLitres(day.hydration.targetMl)}`,
+    );
   for (const a of day.activities)
     parts.push(`Activity: ${a.activity}, ${a.minutes} min`);
   const target = day.dailyTargets.calories;

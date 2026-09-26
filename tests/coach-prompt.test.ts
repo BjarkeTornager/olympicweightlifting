@@ -31,7 +31,11 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // for set_body_goals. Coach collects the athlete's stated details without
     // guessing and reports the app's calculated plan instead of its own
     // figures; it saves only through a reviewed change (body-goals.test.ts).
-    "550453a9acf1e7f75bf9f3c42298ae01acfc25c12cba7dea0281588805d9b0d0",
+    // Revised 2026-09-26, deliberate and reviewed: drinks are logged one at
+    // a time with log_drink instead of overwriting the check-in water total,
+    // and drinks with energy are also logged as a meal in one bundle
+    // (hydration.test.ts). Health, privacy and evidence text is unchanged.
+    "655968bc19151d011c16558fd92465bcbc8336525f01b808e1531cd4d3c2f302",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

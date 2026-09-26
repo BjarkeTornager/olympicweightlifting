@@ -4,7 +4,9 @@ import {
   hydrationForDay,
   removeDrink,
 } from "../hydration";
-import { applyGoals, describePlan } from "../body-goals";
+import { applyGoals, describePlan, splitGoals } from "../body-goals";
+import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
+import { offsetDate } from "../health";
 import {
   repeatMeal,
   totalNutrients,
@@ -136,7 +138,33 @@ export function prepareBodyGoals(
   return {
     targets: next.nutrition.targets,
     title: "Set your goals",
-    detail: [describePlan(action.bodyGoals, plan), ...plan.notes].join(" "),
+    detail: [
+      describePlan(splitGoals(action.bodyGoals).goals, plan),
+      ...plan.notes,
+    ].join(" "),
+  };
+}
+
+export function prepareBodyFat(
+  next: JournalState,
+  action: ActionOf<"record_body_fat" | "delete_body_fat">,
+  currentDate: string,
+): PreparedChange {
+  const entry =
+    action.kind === "record_body_fat"
+      ? saveBodyFat(next, action.bodyFat, currentDate)
+      : removeBodyFat(next, action.date);
+  const trend = bodyFatTrend(next, offsetDate(entry.date, -90), entry.date);
+  const change =
+    action.kind === "record_body_fat" && trend && trend.readings > 1
+      ? ` ${trend.change_points > 0 ? "+" : ""}${trend.change_points} points since ${trend.first.date}.`
+      : "";
+  return {
+    title:
+      action.kind === "record_body_fat"
+        ? "Record body fat"
+        : "Remove a body fat reading",
+    detail: `${action.kind === "record_body_fat" ? "" : "Removes "}${entry.percent}% body fat on ${entry.date}${entry.method ? ` (${entry.method})` : ""}.${change}`,
   };
 }
 

@@ -27,6 +27,7 @@ import { foodDate } from "./nutrition";
 import { localClock, timeZoneSchema } from "./reminders";
 import { writeJournal } from "./server";
 import { healthRouteSchema, pruneRoutes, saveRoutes } from "./workout-routes";
+import { saveBodyFat } from "./body-composition";
 
 // What the iPhone app reads from Apple Health and sends in one batch: nights
 // of sleep samples, daily heart-rate and movement summaries, and workouts.
@@ -56,6 +57,8 @@ export const healthDaySchema = vitalsSchema
   .omit({ source: true, updatedAt: true })
   .partial()
   .required({ date: true })
+  // The day's latest body fat reading from a smart scale, in percent.
+  .extend({ bodyFatPercent: z.number().finite().min(3).max(70).optional() })
   .strict()
   .register(nativeRequests, { id: "HealthDay" });
 export const healthSyncSchema = z
@@ -253,6 +256,30 @@ export function applyWorkout(
   };
 }
 
+// A scale's body fat reading for a day, kept beside anything the athlete
+// reported; an unchanged reading writes nothing.
+export function applyBodyFatImport(
+  state: JournalState,
+  day: z.infer<typeof healthDaySchema>,
+  today: string,
+  now: Date,
+) {
+  if (day.bodyFatPercent == null) return false;
+  const percent = Math.round(day.bodyFatPercent * 10) / 10;
+  const previous = state.health.bodyFat?.find(
+    (b) => b.date === day.date && b.source === "apple-health",
+  );
+  if (previous?.percent === percent) return false;
+  saveBodyFat(
+    state,
+    { date: day.date, percent, method: "scale" },
+    today,
+    "apple-health",
+    now,
+  );
+  return true;
+}
+
 // A daily summary replaces the previous one for that date; unchanged values
 // do not count as a change, so a repeated sync writes nothing.
 export function applyVitals(
@@ -368,9 +395,13 @@ export async function syncHealth(
     }
 
     let daysUpdated = 0;
-    for (const day of days)
-      if (day.date <= today && applyVitals(state, day, now)) daysUpdated++;
-    if (daysUpdated) changed = true;
+    let bodyFatUpdated = 0;
+    for (const day of days) {
+      if (day.date > today) continue;
+      if (applyVitals(state, day, now)) daysUpdated++;
+      if (applyBodyFatImport(state, day, today, now)) bodyFatUpdated++;
+    }
+    if (daysUpdated || bodyFatUpdated) changed = true;
 
     const ids = [
       ...new Set([
@@ -485,6 +516,7 @@ export async function syncHealth(
       changed,
       sleep: sleep.sort((a, b) => a.date.localeCompare(b.date)),
       daysUpdated,
+      bodyFatUpdated,
       workouts,
       routes,
     };

@@ -547,6 +547,72 @@
           "fromAppleHealth"
         ]
       },
+      "Body": {
+        "type": "object",
+        "properties": {
+          "bodyFatPercent": {
+            "type": "number"
+          },
+          "bodyFatDate": {
+            "type": "string"
+          },
+          "bodyFatMethod": {
+            "type": "string"
+          },
+          "bodyFatFromAppleHealth": {
+            "type": "boolean"
+          },
+          "bodyweight": {
+            "type": "number"
+          },
+          "bodyweightDate": {
+            "type": "string"
+          },
+          "weeklyWeightChangeKg": {
+            "type": "number"
+          },
+          "leanMassKg": {
+            "type": "number"
+          },
+          "focus": {
+            "type": "string"
+          },
+          "targetWeightKg": {
+            "type": "number"
+          },
+          "targetBodyFatPercent": {
+            "type": "number"
+          }
+        }
+      },
+      "BodyFatInput": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "percent": {
+            "type": "number",
+            "minimum": 3,
+            "maximum": 70
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "scale",
+              "dexa",
+              "calipers",
+              "tape",
+              "estimate",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "percent"
+        ]
+      },
       "ChartPoint": {
         "type": "object",
         "properties": {
@@ -766,6 +832,24 @@
           "title"
         ]
       },
+      "DeleteBodyFatAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "delete_body_fat"
+            ]
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "date"
+        ]
+      },
       "DeleteCardioAction": {
         "type": "object",
         "properties": {
@@ -935,6 +1019,11 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 20000
+          },
+          "bodyFatPercent": {
+            "type": "number",
+            "minimum": 3,
+            "maximum": 70
           }
         },
         "required": [
@@ -1052,6 +1141,9 @@
             }
           },
           "daysUpdated": {
+            "type": "integer"
+          },
+          "bodyFatUpdated": {
             "type": "integer"
           },
           "workouts": {
@@ -1259,7 +1351,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "One of: strength, cardio, meal, sleep, checkin, vitals. Treat others as unknown."
+            "description": "One of: strength, cardio, meal, sleep, checkin, vitals, body. Treat others as unknown."
           },
           "title": {
             "type": "string"
@@ -1442,6 +1534,12 @@
             "$ref": "#/components/schemas/DeleteDrinkAction"
           },
           {
+            "$ref": "#/components/schemas/RecordBodyFatAction"
+          },
+          {
+            "$ref": "#/components/schemas/DeleteBodyFatAction"
+          },
+          {
             "$ref": "#/components/schemas/RecordCheckinAction"
           },
           {
@@ -1465,6 +1563,8 @@
           "mapping": {
             "log_drink": "#/components/schemas/LogDrinkAction",
             "delete_drink": "#/components/schemas/DeleteDrinkAction",
+            "record_body_fat": "#/components/schemas/RecordBodyFatAction",
+            "delete_body_fat": "#/components/schemas/DeleteBodyFatAction",
             "record_checkin": "#/components/schemas/RecordCheckinAction",
             "delete_cardio": "#/components/schemas/DeleteCardioAction",
             "start_programme": "#/components/schemas/StartProgrammeAction",
@@ -1613,6 +1713,24 @@
         "required": [
           "id",
           "undo"
+        ]
+      },
+      "RecordBodyFatAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "record_body_fat"
+            ]
+          },
+          "bodyFat": {
+            "$ref": "#/components/schemas/BodyFatInput"
+          }
+        },
+        "required": [
+          "kind",
+          "bodyFat"
         ]
       },
       "RecordCheckinAction": {
@@ -1849,6 +1967,9 @@
           "checkin": {
             "$ref": "#/components/schemas/Checkin"
           },
+          "body": {
+            "$ref": "#/components/schemas/Body"
+          },
           "nutrition": {
             "$ref": "#/components/schemas/Nutrition"
           },
@@ -1960,6 +2081,12 @@
             "type": "number"
           },
           "protein": {
+            "type": "number"
+          },
+          "bodyweight": {
+            "type": "number"
+          },
+          "bodyFatPercent": {
             "type": "number"
           },
           "cardioMinutes": {

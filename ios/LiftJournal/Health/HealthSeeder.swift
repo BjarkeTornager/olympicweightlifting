@@ -18,8 +18,9 @@
       let steps = HKQuantityType(.stepCount)
       let energy = HKQuantityType(.activeEnergyBurned)
       let distance = HKQuantityType(.distanceWalkingRunning)
+      let bodyFat = HKQuantityType(.bodyFatPercentage)
       let write: Set<HKSampleType> = [
-        sleep, resting, hrv, heart, steps, energy, distance, .workoutType(), HKSeriesType.workoutRoute(),
+        sleep, resting, hrv, heart, steps, energy, distance, bodyFat, .workoutType(), HKSeriesType.workoutRoute(),
       ]
       try await store.requestAuthorization(toShare: write, read: HealthSync.readTypes)
 
@@ -56,6 +57,11 @@
               start: noon.addingTimeInterval(-3600), end: noon))
         }
       }
+      // This morning's smart-scale reading.
+      let weighIn = calendar.date(byAdding: .hour, value: 7, to: calendar.startOfDay(for: .now))!
+      samples.append(
+        HKQuantitySample(
+          type: bodyFat, quantity: HKQuantity(unit: .percent(), doubleValue: 0.148), start: weighIn, end: weighIn))
       try await store.save(samples)
 
       // Yesterday's run with heart rate and distance.

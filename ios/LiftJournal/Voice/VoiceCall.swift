@@ -64,7 +64,7 @@ final class VoiceCall {
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
     "update_meal": "Meal updated", "delete_meal": "Meal deleted", "log_sleep": "Sleep",
-    "log_drink": "Drink", "delete_drink": "Drink removed", "log_activity": "Activity",
+    "log_drink": "Drink", "delete_drink": "Drink removed", "log_body_fat": "Body fat", "log_activity": "Activity",
     "clear_unfinished_workout": "Unfinished workout", "set_goals": "Goals", "undo_save": "Undo",
   ]
   /// Server tools that only read; they leave no receipt in the conversation.

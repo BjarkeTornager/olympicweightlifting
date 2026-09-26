@@ -29,7 +29,7 @@ struct JournalView: View {
       case .all: true
       case .training: ["strength", "cardio"].contains(kind)
       case .food: kind == "meal"
-      case .recovery: ["sleep", "checkin", "vitals"].contains(kind)
+      case .recovery: ["sleep", "checkin", "vitals", "body"].contains(kind)
       }
     }
   }
@@ -152,6 +152,7 @@ struct JournalRow: View {
     case "meal": .food
     case "sleep": .sleep
     case "vitals": .heart
+    case "body": .body
     default: .checkin
     }
   }

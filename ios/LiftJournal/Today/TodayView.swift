@@ -43,7 +43,7 @@ struct TodayView: View {
       }
     }
     .sheet(isPresented: $showingAccount) { AccountView() }
-    .sheet(isPresented: $showingCheckin) { CheckinSheet(existing: model.today?.checkin) }
+    .sheet(isPresented: $showingCheckin) { CheckinSheet(existing: model.today?.checkin, body_: model.today?.body) }
     .sensoryFeedback(.success, trigger: model.saves)
     .task(id: model.health.lastSync) {
       healthNeedsAccess = model.health.connected ? await HealthSync.shared.needsAccess() : false
@@ -101,10 +101,10 @@ struct TodayView: View {
           HealthView()
         } label: {
           HStack(spacing: 12) {
-            IconBadge(symbol: "map.fill", tint: .green)
+            IconBadge(symbol: "heart.text.square.fill", tint: .pink)
             VStack(alignment: .leading, spacing: 2) {
-              Text("Add your workout routes")
-              Text("See where you walked, ran or rode, and talk it over with Coach")
+              Text("Allow new Apple Health data")
+              Text("Workout routes, and body fat from a smart scale, for you and Coach")
                 .font(.subheadline).foregroundStyle(.secondary)
             }
           }
@@ -116,6 +116,12 @@ struct TodayView: View {
       CheckinCard(checkin: today.checkin) { showingCheckin = true }
     } header: {
       Text("Recovery")
+    }
+    .headerProminence(.increased)
+    Section {
+      NavigationLink(value: Trend.body) { BodyCard(body: today.body) }
+    } header: {
+      Text("Body")
     }
     .headerProminence(.increased)
     Section {
@@ -284,6 +290,54 @@ struct CheckinCard: View {
       }
     }
     .tint(.primary)
+  }
+}
+
+/// Weight, body fat and lean mass, with the goal's focus and the weekly trend.
+struct BodyCard: View {
+  let body_: Components.Schemas.Body?
+
+  init(body: Components.Schemas.Body?) { body_ = body }
+
+  var body: some View {
+    SummaryCard(title: "Weight & Body Fat", category: .body, caption: focus) {
+      if let b = body_, b.bodyweight != nil || b.bodyFatPercent != nil {
+        HStack {
+          MiniValue(value: b.bodyweight.map { $0.formatted() }, unit: "kg", label: "Weight")
+          MiniValue(value: b.bodyFatPercent.map { $0.formatted() }, unit: "%", label: "Body fat")
+          MiniValue(value: b.leanMassKg.map { $0.formatted() }, unit: "kg", label: "Lean mass")
+        }
+        if let line = trendLine(b) {
+          Text(line).font(.footnote).foregroundStyle(.secondary)
+        }
+      } else {
+        Text("Add your weight and body fat in a check-in to follow your progress.")
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  private var focus: String? {
+    switch body_?.focus {
+    case "lose_fat": "Losing fat"
+    case "build_muscle": "Building muscle"
+    case "recomposition": "Recomposition"
+    case "maintain": "Maintaining"
+    default: nil
+    }
+  }
+
+  private func trendLine(_ b: Components.Schemas.Body) -> String? {
+    var parts: [String] = []
+    if let change = b.weeklyWeightChangeKg {
+      let sign = change > 0 ? "+" : ""
+      parts.append("\(sign)\(change.formatted(.number.precision(.fractionLength(0...2)))) kg a week")
+    }
+    if let target = b.targetWeightKg { parts.append("goal \(target.formatted()) kg") }
+    if let fat = b.targetBodyFatPercent { parts.append("\(fat.formatted())% body fat") }
+    if b.bodyFatFromAppleHealth == true { parts.append("body fat from Apple Health") }
+    guard let line = parts.first.map({ _ in parts.joined(separator: " · ") }) else { return nil }
+    return line.prefix(1).uppercased() + line.dropFirst()
   }
 }
 

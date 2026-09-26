@@ -352,6 +352,103 @@ const discardWorkout = z
   .strict()
   .register(nativeRequests, { id: "DiscardWorkoutAction" });
 
+const startTrainingDay = z
+  .object({
+    kind: z.literal("start_training_day"),
+    trainingProgramId: uuid,
+    dayId: uuid,
+    date: day,
+  })
+  .strict()
+  .register(nativeRequests, { id: "StartTrainingDayAction" });
+const correctSet = z
+  .object({
+    kind: z.literal("correct_workout_set"),
+    workoutId: z.string().max(160),
+    entryId: z.string().max(160),
+    setId: z.string().max(160),
+    setChanges: z
+      .object({
+        weight: z.number().min(0).max(1000).optional(),
+        reps: int.min(0).max(1000).optional(),
+        result: z.enum(["success", "miss"]).optional(),
+      })
+      .strict()
+      .register(nativeRequests, { id: "SetChanges" }),
+  })
+  .strict()
+  .register(nativeRequests, { id: "CorrectSetAction" });
+// A programme as the app edits it. The server fills a missing weight with
+// null ("choose a load when training"), as the Coach schema requires.
+const programmeInput = z
+  .object({
+    name: z.string().max(120),
+    notes: z.string().max(2000).optional(),
+    weeks: int.min(1).max(104).optional(),
+    days: z
+      .array(
+        z
+          .object({
+            id: uuid.optional(),
+            name: z.string().max(120),
+            notes: z.string().max(2000).optional(),
+            exercises: z
+              .array(
+                z
+                  .object({
+                    exerciseId: z.string().max(160),
+                    sets: int.min(1).max(30),
+                    reps: int.min(1).max(1000),
+                    repsMax: int.min(1).max(1000).optional(),
+                    weight: z.number().min(0).max(1000).optional(),
+                    restSeconds: int.min(0).max(1800).optional(),
+                    targetRpe: z.number().min(1).max(10).optional(),
+                    notes: z.string().max(2000).optional(),
+                  })
+                  .strict()
+                  .register(nativeRequests, { id: "ProgrammeExerciseInput" }),
+              )
+              .max(30),
+          })
+          .strict()
+          .register(nativeRequests, { id: "ProgrammeDayInput" }),
+      )
+      .min(1)
+      .max(28),
+  })
+  .strict()
+  .register(nativeRequests, { id: "ProgrammeInput" });
+const createProgramme = z
+  .object({
+    kind: z.literal("create_training_program"),
+    trainingProgram: programmeInput,
+  })
+  .strict()
+  .register(nativeRequests, { id: "CreateProgrammeAction" });
+const updateProgramme = z
+  .object({
+    kind: z.literal("update_training_program"),
+    trainingProgramId: uuid,
+    programChanges: programmeInput,
+  })
+  .strict()
+  .register(nativeRequests, { id: "UpdateProgrammeAction" });
+const deleteProgramme = z
+  .object({
+    kind: z.literal("delete_training_program"),
+    trainingProgramId: uuid,
+  })
+  .strict()
+  .register(nativeRequests, { id: "DeleteProgrammeAction" });
+// App-only: which programme Train follows. The website sets this directly.
+const useProgramme = z
+  .object({
+    kind: z.literal("use_programme"),
+    programmeId: z.string().max(160),
+  })
+  .strict()
+  .register(nativeRequests, { id: "UseProgrammeAction" });
+
 export const nativeAction = z
   .discriminatedUnion("kind", [
     logDrink,
@@ -362,6 +459,12 @@ export const nativeAction = z
     logSets,
     finishWorkout,
     discardWorkout,
+    startTrainingDay,
+    correctSet,
+    createProgramme,
+    updateProgramme,
+    deleteProgramme,
+    useProgramme,
   ])
   .register(nativeRequests, { id: "NativeAction" });
 export const nativeActionKinds = nativeAction.options.map(

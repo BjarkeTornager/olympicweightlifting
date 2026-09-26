@@ -10,6 +10,8 @@ struct AccountView: View {
   @State private var deleting = false
   @State private var deletionError: String?
   @AppStorage(AIConsent.key) private var aiAllowed = false
+  /// Shown as the Profile tab rather than as a sheet: no Done button.
+  var inTab = false
 
   var body: some View {
     NavigationStack {
@@ -93,11 +95,13 @@ struct AccountView: View {
             .frame(maxWidth: .infinity)
         }
       }
-      .navigationTitle("Account")
-      .navigationBarTitleDisplayMode(.inline)
+      .navigationTitle(inTab ? "Profile" : "Account")
+      .navigationBarTitleDisplayMode(inTab ? .large : .inline)
       .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Done", role: .confirm) { dismiss() }
+        if !inTab {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Done", role: .confirm) { dismiss() }
+          }
         }
       }
       .confirmationDialog("Sign out of Lift Journal on this iPhone?", isPresented: $confirmingSignOut) {

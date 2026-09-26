@@ -191,6 +191,80 @@
         }
       }
     },
+    "/api/v1/training": {
+      "get": {
+        "operationId": "getTraining",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Training"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workouts/{id}": {
+      "get": {
+        "operationId": "getWorkout",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkoutDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/journal": {
       "get": {
         "operationId": "getJournal",
@@ -766,6 +840,57 @@
           "title"
         ]
       },
+      "CorrectSetAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "correct_workout_set"
+            ]
+          },
+          "workoutId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "entryId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "setId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "setChanges": {
+            "$ref": "#/components/schemas/SetChanges"
+          }
+        },
+        "required": [
+          "kind",
+          "workoutId",
+          "entryId",
+          "setId",
+          "setChanges"
+        ]
+      },
+      "CreateProgrammeAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "create_training_program"
+            ]
+          },
+          "trainingProgram": {
+            "$ref": "#/components/schemas/ProgrammeInput"
+          }
+        },
+        "required": [
+          "kind",
+          "trainingProgram"
+        ]
+      },
       "DeleteCardioAction": {
         "type": "object",
         "properties": {
@@ -802,6 +927,25 @@
         "required": [
           "kind",
           "drinkId"
+        ]
+      },
+      "DeleteProgrammeAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "delete_training_program"
+            ]
+          },
+          "trainingProgramId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "kind",
+          "trainingProgramId"
         ]
       },
       "DiagramEdge": {
@@ -889,6 +1033,25 @@
         },
         "required": [
           "error"
+        ]
+      },
+      "ExerciseOption": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category"
         ]
       },
       "FinishWorkoutAction": {
@@ -1458,6 +1621,24 @@
           },
           {
             "$ref": "#/components/schemas/DiscardWorkoutAction"
+          },
+          {
+            "$ref": "#/components/schemas/StartTrainingDayAction"
+          },
+          {
+            "$ref": "#/components/schemas/CorrectSetAction"
+          },
+          {
+            "$ref": "#/components/schemas/CreateProgrammeAction"
+          },
+          {
+            "$ref": "#/components/schemas/UpdateProgrammeAction"
+          },
+          {
+            "$ref": "#/components/schemas/DeleteProgrammeAction"
+          },
+          {
+            "$ref": "#/components/schemas/UseProgrammeAction"
           }
         ],
         "discriminator": {
@@ -1470,7 +1651,13 @@
             "start_programme": "#/components/schemas/StartProgrammeAction",
             "log_sets": "#/components/schemas/LogSetsAction",
             "finish_workout": "#/components/schemas/FinishWorkoutAction",
-            "discard_workout": "#/components/schemas/DiscardWorkoutAction"
+            "discard_workout": "#/components/schemas/DiscardWorkoutAction",
+            "start_training_day": "#/components/schemas/StartTrainingDayAction",
+            "correct_workout_set": "#/components/schemas/CorrectSetAction",
+            "create_training_program": "#/components/schemas/CreateProgrammeAction",
+            "update_training_program": "#/components/schemas/UpdateProgrammeAction",
+            "delete_training_program": "#/components/schemas/DeleteProgrammeAction",
+            "use_programme": "#/components/schemas/UseProgrammeAction"
           }
         }
       },
@@ -1536,6 +1723,45 @@
           "custom"
         ]
       },
+      "NextTraining": {
+        "type": "object",
+        "properties": {
+          "programmeId": {
+            "type": "string"
+          },
+          "programmeName": {
+            "type": "string"
+          },
+          "dayId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "builtIn": {
+            "type": "boolean"
+          },
+          "canStart": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "programmeId",
+          "programmeName",
+          "dayId",
+          "title",
+          "position",
+          "count",
+          "builtIn",
+          "canStart"
+        ]
+      },
       "Nutrition": {
         "type": "object",
         "properties": {
@@ -1572,6 +1798,48 @@
           "meals"
         ]
       },
+      "PlannedExercise": {
+        "type": "object",
+        "properties": {
+          "exerciseId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sets": {
+            "type": "integer"
+          },
+          "reps": {
+            "type": "integer"
+          },
+          "repsMax": {
+            "type": "integer"
+          },
+          "weight": {
+            "type": "number"
+          },
+          "restSeconds": {
+            "type": "integer"
+          },
+          "targetRpe": {
+            "type": "number"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exerciseId",
+          "name",
+          "sets",
+          "reps",
+          "text"
+        ]
+      },
       "Priority": {
         "type": "object",
         "properties": {
@@ -1597,6 +1865,180 @@
           "title",
           "reason",
           "action"
+        ]
+      },
+      "Programme": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "builtIn": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "weeks": {
+            "type": "integer"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgrammeDay"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "builtIn",
+          "active",
+          "days"
+        ]
+      },
+      "ProgrammeDay": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "exercises": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlannedExercise"
+            }
+          },
+          "cardio": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "exercises",
+          "cardio"
+        ]
+      },
+      "ProgrammeDayInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "exercises": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgrammeExerciseInput"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "exercises"
+        ]
+      },
+      "ProgrammeExerciseInput": {
+        "type": "object",
+        "properties": {
+          "exerciseId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "sets": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "reps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "repsMax": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "restSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1800
+          },
+          "targetRpe": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "exerciseId",
+          "sets",
+          "reps"
+        ]
+      },
+      "ProgrammeInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "weeks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 104
+          },
+          "days": {
+            "minItems": 1,
+            "maxItems": 28,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgrammeDayInput"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "days"
         ]
       },
       "ProposalRequest": {
@@ -1715,6 +2157,58 @@
           "canInvite"
         ]
       },
+      "SessionSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "exercises": {
+            "type": "integer"
+          },
+          "loggedSets": {
+            "type": "integer"
+          },
+          "topSet": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "date",
+          "exercises",
+          "loggedSets"
+        ]
+      },
+      "SetChanges": {
+        "type": "object",
+        "properties": {
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "reps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "success",
+              "miss"
+            ]
+          }
+        }
+      },
       "Sleep": {
         "type": "object",
         "properties": {
@@ -1828,6 +2322,34 @@
           "date"
         ]
       },
+      "StartTrainingDayAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "start_training_day"
+            ]
+          },
+          "trainingProgramId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dayId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "trainingProgramId",
+          "dayId",
+          "date"
+        ]
+      },
       "Today": {
         "type": "object",
         "properties": {
@@ -1929,6 +2451,44 @@
           "user"
         ]
       },
+      "Training": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "activeWorkout": {
+            "$ref": "#/components/schemas/WorkoutDetail"
+          },
+          "next": {
+            "$ref": "#/components/schemas/NextTraining"
+          },
+          "programmes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Programme"
+            }
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSummary"
+            }
+          },
+          "exercises": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseOption"
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "programmes",
+          "recent",
+          "exercises"
+        ]
+      },
       "TrendDay": {
         "type": "object",
         "properties": {
@@ -2000,6 +2560,48 @@
           "waterTargetMl"
         ]
       },
+      "UpdateProgrammeAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "update_training_program"
+            ]
+          },
+          "trainingProgramId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "programChanges": {
+            "$ref": "#/components/schemas/ProgrammeInput"
+          }
+        },
+        "required": [
+          "kind",
+          "trainingProgramId",
+          "programChanges"
+        ]
+      },
+      "UseProgrammeAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "use_programme"
+            ]
+          },
+          "programmeId": {
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "kind",
+          "programmeId"
+        ]
+      },
       "Vitals": {
         "type": "object",
         "properties": {
@@ -2024,6 +2626,96 @@
         },
         "required": [
           "date"
+        ]
+      },
+      "WorkoutDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "finished": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "exercises": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkoutExercise"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "date",
+          "finished",
+          "exercises"
+        ]
+      },
+      "WorkoutExercise": {
+        "type": "object",
+        "properties": {
+          "entryId": {
+            "type": "string"
+          },
+          "exerciseId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkoutSet"
+            }
+          }
+        },
+        "required": [
+          "entryId",
+          "exerciseId",
+          "name",
+          "sets"
+        ]
+      },
+      "WorkoutSet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "integer"
+          },
+          "result": {
+            "type": "string"
+          },
+          "logged": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "result",
+          "logged"
         ]
       },
       "WorkoutSummary": {

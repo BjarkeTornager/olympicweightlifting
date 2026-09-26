@@ -73,6 +73,22 @@ extension Operations.GetTrends.Output {
     }
   }
 }
+extension Operations.GetTraining.Output {
+  public func value() throws -> Components.Schemas.Training {
+    switch self {
+    case .ok(let ok): try ok.body.json
+    case .default(let status, let failure): throw APIFailure(status: status, body: try? failure.body.json)
+    }
+  }
+}
+extension Operations.GetWorkout.Output {
+  public func value() throws -> Components.Schemas.WorkoutDetail {
+    switch self {
+    case .ok(let ok): try ok.body.json
+    case .default(let status, let failure): throw APIFailure(status: status, body: try? failure.body.json)
+    }
+  }
+}
 extension Operations.ApplyAction.Output {
   public func value() throws -> Components.Schemas.ActionResult {
     switch self {

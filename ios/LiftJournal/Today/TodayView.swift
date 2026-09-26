@@ -6,7 +6,6 @@ import SwiftUI
 /// per kind of record, each opening a chart of recent days.
 struct TodayView: View {
   @Environment(AppModel.self) private var model
-  @State private var showingAccount = false
   @State private var showingCheckin = false
   @State private var healthNeedsAccess = false
 
@@ -32,17 +31,7 @@ struct TodayView: View {
     }
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) { logMenu }
-      ToolbarSpacer(.fixed, placement: .topBarTrailing)
-      ToolbarItem(placement: .topBarTrailing) {
-        Button {
-          showingAccount = true
-        } label: {
-          Avatar(name: model.session?.name ?? "")
-        }
-        .accessibilityLabel("Account")
-      }
     }
-    .sheet(isPresented: $showingAccount) { AccountView() }
     .sheet(isPresented: $showingCheckin) { CheckinSheet(existing: model.today?.checkin) }
     .sensoryFeedback(.success, trigger: model.saves)
     .task(id: model.health.lastSync) {
@@ -136,7 +125,16 @@ struct TodayView: View {
     }
     .headerProminence(.increased)
     Section {
-      TrainingCard(today: today)
+      Button {
+        model.tab = .train
+      } label: {
+        HStack {
+          TrainingCard(today: today)
+          Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+        }
+      }
+      .buttonStyle(.plain)
+      .accessibilityHint("Opens Train")
       ForEach(today.activities, id: \.id) { activity in
         if activity.hasRoute == true {
           NavigationLink {

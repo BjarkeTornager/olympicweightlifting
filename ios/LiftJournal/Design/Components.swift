@@ -162,3 +162,64 @@ enum Format {
     Int(value.rounded()).formatted()
   }
 }
+
+/// A white card with rounded corners and a soft shadow, as on Airbnb; in
+/// dark mode an elevated surface without the shadow.
+struct Card: ViewModifier {
+  @Environment(\.colorScheme) private var scheme
+  var padding: CGFloat = 16
+
+  func body(content: Content) -> some View {
+    content
+      .padding(padding)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+          .fill(scheme == .dark ? Color(.secondarySystemBackground) : Color(.systemBackground))
+          .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.08), radius: 14, y: 6)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+          .strokeBorder(Color(.separator).opacity(scheme == .dark ? 0.3 : 0.12))
+      )
+  }
+}
+
+extension View {
+  func card(padding: CGFloat = 16) -> some View { modifier(Card(padding: padding)) }
+}
+
+/// A bold section heading with an optional action on the right.
+struct SectionHeading<Trailing: View>: View {
+  let title: String
+  @ViewBuilder var trailing: Trailing
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline) {
+      Text(title).font(.title3.weight(.bold))
+      Spacer()
+      trailing
+    }
+  }
+}
+
+extension SectionHeading where Trailing == EmptyView {
+  init(_ title: String) {
+    self.title = title
+    self.trailing = EmptyView()
+  }
+}
+
+/// A full-width primary button in the accent colour, rounded like Airbnb's.
+struct PrimaryButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.headline)
+      .foregroundStyle(.white)
+      .frame(maxWidth: .infinity, minHeight: 50)
+      .background(Color.accentColor.gradient, in: .rect(cornerRadius: 14, style: .continuous))
+      .opacity(configuration.isPressed ? 0.85 : 1)
+      .scaleEffect(configuration.isPressed ? 0.98 : 1)
+      .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+  }
+}

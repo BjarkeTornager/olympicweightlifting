@@ -1,4 +1,5 @@
 "use client";
+import { displayMessage } from "@/lib/coach-tasks";
 import { LoaderCircle, Square } from "@/components/ui/icons";
 import type { Turn } from "@/lib/coach-turns";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
@@ -31,7 +32,10 @@ export function CoachTurn({
     <article className="conversation-turn">
       <div className="chat-user">
         <span className="sr-only">You: </span>
-        {videoFeedbackLabel(t.question, t.photoIds?.length ?? 0) ?? t.question}
+        <MessageText
+          message={t.question}
+          video={videoFeedbackLabel(t.question, t.photoIds?.length ?? 0)}
+        />
         <div className="food-photo-strip">
           {t.photoIds?.map((id) => (
             <FoodPhotoImage
@@ -84,5 +88,23 @@ export function CoachTurn({
         />
       ))}
     </article>
+  );
+}
+
+// The person's own words; a logging or planning instruction shows as a label.
+export function MessageText({
+  message,
+  video,
+}: {
+  message: string;
+  video?: string | null;
+}) {
+  if (video) return <>{video}</>;
+  const { label, text } = displayMessage(message);
+  return (
+    <>
+      {label && <span className="chat-task">{label}</span>}
+      {text}
+    </>
   );
 }

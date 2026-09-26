@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, coachTask } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
 import { mealSchema } from "../../lib/nutrition";
@@ -158,9 +158,10 @@ test("meal camera attaches a photo with logging intent without silently sending 
   await expect(page.getByRole("dialog", { name: "Log something" })).toHaveCount(
     0,
   );
+  await expect(coachTask(page)).toHaveText("Meal photo");
   await expect(
     page.getByRole("textbox", { name: "Message your coach" }),
-  ).toHaveValue(/Log the food I ate in this image/);
+  ).toHaveValue("");
   await expect.poll(() => uploads).toBe(1);
   await expect(
     page.getByRole("button", { name: "Send", exact: true }),

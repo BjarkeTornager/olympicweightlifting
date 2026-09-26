@@ -1,11 +1,11 @@
-import { liftingPrompt } from "./lifting-coach";
+import { coachTasks } from "./coach-tasks";
 import { trainingPrograms } from "./training-programs";
 import type { JournalState } from "./model";
 
 const videoRoute = /^coach\/lifting\/(video|technique)$/;
 
 // Turns a #coach/... link into what Coach should open with. A draft handed
-// over in memory (never in the URL) takes precedence over a route prompt.
+// over in memory (never in the URL) is kept alongside any route task.
 export function coachEntryIntent(
   route: string,
   state: JournalState,
@@ -21,17 +21,21 @@ export function coachEntryIntent(
           ? ("memories" as const)
           : undefined,
     initialVideoReview: videoRoute.test(route),
-    initialTrainingPrompt:
-      draft ??
-      (videoRoute.test(route)
-        ? undefined
-        : route.startsWith("coach/lifting/")
-          ? liftingPrompt(route.split("/")[2])
-          : route === "coach/training/new"
-            ? "Help me build a reusable training program in Train. My goal is "
-            : route.startsWith("coach/training/")
-              ? `Update my saved training program “${trainingPrograms(state).find((p) => p.id === route.split("/")[2])?.name ?? "my program"}”: `
-              : undefined),
+    // A draft handed over from another screen is the person's own question.
+    initialTrainingPrompt: draft,
+    initialTask: videoRoute.test(route)
+      ? undefined
+      : route.startsWith("coach/lifting/")
+        ? coachTasks.lifting(route.split("/")[2])
+        : route === "coach/training/new"
+          ? coachTasks.newProgram()
+          : route.startsWith("coach/training/")
+            ? coachTasks.editProgram(
+                trainingPrograms(state).find(
+                  (p) => p.id === route.split("/")[2],
+                )?.name ?? "my program",
+              )
+            : undefined,
     initialCardioLog:
       route === "coach/cardio" ||
       /^coach\/photo\/[^/]+\/cardio(?:\/log)?$/.test(route),

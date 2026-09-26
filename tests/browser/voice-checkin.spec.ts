@@ -14,6 +14,21 @@ test.use({
   },
 });
 
+function tone(seconds: number) {
+  const pcm = Buffer.alloc(seconds * 24000 * 2);
+  for (let i = 0; i < seconds * 24000; i++)
+    pcm.writeInt16LE(
+      Math.round(
+        12000 *
+          (Math.sin((2 * Math.PI * 220 * i) / 24000) +
+            0.5 * Math.sin((2 * Math.PI * 660 * i) / 24000)) *
+          0.6,
+      ),
+      i * 2,
+    );
+  return pcm.toString("base64");
+}
+
 const socketUrl =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=synthetic";
 
@@ -21,7 +36,7 @@ test("a spoken check-in streams the microphone, saves through Coach and reports 
   page,
   context,
   browserName,
-}) => {
+}, info) => {
   test.skip(
     browserName !== "chromium",
     "Synthetic microphone is Chromium-only",
@@ -66,12 +81,12 @@ test("a spoken check-in streams the microphone, saves through Coach and reports 
         ws.send(
           JSON.stringify({
             serverContent: {
-              // 0.1 s of silence at 24 kHz.
+              // 1.5 s of a voice-like tone at 24 kHz, so the visual has sound.
               modelTurn: {
                 parts: [
                   {
                     inlineData: {
-                      data: Buffer.alloc(4800).toString("base64"),
+                      data: tone(1.5),
                       mimeType: "audio/pcm;rate=24000",
                     },
                   },
@@ -98,6 +113,17 @@ test("a spoken check-in streams the microphone, saves through Coach and reports 
   await dialog.getByRole("button", { name: "Start talking" }).click();
 
   await expect(dialog.getByText("Hi! Did you train today?")).toBeVisible();
+  // The coach's voice is visible: the bars rise while he speaks.
+  await expect
+    .poll(() =>
+      dialog
+        .locator(".voice-bars > span")
+        .evaluateAll((bars) =>
+          Math.max(...bars.map((b) => b.getBoundingClientRect().height)),
+        ),
+    )
+    .toBeGreaterThan(12);
+  await page.screenshot({ path: info.outputPath("voice-speaking.png") });
   expect(received[0]).toEqual({
     setup: { model: "models/gemini-3.8-live-extended-thinking" },
   });

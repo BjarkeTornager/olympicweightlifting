@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
+import { coachTask } from "./fixtures";
 import { emptyJournal } from "../../lib/domain";
 import { unclassifiedImage, type UserImage } from "../../lib/images";
 
@@ -112,14 +113,13 @@ async function imageAccount(
 }
 test.describe("private image collections", () => {
   test.use({ serviceWorkers: "block" });
-  test("a sleep screenshot uploaded from Food goes to Health and opens a sleep conversation", async ({
+  test("a sleep screenshot is tagged as sleep and opens a sleep conversation", async ({
     page,
     context,
   }) => {
     const account = await imageAccount(context, "sleep");
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/#food");
-    await page.getByText("Add photos", { exact: true }).click();
+    await page.goto("/#images");
     await page
       .getByLabel("Photo label", { exact: true })
       .fill("Last night sleep");
@@ -133,40 +133,24 @@ test.describe("private image collections", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("img", { name: "Last night sleep" }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Log meal", exact: true }),
-    ).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Open image library", exact: true })
-      .click();
-    await expect(
-      page.getByRole("img", { name: "Last night sleep" }),
     ).toBeVisible();
     await expect(page.locator(".image-category-sleep")).toContainText(
       "Auto tagged",
     );
-    await page.goto("/#health");
     await expect(
-      page.getByRole("heading", { name: "Health images & screenshots" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("img", { name: "Last night sleep" }),
-    ).toBeVisible();
+      page.getByRole("button", { name: "Log meal", exact: true }),
+    ).toHaveCount(0);
     await page
       .getByRole("button", { name: "Read sleep image", exact: true })
       .click();
-    await expect(page.getByLabel("Message your coach")).toHaveValue(
-      /sleep screenshot/,
-    );
-    await expect(page.getByLabel("Message your coach")).not.toHaveValue(
-      /prepare a food entry/,
-    );
+    await expect(coachTask(page)).toHaveText("Sleep screenshot");
     await page.getByRole("button", { name: "Send", exact: true }).click();
     await expect(
       page.getByText("This is a sleep screenshot.", { exact: false }),
     ).toBeVisible();
     expect(account.questions).toHaveLength(1);
+    expect(account.questions[0]).toMatch(/sleep screenshot/);
+    expect(account.questions[0]).not.toMatch(/prepare a food entry/);
     expect(account.writes()).toBe(0);
   });
   test("uncertain images stay in review, categories are correctable, failed retagging keeps the image", async ({

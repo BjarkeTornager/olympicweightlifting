@@ -104,3 +104,7 @@ export async function openTodayOverview(page: Page) {
       await more.locator(":scope > summary").click();
   }
 }
+// The logging or planning task Coach will be given, shown above the message.
+export function coachTask(page: Page) {
+  return page.locator(".composer-task > span");
+}

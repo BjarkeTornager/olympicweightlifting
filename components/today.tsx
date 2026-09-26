@@ -34,9 +34,6 @@ export function Today({
       meal.items.reduce((sum, item) => sum + Number(item.calories || 0), 0),
     0,
   );
-  const trainedDays = week.days.filter(
-    (d) => d.strength.length + d.cardio.length > 0,
-  ).length;
   return (
     <div className="today-page">
       <div className="page-heading compact">
@@ -48,12 +45,10 @@ export function Today({
         <Button onClick={() => go("coach/capture")}>
           <Plus size={20} weight="bold" /> Log something
         </Button>
-        {voiceEnabled ? (
+        {voiceEnabled && (
           <Button variant="secondary" onClick={() => go("coach/voice")}>
             <Mic size={20} /> Check in by voice
           </Button>
-        ) : (
-          <span>A photo, a sentence, or your usual meal.</span>
         )}
       </div>
       <NextSession state={state} update={journal.update} go={go} />
@@ -167,11 +162,6 @@ export function Today({
           <span>
             <i className="week-strip-food" data-on /> food logged
           </span>
-        </p>
-        <p className="fine-print">
-          Trained on {trainedDays} of 7 days, with sleep on {week.sleepNights}{" "}
-          nights and food on {week.foodLoggedDays} days. Missing entries stay
-          unknown.
         </p>
       </section>
       <details className="today-extra">

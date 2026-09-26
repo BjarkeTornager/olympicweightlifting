@@ -1,11 +1,10 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, coachTask } from "./fixtures";
 import type { BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
 import type { JournalState } from "../../lib/model";
 import { liftingFixture, liftingBrief } from "../fixtures/lifting-coach";
 import { prepareAction } from "../../lib/agent/actions";
-import { liftingPrompt } from "../../lib/lifting-coach";
 import { streamingFixture, type StreamWindow } from "./coach-stream";
 
 async function fixture(context: BrowserContext, initial: JournalState) {
@@ -151,9 +150,8 @@ test("lifting starters preserve a written draft and don't submit or disturb an a
     .click();
   await page.goto("/#workout/coaching");
   await page.getByRole("button", { name: "Build my plan" }).click();
-  await expect(input).toHaveValue(
-    `I have 45 minutes on Thursday.\n\n${liftingPrompt("plan")}`,
-  );
+  await expect(input).toHaveValue("I have 45 minutes on Thursday.");
+  await expect(coachTask(page)).toHaveText("Build my lifting plan");
   expect(
     await page.evaluate(
       () => (window as unknown as StreamWindow).coachRequests.length,
@@ -181,9 +179,8 @@ test("lifting starters preserve a written draft and don't submit or disturb an a
   await expect(
     page.getByText("We can review one priority.", { exact: true }),
   ).toBeVisible();
-  await expect(input).toHaveValue(
-    `I have 45 minutes on Thursday.\n\n${liftingPrompt("plan")}`,
-  );
+  await expect(input).toHaveValue("I have 45 minutes on Thursday.");
+  await expect(coachTask(page)).toHaveText("Build my lifting plan");
 });
 
 test("Coach brief reviews show every field and save with reversible account-scoped changes", async ({

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   LoaderCircle,
   Mic,
+  X,
   CalendarDays,
   Table2,
 } from "@/components/ui/icons";
@@ -25,16 +26,15 @@ import { consumeActivityPhoto } from "@/lib/activity-photo-client";
 import {
   imageCoachPrompt,
   activityLoggingPrompt,
-  sleepLoggingPrompt,
   type UserImage,
 } from "@/lib/images";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { CheckinDialog } from "./health";
-import { CoachOpening } from "./coach-opening";
 import { CoachMemoryBook } from "./coach-memory";
 import { LiftingVideoDialog } from "./lifting-video-upload";
 import { QuickCapture } from "./quick-capture";
+import { coachTasks, taskMessage, type CoachTask } from "@/lib/coach-tasks";
 import { VoiceCheckin } from "./voice-checkin";
 import { useVoiceEnabled, type SaveResult } from "@/lib/use-voice-checkin";
 import { CoachTurn, type Turn } from "./coach-turn";
@@ -47,11 +47,7 @@ import {
 } from "./coach-queue";
 import { CoachImageTools } from "./coach-image-tools";
 import { CoachOptions } from "./coach-options";
-import {
-  ComposerAttachments,
-  ComposerQuickActions,
-  ComposerReconnect,
-} from "./coach-composer";
+import { ComposerAttachments, ComposerReconnect } from "./coach-composer";
 import { WhistleIcon } from "./ui/journal-icons";
 export function TrainingAgent({
   journal,
@@ -64,6 +60,7 @@ export function TrainingAgent({
   initialCardioLog = false,
   initialActivityPhotoLog = false,
   initialTrainingPrompt,
+  initialTask,
   initialVideoReview = false,
   initialCapture = false,
   initialVoice = false,
@@ -79,18 +76,22 @@ export function TrainingAgent({
   initialCardioLog?: boolean;
   initialActivityPhotoLog?: boolean;
   initialTrainingPrompt?: string;
+  initialTask?: CoachTask;
   initialVideoReview?: boolean;
   initialCapture?: boolean;
   initialVoice?: boolean;
   initialMemories?: "memories" | "plans";
 }) {
-  const entryPrompt = initialSleepLog
-    ? sleepLoggingPrompt(Boolean(initialPhotoId))
+  const entryPrompt = initialTrainingPrompt ?? "";
+  const entryTask = initialSleepLog
+    ? coachTasks.sleep(Boolean(initialPhotoId))
     : initialCardioLog && !initialActivityPhotoLog
-      ? activityLoggingPrompt(Boolean(initialPhotoId))
-      : (initialTrainingPrompt ?? "");
+      ? coachTasks.activity(Boolean(initialPhotoId))
+      : (initialTask ?? null);
   const [turns, setTurns] = useState<Turn[]>([]),
     [message, setMessage] = useState(entryPrompt),
+    // What Coach is asked to do with the message; shown as a label, not text.
+    [task, setTask] = useState<CoachTask | null>(entryTask),
     [error, setError] = useState("");
   const [clear, setClear] = useState(false);
   const [acting, setActing] = useState<string | null>(null),
@@ -177,6 +178,10 @@ export function TrainingAgent({
     if (initialMemories) {
       setMemoriesOpen(true);
       setMemoryTab(initialMemories);
+    }
+    if (entryTask) {
+      setTask(entryTask);
+      setView("conversation");
     }
     if (entryPrompt) {
       setView("conversation");
@@ -307,7 +312,7 @@ export function TrainingAgent({
             if (queueSize.current >= MAX_QUEUED_MESSAGES) {
               setPhotoIds((ids) => [...new Set([...ids, image.id])]);
               setImageDetails((details) => ({ ...details, [image.id]: image }));
-              setMessage((current) => current || activityLoggingPrompt(true));
+              setTask(coachTasks.activity(true));
               throw Error(
                 "Your photo is saved and attached. Send it once Coach has room in the queue.",
               );
@@ -325,12 +330,13 @@ export function TrainingAgent({
           submittedDraft.current = null;
           setPhotoIds((ids) => [...new Set([...ids, image.id])]);
           setImageDetails((details) => ({ ...details, [image.id]: image }));
-          setMessage(
+          // Keep a task the entry link already chose, such as logging sleep.
+          setTask(
             (current) =>
-              current ||
+              current ??
               (initialCardioLog
-                ? activityLoggingPrompt(true)
-                : imageCoachPrompt(image.category)),
+                ? coachTasks.activity(true)
+                : coachTasks.photo(image.category)),
           );
         }
       })
@@ -422,7 +428,7 @@ export function TrainingAgent({
   const send = (provided?: string) => {
     const question =
       provided?.trim() ||
-      message.trim() ||
+      taskMessage(task, message) ||
       (photoIds.length
         ? imageCoachPrompt(
             photoIds.every((id) => imageDetails[id]?.category === "food")
@@ -448,6 +454,7 @@ export function TrainingAgent({
     const job = queuedMessage(crypto.randomUUID(), question, [...photoIds]);
     enqueue(job);
     setMessage("");
+    if (!provided) setTask(null);
     setPhotoIds([]);
     setImageDetails({});
     setView("conversation");
@@ -540,22 +547,6 @@ export function TrainingAgent({
       </div>
     ) : null;
   }
-  const opening =
-    connection?.enabled &&
-    journal.status === "synced" &&
-    !pending &&
-    !initialPhotoId &&
-    !initialSleepLog &&
-    !initialCardioLog ? (
-      <CoachOpening
-        key={`${accountId}:${today()}`}
-        journal={journal}
-        date={today()}
-        compact={turns.length > 0 || Boolean(journal.state?.activeWorkout)}
-        disabled={busy || Boolean(acting) || uploading}
-        onDiscuss={ask}
-      />
-    ) : null;
   return (
     <div className="agent-page">
       <header className="coach-header">
@@ -638,12 +629,12 @@ export function TrainingAgent({
             );
             return;
           }
-          draft(
-            imageCoachPrompt(
-              "food",
+          setTask(
+            coachTasks.mealPhotos(
               photoIds.length + (Array.isArray(file) ? file.length : 1),
             ),
           );
+          setView("conversation");
           void attach(file, "meal-photo");
         }}
       />
@@ -672,7 +663,6 @@ export function TrainingAgent({
           </section>
         ) : (
           <>
-            {turns.length > 0 && opening}
             {(turns.length > 1 || reviewCount > 0) && (
               <div className="coach-thread-tools">
                 {reviewCount > 0 ? (
@@ -746,8 +736,6 @@ export function TrainingAgent({
               <div className="conversation-content" ref={content}>
                 {!turns.length && (
                   <div className="coach-start">
-                    <h2>What’s on your mind today?</h2>
-                    <p>Ask a question, or record food, sleep or training.</p>
                     {journal.state?.activeWorkout && (
                       <div className="notice">
                         <div>
@@ -761,7 +749,6 @@ export function TrainingAgent({
                         </Button>
                       </div>
                     )}
-                    {opening}
                     <div className="agent-prompts">
                       {[
                         {
@@ -862,6 +849,18 @@ export function TrainingAgent({
               <label className="sr-only" htmlFor="training-message">
                 Message your coach
               </label>
+              {task && (
+                <div className="composer-task">
+                  <span>{task.label}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove: ${task.label}`}
+                    onClick={() => setTask(null)}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
               <textarea
                 id="training-message"
                 ref={input}
@@ -874,7 +873,10 @@ export function TrainingAgent({
                   submittedDraft.current = null;
                   setMessage(e.target.value);
                 }}
-                placeholder="Ask anything, or tell me about your day…"
+                placeholder={
+                  task?.placeholder ??
+                  "Ask anything, or tell me about your day…"
+                }
                 onKeyDown={(e) => {
                   if (
                     e.key === "Enter" &&
@@ -891,12 +893,6 @@ export function TrainingAgent({
                 Press Enter to send. Use Shift+Enter for a new line.
               </span>
               <div className="composer-actions">
-                <ComposerQuickActions
-                  disabled={uploading || loadingImage}
-                  hasText={Boolean(message.trim())}
-                  photoCount={photoIds.length}
-                  onDraft={draft}
-                />
                 <div className="composer-send-controls">
                   <Button
                     type="button"
@@ -919,7 +915,7 @@ export function TrainingAgent({
                       uploading ||
                       queue.length >= MAX_QUEUED_MESSAGES ||
                       photoIds.length > 4 ||
-                      (!message.trim() && !photoIds.length)
+                      (!message.trim() && !photoIds.length && !task)
                     }
                   >
                     <Send size={17} />
@@ -950,7 +946,11 @@ export function TrainingAgent({
                   onClose={() => setToolsOpen(false)}
                   onLogActivity={() => {
                     setToolsOpen(false);
-                    draft(activityLoggingPrompt(photoIds.length > 0));
+                    setTask(coachTasks.activity(photoIds.length > 0));
+                    setView("conversation");
+                    requestAnimationFrame(() =>
+                      input.current?.focus({ preventScroll: true }),
+                    );
                   }}
                   onReviewVideo={() => {
                     setToolsOpen(false);

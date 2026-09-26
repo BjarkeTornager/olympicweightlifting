@@ -1,4 +1,10 @@
-import { test, expect, browserUser, openJournalArea } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  openJournalArea,
+  coachTask,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -243,9 +249,10 @@ test("Photo and sleep entry links preserve a running turn and the next draft; le
     .getByRole("button", { name: "Health history", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Log sleep with Coach" }).click();
-  await expect(composer).toHaveValue(/^Keep this next draft\n\n/);
-  await expect(composer).toHaveValue(/sleep/);
+  await page.getByRole("button", { name: "Log sleep", exact: true }).click();
+  // The draft stays as typed; the sleep request is a label, not pasted text.
+  await expect(composer).toHaveValue("Keep this next draft");
+  await expect(coachTask(page)).toHaveText("Logging sleep");
   await openJournalArea(page, "Food");
   // Simulate the catalog's exact in-site photo link, with no document reload.
   await page.evaluate((id) => {

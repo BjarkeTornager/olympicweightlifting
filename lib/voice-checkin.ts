@@ -8,6 +8,8 @@ import { localClock } from "./agent/time-context";
 // fixed here on the server. Saving goes through Coach, never through Gemini.
 export const VOICE_MODEL =
   process.env.VOICE_MODEL || "gemini-3.8-live-extended-thinking";
+// A prebuilt Gemini voice chosen to sound like a coach at the platform.
+export const VOICE_NAME = process.env.VOICE_NAME || "Orus";
 export const VOICE_SESSION_MINUTES = 10;
 export const VOICE_SOCKET_URL =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
@@ -61,7 +63,7 @@ export function voiceInstruction(
   clock: ReturnType<typeof localClock>,
   name?: string,
 ) {
-  return `You are the athlete's weightlifting coach doing a short spoken end-of-day check-in${name ? ` with ${name}` : ""}. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
+  return `You are the athlete's Olympic weightlifting coach doing a short spoken end-of-day check-in${name ? ` with ${name}` : ""}. Sound like a real coach at the platform: warm, confident, direct and energetic, with short natural sentences, genuine encouragement for good work and calm matter-of-factness about misses. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 
 It is ${clock.time} on ${clock.date} (${clock.timezone}).
 Already recorded for ${context.date}:
@@ -122,6 +124,9 @@ export function voiceSetup(instruction: string) {
     model: `models/${VOICE_MODEL}`,
     generationConfig: {
       responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } },
+      },
       // Extended thinking requires a level; low keeps spoken replies prompt.
       // The standard Live model rejects the setting.
       ...(VOICE_MODEL.includes("extended-thinking")

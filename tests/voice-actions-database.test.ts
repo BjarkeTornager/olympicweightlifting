@@ -114,7 +114,7 @@ test(
             date: today,
             hours: 7.5,
           });
-          assert.ok(sleep.ok && sleep.saveId);
+          assert.ok(sleep.ok && "saveId" in sleep && sleep.saveId);
           assert.equal(
             (await readJournal(a)).state.health.checkins[0].sleepHours,
             7.5,
@@ -210,7 +210,7 @@ test(
             sessionMinutes: 75,
             experience: "developing",
           });
-          assert.ok(saved.ok);
+          assert.ok(saved.ok && "detail" in saved);
           assert.match(saved.detail, /2,350 kcal a day/);
           const { state } = await readJournal(a);
           assert.equal(state.profile.body?.targetWeightKg, 81);
@@ -223,6 +223,110 @@ test(
               targetWeightKg: 80,
             }),
           );
+        },
+      );
+
+      await t.test(
+        "the coach reads the journal and corrects meals and workouts in place",
+        async () => {
+          const a = await user();
+          const item = (name: string, calories: number) => ({
+            name,
+            portion: "1 serving",
+            calories,
+            protein_g: 10,
+            carbs_g: 20,
+            fat_g: 5,
+          });
+          const meal = {
+            summary: "Brunch",
+            date: today,
+            meal_type: "breakfast",
+            name: "Brunch",
+            items: [item("Eggs", 200), item("Bread", 250)],
+          };
+          assert.ok((await run(a, "log_meal", meal)).ok);
+          const journal = await run(a, "read_journal", {
+            from: today,
+            to: today,
+          });
+          assert.ok(journal.ok && "data" in journal);
+          const data = journal.data as {
+            meals: { meal_id: string; items: unknown[] }[];
+          };
+          const mealId = data.meals[0].meal_id;
+          // "I also had sausages and yogurt" adds to the same meal.
+          const updated = await run(a, "update_meal", {
+            ...meal,
+            summary: "Added sausages and yogurt to brunch",
+            meal_id: mealId,
+            items: [...meal.items, item("Sausages", 180), item("Yogurt", 120)],
+          });
+          assert.ok(updated.ok);
+          let state = (await readJournal(a)).state;
+          assert.equal(state.nutrition.meals.length, 1);
+          assert.deepEqual(
+            state.nutrition.meals[0].items.map((i) => i.name),
+            ["Eggs", "Bread", "Sausages", "Yogurt"],
+          );
+          const extra = await run(a, "log_meal", {
+            ...meal,
+            name: "Duplicate",
+          });
+          assert.ok(extra.ok);
+          const duplicate = (await readJournal(a)).state.nutrition.meals.find(
+            (m) => m.name === "Duplicate",
+          )!;
+          assert.ok(
+            (
+              await run(a, "delete_meal", {
+                summary: "Remove duplicate",
+                meal_id: duplicate.id,
+              })
+            ).ok,
+          );
+          state = (await readJournal(a)).state;
+          assert.deepEqual(
+            state.nutrition.meals.map((m) => m.name),
+            ["Brunch"],
+          );
+
+          assert.ok((await run(a, "log_training", cleanAndJerk)).ok);
+          const session = (await readJournal(a)).state.sessions[0];
+          const corrected = await run(a, "update_training", {
+            summary: "The last set was 85, not 80",
+            session_id: session.id,
+            title: "Clean & jerk",
+            exercises: [
+              {
+                exercise: "clean_and_jerk",
+                sets: [40, 50, 60, 85].map((w) => ({
+                  weight_kg: w,
+                  reps: 2,
+                  made: true,
+                })),
+              },
+            ],
+          });
+          assert.ok(corrected.ok);
+          assert.deepEqual(
+            (await readJournal(a)).state.sessions[0].exercises[0].sets.map(
+              (x) => x.weight,
+            ),
+            [40, 50, 60, 85],
+          );
+          await assert.rejects(
+            run(a, "update_meal", { ...meal, meal_id: crypto.randomUUID() }),
+            /not in the journal/,
+          );
+          await assert.rejects(
+            run(a, "read_journal", { from: "2026-08-01", to: today }),
+            /14 days/,
+          );
+          const recall = await run(a, "recall_conversations", {
+            query: "brunch",
+          });
+          assert.ok(recall.ok && "data" in recall);
         },
       );
 

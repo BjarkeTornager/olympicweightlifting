@@ -10,6 +10,8 @@ const statusText = {
   connecting: "Connecting…",
   listening: "Listening",
   speaking: "Coach is speaking",
+  reconnecting: "Reconnecting… the conversation carries on",
+  paused: "Paused while you were away",
   ended: "Call ended. Everything saved is in Coach, with Undo.",
   failed: "",
 };
@@ -43,6 +45,11 @@ export function VoiceCheckin({
     if (viewfinder.current) viewfinder.current.srcObject = camera;
   }, [camera]);
   const live = voice.status === "listening" || voice.status === "speaking";
+  const inCall =
+    live || ["connecting", "reconnecting", "paused"].includes(voice.status);
+  const receipts = voice.lines.filter((l) => l.role === "save");
+  const saved = receipts.filter((r) => r.state === "saved").length;
+  const failed = receipts.filter((r) => r.state === "failed").length;
   const transcript = useRef<HTMLDivElement>(null);
   useEffect(() => {
     transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
@@ -94,36 +101,45 @@ export function VoiceCheckin({
       </p>
       {voice.lines.length > 0 && (
         <div className="voice-transcript" ref={transcript} aria-live="polite">
-          {voice.lines.map((line, i) => (
-            <p key={i} className={line.role}>
-              {line.text}
-            </p>
-          ))}
-        </div>
-      )}
-      {voice.saves.length > 0 && (
-        <ul className="voice-saves" aria-label="Saved from this call">
-          {voice.saves.map((save) => (
-            <li key={save.id} className={save.state}>
-              {save.state === "saving" ? (
-                <LoaderCircle size={16} className="spin" />
-              ) : save.state === "saved" ? (
-                <Check size={16} />
-              ) : null}
-              <span>
-                <strong>{save.label}</strong>{" "}
-                {save.state === "saving"
+          {voice.lines.map((line, i) =>
+            line.role === "save" ? (
+              <p key={line.id} className={`voice-receipt ${line.state}`}>
+                {line.state === "saving" ? (
+                  <LoaderCircle size={14} className="spin" aria-hidden="true" />
+                ) : line.state === "saved" ? (
+                  <Check size={14} aria-hidden="true" />
+                ) : null}
+                {line.label}{" "}
+                {line.state === "saving"
                   ? "saving…"
-                  : save.state === "saved"
+                  : line.state === "saved"
                     ? "saved"
                     : "not saved yet"}
-              </span>
-            </li>
-          ))}
-        </ul>
+              </p>
+            ) : (
+              <p key={i} className={line.role}>
+                {line.text}
+              </p>
+            ),
+          )}
+        </div>
+      )}
+      {receipts.length > 0 && (
+        <p className="voice-summary">
+          {saved} saved{failed ? ` · ${failed} not saved yet` : ""}
+        </p>
       )}
       <div className="voice-actions">
-        {live || voice.status === "connecting" ? (
+        {voice.status === "paused" ? (
+          <>
+            <Button onClick={voice.resume}>
+              <Mic size={18} /> Continue
+            </Button>
+            <Button variant="danger" onClick={voice.stop}>
+              <PhoneOff size={18} /> End
+            </Button>
+          </>
+        ) : inCall ? (
           <>
             <Button
               variant="secondary"
@@ -144,7 +160,7 @@ export function VoiceCheckin({
               <Mic size={18} />
               {voice.status === "idle" ? "Start talking" : "Talk again"}
             </Button>
-            {voice.saves.length > 0 && (
+            {receipts.length > 0 && (
               <Button
                 variant="secondary"
                 onClick={() => {

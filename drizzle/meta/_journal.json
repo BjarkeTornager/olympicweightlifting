@@ -71,6 +71,13 @@
       "when": 1789850019381,
       "tag": "0009_quick_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790422346944,
+      "tag": "0010_voice_call_memory",
+      "breakpoints": true
     }
   ]
 }

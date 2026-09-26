@@ -15,6 +15,7 @@ import { actionSchema, type AgentAction } from "./action-schema";
 import {
   prepareDietTargets,
   prepareBodyGoals,
+  prepareDeleteMeal,
   prepareCardio,
   prepareCheckin,
   prepareMeal,
@@ -160,6 +161,8 @@ function applyAction(
       return prepareMeal(next, action, currentDate);
     case "set_diet_targets":
       return prepareDietTargets(next, action);
+    case "delete_meal":
+      return prepareDeleteMeal(next, action);
     case "set_body_goals":
       return prepareBodyGoals(next, action, currentDate);
     case "save_routine":

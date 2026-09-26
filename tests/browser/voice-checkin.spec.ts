@@ -1,4 +1,5 @@
 import { test, expect, browserUser } from "./fixtures";
+import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
 import type { ActionPreview } from "../../lib/agent/actions";
 
@@ -108,11 +109,29 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
       },
     });
   });
+  // Transcripts are kept on the server for Coach's memory.
+  const transcripts: { entries: { role: string; text: string }[] }[] = [];
+  await context.route("**/api/voice/transcript", (r) => {
+    transcripts.push(r.request().postDataJSON());
+    return r.fulfill({ json: { saved: true } });
+  });
+  // A saved photo the coach can look at.
+  const savedPhoto = crypto.randomUUID();
+  const jpeg = await sharp({
+    create: { width: 64, height: 48, channels: 3, background: "#d9a86c" },
+  })
+    .jpeg()
+    .toBuffer();
+  await context.route(`**/api/images/${savedPhoto}`, (r) =>
+    r.fulfill({ body: jpeg, contentType: "image/jpeg" }),
+  );
+  const sessionBodies: Record<string, unknown>[] = [];
   let sessionBody: unknown = null;
   await context.route("**/api/voice/session", (r) =>
     r.request().method() === "GET"
       ? r.fulfill({ json: { enabled: true } })
       : ((sessionBody = r.request().postDataJSON()),
+        sessionBodies.push(r.request().postDataJSON()),
         r.fulfill({
           json: {
             url: socketUrl,
@@ -241,8 +260,9 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     }),
   );
   // Saved directly by the journal, without a second model in between.
-  const saves = dialog.getByRole("list", { name: "Saved from this call" });
-  await expect(saves).toHaveText(/Training\s+saved$/);
+  // The save shows in the conversation where it happened.
+  await expect(dialog.locator(".voice-receipt")).toHaveText(/Training\s+saved/);
+  await expect(dialog.locator(".voice-summary")).toHaveText("1 saved");
   expect(actions[0]).toMatchObject({ name: "log_training", args: workout });
   await expect
     .poll(() => received.find((m) => m.toolResponse))
@@ -313,6 +333,67 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   );
   await expect.poll(() => actions.length).toBe(2);
   expect(actions[1].seenPhotoIds).toEqual([photoId]);
+
+  // The coach can look at any saved photo, not just its label.
+  const sentImages = () =>
+    received.filter(
+      (m) =>
+        (m.realtimeInput as { video?: object } | undefined)?.video !==
+        undefined,
+    ).length;
+  const imagesBefore = sentImages();
+  server.send(
+    JSON.stringify({
+      toolCall: {
+        functionCalls: [
+          {
+            id: "call-view",
+            name: "view_photo",
+            args: { photo_id: savedPhoto },
+          },
+        ],
+      },
+    }),
+  );
+  await expect.poll(sentImages).toBe(imagesBefore + 1);
+  await expect
+    .poll(() =>
+      received.some(
+        (m) =>
+          JSON.stringify(m).includes("call-view") &&
+          JSON.stringify(m).includes(savedPhoto),
+      ),
+    )
+    .toBe(true);
+
+  // Google ends connections after a while; the call continues on a new one
+  // with the resumption handle, without starting the conversation again.
+  server.send(
+    JSON.stringify({
+      sessionResumptionUpdate: { newHandle: "resume-1", resumable: true },
+    }),
+  );
+  const setups = () => received.filter((m) => m.setup).length;
+  const starts = () =>
+    received.filter((m) =>
+      String((m.realtimeInput as { text?: string })?.text).startsWith(
+        "(The athlete started",
+      ),
+    ).length;
+  server.send(JSON.stringify({ goAway: { timeLeft: "5s" } }));
+  await expect.poll(setups).toBe(2);
+  expect(sessionBodies.at(-1)).toMatchObject({ resumeHandle: "resume-1" });
+  await expect(dialog.getByRole("status")).toHaveText(
+    /Listening|Coach is speaking/,
+  );
+  expect(starts()).toBe(1);
+  await expect
+    .poll(() =>
+      transcripts.some((t) =>
+        t.entries.some((e) => e.text === "Hi! Did you train today?"),
+      ),
+    )
+    .toBe(true);
 
   server.send(
     JSON.stringify({

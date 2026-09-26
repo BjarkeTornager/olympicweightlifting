@@ -91,6 +91,13 @@ test("voice instructions carry the date, the records and the save rules", () => 
   assert.deepEqual(names, [
     "log_training",
     "log_meal",
+    "update_meal",
+    "delete_meal",
+    "update_training",
+    "recall_conversations",
+    "read_journal",
+    "list_photos",
+    "view_photo",
     "log_sleep",
     "log_activity",
     "set_goals",
@@ -100,6 +107,12 @@ test("voice instructions carry the date, the records and the save rules", () => 
     "take_photo",
     "end_check_in",
   ]);
+  // Long calls continue across connections instead of ending.
+  assert.deepEqual(setup.contextWindowCompression, { slidingWindow: {} });
+  assert.deepEqual(setup.sessionResumption, {});
+  assert.deepEqual(voiceSetup(text, "handle-1").sessionResumption, {
+    handle: "handle-1",
+  });
   assert.deepEqual(setup.generationConfig.responseModalities, ["AUDIO"]);
 });
 

@@ -219,6 +219,9 @@ const singleActionSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z
+    .object({ kind: z.literal("delete_meal"), mealId: z.string().uuid() })
+    .strict(),
+  z
     .object({ kind: z.literal("set_diet_targets"), targets: dietTargetsSchema })
     .strict(),
   z
@@ -312,6 +315,7 @@ export const actionToolSchema = z
       "update_meal",
       "set_diet_targets",
       "set_body_goals",
+      "delete_meal",
       "record_session",
       "log_workout_progress",
       "merge_sessions",

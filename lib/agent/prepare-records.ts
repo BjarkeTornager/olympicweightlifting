@@ -72,6 +72,21 @@ export function prepareMeal(
   };
 }
 
+export function prepareDeleteMeal(
+  next: JournalState,
+  action: ActionOf<"delete_meal">,
+): PreparedChange {
+  const meal = next.nutrition.meals.find((m) => m.id === action.mealId);
+  if (!meal) throw Error("That meal is not in your food journal.");
+  next.nutrition.meals = next.nutrition.meals.filter((m) => m.id !== meal.id);
+  reopenFoodDays(next, meal.date);
+  return {
+    meal,
+    title: "Delete a meal",
+    detail: `Removes “${meal.name}” from ${meal.date}. Its photos stay in your library.`,
+  };
+}
+
 export function prepareDietTargets(
   next: JournalState,
   action: ActionOf<"set_diet_targets">,

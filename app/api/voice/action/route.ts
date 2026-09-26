@@ -46,16 +46,15 @@ export async function POST(request: Request) {
         ),
         args: z.record(z.string(), z.unknown()),
         timezone,
-        seenPhotoIds: z.array(z.string().uuid()).max(8).default([]),
+        seenPhotoIds: z.array(z.string().uuid()).max(40).default([]),
       })
       .strict()
       .parse(await readJson(request, 32000));
     const today = localClock(new Date(), input.timezone).date;
     try {
-      return Response.json(
-        await runVoiceTool(user.id, { ...input, today }),
-        { headers: { "Cache-Control": "no-store" } },
-      );
+      return Response.json(await runVoiceTool(user.id, { ...input, today }), {
+        headers: { "Cache-Control": "no-store" },
+      });
     } catch (error) {
       if (!(error instanceof Error) || error instanceof ApiError) throw error;
       if (!(error instanceof z.ZodError) && error.constructor !== Error)

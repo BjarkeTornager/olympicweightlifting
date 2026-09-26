@@ -293,6 +293,30 @@ export const rateLimits = pgTable("request_limits", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
+// Spoken conversations with Coach, kept so Coach can recall them later.
+export const voiceCalls = pgTable(
+  "voice_calls",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull().default("checkin"),
+    transcript: jsonb("transcript")
+      .$type<{ role: "you" | "coach"; text: string }[]>()
+      .notNull(),
+    // The transcript as plain text, for search.
+    content: text("content").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("voice_calls_user_date_idx").on(t.userId, t.startedAt)],
+);
+
 export const agentTurns = pgTable(
   "agent_turns",
   {

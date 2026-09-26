@@ -36,7 +36,8 @@ export type LiveEvent =
   | { type: "turnComplete" }
   | { type: "toolCall"; calls: FunctionCall[] }
   | { type: "cancelled"; ids: string[] }
-  | { type: "goAway" };
+  | { type: "goAway" }
+  | { type: "resumeHandle"; handle: string };
 
 type ServerMessage = {
   setupComplete?: object;
@@ -50,6 +51,7 @@ type ServerMessage = {
   toolCall?: { functionCalls?: FunctionCall[] };
   toolCallCancellation?: { ids?: string[] };
   goAway?: object;
+  sessionResumptionUpdate?: { newHandle?: string; resumable?: boolean };
 };
 
 export function liveEvents(raw: string): LiveEvent[] {
@@ -73,21 +75,32 @@ export function liveEvents(raw: string): LiveEvent[] {
   if (message.toolCallCancellation?.ids?.length)
     events.push({ type: "cancelled", ids: message.toolCallCancellation.ids });
   if (message.goAway) events.push({ type: "goAway" });
+  const resume = message.sessionResumptionUpdate;
+  if (resume?.resumable && resume.newHandle)
+    events.push({ type: "resumeHandle", handle: resume.newHandle });
   return events;
 }
 
 export type Line = { role: "you" | "coach"; text: string };
+// A save shown in the conversation where it happened.
+export type Receipt = {
+  role: "save";
+  id: string;
+  label: string;
+  state: "saving" | "saved" | "failed";
+};
+export type Entry = Line | Receipt;
 
 // Transcription arrives in fragments. Consecutive fragments from the same
 // speaker extend the current line unless a completed turn closed it.
 export function appendLine(
-  lines: Line[],
+  lines: Entry[],
   role: Line["role"],
   text: string,
   fresh = false,
-) {
+): Entry[] {
   const last = lines.at(-1);
-  if (last?.role === role && !fresh)
+  if (last && last.role === role && !fresh)
     return [...lines.slice(0, -1), { role, text: last.text + text }];
   return [...lines, { role, text: text.trimStart() }];
 }

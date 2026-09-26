@@ -293,3 +293,40 @@ test("PCM survives the base64 round trip", () => {
     [0, 16384, -16384, 32767, -32768],
   );
 });
+
+test("background noise does not interrupt the coach, but speaking does", async () => {
+  const { createBargeInGate } = await import("../lib/voice-live");
+  const chunk = (amplitude: number) =>
+    Int16Array.from({ length: 1600 }, (_, i) =>
+      Math.round(amplitude * 32767 * Math.sin(i / 3)),
+    );
+  const silent = (out: Int16Array[]) =>
+    out.length === 1 && out[0].every((x) => x === 0);
+  const gate = createBargeInGate();
+  // A quiet room while the coach is silent passes straight through.
+  for (let i = 0; i < 30; i++)
+    assert.deepEqual(gate(chunk(0.01), false), [chunk(0.01)]);
+  // While the coach speaks, steady background noise is silenced.
+  for (let i = 0; i < 10; i++) assert.ok(silent(gate(chunk(0.015), true)));
+  // A short clang (two chunks) is silenced too.
+  assert.ok(silent(gate(chunk(0.5), true)));
+  assert.ok(silent(gate(chunk(0.5), true)));
+  assert.ok(silent(gate(chunk(0.01), true)));
+  // Sustained speech opens the gate and keeps its beginning.
+  assert.ok(silent(gate(chunk(0.2), true)));
+  assert.ok(silent(gate(chunk(0.2), true)));
+  const opened = gate(chunk(0.2), true);
+  assert.equal(opened.length, 3);
+  assert.ok(opened.every((c) => c.some((x) => x !== 0)));
+  // The coach's own voice echoing back is not the athlete, even when
+  // sustained; the athlete must be clearly louder than the playback.
+  const echoGate = createBargeInGate();
+  for (let i = 0; i < 10; i++)
+    assert.ok(silent(echoGate(chunk(0.08), true, 0.2)));
+  assert.ok(silent(echoGate(chunk(0.5), true, 0.2)));
+  assert.ok(silent(echoGate(chunk(0.5), true, 0.2)));
+  assert.equal(echoGate(chunk(0.5), true, 0.2).length, 3);
+  // Once open, everything passes until the coach stops.
+  assert.deepEqual(gate(chunk(0.01), true), [chunk(0.01)]);
+  assert.deepEqual(gate(chunk(0.01), false), [chunk(0.01)]);
+});

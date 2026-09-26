@@ -123,3 +123,56 @@ export function appendLine(
     return [...lines.slice(0, -1), { role, text: last.text + text }];
   return [...lines, { role, text: text.trimStart() }];
 }
+
+// While the coach is speaking, background noise, distant voices and the
+// coach's own voice echoing from the speaker must not interrupt it. The
+// microphone is only let through when sound stands clearly above both the
+// room's noise floor and the coach's current output level for about a third
+// of a second, like someone speaking to the phone; otherwise the model hears
+// silence. The start of that speech is kept, not clipped. When the coach is
+// quiet, everything passes as normal.
+export function createBargeInGate({
+  holdChunks = 3,
+  ratio = 3,
+  minLevel = 0.02,
+  // How loud, relative to the coach's own playback, the microphone must be.
+  // Echo reaching the microphone is far quieter than the playback (the
+  // phone's echo cancellation removes most of it); someone speaking to the
+  // phone is about as loud or louder.
+  echoRatio = 0.6,
+} = {}) {
+  let floor = 0.005;
+  let loud: Int16Array[] = [];
+  let open = false;
+  const level = (pcm: Int16Array) => {
+    let sum = 0;
+    for (const x of pcm) sum += (x / 32768) ** 2;
+    return Math.sqrt(sum / Math.max(1, pcm.length));
+  };
+  // coachLevel: RMS of the coach's audio being played right now (0–1).
+  return (
+    pcm: Int16Array,
+    coachSpeaking: boolean,
+    coachLevel = 0,
+  ): Int16Array[] => {
+    const rms = level(pcm);
+    if (!coachSpeaking) {
+      // Learn the room's background level while nobody is being gated.
+      floor = floor * 0.95 + Math.min(rms, 0.2) * 0.05;
+      open = false;
+      loud = [];
+      return [pcm];
+    }
+    if (open) return [pcm];
+    if (rms > Math.max(minLevel, floor * ratio, coachLevel * echoRatio)) {
+      loud.push(pcm);
+      if (loud.length >= holdChunks) {
+        open = true;
+        const speech = loud;
+        loud = [];
+        return speech;
+      }
+    } else loud = [];
+    return [new Int16Array(pcm.length)];
+  };
+}

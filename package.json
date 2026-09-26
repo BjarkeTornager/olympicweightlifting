@@ -13,6 +13,7 @@
     "lint": "eslint app components lib tests scripts/migrate.ts scripts/gepa/runner.ts scripts/jev scripts/evals",
     "test": "tsx --test tests/*.test.ts",
     "eval": "node --import tsx scripts/evals/run.ts",
+    "eval:barge-in": "node --import tsx scripts/evals/barge-in.ts",
     "benchmark:jev": "node --import tsx scripts/jev/benchmark.ts",
     "benchmark:jev:workflows": "node --import tsx scripts/jev/workflow-collect.ts",
     "benchmark:jev:audit": "node --import tsx scripts/jev/workflow-audit.ts",

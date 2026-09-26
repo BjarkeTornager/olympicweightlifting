@@ -22,6 +22,10 @@ The design follows current practice for evaluating tool-using agents:
 - **Scripted regressions, simulated coverage.** Regression scenarios use scripted athlete turns taken from real failures, so they are repeatable. A few capability scenarios use a simulated athlete with a goal; simulated users are known to differ from real ones ([Lost in Simulation](https://arxiv.org/abs/2601.17087)), so their results guide rather than gate.
 - **Voice specifics.** Voice failures are mostly multi-turn, so each voice scenario is a whole conversation. The simulated athlete pauses briefly after the coach stops, like a person on a call, and never talks while a check or save is running. Time from the athlete's turn to the coach's first audio is recorded ([EVA-Bench](https://arxiv.org/abs/2605.13841)).
 
+## Interruptions (audio)
+
+`npm run eval:barge-in -- --live [--k 3]` streams sound into the real Gemini Live model while the coach gives a long answer and records whether it stops: the coach's own voice echoing back at 40 %, distant chatter, the athlete speaking to the phone, and a short bang. Each case runs `k` times with the app's noise gate (`createBargeInGate`) and without it. It passes when, with the gate, echo, chatter and the bang never interrupt and the athlete always does. Baseline (26 September, k = 3): without the gate echo and chatter interrupted 3/3; with it 0/3, while the athlete still interrupted 3/3.
+
 ## Scenarios
 
 `regression` scenarios reproduce failures seen in real use on 26 September 2026 and must pass every trial. `capability` scenarios describe behaviour the coach should reach; a failure there is information, not a broken build.

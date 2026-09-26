@@ -88,7 +88,17 @@ test("voice instructions carry the date, the records and the save rules", () => 
   const setup = voiceSetup(text);
   assert.equal(setup.model, "models/gemini-3.8-live-extended-thinking");
   const names = setup.tools[0].functionDeclarations.map((f) => f.name);
-  assert.deepEqual(names, ["save_to_journal", "end_check_in"]);
+  assert.deepEqual(names, [
+    "log_training",
+    "log_meal",
+    "log_sleep",
+    "log_activity",
+    "clear_unfinished_workout",
+    "undo_save",
+    "open_camera",
+    "take_photo",
+    "end_check_in",
+  ]);
   assert.deepEqual(setup.generationConfig.responseModalities, ["AUDIO"]);
 });
 

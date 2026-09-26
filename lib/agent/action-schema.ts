@@ -245,6 +245,7 @@ const singleActionSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("finish_workout") }).strict(),
+  z.object({ kind: z.literal("discard_workout") }).strict(),
   z
     .object({
       kind: z.literal("start_programme"),
@@ -311,6 +312,7 @@ export const actionToolSchema = z
       "log_sets",
       "correct_workout_set",
       "finish_workout",
+      "discard_workout",
       "start_programme",
       "repeat_session",
       "save_routine",
@@ -429,6 +431,7 @@ export const loggingKinds = [
   "log_sets",
   "correct_workout_set",
   "finish_workout",
+  "discard_workout",
   "record_bundle",
 ] as const;
 export const loggingToolSchema = actionToolSchema

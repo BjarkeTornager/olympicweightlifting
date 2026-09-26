@@ -93,5 +93,5 @@ export function useCoachConnection(
   const reconnect = () => {
     if (!ready.current) void refresh();
   };
-  return { connection, loading, error, headers, reconnect };
+  return { connection, loading, error, headers, reconnect, refresh };
 }

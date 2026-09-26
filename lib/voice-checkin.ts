@@ -1,4 +1,7 @@
 import type { JournalState, Workout } from "./model";
+import { EXERCISES } from "./domain";
+import { cardioActivities } from "./cardio";
+import { foodGroups } from "./nutrition";
 import { nextTraining } from "./next-training";
 import { formatSleepDuration } from "./health";
 import { localClock } from "./agent/time-context";
@@ -70,7 +73,7 @@ Already recorded for ${context.date}:
 - Food: ${context.food}
 - Sleep last night: ${context.sleep}
 - Training: ${context.training}
-${context.unfinishedWorkout ? `- An unfinished workout is open: ${context.unfinishedWorkout}\n` : ""}${context.nextPlanned ? `- Next planned session in the programme: ${context.nextPlanned}\n` : ""}
+${context.unfinishedWorkout ? `- An unfinished workout is open: ${context.unfinishedWorkout}. It does not stop you logging other training.\n` : ""}${context.nextPlanned ? `- Next planned session in the programme: ${context.nextPlanned}\n` : ""}
 How to run the check-in:
 - Open with one short, friendly line and your first question. Ask only about what is not recorded yet, one topic at a time: training, then food, then last night's sleep. Skip anything already recorded unless the athlete brings it up.
 - Keep every reply to one or two short sentences. This is a spoken conversation, not a report. No lectures, no nutrition advice unless asked.
@@ -78,36 +81,187 @@ How to run the check-in:
 - Food: ask what they ate and roughly how much. Plain descriptions are fine; do not ask for calories or grams.
 - Sleep: hours slept last night, optionally how rested they feel.
 - If a number is unclear or sounds implausible, ask once. Otherwise briefly repeat numbers back as you move on ("72 made, 75 missed twice, got it").
-- As soon as one topic is complete, call save_to_journal with a plain factual report of exactly what the athlete said for that topic, then continue the conversation while it saves. Never add sets, foods or amounts they did not say. Write the report in English, with dates relative to ${context.date} made explicit.
-- If saving fails, tell the athlete briefly that it is kept in Coach to retry, and carry on.
+- Before saving, make sure the details add up. If the numbers don't match (for example five sets but only four weights) or reps are missing, ask one short question. Never save a guess. Never add sets, foods or amounts they did not say.
+- As soon as one topic is complete, save it with the matching tool: log_training, log_meal, log_sleep or log_activity. Dates are explicit (today is ${context.date}; "last night" sleep belongs to today). Saves take about a second; wait for the result, then confirm in a few words and move on.
+- log_training: one call per workout with every exercise and set. finished is true unless the athlete says they are still training.
+- log_meal: estimate calories, protein, carbs and fat yourself from the foods and portions; never ask the athlete for numbers.
+- You can fix things yourself, but never change anything the athlete didn't ask about without saying so. Leave an old unfinished workout alone unless the athlete asks or a save is refused because of it; then tell them in one sentence and call clear_unfinished_workout (it saves any logged sets to history, or removes an empty draft), and save again. If the athlete corrects something you just saved, call undo_save with its save_id and save the corrected version. Never send the athlete to another screen to fix it.
+- If a save is refused for another reason, say briefly why in plain words and what you will do, then try once more with the fix.
+- Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids.
 - When everything is covered, say a short goodbye and call end_check_in. Also call it if the athlete says they are done.
 - Speak the athlete's language; default to English.`;
 }
+
+const text = (description?: string) => ({ type: "STRING", description });
+const number = (description?: string) => ({ type: "NUMBER", description });
+const summaryField = text(
+  "One short sentence of what the athlete reported, in their words, shown in their journal.",
+);
+const dateField = text("YYYY-MM-DD");
 
 export function voiceTools() {
   return [
     {
       functionDeclarations: [
         {
-          name: "save_to_journal",
+          name: "log_training",
           description:
-            "Record what the athlete reported for one topic (training, food or sleep). Coach saves it to the journal with Undo.",
-          behavior: "NON_BLOCKING",
+            "Save one workout the athlete reported: every exercise with its sets. Continues a workout already recorded for that date.",
           parameters: {
             type: "OBJECT",
             properties: {
-              topic: {
-                type: "STRING",
-                enum: ["training", "food", "sleep", "other"],
+              summary: summaryField,
+              date: dateField,
+              title: text("Short workout name, e.g. 'Clean & jerk'"),
+              finished: {
+                type: "BOOLEAN",
+                description: "False only if the athlete is still training.",
               },
-              report: {
-                type: "STRING",
-                description:
-                  "Factual summary of what the athlete said, e.g. 'Trained today (2026-09-25): snatch 72 kg x 2 made, 75 kg x 2 missed twice; back squat 110 kg 3 sets of 5.'",
+              exercises: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    exercise: text(
+                      `Catalogue id: ${EXERCISES.map((e) => e.id).join(", ")}. For anything else use custom:Name.`,
+                    ),
+                    sets: {
+                      type: "ARRAY",
+                      items: {
+                        type: "OBJECT",
+                        properties: {
+                          weight_kg: number(),
+                          reps: { type: "INTEGER" },
+                          made: {
+                            type: "BOOLEAN",
+                            description: "False for a missed lift.",
+                          },
+                        },
+                        required: ["weight_kg", "reps", "made"],
+                      },
+                    },
+                  },
+                  required: ["exercise", "sets"],
+                },
               },
             },
-            required: ["topic", "report"],
+            required: ["summary", "date", "title", "exercises"],
           },
+        },
+        {
+          name: "log_meal",
+          description:
+            "Save one meal with your own estimate of calories and macros per item.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: summaryField,
+              date: dateField,
+              meal_type: {
+                type: "STRING",
+                enum: ["breakfast", "lunch", "dinner", "snack"],
+              },
+              name: text("Short meal name"),
+              items: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    name: text(),
+                    portion: text("e.g. '2 slices', '300 g'"),
+                    calories: number(),
+                    protein_g: number(),
+                    carbs_g: number(),
+                    fat_g: number(),
+                    food_groups: {
+                      type: "ARRAY",
+                      items: { type: "STRING", enum: Object.keys(foodGroups) },
+                    },
+                    ingredients: {
+                      type: "ARRAY",
+                      items: { type: "STRING" },
+                      description:
+                        "Main ingredients the athlete named or you can see; leave out anything you would be guessing.",
+                    },
+                  },
+                  required: [
+                    "name",
+                    "portion",
+                    "calories",
+                    "protein_g",
+                    "carbs_g",
+                    "fat_g",
+                    "food_groups",
+                    "ingredients",
+                  ],
+                },
+              },
+              photo_ids: {
+                type: "ARRAY",
+                items: { type: "STRING" },
+                description: "Ids of photos taken in this call of this meal.",
+              },
+            },
+            required: ["summary", "date", "meal_type", "name", "items"],
+          },
+        },
+        {
+          name: "log_sleep",
+          description: "Save hours slept, on the date the athlete woke up.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: summaryField,
+              date: dateField,
+              hours: number(),
+            },
+            required: ["summary", "date", "hours"],
+          },
+        },
+        {
+          name: "log_activity",
+          description: "Save a walk, run, ride or other cardio activity.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: summaryField,
+              date: dateField,
+              activity: { type: "STRING", enum: [...cardioActivities] },
+              minutes: number(),
+              distance_km: number(),
+            },
+            required: ["summary", "date", "activity", "minutes"],
+          },
+        },
+        {
+          name: "clear_unfinished_workout",
+          description:
+            "Resolve the open unfinished workout: logged sets go to history, an empty draft is removed. Undoable.",
+          parameters: {
+            type: "OBJECT",
+            properties: { summary: summaryField },
+            required: ["summary"],
+          },
+        },
+        {
+          name: "undo_save",
+          description:
+            "Undo one save from this call, by the save_id it returned.",
+          parameters: {
+            type: "OBJECT",
+            properties: { save_id: text() },
+            required: ["save_id"],
+          },
+        },
+        {
+          name: "open_camera",
+          description:
+            "Open the phone camera so the athlete can show you their food.",
+        },
+        {
+          name: "take_photo",
+          description:
+            "Take the photo when the athlete says so. Returns its id; the image follows.",
         },
         {
           name: "end_check_in",

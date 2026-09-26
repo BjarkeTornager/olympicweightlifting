@@ -9,7 +9,7 @@ const security = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(self), geolocation=()",
+    value: "camera=(self), microphone=(self), geolocation=()",
   },
 ];
 // Login/callback must not list Google Maps hosts. Putting *.google.com on the

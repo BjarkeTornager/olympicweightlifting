@@ -28,6 +28,7 @@ import {
 } from "./prepare-plans";
 import {
   prepareFinishWorkout,
+  prepareDiscardWorkout,
   prepareLogSets,
   prepareMergeSessions,
   prepareRepeatSession,
@@ -141,6 +142,8 @@ function applyAction(
       return prepareLogSets(next, action, currentDate);
     case "finish_workout":
       return prepareFinishWorkout(next, currentDate);
+    case "discard_workout":
+      return prepareDiscardWorkout(next);
     case "start_programme":
       return prepareStartProgramme(next, action);
     case "repeat_session":

@@ -26,3 +26,14 @@ Today or Coach → **Check in by voice** → **Start talking**. Coach speaks fir
 - A real text-driven session against Google with the production key and setup: greeting by name, a correct training summary tool call, numbers read back, next topic, clean `end_check_in`. First audio 0.6–1 s after the athlete stops; about 5 s after a save while the tool result returns.
 
 Not yet verified: real speech on iPhone Safari/Home Screen app (echo from the speaker, gym noise, heard weights) and a save through real Coach in production.
+
+## Update: direct saves, fixes and camera (26 September, afternoon)
+
+The first real use showed the relay was the problem: the voice coach forwarded a summary to text Coach, which asked its own follow-up questions ("which load was repeated?"), each costing a full model turn, while an empty unfinished workout from 20 September blocked the save and Coach could only send the athlete to Train.
+
+- The voice coach now saves through `POST /api/voice/action` with structured tools (`log_training`, `log_meal`, `log_sleep`, `log_activity`, `clear_unfinished_workout`, `undo_save`). Each call becomes one ordinary journal action checked by the same change guards and saved with a Coach receipt and Undo (`[voice]` messages, labelled "From your voice check-in"). Server time per save is 20–90 ms in the database tests; there is no second model. A repeated call id returns the same save.
+- The voice coach resolves inconsistent numbers before saving and estimates meal nutrition and tags itself.
+- A finished session is no longer blocked by an unfinished workout from another date, for voice and text Coach. `discard_workout` clears an old draft only if it has no logged sets; otherwise `finish_workout` keeps the sets. The fixed Coach policy fingerprint was updated for this deliberate change.
+- "Take a photo of my food": `open_camera` shows a viewfinder in the call (`camera=(self)`), the shutter or `take_photo` saves a meal photo, sends the image to the coach, and `log_meal` can link it. Only photos seen in the call are accepted as meal sources.
+- Coach shows a blue Talk button in place of Send while the message is empty.
+- Voice: `VOICE_NAME=Algenib` in production.

@@ -1,5 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { privateFetch, privateRequestHeaders } from "./private-fetch";
 import {
   appendLine,
@@ -14,12 +20,22 @@ export type VoiceStatus =
   "idle" | "connecting" | "listening" | "speaking" | "ended" | "failed";
 export type VoiceSave = {
   id: string;
-  topic: string;
-  report: string;
+  label: string;
   state: "saving" | "saved" | "failed";
   detail?: string;
 };
-export type SaveResult = { ok: boolean; detail: string };
+type ActionResult =
+  | { ok: true; saveId?: string; title: string; detail: string }
+  | { ok: false; error: string };
+
+const saveLabels: Record<string, string> = {
+  log_training: "Training",
+  log_meal: "Meal",
+  log_sleep: "Sleep",
+  log_activity: "Activity",
+  clear_unfinished_workout: "Unfinished workout",
+  undo_save: "Undo",
+};
 type Session = {
   socket?: WebSocket;
   context: AudioContext;
@@ -32,22 +48,33 @@ type Session = {
   closed: boolean;
   lineClosed: boolean;
   timers: ReturnType<typeof setTimeout>[];
+  camera?: MediaStream;
+  // Photos the coach has seen in this call; they may be linked to a meal.
+  photos: string[];
+  send?: (message: object) => void;
 };
 
 // One spoken check-in. Audio goes straight between this device and Google
-// with a single-use token; every save is handed to Coach as a message.
+// with a single-use token; each save goes to this server's journal actions.
 export function useVoiceCheckin({
+  accountId,
   headers,
-  onSave,
+  onSaved,
+  video,
 }: {
+  accountId: string;
   headers: () => Record<string, string>;
-  onSave: (report: string) => Promise<SaveResult>;
+  onSaved: () => void;
+  // The viewfinder element photos are captured from.
+  video: RefObject<HTMLVideoElement | null>;
 }) {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [error, setError] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [saves, setSaves] = useState<VoiceSave[]>([]);
   const [muted, setMuted] = useState(false);
+  const [camera, setCamera] = useState<MediaStream | null>(null);
+  const [capturing, setCapturing] = useState(false);
   const mutedRef = useRef(false);
   const session = useRef<Session | null>(null);
 
@@ -57,6 +84,8 @@ export function useVoiceCheckin({
     s.closed = true;
     s.timers.forEach(clearTimeout);
     s.stream?.getTracks().forEach((t) => t.stop());
+    s.camera?.getTracks().forEach((t) => t.stop());
+    setCamera(null);
     s.sources.forEach((source) => source.stop());
     if (s.socket && s.socket.readyState <= WebSocket.OPEN) s.socket.close();
     void s.context.close();
@@ -97,6 +126,7 @@ export function useVoiceCheckin({
       closed: false,
       lineClosed: true,
       timers: [],
+      photos: [],
     };
     session.current = s;
     setStatus("connecting");
@@ -131,6 +161,7 @@ export function useVoiceCheckin({
         if (socket.readyState === WebSocket.OPEN)
           socket.send(JSON.stringify(message));
       };
+      s.send = send;
       socket.onopen = () => send({ setup: data.setup });
       socket.onerror = () => stop("The voice connection failed.");
       socket.onclose = (event) => {
@@ -227,57 +258,170 @@ export function useVoiceCheckin({
     };
   };
 
+  const respond = (
+    send: (m: object) => void,
+    call: FunctionCall,
+    response: object,
+  ) =>
+    send({
+      toolResponse: {
+        functionResponses: [{ id: call.id, name: call.name, response }],
+      },
+    });
+
+  const closeCamera = () => {
+    const s = session.current;
+    s?.camera?.getTracks().forEach((t) => t.stop());
+    if (s) s.camera = undefined;
+    setCamera(null);
+  };
+
+  const openCamera = async () => {
+    const s = session.current;
+    if (!s) throw Error("The call has ended.");
+    if (s.camera) return;
+    s.camera = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 } },
+    });
+    setCamera(s.camera);
+  };
+
+  // Captures the viewfinder, saves it as a meal photo and shows it to the
+  // coach. Returns the photo id the coach links to the meal.
+  const takePhoto = async () => {
+    const s = session.current;
+    const frame = video.current;
+    if (!s?.camera || !frame?.videoWidth)
+      throw Error("The camera is not open.");
+    setCapturing(true);
+    try {
+      const scale = Math.min(
+        1,
+        1280 / Math.max(frame.videoWidth, frame.videoHeight),
+      );
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(frame.videoWidth * scale);
+      canvas.height = Math.round(frame.videoHeight * scale);
+      canvas
+        .getContext("2d")!
+        .drawImage(frame, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (b) =>
+            b ? resolve(b) : reject(Error("The photo could not be taken.")),
+          "image/jpeg",
+          0.85,
+        ),
+      );
+      closeCamera();
+      const { uploadUserImage } = await import("./food-client");
+      const photo = await uploadUserImage(
+        new File([blob], "meal.jpg", { type: "image/jpeg" }),
+        accountId,
+        localDate(),
+        "Meal photo from voice check-in",
+        false,
+        "meal-photo",
+      );
+      s.photos.push(photo.id);
+      const data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+      s.send?.({ realtimeInput: { video: { data, mimeType: "image/jpeg" } } });
+      return photo.id;
+    } finally {
+      setCapturing(false);
+    }
+  };
+
   const handle = async (call: FunctionCall, send: (m: object) => void) => {
     const s = session.current;
     if (call.name === "end_check_in") {
-      send({
-        toolResponse: {
-          functionResponses: [
-            { id: call.id, name: call.name, response: { result: "ended" } },
-          ],
-        },
-      });
+      respond(send, call, { result: "ended" });
       // Let the goodbye finish playing before hanging up.
       const remaining = s ? Math.max(0, s.playAt - s.context.currentTime) : 0;
       s?.timers.push(setTimeout(() => stop(), remaining * 1000 + 1500));
       return;
     }
-    const report = String(call.args?.report ?? "").trim();
-    const topic = String(call.args?.topic ?? "other");
-    let result: SaveResult;
-    if (call.name !== "save_to_journal" || !report)
-      result = { ok: false, detail: "Nothing to save." };
-    else {
-      setSaves((list) => [
-        ...list,
-        { id: call.id, topic, report, state: "saving" },
-      ]);
-      result = await onSave(report);
-      setSaves((list) =>
-        list.map((item) =>
-          item.id === call.id
-            ? {
-                ...item,
-                state: result.ok ? "saved" : "failed",
-                detail: result.detail,
-              }
-            : item,
-        ),
-      );
+    if (call.name === "open_camera") {
+      try {
+        await openCamera();
+        respond(send, call, {
+          result:
+            "The camera is open. The athlete taps the shutter, or asks you to take_photo.",
+        });
+      } catch (e) {
+        respond(send, call, {
+          error:
+            e instanceof DOMException && e.name === "NotAllowedError"
+              ? "Camera access is off for this site; the athlete can describe the meal instead."
+              : "The camera could not open; ask the athlete to describe the meal instead.",
+        });
+      }
+      return;
     }
-    send({
-      toolResponse: {
-        functionResponses: [
-          {
-            id: call.id,
-            name: call.name,
-            response: result.ok
-              ? { result: `Saved. Coach: ${result.detail}` }
-              : { error: result.detail },
+    if (call.name === "take_photo") {
+      try {
+        const id = await takePhoto();
+        respond(send, call, {
+          result: {
+            photo_id: id,
+            note: "The photo was sent to you as an image.",
           },
-        ],
-      },
-    });
+        });
+      } catch (e) {
+        respond(send, call, {
+          error: e instanceof Error ? e.message : "The photo failed.",
+        });
+      }
+      return;
+    }
+    const label = saveLabels[call.name] ?? "Save";
+    setSaves((list) => [...list, { id: call.id, label, state: "saving" }]);
+    let result: ActionResult;
+    try {
+      const response = await privateFetch("/api/voice/action", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          name: call.name,
+          args: call.args ?? {},
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          seenPhotoIds: s?.photos ?? [],
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const data = await response.json();
+      result = response.ok
+        ? data
+        : { ok: false, error: data.error ?? "That could not be saved." };
+    } catch {
+      result = { ok: false, error: "The connection to the journal failed." };
+    }
+    setSaves((list) =>
+      list.map((item) =>
+        item.id === call.id
+          ? {
+              ...item,
+              state: result.ok ? "saved" : "failed",
+              detail: result.ok ? result.title : result.error,
+            }
+          : item,
+      ),
+    );
+    if (result.ok) onSaved();
+    respond(
+      send,
+      call,
+      result.ok
+        ? {
+            result: {
+              saved: result.title,
+              detail: result.detail,
+              ...(result.saveId ? { save_id: result.saveId } : {}),
+            },
+          }
+        : { error: result.error },
+    );
   };
 
   return {
@@ -290,11 +434,32 @@ export function useVoiceCheckin({
     start: () => void start(),
     stop: () => stop(),
     analyser,
+    camera,
+    capturing,
+    closeCamera,
+    // The shutter button: the coach learns the photo id from this note.
+    shutter: async () => {
+      try {
+        const id = await takePhoto();
+        session.current?.send?.({
+          realtimeInput: {
+            text: `(The athlete took a food photo, photo id ${id}. It is the image just sent.)`,
+          },
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "The photo failed.");
+      }
+    },
   };
 }
 
 // Whether the server has a Gemini key; the entry points stay hidden otherwise.
 // A plain fetch: an optional feature check must never sign the person out.
+const localDate = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export function useVoiceEnabled(accountId: string | undefined) {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {

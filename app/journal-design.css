@@ -2411,6 +2411,8 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .voice-orb { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); transform: scale(calc(1 + var(--level) * 0.35)); box-shadow: 0 0 0 calc(var(--level) * 22px) color-mix(in srgb, var(--voice) 22%, transparent); transition: transform 90ms linear, box-shadow 90ms linear, background 200ms; }
 .voice-visual.speaking .voice-orb { background: var(--accent-solid); color: var(--on-solid); }
 .voice-visual.failed .voice-orb { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
+.voice-camera { align-self: stretch; display: grid; gap: 12px; }
+.voice-camera video { width: 100%; max-height: 46vh; border-radius: 16px; object-fit: cover; background: #000; }
 .voice-bars { display: flex; align-items: center; gap: 5px; height: 40px; }
 .voice-bars > span { width: 6px; height: 4px; border-radius: 3px; background: var(--voice); transition: height 70ms linear, background 200ms; }
 @keyframes voice-spin { to { transform: rotate(360deg); } }
@@ -2438,6 +2440,8 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .composer-task button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
 .composer-task button:hover { background: var(--accent-line); }
 .composer-send-controls { margin-left: auto; }
+.coach-workspace .composer-talk-button { min-height: 48px; padding: 0 22px; gap: 8px; border-radius: 999px; background: var(--accent-solid); color: var(--on-solid); font-size: 16px; font-weight: 700; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-solid) 35%, transparent); }
+.coach-workspace .composer-talk-button:hover { background: var(--accent-hover); }
 .chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
 .chat-task:only-child { margin: 0; font-size: 15px; opacity: 1; }
 }

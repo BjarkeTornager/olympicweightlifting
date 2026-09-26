@@ -21,7 +21,13 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // It forbids personal data in a query, treats results as untrusted
     // reference text rather than instructions or records about this athlete,
     // and keeps medical claims and logging out of scope (web-search.test.ts).
-    "26d0baaf4e3f669a5ba8c2fa78c87a8db1f0f98e3f593bf01d27279100b68ebe",
+    // Revised 2026-09-26, deliberate and reviewed: an unfinished workout from
+    // another date no longer blocks record_session, and Coach may clear an
+    // empty old draft (discard_workout) instead of sending the athlete to
+    // Train. Drafts with logged sets can only be finished, never discarded
+    // (voice-actions-database.test.ts). Health, privacy and evidence text is
+    // unchanged.
+    "f91fcbac03dd7159c3d4db82d65c53010d88126a80248a9f23eb6bf40a80f0c0",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

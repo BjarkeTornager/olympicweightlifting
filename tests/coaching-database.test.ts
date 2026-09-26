@@ -52,8 +52,9 @@ test(
         );
       };
       await insertTurn(a, "expired conversation", "done", 91 * 1440);
-      for (let i = 0; i < 9; i++)
-        await insertTurn(a, `A's exchange ${i}`, "done", 12 - i);
+      // Coach keeps the latest ten completed exchanges in view.
+      for (let i = 0; i < 11; i++)
+        await insertTurn(a, `A's exchange ${i}`, "done", 14 - i);
       await insertTurn(a, "failed conversation", "failed", 2);
       await insertTurn(b, "B's private conversation", "done", 1);
       const response = await runTurn(
@@ -74,17 +75,17 @@ test(
           const all = messages.map((m) => m.content).join("\n");
           assert.doesNotMatch(
             all,
-            /B's private|expired conversation|failed conversation|A's exchange 0/,
+            /B's private|expired conversation|failed conversation|A's exchange 0\b/,
           );
           assert.equal(
             messages.filter((m) =>
               m.content.startsWith("Earlier message sent at "),
             ).length,
-            8,
+            10,
           );
           assert.match(all, /Earlier message sent at \d{4}-\d{2}-\d{2}T/);
           assert.match(all, /A's exchange 1/);
-          assert.match(all, /A's exchange 8/);
+          assert.match(all, /A's exchange 10/);
           assert.equal(messages.at(-1)!.content, "Thanks, that helps.");
           return { role: "assistant", content: "You’re welcome." };
         },

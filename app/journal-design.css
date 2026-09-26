@@ -2408,7 +2408,7 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .voice-visual.speaking { --voice: var(--accent-solid); }
 .voice-visual.listening:not(.muted) { --voice: var(--success-solid); }
 .voice-visual.failed { --voice: var(--danger-solid); }
-.voice-orb { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); transform: scale(calc(1 + var(--level) * 0.35)); box-shadow: 0 0 0 calc(var(--level) * 22px) color-mix(in srgb, var(--voice) 22%, transparent); transition: transform 90ms linear, box-shadow 90ms linear, background 200ms; }
+.voice-orb { display: grid; place-items: center; width: 80px; height: 80px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); transform: scale(calc(1 + var(--level) * 0.35)); box-shadow: 0 0 0 calc(var(--level) * 22px) color-mix(in srgb, var(--voice) 22%, transparent); transition: transform 90ms linear, box-shadow 90ms linear, background 200ms; }
 .voice-visual.speaking .voice-orb { background: var(--accent-solid); color: var(--on-solid); }
 .voice-visual.failed .voice-orb { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
 .voice-camera { align-self: stretch; display: grid; gap: 12px; }
@@ -2418,7 +2418,7 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 @keyframes voice-spin { to { transform: rotate(360deg); } }
 .voice-checkin .spin { animation: voice-spin 1s linear infinite; }
 .voice-status { margin: 0; min-height: 1.4em; text-align: center; color: var(--ink-2); font-size: 15px; }
-.voice-transcript { align-self: stretch; max-height: 34vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--canvas); }
+.voice-transcript { align-self: stretch; min-height: 120px; max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--canvas); }
 .voice-transcript p { margin: 0; max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
 .voice-transcript p.coach { align-self: flex-start; background: var(--surface); }
 .voice-transcript p.you { align-self: flex-end; background: var(--accent-soft); }
@@ -2427,6 +2427,10 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .voice-saves li strong { text-transform: capitalize; color: var(--ink); }
 .voice-saves li.saved svg { color: var(--success); }
 .voice-saves li.failed { color: var(--danger); }
+.voice-transcript p.voice-receipt { align-self: center; display: flex; align-items: center; gap: 6px; max-width: none; padding: 2px 10px; background: none; font-size: 13px; color: var(--ink-2); }
+.voice-transcript p.voice-receipt.saved svg { color: var(--success); }
+.voice-transcript p.voice-receipt.failed { color: var(--danger); }
+.voice-summary { margin: 0; font-size: 13px; color: var(--ink-2); }
 .voice-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .voice-actions .button { min-height: 48px; min-width: 132px; }
 .voice-checkin > .fine-print { margin: 0; text-align: center; }

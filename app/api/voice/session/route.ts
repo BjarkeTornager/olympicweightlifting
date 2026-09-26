@@ -9,6 +9,7 @@ import {
 import { localClock } from "@/lib/agent/time-context";
 import { logFailure } from "@/lib/error-log";
 import { allowRequest, readJournal } from "@/lib/server";
+import { recentConversations } from "@/lib/conversation-memory";
 import {
   mintVoiceToken,
   VOICE_MODEL,
@@ -43,14 +44,16 @@ export async function POST(request: Request) {
         "Voice check-in is not set up yet. You can keep logging with Coach.",
         503,
       );
-    if (!(await allowRequest(user.id, "voice", 3)))
+    if (!(await allowRequest(user.id, "voice", 6)))
       throw new ApiError(
         "Please wait a minute before starting another call.",
         429,
       );
-    const { timezone, purpose } = z
+    const { timezone, purpose, resumeHandle } = z
       .object({
         purpose: z.enum(["checkin", "goals"]).default("checkin"),
+        // Continues an interrupted call; Google validates the handle.
+        resumeHandle: z.string().min(1).max(2000).optional(),
         timezone: z
           .string()
           .max(100)
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
           }),
       })
       .strict()
-      .parse(await readJson(request, 1000));
+      .parse(await readJson(request, 4000));
     const clock = localClock(new Date(), timezone);
     const { state } = await readJournal(user.id);
     const setup = voiceSetup(
@@ -73,7 +76,9 @@ export async function POST(request: Request) {
         clock,
         state.profile.name || user.name?.split(" ")[0],
         purpose,
+        await recentConversations(user.id, { limit: 10 }),
       ),
+      resumeHandle,
     );
     let token: string;
     try {

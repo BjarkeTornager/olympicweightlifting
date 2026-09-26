@@ -12,38 +12,63 @@ import {
   base64ToFloat32,
   liveEvents,
   pcmToBase64,
+  type Entry,
   type FunctionCall,
-  type Line,
+  type Receipt,
 } from "./voice-live";
 
 export type VoiceStatus =
-  "idle" | "connecting" | "listening" | "speaking" | "ended" | "failed";
-export type VoiceSave = {
-  id: string;
-  label: string;
-  state: "saving" | "saved" | "failed";
-  detail?: string;
-};
+  | "idle"
+  | "connecting"
+  | "listening"
+  | "speaking"
+  | "reconnecting"
+  | "paused"
+  | "ended"
+  | "failed";
+export type VoicePurpose = "checkin" | "goals";
 type ActionResult =
   | { ok: true; saveId?: string; title: string; detail: string }
+  | { ok: true; data: unknown }
   | { ok: false; error: string };
 
 const saveLabels: Record<string, string> = {
   log_training: "Training",
+  update_training: "Workout corrected",
   log_meal: "Meal",
+  update_meal: "Meal updated",
+  delete_meal: "Meal deleted",
   log_sleep: "Sleep",
   log_activity: "Activity",
   clear_unfinished_workout: "Unfinished workout",
   set_goals: "Goals",
   undo_save: "Undo",
 };
+// Server tools that only read; they leave no receipt in the conversation.
+const readTools = new Set([
+  "read_journal",
+  "list_photos",
+  "recall_conversations",
+]);
+const MAX_CALL_MINUTES = 30;
+
 type Session = {
-  socket?: WebSocket;
+  id: string;
+  purpose: VoicePurpose;
   context: AudioContext;
   // Live levels for the on-screen voice: the coach's output and the mic.
   output: AnalyserNode;
-  input?: AnalyserNode;
+  input: AnalyserNode;
+  capture?: AudioWorkletNode;
   stream?: MediaStream;
+  mic?: MediaStreamAudioSourceNode;
+  socket?: WebSocket;
+  send?: (message: object) => void;
+  // Google's resumption handle: a new connection continues the conversation.
+  handle?: string;
+  started: boolean;
+  reconnecting: boolean;
+  failures: number;
   sources: Set<AudioBufferSourceNode>;
   playAt: number;
   closed: boolean;
@@ -52,11 +77,13 @@ type Session = {
   camera?: MediaStream;
   // Photos the coach has seen in this call; they may be linked to a meal.
   photos: string[];
-  send?: (message: object) => void;
 };
 
-// One spoken check-in. Audio goes straight between this device and Google
-// with a single-use token; each save goes to this server's journal actions.
+const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// One spoken conversation with Coach. Audio goes straight between this device
+// and Google with single-use tokens; saves and reads go to this server. The
+// call survives Google's connection limits, network drops and leaving the app.
 export function useVoiceCheckin({
   accountId,
   headers,
@@ -71,29 +98,64 @@ export function useVoiceCheckin({
 }) {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [error, setError] = useState("");
-  const [lines, setLines] = useState<Line[]>([]);
-  const [saves, setSaves] = useState<VoiceSave[]>([]);
+  const [lines, setLines] = useState<Entry[]>([]);
   const [muted, setMuted] = useState(false);
   const [camera, setCamera] = useState<MediaStream | null>(null);
   const [capturing, setCapturing] = useState(false);
   const mutedRef = useRef(false);
   const session = useRef<Session | null>(null);
+  const transcript = useRef<Entry[]>([]);
 
-  const stop = useCallback((failure?: string) => {
+  // The conversation is kept on the server so Coach can recall it later.
+  const persist = useCallback(
+    (s: Session) => {
+      const entries = transcript.current.flatMap((e) =>
+        e.role === "save"
+          ? []
+          : [{ role: e.role, text: e.text.slice(0, 4000) }],
+      );
+      if (!entries.length) return;
+      void privateFetch("/api/voice/transcript", {
+        method: "POST",
+        headers: headers(),
+        keepalive: true,
+        body: JSON.stringify({
+          id: s.id,
+          purpose: s.purpose,
+          entries: entries.slice(-400),
+        }),
+      }).catch(() => {});
+    },
+    [headers],
+  );
+
+  useEffect(() => {
+    transcript.current = lines;
     const s = session.current;
-    if (!s || s.closed) return;
-    s.closed = true;
-    s.timers.forEach(clearTimeout);
-    s.stream?.getTracks().forEach((t) => t.stop());
-    s.camera?.getTracks().forEach((t) => t.stop());
-    setCamera(null);
-    s.sources.forEach((source) => source.stop());
-    if (s.socket && s.socket.readyState <= WebSocket.OPEN) s.socket.close();
-    void s.context.close();
-    session.current = null;
-    setError(failure ?? "");
-    setStatus(failure ? "failed" : "ended");
-  }, []);
+    if (!s) return;
+    const timer = setTimeout(() => persist(s), 4000);
+    return () => clearTimeout(timer);
+  }, [lines, persist]);
+
+  const stop = useCallback(
+    (failure?: string) => {
+      const s = session.current;
+      if (!s || s.closed) return;
+      s.closed = true;
+      persist(s);
+      s.timers.forEach(clearTimeout);
+      s.stream?.getTracks().forEach((t) => t.stop());
+      s.camera?.getTracks().forEach((t) => t.stop());
+      setCamera(null);
+      s.sources.forEach((source) => source.stop());
+      if (s.socket && s.socket.readyState <= WebSocket.OPEN) s.socket.close();
+      void s.context.close();
+      session.current = null;
+      setError(failure ?? "");
+      setStatus(failure ? "failed" : "ended");
+    },
+    [persist],
+  );
 
   useEffect(() => () => stop(), [stop]);
 
@@ -110,69 +172,54 @@ export function useVoiceCheckin({
     setMuted(mutedRef.current);
   };
 
-  const start = async (purpose: "checkin" | "goals" = "checkin") => {
-    if (session.current) return;
-    // iOS only lets audio start from the tap itself, before any await.
-    const context = new AudioContext();
-    void context.resume();
-    const output = context.createAnalyser();
-    output.fftSize = 256;
-    output.smoothingTimeConstant = 0.6;
-    output.connect(context.destination);
-    const s: Session = {
-      context,
-      output,
-      sources: new Set(),
-      playAt: 0,
-      closed: false,
-      lineClosed: true,
-      timers: [],
-      photos: [],
+  // iOS ends the microphone when the app goes to the background; a new
+  // stream is connected to the same capture graph on return.
+  const ensureMic = async (s: Session) => {
+    if (s.stream?.getAudioTracks().some((t) => t.readyState === "live")) return;
+    s.mic?.disconnect();
+    s.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    s.mic = s.context.createMediaStreamSource(s.stream);
+    if (s.capture) s.mic.connect(s.capture);
+    s.mic.connect(s.input);
+    s.stream.getAudioTracks()[0]?.addEventListener("ended", () => {
+      if (!s.closed && document.visibilityState === "visible")
+        void ensureMic(s).catch(() => setStatus("paused"));
+    });
+  };
+
+  const connect = async (s: Session, resume: boolean) => {
+    const response = await privateFetch("/api/voice/session", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        timezone: timezone(),
+        purpose: s.purpose,
+        ...(resume && s.handle ? { resumeHandle: s.handle } : {}),
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await response.json();
+    if (!response.ok) throw Error(data.error ?? "Voice could not start.");
+    if (s.closed) return;
+    const previous = s.socket;
+    const socket = new WebSocket(data.url);
+    socket.binaryType = "arraybuffer";
+    s.socket = socket;
+    const send = (message: object) => {
+      if (socket.readyState === WebSocket.OPEN)
+        socket.send(JSON.stringify(message));
     };
-    session.current = s;
-    setStatus("connecting");
-    setError("");
-    setLines([]);
-    setSaves([]);
-    try {
-      s.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      const response = await privateFetch("/api/voice/session", {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          purpose,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw Error(data.error ?? "Voice check-in could not start.");
-      if (s.closed) return;
-      await context.audioWorklet.addModule("/voice-capture-worklet.js");
-      const socket = new WebSocket(data.url);
-      socket.binaryType = "arraybuffer";
-      s.socket = socket;
-      const send = (message: object) => {
-        if (socket.readyState === WebSocket.OPEN)
-          socket.send(JSON.stringify(message));
-      };
-      s.send = send;
+    await new Promise<void>((ready, fail) => {
       socket.onopen = () => send({ setup: data.setup });
-      socket.onerror = () => stop("The voice connection failed.");
       socket.onclose = (event) => {
-        if (!s.closed)
-          stop(
-            event.code === 1000
-              ? undefined
-              : `The call dropped${event.reason ? ` (${event.reason})` : ""}. Anything already saved is in Coach.`,
-          );
+        fail(Error(event.reason || "The voice connection closed."));
+        if (!s.closed && s.socket === socket) void recover(s);
       };
       socket.onmessage = (event) => {
         const raw =
@@ -181,37 +228,20 @@ export function useVoiceCheckin({
             : new TextDecoder().decode(event.data as ArrayBuffer);
         for (const e of liveEvents(raw)) {
           if (e.type === "ready") {
-            const mic = context.createMediaStreamSource(s.stream!);
-            const capture = new AudioWorkletNode(context, "voice-capture");
-            capture.port.onmessage = ({ data: pcm }) => {
-              if (!mutedRef.current)
-                send({
-                  realtimeInput: {
-                    audio: {
-                      data: pcmToBase64(pcm as ArrayBuffer),
-                      mimeType: "audio/pcm;rate=16000",
-                    },
-                  },
-                });
-            };
-            mic.connect(capture);
-            s.input = context.createAnalyser();
-            s.input.fftSize = 256;
-            s.input.smoothingTimeConstant = 0.6;
-            mic.connect(s.input);
-            // Nothing is audible; the graph only runs while connected.
-            const silent = context.createGain();
-            silent.gain.value = 0;
-            capture.connect(silent).connect(context.destination);
+            s.send = send;
+            s.failures = 0;
+            if (previous && previous !== socket) previous.close();
             setStatus("listening");
-            // Let the coach speak first.
-            send({
-              realtimeInput: { text: "(The athlete started the check-in.)" },
-            });
-            s.timers.push(
-              setTimeout(() => stop(), data.maxMinutes * 60000 - 15000),
-            );
-          } else if (e.type === "audio") play(s, e.data);
+            if (!s.started) {
+              s.started = true;
+              // Let the coach speak first.
+              send({
+                realtimeInput: { text: "(The athlete started the call.)" },
+              });
+            }
+            ready();
+          } else if (e.type === "resumeHandle") s.handle = e.handle;
+          else if (e.type === "audio") play(s, e.data);
           else if (e.type === "interrupted") {
             s.sources.forEach((source) => source.stop());
             s.sources.clear();
@@ -227,17 +257,142 @@ export function useVoiceCheckin({
           } else if (e.type === "turnComplete") s.lineClosed = true;
           else if (e.type === "toolCall")
             e.calls.forEach((call) => void handle(call, send));
-          else if (e.type === "goAway")
-            s.timers.push(setTimeout(() => stop(), 3000));
+          // The connection is about to end: continue on a fresh one.
+          else if (e.type === "goAway") void recover(s);
         }
       };
+    });
+  };
+
+  // Reconnects with the resumption handle; the conversation carries on.
+  const recover = async (s: Session) => {
+    if (s.closed || s.reconnecting) return;
+    if (document.visibilityState === "hidden") {
+      setStatus("paused");
+      return;
+    }
+    s.reconnecting = true;
+    setStatus("reconnecting");
+    try {
+      while (true) {
+        try {
+          await ensureMic(s);
+          await connect(s, true);
+          return;
+        } catch (e) {
+          if (s.closed) return;
+          if (++s.failures >= 3 || !s.handle)
+            throw e instanceof Error ? e : Error("The call dropped.");
+          await new Promise((r) => setTimeout(r, 1000 * s.failures));
+        }
+      }
+    } catch (e) {
+      stop(
+        `${e instanceof Error ? e.message : "The call dropped."} Anything already saved is in Coach.`,
+      );
+    } finally {
+      s.reconnecting = false;
+    }
+  };
+
+  // Coming back to the app picks the call up again. iOS may need a tap to
+  // restart audio, which the Continue button provides.
+  const resumeCall = useCallback(async () => {
+    const s = session.current;
+    if (!s || s.closed) return;
+    try {
+      await s.context.resume();
+      await ensureMic(s);
+    } catch {
+      setStatus("paused");
+      return;
+    }
+    if (s.context.state !== "running") {
+      setStatus("paused");
+      return;
+    }
+    if (s.socket?.readyState !== WebSocket.OPEN) await recover(s);
+    else setStatus("listening");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const visible = () => {
+      if (document.visibilityState === "visible" && session.current)
+        void resumeCall();
+    };
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("pageshow", visible);
+    return () => {
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("pageshow", visible);
+    };
+  }, [resumeCall]);
+
+  const start = async (purpose: VoicePurpose = "checkin") => {
+    if (session.current) return;
+    // iOS only lets audio start from the tap itself, before any await.
+    const context = new AudioContext();
+    void context.resume();
+    const output = context.createAnalyser();
+    output.fftSize = 256;
+    output.smoothingTimeConstant = 0.6;
+    output.connect(context.destination);
+    const input = context.createAnalyser();
+    input.fftSize = 256;
+    input.smoothingTimeConstant = 0.6;
+    const s: Session = {
+      id: crypto.randomUUID(),
+      purpose,
+      context,
+      output,
+      input,
+      started: false,
+      reconnecting: false,
+      failures: 0,
+      sources: new Set(),
+      playAt: 0,
+      closed: false,
+      lineClosed: true,
+      timers: [],
+      photos: [],
+    };
+    session.current = s;
+    setStatus("connecting");
+    setError("");
+    setLines([]);
+    context.onstatechange = () => {
+      if (s.closed || context.state === "running") return;
+      if (document.visibilityState === "visible") void resumeCall();
+    };
+    try {
+      await context.audioWorklet.addModule("/voice-capture-worklet.js");
+      s.capture = new AudioWorkletNode(context, "voice-capture");
+      s.capture.port.onmessage = ({ data: pcm }) => {
+        if (!mutedRef.current)
+          s.send?.({
+            realtimeInput: {
+              audio: {
+                data: pcmToBase64(pcm as ArrayBuffer),
+                mimeType: "audio/pcm;rate=16000",
+              },
+            },
+          });
+      };
+      // Nothing is audible; the graph only runs while connected.
+      const silent = context.createGain();
+      silent.gain.value = 0;
+      s.capture.connect(silent).connect(context.destination);
+      await ensureMic(s);
+      await connect(s, false);
+      s.timers.push(setTimeout(() => stop(), MAX_CALL_MINUTES * 60000));
     } catch (e) {
       stop(
         e instanceof DOMException && e.name === "NotAllowedError"
           ? "Microphone access is off. Allow it for this site in Settings, then try again."
           : e instanceof Error
             ? e.message
-            : "Voice check-in could not start.",
+            : "Voice could not start.",
       );
     }
   };
@@ -256,7 +411,8 @@ export function useVoiceCheckin({
     setStatus("speaking");
     source.onended = () => {
       s.sources.delete(source);
-      if (!s.sources.size && !s.closed) setStatus("listening");
+      if (!s.sources.size && !s.closed && !s.reconnecting)
+        setStatus("listening");
     };
   };
 
@@ -288,6 +444,25 @@ export function useVoiceCheckin({
     setCamera(s.camera);
   };
 
+  // Sends an image to the coach as a JPEG no larger than it needs.
+  const showImage = (
+    s: Session,
+    source: CanvasImageSource,
+    w: number,
+    h: number,
+  ) => {
+    const scale = Math.min(1, 1024 / Math.max(w, h));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas
+      .getContext("2d")!
+      .drawImage(source, 0, 0, canvas.width, canvas.height);
+    const data = canvas.toDataURL("image/jpeg", 0.75).split(",")[1];
+    s.send?.({ realtimeInput: { video: { data, mimeType: "image/jpeg" } } });
+    return canvas;
+  };
+
   // Captures the viewfinder, saves it as a meal photo and shows it to the
   // coach. Returns the photo id the coach links to the meal.
   const takePhoto = async () => {
@@ -297,16 +472,7 @@ export function useVoiceCheckin({
       throw Error("The camera is not open.");
     setCapturing(true);
     try {
-      const scale = Math.min(
-        1,
-        1280 / Math.max(frame.videoWidth, frame.videoHeight),
-      );
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(frame.videoWidth * scale);
-      canvas.height = Math.round(frame.videoHeight * scale);
-      canvas
-        .getContext("2d")!
-        .drawImage(frame, 0, 0, canvas.width, canvas.height);
+      const canvas = showImage(s, frame, frame.videoWidth, frame.videoHeight);
       const blob = await new Promise<Blob>((resolve, reject) =>
         canvas.toBlob(
           (b) =>
@@ -326,21 +492,42 @@ export function useVoiceCheckin({
         "meal-photo",
       );
       s.photos.push(photo.id);
-      const data = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-      s.send?.({ realtimeInput: { video: { data, mimeType: "image/jpeg" } } });
       return photo.id;
     } finally {
       setCapturing(false);
     }
   };
 
+  // A saved photo, fetched privately and shown to the coach.
+  const viewPhoto = async (s: Session, id: string) => {
+    const response = await privateFetch(
+      `/api/images/${encodeURIComponent(id)}`,
+      {
+        headers: { "X-Journal-Account": accountId },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    if (!response.ok)
+      throw Error("That photo is not in the athlete's library.");
+    const bitmap = await createImageBitmap(await response.blob());
+    showImage(s, bitmap, bitmap.width, bitmap.height);
+    bitmap.close();
+    if (!s.photos.includes(id)) s.photos.push(id);
+  };
+
+  const setReceipt = (id: string, state: Receipt["state"]) =>
+    setLines((l) =>
+      l.map((e) => (e.role === "save" && e.id === id ? { ...e, state } : e)),
+    );
+
   const handle = async (call: FunctionCall, send: (m: object) => void) => {
     const s = session.current;
+    if (!s) return;
     if (call.name === "end_check_in") {
       respond(send, call, { result: "ended" });
       // Let the goodbye finish playing before hanging up.
-      const remaining = s ? Math.max(0, s.playAt - s.context.currentTime) : 0;
-      s?.timers.push(setTimeout(() => stop(), remaining * 1000 + 1500));
+      const remaining = Math.max(0, s.playAt - s.context.currentTime);
+      s.timers.push(setTimeout(() => stop(), remaining * 1000 + 1500));
       return;
     }
     if (call.name === "open_camera") {
@@ -360,14 +547,15 @@ export function useVoiceCheckin({
       }
       return;
     }
-    if (call.name === "take_photo") {
+    if (call.name === "take_photo" || call.name === "view_photo") {
       try {
-        const id = await takePhoto();
+        const id =
+          call.name === "take_photo"
+            ? await takePhoto()
+            : String(call.args?.photo_id ?? "");
+        if (call.name === "view_photo") await viewPhoto(s, id);
         respond(send, call, {
-          result: {
-            photo_id: id,
-            note: "The photo was sent to you as an image.",
-          },
+          result: { photo_id: id, note: "The image was sent to you." },
         });
       } catch (e) {
         respond(send, call, {
@@ -376,8 +564,17 @@ export function useVoiceCheckin({
       }
       return;
     }
-    const label = saveLabels[call.name] ?? "Save";
-    setSaves((list) => [...list, { id: call.id, label, state: "saving" }]);
+    const reading = readTools.has(call.name);
+    if (!reading)
+      setLines((l) => [
+        ...l,
+        {
+          role: "save",
+          id: call.id,
+          label: saveLabels[call.name] ?? "Save",
+          state: "saving",
+        },
+      ]);
     let result: ActionResult;
     try {
       const response = await privateFetch("/api/voice/action", {
@@ -387,42 +584,36 @@ export function useVoiceCheckin({
           id: crypto.randomUUID(),
           name: call.name,
           args: call.args ?? {},
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          seenPhotoIds: s?.photos ?? [],
+          timezone: timezone(),
+          seenPhotoIds: s.photos,
         }),
         signal: AbortSignal.timeout(20000),
       });
       const data = await response.json();
       result = response.ok
         ? data
-        : { ok: false, error: data.error ?? "That could not be saved." };
+        : { ok: false, error: data.error ?? "That could not be done." };
     } catch {
       result = { ok: false, error: "The connection to the journal failed." };
     }
-    setSaves((list) =>
-      list.map((item) =>
-        item.id === call.id
-          ? {
-              ...item,
-              state: result.ok ? "saved" : "failed",
-              detail: result.ok ? result.title : result.error,
-            }
-          : item,
-      ),
-    );
-    if (result.ok) onSaved();
+    if (!reading) {
+      setReceipt(call.id, result.ok ? "saved" : "failed");
+      if (result.ok) onSaved();
+    }
     respond(
       send,
       call,
-      result.ok
-        ? {
-            result: {
-              saved: result.title,
-              detail: result.detail,
-              ...(result.saveId ? { save_id: result.saveId } : {}),
+      !result.ok
+        ? { error: result.error }
+        : "data" in result
+          ? { result: result.data }
+          : {
+              result: {
+                saved: result.title,
+                detail: result.detail,
+                ...(result.saveId ? { save_id: result.saveId } : {}),
+              },
             },
-          }
-        : { error: result.error },
     );
   };
 
@@ -430,11 +621,11 @@ export function useVoiceCheckin({
     status,
     error,
     lines,
-    saves,
     muted,
     toggleMute,
-    start: (purpose?: "checkin" | "goals") => void start(purpose),
+    start: (purpose?: VoicePurpose) => void start(purpose),
     stop: () => stop(),
+    resume: () => void resumeCall(),
     analyser,
     camera,
     capturing,
@@ -455,13 +646,13 @@ export function useVoiceCheckin({
   };
 }
 
-// Whether the server has a Gemini key; the entry points stay hidden otherwise.
-// A plain fetch: an optional feature check must never sign the person out.
 const localDate = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+// Whether the server has a Gemini key; the entry points stay hidden otherwise.
+// A plain fetch: an optional feature check must never sign the person out.
 export function useVoiceEnabled(accountId: string | undefined) {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {

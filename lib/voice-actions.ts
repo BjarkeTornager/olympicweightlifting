@@ -12,6 +12,11 @@ import { prepareAction, type ActionPreview } from "./agent/actions";
 import type { AgentAction } from "./agent/action-schema";
 import { guardChange } from "./agent/change-guards";
 import { newTurnReads } from "./agent/read-tools";
+import { listUserImages } from "./user-images";
+import {
+  recentConversations,
+  searchConversations,
+} from "./conversation-memory";
 import { applyProposal } from "./agent/engine";
 import { ApiError } from "./agent/http";
 import { VOICE_PREFIX } from "./coach-tasks";
@@ -23,56 +28,123 @@ import { VOICE_PREFIX } from "./coach-tasks";
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const summarySchema = z.string().trim().min(1).max(500);
 
+const exercisesSchema = z
+  .array(
+    z.object({
+      exercise: z.string().min(1).max(160),
+      sets: z
+        .array(
+          z.object({
+            weight_kg: z.number().min(0).max(1000),
+            reps: z.number().int().min(1).max(1000),
+            made: z.boolean().default(true),
+          }),
+        )
+        .min(1)
+        .max(30),
+    }),
+  )
+  .min(1)
+  .max(30);
+const mealArgs = z.object({
+  summary: summarySchema,
+  date,
+  meal_type: z.enum(["breakfast", "lunch", "dinner", "snack"]),
+  name: z.string().trim().min(1).max(160),
+  items: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(160),
+        portion: z.string().trim().min(1).max(200),
+        calories: z.number().min(0).max(10000),
+        protein_g: z.number().min(0).max(1000),
+        carbs_g: z.number().min(0).max(2000),
+        fat_g: z.number().min(0).max(1000),
+        food_groups: z.array(foodGroupSchema).max(13).default([]),
+        ingredients: z
+          .array(z.string().trim().min(1).max(80))
+          .max(30)
+          .default([]),
+      }),
+    )
+    .min(1)
+    .max(30),
+  // Omitted on an update keeps the meal's photos.
+  photo_ids: z.array(z.string().uuid()).max(4).optional(),
+});
+
+const workoutFrom = (
+  title: string,
+  day: string,
+  exercises: z.infer<typeof exercisesSchema>,
+) => ({
+  title,
+  date: day,
+  category: "open" as const,
+  exercises: exercises.map((e) => ({
+    exerciseId: e.exercise,
+    sets: e.sets.map((s) => ({
+      weight: s.weight_kg,
+      reps: s.reps,
+      result: s.made ? ("success" as const) : ("miss" as const),
+    })),
+  })),
+});
+
+const mealFrom = (a: z.infer<typeof mealArgs>, photoIds: string[]) => ({
+  date: a.date,
+  name: a.name,
+  type: a.meal_type,
+  items: a.items.map((i) => ({
+    name: i.name,
+    portion: i.portion,
+    calories: i.calories,
+    protein: i.protein_g,
+    carbs: i.carbs_g,
+    fat: i.fat_g,
+    // Ingredients come from what the athlete said, or what the coach saw
+    // in a photo.
+    classification: {
+      foodGroups: [...new Set(i.food_groups)],
+      ingredients: [...new Set(i.ingredients.map((n) => n.toLowerCase()))].map(
+        (name) => ({
+          name,
+          evidence: photoIds.length
+            ? ("visible" as const)
+            : ("reported" as const),
+        }),
+      ),
+    },
+  })),
+  source: photoIds.length ? ("photo" as const) : ("text" as const),
+  estimated: true,
+  notes: "",
+  photoIds,
+});
+
 export const voiceToolArgs = {
   log_training: z.object({
     summary: summarySchema,
     date,
     title: z.string().trim().min(1).max(120),
     finished: z.boolean().default(true),
-    exercises: z
-      .array(
-        z.object({
-          exercise: z.string().min(1).max(160),
-          sets: z
-            .array(
-              z.object({
-                weight_kg: z.number().min(0).max(1000),
-                reps: z.number().int().min(1).max(1000),
-                made: z.boolean().default(true),
-              }),
-            )
-            .min(1)
-            .max(30),
-        }),
-      )
-      .min(1)
-      .max(30),
+    exercises: exercisesSchema,
   }),
-  log_meal: z.object({
+  // Read-only: the journal for a short date range, with ids for corrections.
+  read_journal: z.object({ from: date, to: date }),
+  list_photos: z.object({ from: date, to: date }),
+  recall_conversations: z.object({
+    query: z.string().trim().max(200).optional(),
+  }),
+  update_training: z.object({
     summary: summarySchema,
-    date,
-    meal_type: z.enum(["breakfast", "lunch", "dinner", "snack"]),
-    name: z.string().trim().min(1).max(160),
-    items: z
-      .array(
-        z.object({
-          name: z.string().trim().min(1).max(160),
-          portion: z.string().trim().min(1).max(200),
-          calories: z.number().min(0).max(10000),
-          protein_g: z.number().min(0).max(1000),
-          carbs_g: z.number().min(0).max(2000),
-          fat_g: z.number().min(0).max(1000),
-          food_groups: z.array(foodGroupSchema).max(13).default([]),
-          ingredients: z
-            .array(z.string().trim().min(1).max(80))
-            .max(30)
-            .default([]),
-        }),
-      )
-      .min(1)
-      .max(30),
-    photo_ids: z.array(z.string().uuid()).max(4).default([]),
+    session_id: z.string().min(1).max(160),
+    title: z.string().trim().min(1).max(120),
+    exercises: exercisesSchema,
   }),
+  delete_meal: z.object({ summary: summarySchema, meal_id: z.string().uuid() }),
+  log_meal: mealArgs,
+  update_meal: mealArgs.extend({ meal_id: z.string().uuid() }),
   log_sleep: z.object({
     summary: summarySchema,
     date,
@@ -94,10 +166,11 @@ export const voiceToolArgs = {
   undo_save: z.object({ save_id: z.string().uuid() }),
 };
 export type VoiceToolName = keyof typeof voiceToolArgs;
+type ReadTool = "read_journal" | "list_photos" | "recall_conversations";
 
 // Turns a voice tool call into a journal action for the current state.
 export function voiceAction(
-  name: Exclude<VoiceToolName, "undo_save">,
+  name: Exclude<VoiceToolName, "undo_save" | ReadTool>,
   raw: unknown,
   state: JournalState,
   today: string,
@@ -105,19 +178,7 @@ export function voiceAction(
   switch (name) {
     case "log_training": {
       const a = voiceToolArgs.log_training.parse(raw);
-      const workout = {
-        title: a.title,
-        date: a.date,
-        category: "open" as const,
-        exercises: a.exercises.map((e) => ({
-          exerciseId: e.exercise,
-          sets: e.sets.map((s) => ({
-            weight: s.weight_kg,
-            reps: s.reps,
-            result: s.made ? ("success" as const) : ("miss" as const),
-          })),
-        })),
-      };
+      const workout = workoutFrom(a.title, a.date, a.exercises);
       const completion = a.finished ? "completed" : "ongoing";
       // Same-day training continues the workout already there.
       if (state.activeWorkout?.date === a.date)
@@ -136,41 +197,37 @@ export function voiceAction(
         return { kind: "log_workout_progress", workout, completion };
       return { kind: "record_session", workout };
     }
+    case "update_training": {
+      const a = voiceToolArgs.update_training.parse(raw);
+      const session = state.sessions.find((s) => s.id === a.session_id);
+      if (!session)
+        throw Error(
+          "That workout is not in the journal. Read the journal first.",
+        );
+      return {
+        kind: "update_session",
+        sessionId: session.id,
+        workout: workoutFrom(a.title, session.date, a.exercises),
+      };
+    }
     case "log_meal": {
       const a = voiceToolArgs.log_meal.parse(raw);
+      return { kind: "record_meal", meal: mealFrom(a, a.photo_ids ?? []) };
+    }
+    case "update_meal": {
+      const a = voiceToolArgs.update_meal.parse(raw);
+      const meal = state.nutrition.meals.find((m) => m.id === a.meal_id);
+      if (!meal)
+        throw Error("That meal is not in the journal. Read the journal first.");
       return {
-        kind: "record_meal",
-        meal: {
-          date: a.date,
-          name: a.name,
-          type: a.meal_type,
-          items: a.items.map((i) => ({
-            name: i.name,
-            portion: i.portion,
-            calories: i.calories,
-            protein: i.protein_g,
-            carbs: i.carbs_g,
-            fat: i.fat_g,
-            // Ingredients come from what the athlete said, or what the coach
-            // saw in a photo taken during the call.
-            classification: {
-              foodGroups: [...new Set(i.food_groups)],
-              ingredients: [
-                ...new Set(i.ingredients.map((n) => n.toLowerCase())),
-              ].map((name) => ({
-                name,
-                evidence: a.photo_ids.length
-                  ? ("visible" as const)
-                  : ("reported" as const),
-              })),
-            },
-          })),
-          source: a.photo_ids.length ? "photo" : "text",
-          estimated: true,
-          notes: "",
-          photoIds: a.photo_ids,
-        },
+        kind: "update_meal",
+        mealId: meal.id,
+        meal: mealFrom(a, a.photo_ids ?? meal.photoIds),
       };
+    }
+    case "delete_meal": {
+      const a = voiceToolArgs.delete_meal.parse(raw);
+      return { kind: "delete_meal", mealId: a.meal_id };
     }
     case "log_sleep": {
       const a = voiceToolArgs.log_sleep.parse(raw);
@@ -241,7 +298,86 @@ function allRead(state: JournalState, day: string) {
 
 export type VoiceResult =
   | { ok: true; saveId?: string; title: string; detail: string }
+  | { ok: true; data: unknown }
   | { ok: false; error: string };
+
+const dayRange = (from: string, to: string) => {
+  if (to < from) throw Error("The end date is before the start date.");
+  if ((Date.parse(to) - Date.parse(from)) / 86400000 > 13)
+    throw Error("Read at most 14 days at a time.");
+  return (day: string) => day >= from && day <= to;
+};
+
+// What the voice coach sees of the journal: compact, with the ids it needs
+// to correct an entry, and photo ids it can look at with view_photo.
+export function journalForVoice(state: JournalState, from: string, to: string) {
+  const inRange = dayRange(from, to);
+  const sets = (w: JournalState["sessions"][number]) =>
+    w.exercises.map((e) => ({
+      exercise: e.exerciseId,
+      sets: e.sets
+        .filter((x) => x.logged || x.result)
+        .map((x) => ({
+          weight_kg: x.weight,
+          reps: x.reps,
+          made: x.result !== "miss",
+        })),
+    }));
+  return {
+    meals: state.nutrition.meals
+      .filter((m) => inRange(m.date))
+      .map((m) => ({
+        meal_id: m.id,
+        date: m.date,
+        meal_type: m.type,
+        name: m.name,
+        photo_ids: m.photoIds,
+        items: m.items.map((i) => ({
+          name: i.name,
+          portion: i.portion,
+          calories: i.calories,
+          protein_g: i.protein,
+          carbs_g: i.carbs,
+          fat_g: i.fat,
+        })),
+      })),
+    workouts: state.sessions
+      .filter((w) => inRange(w.date))
+      .map((w) => ({
+        session_id: w.id,
+        date: w.date,
+        title: w.title,
+        exercises: sets(w),
+      })),
+    unfinishedWorkout: state.activeWorkout
+      ? {
+          date: state.activeWorkout.date,
+          title: state.activeWorkout.title,
+          exercises: sets(state.activeWorkout),
+        }
+      : null,
+    checkins: state.health.checkins
+      .filter((c) => inRange(c.date))
+      .map((c) => ({
+        date: c.date,
+        sleep_hours: c.sleepHours,
+        energy: c.energy,
+        soreness: c.soreness,
+        bodyweight: c.bodyweight,
+        notes: c.notes,
+      })),
+    activities: state.cardio.sessions
+      .filter((c) => inRange(c.date))
+      .map((c) => ({
+        date: c.date,
+        activity: c.activity,
+        minutes: Math.round(c.durationSeconds / 60),
+        distance_km: c.distanceKm,
+      })),
+    dailyTargets: state.nutrition.targets,
+    goals: state.profile.body ?? null,
+  };
+}
 
 export async function runVoiceTool(
   userId: string,
@@ -254,6 +390,37 @@ export async function runVoiceTool(
     seenPhotoIds: string[];
   },
 ): Promise<VoiceResult> {
+  if (input.name === "read_journal") {
+    const { from, to } = voiceToolArgs.read_journal.parse(input.args);
+    const { state } = await readJournal(userId);
+    return { ok: true, data: journalForVoice(state, from, to) };
+  }
+  if (input.name === "list_photos") {
+    const { from, to } = voiceToolArgs.list_photos.parse(input.args);
+    const inRange = dayRange(from, to);
+    const photos = (await listUserImages(userId))
+      .filter((p) => inRange(p.date))
+      .slice(0, 40)
+      .map((p) => ({
+        photo_id: p.id,
+        date: p.date,
+        category: p.category,
+        label: p.label,
+        tags: p.classification?.tags ?? [],
+      }));
+    return { ok: true, data: { photos } };
+  }
+  if (input.name === "recall_conversations") {
+    const { query } = voiceToolArgs.recall_conversations.parse(input.args);
+    return {
+      ok: true,
+      data: {
+        conversations: query
+          ? await searchConversations(userId, query)
+          : await recentConversations(userId, { limit: 10 }),
+      },
+    };
+  }
   if (input.name === "undo_save") {
     const { save_id } = voiceToolArgs.undo_save.parse(input.args);
     await applyProposal(userId, save_id, true);

@@ -37,3 +37,12 @@ The first real use showed the relay was the problem: the voice coach forwarded a
 - "Take a photo of my food": `open_camera` shows a viewfinder in the call (`camera=(self)`), the shutter or `take_photo` saves a meal photo, sends the image to the coach, and `log_meal` can link it. Only photos seen in the call are accepted as meal sources.
 - Coach shows a blue Talk button in place of Send while the message is empty.
 - Voice: `VOICE_NAME=Algenib` in production.
+
+## Update: memory, full journal access and calls that last (26 September, evening)
+
+- **Conversation memory in PostgreSQL** (`lib/conversation-memory.ts`, table `voice_calls`, migration `0010_voice_call_memory`). Voice transcripts are saved during and after each call (`POST /api/voice/transcript`, upsert per call id, account-scoped). The voice coach starts with the last ten conversations (typed and spoken) and has `recall_conversations` to search the whole history; typed Coach has `conversation_history`, sees ten recent exchanges (was eight) and recent voice calls. Search is PostgreSQL full-text (`simple` configuration, prefix matching) so Danish and English both work. Restate was considered and not used: it provides durable workflow execution, not storage or search, and would add a separately hosted service.
+- **The voice coach sees the journal and photos**: `read_journal` (≤14 days, with meal/session ids and photo ids), `list_photos`, `view_photo` (the phone fetches the private image and sends it to the model), and corrections `update_meal`, `delete_meal` (new action; reviewed in typed Coach), `update_training`. Adding food to a meal already logged — including from a photo — updates that meal instead of creating another.
+- **Calls survive**: session resumption handles and sliding-window context compression; on `goAway` or a dropped socket the phone requests a fresh single-use token with the handle and continues the conversation. Returning to the app resumes the call (microphone re-acquired if iOS ended it); if iOS needs a tap to restart audio the call shows *Paused* with **Continue**. The 10-minute cap is now 30 minutes. A web page cannot keep listening while another app is in front; iOS suspends it.
+- **Transcript view**: saves appear inline as receipts in one scrolling conversation with a one-line summary, instead of a growing list that pushed the transcript away.
+
+Not device-verified: background/foreground resume and Continue on a physical iPhone.

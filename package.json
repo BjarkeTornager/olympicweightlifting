@@ -19,6 +19,7 @@
     "test:browser": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:generate": "drizzle-kit generate",
+    "openapi": "tsx scripts/openapi.ts",
     "check:production": "npm run typecheck && npm run lint && npm run check && npm test"
   },
   "engines": {

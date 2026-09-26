@@ -4,6 +4,11 @@ import { logFailure } from "../error-log";
 import { getAuth } from "../auth";
 import { RevisionConflict, MissingMealPhoto } from "../server";
 import { ProviderError } from "./provider";
+import {
+  nativeClient,
+  nativeSupported,
+  nativeUpdateMessage,
+} from "../native-client";
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -13,6 +18,12 @@ export class ApiError extends Error {
   }
 }
 export function requireCurrentCoach(request: Request) {
+  // Installed apps are versioned by build, not by the website's feature headers.
+  const native = nativeClient(request);
+  if (native) {
+    if (!nativeSupported(native)) throw new ApiError(nativeUpdateMessage, 426);
+    return;
+  }
   if (
     request.headers.get("x-coach-journal-version") !== "1" ||
     request.headers.get("x-training-programs-version") !== "2"

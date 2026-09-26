@@ -64,7 +64,13 @@ public final class VoiceAudio: @unchecked Sendable {
     guard !running else { return }
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+    // Echo cancellation runs only when the microphone and speaker share one
+    // sample rate; left alone, an iPhone can come up with 48 kHz in and
+    // 44.1 kHz out, and the engine stops at once.
+    try? session.setPreferredSampleRate(48000)
+    try? session.setPreferredIOBufferDuration(0.02)
     try session.setActive(true)
+    voiceTrace("session: \(session.sampleRate) Hz, buffer \(session.ioBufferDuration) s")
     try build()
     running = true
     let center = NotificationCenter.default
@@ -74,7 +80,7 @@ public final class VoiceAudio: @unchecked Sendable {
         let changed = (note.object as? AVAudioEngine).map(ObjectIdentifier.init)
         MainActor.assumeIsolated {
           guard let self, changed == self.engine.map(ObjectIdentifier.init) else { return }
-          self.log.notice("Audio configuration changed; restarting")
+          voiceTrace("configuration changed; restarting")
           self.scheduleRebuild()
         }
       },
@@ -120,16 +126,47 @@ public final class VoiceAudio: @unchecked Sendable {
   }
 
   /// iOS often sends several changes in a row; restart once they settle.
+  /// The same engine is started again; only if that fails is it rebuilt,
+  /// and repeated failures end the call instead of looping.
   @MainActor
   private func scheduleRebuild() {
     guard running, !rebuildPending else { return }
     rebuildPending = true
     Task { @MainActor [weak self] in
       try? await Task.sleep(for: .milliseconds(300))
-      guard let self else { return }
+      guard let self, self.running else { return }
       self.rebuildPending = false
-      self.rebuild()
+      self.recover()
     }
+  }
+
+  private var restarts: [Date] = []
+
+  @MainActor
+  private func recover() {
+    restarts = restarts.filter { $0 > .now.addingTimeInterval(-15) } + [.now]
+    guard restarts.count <= 6 else {
+      voiceTrace("audio keeps stopping; giving up")
+      onFailure?("The iPhone's audio kept stopping. End the call and try again.")
+      return
+    }
+    if let engine, let player {
+      if engine.isRunning {
+        if !player.isPlaying { player.play() }
+        return
+      }
+      do {
+        try AVAudioSession.sharedInstance().setActive(true)
+        engine.prepare()
+        try engine.start()
+        if engine.isRunning { player.play() }
+        voiceTrace("engine restarted: running=\(engine.isRunning)")
+        if engine.isRunning { return }
+      } catch {
+        voiceTrace("engine restart failed: \(error.localizedDescription)")
+      }
+    }
+    rebuild()
   }
 
   @MainActor
@@ -137,13 +174,18 @@ public final class VoiceAudio: @unchecked Sendable {
     let engine = AVAudioEngine()
     let input = engine.inputNode
     try input.setVoiceProcessingEnabled(true)
-    let player = AVAudioPlayerNode()
-    engine.attach(player)
-    engine.connect(player, to: engine.mainMixerNode, format: playback)
     let format = input.outputFormat(forBus: 0)
     guard format.sampleRate > 0, format.channelCount > 0 else {
       throw VoiceAudioError("The microphone isn't available right now.")
     }
+    let player = AVAudioPlayerNode()
+    engine.attach(player)
+    // The mixer feeds the speaker at the microphone's rate, the one rate
+    // voice processing can run both directions at.
+    if let speaker = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 1) {
+      engine.connect(engine.mainMixerNode, to: engine.outputNode, format: speaker)
+    }
+    engine.connect(player, to: engine.mainMixerNode, format: playback)
     // nil: the tap uses whatever the bus delivers, so a format that changed
     // under voice processing can never make installTap throw.
     // @Sendable: runs on the audio thread. Without it, a closure formed in
@@ -158,8 +200,8 @@ public final class VoiceAudio: @unchecked Sendable {
     self.engine = engine
     self.player = player
     preferSpeaker()
-    log.notice(
-      "Audio started: mic \(format.sampleRate, privacy: .public) Hz × \(format.channelCount, privacy: .public), output \(engine.outputNode.outputFormat(forBus: 0).sampleRate, privacy: .public) Hz"
+    voiceTrace(
+      "audio started: running=\(engine.isRunning) mic \(format.sampleRate) Hz × \(format.channelCount), output \(engine.outputNode.outputFormat(forBus: 0).sampleRate) Hz, route \(AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType.rawValue))"
     )
   }
 
@@ -191,7 +233,7 @@ public final class VoiceAudio: @unchecked Sendable {
       try AVAudioSession.sharedInstance().setActive(true)
       try build()
     } catch {
-      log.error("Audio restart failed: \(error.localizedDescription, privacy: .public)")
+      voiceTrace("audio restart failed: \(error.localizedDescription)")
       onFailure?("The iPhone's audio stopped and could not restart. End the call and try again.")
     }
   }
@@ -217,7 +259,7 @@ public final class VoiceAudio: @unchecked Sendable {
       let out = buffer.floatChannelData?[0]
     else {
       if running, engine?.isRunning != true {
-        log.notice("Audio engine not running while the coach speaks; restarting")
+        voiceTrace("engine not running while the coach speaks; restarting")
         scheduleRebuild()
       }
       return
@@ -247,7 +289,10 @@ public final class VoiceAudio: @unchecked Sendable {
         state.scheduled -= 1
         return state.scheduled == 0
       }
-      if finished { self.onSpeaking?(false) }
+      if finished {
+        voiceTrace("coach audio played to the end")
+        self.onSpeaking?(false)
+      }
     }
     if !player.isPlaying, engine.isRunning { player.play() }
   }
@@ -294,7 +339,7 @@ public final class VoiceAudio: @unchecked Sendable {
       return buffer
     }
     if let error {
-      log.error("Microphone conversion failed: \(error.localizedDescription, privacy: .public)")
+      voiceTrace("microphone conversion failed: \(error.localizedDescription)")
       return
     }
     guard let data = output.int16ChannelData?[0], output.frameLength > 0 else { return }
@@ -314,7 +359,7 @@ public final class VoiceAudio: @unchecked Sendable {
       state.chunks += ready.count
       return (ready, state.chunks == ready.count && !ready.isEmpty)
     }
-    if first { log.notice("Microphone audio is flowing") }
+    if first { voiceTrace("microphone audio is flowing (\(format.sampleRate) Hz × \(format.channelCount))") }
     for chunk in chunks { onChunk?(chunk) }
   }
 

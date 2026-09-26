@@ -1,4 +1,12 @@
 import Foundation
+import os
+
+/// Voice diagnostics: to the unified log, and to stdout so a build launched
+/// from the Mac shows them live. Never includes speech or transcripts.
+public func voiceTrace(_ message: String) {
+  Logger(subsystem: "com.bjarketornager.liftjournal", category: "voice").notice("\(message, privacy: .public)")
+  print("[voice \(Date.now.formatted(.dateTime.hour().minute().second()))] \(message)")
+}
 
 /// A tool the voice coach asked the app to run.
 public struct FunctionCall: Sendable, Equatable {

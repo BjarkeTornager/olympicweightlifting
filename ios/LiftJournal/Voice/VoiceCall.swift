@@ -82,7 +82,9 @@ final class VoiceCall {
     error = nil
     lines = []
     status = .connecting
-    guard await AVAudioApplication.requestRecordPermission() else {
+    let allowed = await AVAudioApplication.requestRecordPermission()
+    voiceTrace("microphone permission: \(allowed)")
+    guard allowed else {
       stop(failure: "Microphone access is off. Turn it on in Settings › Lift Journal, then try again.")
       return
     }
@@ -100,7 +102,9 @@ final class VoiceCall {
     }
     do {
       try audio.start()
+      voiceTrace("audio start returned")
       try await connect(resume: false)
+      voiceTrace("connected and ready")
       meter()
       tasks.append(
         Task { [weak self] in
@@ -113,6 +117,7 @@ final class VoiceCall {
           await self?.endWhenIdle(limit: .seconds(90))
         })
     } catch {
+      voiceTrace("start failed: \(error.localizedDescription)")
       stop(failure: failureMessage(error))
     }
   }
@@ -144,6 +149,7 @@ final class VoiceCall {
     let response = try await RawRequest.send(
       "api/voice/session", body: body, token: session.token, account: session.accountID,
       headers: ["X-Voice-Client": Self.clientVersion], timeout: 15)
+    voiceTrace("session request: HTTP \(response.status)\(response.error.map { " – \($0)" } ?? "")")
     if response.status == 426 { app.updateRequired = true }
     if response.status == 401 {
       _ = await app.handle(APIFailure(status: 401, message: "Sign in again."))
@@ -158,7 +164,9 @@ final class VoiceCall {
     task.maximumMessageSize = 16 * 1024 * 1024
     socket = task
     task.resume()
+    voiceTrace("socket opening to \(url.host() ?? "?")")
     try await task.send(.string(Self.encode(["setup": setup])))
+    voiceTrace("setup sent")
     listen(on: task, previous: previous)
     // Wait for Google's setupComplete, or give up after 20 seconds.
     let timeout = Task { [weak self] in
@@ -188,6 +196,7 @@ final class VoiceCall {
           } catch {
             guard let self, !self.closed, self.socket === task else { return }
             let reason = task.closeReason.flatMap { String(data: $0, encoding: .utf8) }
+            voiceTrace("socket closed: code \(task.closeCode.rawValue) \(reason ?? error.localizedDescription)")
             self.report("socket_closed", ["code": task.closeCode.rawValue, "reason": String((reason ?? "").prefix(200))])
             if self.waiting != nil {
               self.connected(.failure(VoiceError(reason ?? "The voice connection closed.")))
@@ -197,6 +206,10 @@ final class VoiceCall {
             return
           }
           guard let self, !self.closed else { return }
+          self.received += 1
+          if self.received <= 3 || self.received % 50 == 0 {
+            voiceTrace("message \(self.received) from Google")
+          }
           let data: Data
           switch message {
           case .string(let text): data = Data(text.utf8)
@@ -270,8 +283,14 @@ final class VoiceCall {
 
   // MARK: Audio
 
+  private var received = 0
+  private var heardAudio = false
+  private var sentChunks = 0
+
   private func microphone(_ chunk: [Int16]) {
     guard started, !closed, !reconnecting else { return }
+    sentChunks += 1
+    if sentChunks == 1 || sentChunks % 100 == 0 { voiceTrace("sent \(sentChunks) microphone chunks") }
     for pcm in gate.pass(chunk, coachSpeaking: audio.coachSpeaking, coachLevel: audio.coachLevel) {
       send(LiveProtocol.audio(pcm))
     }
@@ -298,6 +317,10 @@ final class VoiceCall {
     case .resumeHandle(let value):
       handle = value
     case .audio(let pcm):
+      if !heardAudio {
+        heardAudio = true
+        voiceTrace("first coach audio: \(pcm.count) bytes")
+      }
       audio.play(pcm)
     case .interrupted:
       audio.interrupt()

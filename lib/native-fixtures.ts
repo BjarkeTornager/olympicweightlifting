@@ -1,7 +1,12 @@
 import { createWorkout, days, emptyJournal } from "./domain";
 import { cardioFromWorkout } from "./health-sync";
 import { addDrink } from "./hydration";
-import { buildCoach, buildJournal, buildToday } from "./native-api";
+import {
+  buildCoach,
+  buildJournal,
+  buildToday,
+  buildTrends,
+} from "./native-api";
 
 // Synthetic server responses, committed next to the Swift tests and used by
 // the app's previews. The Swift tests decode them with the generated client,
@@ -91,6 +96,7 @@ export function nativeFixtures() {
   return {
     "today.json": buildToday(state, 12, date, imported),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
+    "trends.json": buildTrends(state, date, 7),
     "coach.json": buildCoach(
       [
         {
@@ -99,7 +105,22 @@ export function nativeFixtures() {
           photoIds: [],
           createdAt: now.toISOString(),
           status: "done",
-          reply: "Saved your breakfast. **About 300 kcal** and 11 g protein.",
+          reply:
+            "### Breakfast saved\n\n**About 300 kcal** and 11 g protein.\n\n- Oats, 80 g\n- Berries\n  - estimated portion\n\n| Meal | kcal |\n| --- | --- |\n| Breakfast | 300 |",
+          visuals: [
+            {
+              id: "0d4e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a16",
+              content: {
+                kind: "bar_chart",
+                title: "Protein this week",
+                unit: "g",
+                points: [
+                  { label: "Mon", value: 120 },
+                  { label: "Tue", value: 95 },
+                ],
+              },
+            },
+          ],
           proposals: [
             {
               id: "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a13",

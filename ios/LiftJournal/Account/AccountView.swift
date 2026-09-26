@@ -12,8 +12,14 @@ struct AccountView: View {
       List {
         if let session = model.session {
           Section {
-            LabeledContent("Name", value: session.name)
-            LabeledContent("Email", value: session.email)
+            HStack(spacing: 14) {
+              Avatar(name: session.name, size: 56)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(session.name).font(.title3.weight(.semibold))
+                Text(session.email).font(.subheadline).foregroundStyle(.secondary)
+              }
+            }
+            .padding(.vertical, 4)
           }
         }
         Section {
@@ -21,16 +27,28 @@ struct AccountView: View {
             HealthView()
           } label: {
             LabeledContent {
-              Text(model.health.connected ? "Connected" : "Off")
+              Text(model.health.connected ? "On" : "Off")
             } label: {
-              Label("Apple Health", systemImage: "heart.fill")
+              Label {
+                Text("Apple Health")
+              } icon: {
+                IconBadge(symbol: "heart.fill", tint: .pink, size: 28)
+              }
             }
           }
           Link(destination: LiftServer.origin) {
-            Label("Open the website", systemImage: "safari")
+            Label {
+              Text("Open the Website")
+            } icon: {
+              IconBadge(symbol: "safari.fill", tint: .blue, size: 28)
+            }
           }
           Link(destination: LiftServer.origin.appending(path: "privacy")) {
-            Label("Privacy policy", systemImage: "hand.raised")
+            Label {
+              Text("Privacy Policy")
+            } icon: {
+              IconBadge(symbol: "hand.raised.fill", tint: .gray, size: 28)
+            }
           }
         } footer: {
           Text("Routines, programmes, videos and backups are managed on the website for now.")

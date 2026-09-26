@@ -2,7 +2,8 @@ import LiftAPI
 import LiftStore
 import SwiftUI
 
-/// Everything recorded, newest first, a fortnight at a time.
+/// Everything recorded, newest first, a fortnight at a time, with the
+/// standard search field and a filter menu.
 struct JournalView: View {
   @Environment(AppModel.self) private var model
   @State private var items: [Components.Schemas.JournalItem] = []
@@ -10,10 +11,19 @@ struct JournalView: View {
   @State private var loading = false
   @State private var error: String?
   @State private var filter: Kind = .all
+  @State private var query = ""
 
   enum Kind: String, CaseIterable, Identifiable {
     case all = "All", training = "Training", food = "Food", recovery = "Recovery"
     var id: Self { self }
+    var symbol: String {
+      switch self {
+      case .all: "tray.full"
+      case .training: "figure.run"
+      case .food: "fork.knife"
+      case .recovery: "bed.double"
+      }
+    }
     func includes(_ kind: String) -> Bool {
       switch self {
       case .all: true
@@ -25,51 +35,58 @@ struct JournalView: View {
   }
 
   private var days: [(String, [Components.Schemas.JournalItem])] {
-    let shown = items.filter { filter.includes($0.kind) }
+    let words = query.lowercased().split(separator: " ")
+    let shown = items.filter { item in
+      filter.includes(item.kind)
+        && words.allSatisfy { "\(item.title) \(item.detail)".lowercased().contains($0) }
+    }
     let grouped = Dictionary(grouping: shown, by: \.date)
     return grouped.keys.sorted(by: >).map { ($0, grouped[$0]!) }
   }
 
   var body: some View {
     List {
-      Picker("Show", selection: $filter) {
-        ForEach(Kind.allCases) { Text($0.rawValue).tag($0) }
-      }
-      .pickerStyle(.segmented)
-      .listRowBackground(Color.clear)
-      .listRowInsets(EdgeInsets())
-
       ForEach(days, id: \.0) { day, entries in
         Section(Self.heading(day)) {
           ForEach(entries, id: \.id) { JournalRow(item: $0) }
         }
       }
-      if let nextBefore {
+      if let nextBefore, query.isEmpty {
         ProgressView()
           .frame(maxWidth: .infinity)
-          .task(id: nextBefore) { await load(before: nextBefore) }
-      } else if !items.isEmpty {
-        Text("That's everything.")
-          .font(.footnote).foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity)
           .listRowBackground(Color.clear)
+          .task(id: nextBefore) { await load(before: nextBefore) }
       }
     }
     .overlay {
-      if items.isEmpty && !loading {
-        ContentUnavailableView(
-          "Nothing here yet", systemImage: "book.closed",
-          description: Text(error ?? "Training, food and recovery appear here as you log them."))
+      if days.isEmpty && !loading {
+        if !query.isEmpty {
+          ContentUnavailableView.search(text: query)
+        } else {
+          ContentUnavailableView(
+            "Nothing Here Yet", systemImage: "book.closed",
+            description: Text(error ?? "Training, food and recovery appear here as you log them."))
+        }
       }
     }
-    .navigationTitle("Journal")
-    .refreshable { await reload() }
-    .task { if items.isEmpty { await reload() } }
-    .onChange(of: model.today?.revision) { _, _ in Task { await reload() } }
-  }
-
-  private func reload() async {
-    await load(before: nil)
+    .navigationTitle(filter == .all ? "Journal" : filter.rawValue)
+    .searchable(text: $query, prompt: "Search your journal")
+    .toolbar {
+      ToolbarItem(placement: .topBarTrailing) {
+        Menu {
+          Picker("Show", selection: $filter) {
+            ForEach(Kind.allCases) { Label($0.rawValue, systemImage: $0.symbol).tag($0) }
+          }
+          .pickerStyle(.inline)
+        } label: {
+          Label("Filter", systemImage: filter == .all
+            ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+        }
+      }
+    }
+    .refreshable { await load(before: nil) }
+    .task { if items.isEmpty { await load(before: nil) } }
+    .onChange(of: model.today?.revision) { _, _ in Task { await load(before: nil) } }
   }
 
   private func load(before: String?) async {
@@ -100,41 +117,28 @@ struct JournalRow: View {
   let item: Components.Schemas.JournalItem
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
-      Image(systemName: symbol)
-        .foregroundStyle(color)
-        .frame(width: 28)
+    HStack(spacing: 12) {
+      IconBadge(symbol: category.symbol, tint: category.tint)
       VStack(alignment: .leading, spacing: 2) {
         Text(item.title)
         if !item.detail.isEmpty {
           Text(item.detail).font(.subheadline).foregroundStyle(.secondary)
         }
-        if item.fromAppleHealth { AppleHealthBadge() }
       }
+      Spacer(minLength: 0)
+      if item.fromAppleHealth { AppleHealthMark() }
     }
     .accessibilityElement(children: .combine)
   }
 
-  private var symbol: String {
+  private var category: Category {
     switch item.kind {
-    case "strength": "figure.strengthtraining.olympic"
-    case "cardio": "figure.run"
-    case "meal": "fork.knife"
-    case "sleep": "bed.double.fill"
-    case "checkin": "face.smiling"
-    case "vitals": "heart.fill"
-    default: "circle"
-    }
-  }
-
-  private var color: Color {
-    switch item.kind {
-    case "strength": .orange
-    case "cardio": .green
-    case "meal": .yellow
-    case "sleep": .indigo
-    case "vitals": .pink
-    default: .secondary
+    case "strength": .training
+    case "cardio": .activity
+    case "meal": .food
+    case "sleep": .sleep
+    case "vitals": .heart
+    default: .checkin
     }
   }
 }

@@ -5,5 +5,10 @@
 	<!-- Keys without an INFOPLIST_KEY_ build setting. Xcode merges this with the generated Info.plist. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- A spoken check-in keeps going while the screen is locked. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

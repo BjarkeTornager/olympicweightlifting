@@ -146,6 +146,51 @@
         }
       }
     },
+    "/api/v1/trends": {
+      "get": {
+        "operationId": "getTrends",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trends"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/journal": {
       "get": {
         "operationId": "getJournal",
@@ -459,6 +504,21 @@
           "fromAppleHealth"
         ]
       },
+      "ChartPoint": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
       "Checkin": {
         "type": "object",
         "properties": {
@@ -550,6 +610,12 @@
             "items": {
               "$ref": "#/components/schemas/CoachReceipt"
             }
+          },
+          "visuals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoachVisual"
+            }
           }
         },
         "required": [
@@ -560,6 +626,95 @@
           "createdAt",
           "status",
           "receipts"
+        ]
+      },
+      "CoachVisual": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "One of: table, bar_chart, diagram, photo_gallery, route_map. Treat others as unknown."
+          },
+          "title": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "unit": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartPoint"
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagramNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagramEdge"
+            }
+          },
+          "imageIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "activity": {
+            "type": "string"
+          },
+          "distanceKm": {
+            "type": "number"
+          },
+          "durationSeconds": {
+            "type": "integer"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RouteStop"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title"
         ]
       },
       "DeleteCardioAction": {
@@ -598,6 +753,39 @@
         "required": [
           "kind",
           "drinkId"
+        ]
+      },
+      "DiagramEdge": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "DiagramNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
         ]
       },
       "DiscardWorkoutAction": {
@@ -1370,6 +1558,25 @@
           "checkin"
         ]
       },
+      "RouteStop": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "label"
+        ]
+      },
       "SessionInfo": {
         "type": "object",
         "properties": {
@@ -1596,6 +1803,77 @@
           "token",
           "expiresAt",
           "user"
+        ]
+      },
+      "TrendDay": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "sleepHours": {
+            "type": "number"
+          },
+          "sleepFromAppleHealth": {
+            "type": "boolean"
+          },
+          "restingHeartRate": {
+            "type": "integer"
+          },
+          "heartRateVariabilityMs": {
+            "type": "number"
+          },
+          "steps": {
+            "type": "integer"
+          },
+          "activeEnergyKcal": {
+            "type": "integer"
+          },
+          "waterMl": {
+            "type": "integer"
+          },
+          "calories": {
+            "type": "number"
+          },
+          "protein": {
+            "type": "number"
+          },
+          "cardioMinutes": {
+            "type": "integer"
+          },
+          "strengthSessions": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "sleepFromAppleHealth",
+          "cardioMinutes",
+          "strengthSessions"
+        ]
+      },
+      "Trends": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrendDay"
+            }
+          },
+          "targetCalories": {
+            "type": "number"
+          },
+          "targetProtein": {
+            "type": "number"
+          },
+          "waterTargetMl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "waterTargetMl"
         ]
       },
       "Vitals": {

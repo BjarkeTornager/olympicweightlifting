@@ -24,44 +24,25 @@ struct RootView: View {
           }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .overlay(alignment: .bottom) { NoticeBar() }
+        .fullScreenCover(
+          isPresented: Binding(
+            get: { model.voiceCall != nil }, set: { if !$0 { model.closeVoice() } })
+        ) {
+          if let call = model.voiceCall { VoiceCallView(call: call) }
+        }
+        .alert(
+          "Not Saved",
+          isPresented: Binding(
+            get: { model.notice?.problem == true }, set: { if !$0 { model.notice = nil } }),
+          presenting: model.notice
+        ) { _ in
+          Button("OK", role: .cancel) {}
+        } message: { notice in
+          Text(notice.text)
+        }
       }
     }
     .fullScreenCover(isPresented: $model.updateRequired) { UpdateRequiredView() }
-  }
-}
-
-/// A short confirmation above the tab bar, with Undo where the change can be undone.
-struct NoticeBar: View {
-  @Environment(AppModel.self) private var model
-
-  var body: some View {
-    if let notice = model.notice {
-      HStack(spacing: 12) {
-        Image(systemName: notice.problem ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-          .foregroundStyle(notice.problem ? .orange : .green)
-        Text(notice.text).font(.subheadline).lineLimit(3)
-        Spacer(minLength: 0)
-        if let undo = notice.undo {
-          Button("Undo") {
-            model.notice = nil
-            Task { await model.save(undo, confirmation: "Undone") }
-          }
-          .font(.subheadline.weight(.semibold))
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
-      .glassEffect(.regular, in: .capsule)
-      .padding(.horizontal, 16)
-      .padding(.bottom, 64)
-      .transition(.move(edge: .bottom).combined(with: .opacity))
-      .task(id: notice.id) {
-        try? await Task.sleep(for: .seconds(notice.problem ? 6 : 3))
-        if model.notice?.id == notice.id { withAnimation { model.notice = nil } }
-      }
-      .accessibilityElement(children: .combine)
-    }
   }
 }
 

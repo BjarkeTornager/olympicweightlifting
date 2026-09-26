@@ -6,7 +6,7 @@ LIFT_BUNDLE_ID = com.bjarketornager.liftjournal
 
 // Bump MARKETING_VERSION for each TestFlight milestone. The build number must
 // increase for every upload; scripts/testflight.sh sets it from the date.
-MARKETING_VERSION = 0.1
+MARKETING_VERSION = 0.2
 CURRENT_PROJECT_VERSION = 1
 
 SDKROOT = iphoneos

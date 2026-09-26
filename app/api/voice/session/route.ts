@@ -9,6 +9,7 @@ import {
 import { localClock } from "@/lib/agent/time-context";
 import { logFailure } from "@/lib/error-log";
 import { isCreditError, VOICE_CREDIT_MESSAGE } from "@/lib/voice-live";
+import { nativeClient } from "@/lib/native-client";
 import { allowRequest, readJournal } from "@/lib/server";
 import { recentConversations } from "@/lib/conversation-memory";
 import {
@@ -44,7 +45,9 @@ export async function POST(request: Request) {
     // An older app would start a call with outdated tools and time limits.
     // A call already in progress may still reconnect, so a release never
     // cuts off a conversation.
+    // Installed iPhone builds are gated by build number in requireCurrentCoach.
     if (
+      !nativeClient(request) &&
       Number(request.headers.get("x-voice-client") ?? 0) < 3 &&
       !(raw && typeof raw === "object" && "resumeHandle" in raw)
     )

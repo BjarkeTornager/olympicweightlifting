@@ -3,12 +3,13 @@ import PackageDescription
 
 // Shared by the app and, later, its widget extension. LiftAPI is the client
 // generated from the server's OpenAPI document; LiftStore keeps credentials,
-// the offline queue and the Apple Health reader.
+// the offline queue and the Apple Health reader; LiftVoice runs the audio of
+// a spoken check-in.
 let package = Package(
   name: "LiftKit",
   platforms: [.iOS(.v26)],
   products: [
-    .library(name: "LiftKit", targets: ["LiftAPI", "LiftStore"])
+    .library(name: "LiftKit", targets: ["LiftAPI", "LiftStore", "LiftVoice"])
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.13.1"),
@@ -27,9 +28,11 @@ let package = Package(
       plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]
     ),
     .target(name: "LiftStore", dependencies: ["LiftAPI"]),
+    // Spoken check-in: audio engine and Gemini Live wire format.
+    .target(name: "LiftVoice"),
     .testTarget(
       name: "LiftKitTests",
-      dependencies: ["LiftAPI", "LiftStore"],
+      dependencies: ["LiftAPI", "LiftStore", "LiftVoice"],
       resources: [.copy("Fixtures")]
     ),
   ]

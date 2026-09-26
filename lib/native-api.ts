@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
 import { dailyHealth, formatSleepDuration, offsetDate } from "./health";
-import { drinkKinds, hydrationForDay } from "./hydration";
+import { drinkKinds, hydrationForDay, hydrationTargetMl } from "./hydration";
 import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
 import { mealTypes, totalNutrients } from "./nutrition";
+import type { SavedVisual } from "./coach-visuals";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -652,6 +653,67 @@ const receipt = z
   })
   .strict()
   .register(nativeResponses, { id: "CoachReceipt" });
+// A Coach visual flattened into one shape the app decodes tolerantly: the
+// kind says which fields are present. Unknown kinds are skipped by the app.
+const coachVisual = z
+  .object({
+    id: z.string(),
+    kind: z.enum([
+      "table",
+      "bar_chart",
+      "diagram",
+      "photo_gallery",
+      "route_map",
+    ]),
+    title: z.string(),
+    caption: z.string().optional(),
+    columns: z.array(z.string()).optional(),
+    rows: z.array(z.array(z.string())).optional(),
+    unit: z.string().optional(),
+    points: z
+      .array(
+        z
+          .object({ label: z.string(), value: z.number() })
+          .strict()
+          .register(nativeResponses, { id: "ChartPoint" }),
+      )
+      .optional(),
+    nodes: z
+      .array(
+        z
+          .object({ id: z.string(), label: z.string() })
+          .strict()
+          .register(nativeResponses, { id: "DiagramNode" }),
+      )
+      .optional(),
+    edges: z
+      .array(
+        z
+          .object({
+            from: z.string(),
+            to: z.string(),
+            label: z.string().optional(),
+          })
+          .strict()
+          .register(nativeResponses, { id: "DiagramEdge" }),
+      )
+      .optional(),
+    imageIds: z.array(z.string()).optional(),
+    activity: z.string().optional(),
+    distanceKm: z.number().optional(),
+    durationSeconds: int.optional(),
+    path: z.array(z.array(z.number())).optional(),
+    stops: z
+      .array(
+        z
+          .object({ lat: z.number(), lng: z.number(), label: z.string() })
+          .strict()
+          .register(nativeResponses, { id: "RouteStop" }),
+      )
+      .optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "CoachVisual" });
 const coachTurn = z
   .object({
     id: z.string(),
@@ -662,6 +724,8 @@ const coachTurn = z
     status: z.enum(["running", "done", "failed"]),
     reply: z.string().optional(),
     receipts: z.array(receipt),
+    // Optional: builds released before visuals must still decode a turn.
+    visuals: z.array(coachVisual).optional(),
   })
   .strict()
   .register(nativeResponses, { id: "CoachTurn" });
@@ -684,7 +748,32 @@ type HistoryTurn = {
     status?: string;
     expiresAt: string;
   }[];
+  visuals?: SavedVisual[];
 };
+
+function flattenVisual({ id, content }: SavedVisual) {
+  const { kind, title, caption } = content;
+  const common = { id, kind, title, caption };
+  switch (content.kind) {
+    case "table":
+      return { ...common, columns: content.columns, rows: content.rows };
+    case "bar_chart":
+      return { ...common, unit: content.unit, points: content.points };
+    case "diagram":
+      return { ...common, nodes: content.nodes, edges: content.edges };
+    case "photo_gallery":
+      return { ...common, imageIds: content.imageIds };
+    case "route_map":
+      return {
+        ...common,
+        activity: content.activity,
+        distanceKm: content.distanceKm,
+        durationSeconds: content.durationSeconds,
+        path: content.path.map(([lat, lng]) => [lat, lng]),
+        stops: content.stops,
+      };
+  }
+}
 
 export function buildCoach(turns: HistoryTurn[], now = new Date()) {
   const voice = "[voice] ";
@@ -702,6 +791,7 @@ export function buildCoach(turns: HistoryTurn[], now = new Date()) {
           ? t.status
           : "done",
         reply: t.reply,
+        visuals: (t.visuals ?? []).map((v) => defined(flattenVisual(v))),
         receipts: (t.proposals ?? []).map((p) => ({
           id: p.id,
           title: p.title,
@@ -730,3 +820,77 @@ export const imageUpload = z
   })
   .strict()
   .register(nativeRequests, { id: "ImageUpload" });
+
+// ---- Trends ------------------------------------------------------------------
+
+const trendDay = z
+  .object({
+    date: day,
+    sleepHours: z.number().optional(),
+    sleepFromAppleHealth: z.boolean(),
+    restingHeartRate: int.optional(),
+    heartRateVariabilityMs: z.number().optional(),
+    steps: int.optional(),
+    activeEnergyKcal: int.optional(),
+    waterMl: int.optional(),
+    calories: z.number().optional(),
+    protein: z.number().optional(),
+    cardioMinutes: int,
+    strengthSessions: int,
+  })
+  .strict()
+  .register(nativeResponses, { id: "TrendDay" });
+export const trendsView = z
+  .object({
+    days: z.array(trendDay),
+    targetCalories: z.number().optional(),
+    targetProtein: z.number().optional(),
+    waterTargetMl: int,
+  })
+  .strict()
+  .register(nativeResponses, { id: "Trends" });
+export type TrendsView = z.infer<typeof trendsView>;
+
+// One row per day, oldest first, for the app's charts. Absent values mean
+// nothing was recorded, not zero.
+export function buildTrends(
+  state: JournalState,
+  date: string,
+  days: number,
+): TrendsView {
+  const rows = Array.from({ length: days }, (_, i) =>
+    offsetDate(date, i - days + 1),
+  ).map((d) => {
+    const checkin = state.health.checkins.find((c) => c.date === d);
+    const vitals = state.health.vitals?.find((v) => v.date === d);
+    const meals = state.nutrition.meals.filter((m) => m.date === d);
+    const food = totalNutrients(meals.flatMap((m) => m.items));
+    const water = hydrationForDay(state, d);
+    return defined({
+      date: d,
+      sleepHours: checkin?.sleepHours,
+      sleepFromAppleHealth: Boolean(checkin?.sleepImport),
+      restingHeartRate: vitals?.restingHeartRate,
+      heartRateVariabilityMs: vitals?.heartRateVariabilityMs,
+      steps: vitals?.steps,
+      activeEnergyKcal: vitals?.activeEnergyKcal,
+      waterMl: water.recorded ? water.totalMl : undefined,
+      calories: meals.length ? food.calories : undefined,
+      protein: meals.length ? food.protein : undefined,
+      cardioMinutes: Math.round(
+        state.cardio.sessions
+          .filter((s) => s.date === d)
+          .reduce((n, s) => n + s.durationSeconds, 0) / 60,
+      ),
+      strengthSessions: state.sessions.filter((s) => s.date === d).length,
+    });
+  });
+  return trendsView.parse(
+    defined({
+      days: rows,
+      targetCalories: state.nutrition.targets?.calories,
+      targetProtein: state.nutrition.targets?.protein,
+      waterTargetMl: hydrationTargetMl(state, date).targetMl,
+    }),
+  );
+}

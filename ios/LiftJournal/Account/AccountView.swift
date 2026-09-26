@@ -6,6 +6,10 @@ struct AccountView: View {
   @Environment(AppModel.self) private var model
   @Environment(\.dismiss) private var dismiss
   @State private var confirmingSignOut = false
+  @State private var confirmingDeletion = false
+  @State private var deleting = false
+  @State private var deletionError: String?
+  @AppStorage(AIConsent.key) private var aiAllowed = false
 
   var body: some View {
     NavigationStack {
@@ -59,6 +63,31 @@ struct AccountView: View {
           Text("Signs out this iPhone only. Your journal stays on the server.")
         }
         Section {
+          Toggle(isOn: $aiAllowed) {
+            Label("Share with Coach's AI provider", systemImage: "sparkles")
+          }
+        } footer: {
+          Text("Coach and voice check-ins send your messages, photos and relevant journal and Apple Health records to a third-party AI provider. Turn this off to stop sharing; Coach stays off until you allow it again.")
+        }
+        Section {
+          Button(role: .destructive) {
+            confirmingDeletion = true
+          } label: {
+            if deleting {
+              ProgressView()
+            } else {
+              Text("Delete account")
+            }
+          }
+          .disabled(deleting)
+        } footer: {
+          if let deletionError {
+            Text(deletionError).foregroundStyle(.red)
+          } else {
+            Text("Permanently deletes your account and everything in your journal from Lift Journal's server. Data in Apple Health is not affected.")
+          }
+        }
+        Section {
         } footer: {
           Text("Lift Journal \(LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "").replacingOccurrences(of: "/", with: " (")))")
             .frame(maxWidth: .infinity)
@@ -82,6 +111,19 @@ struct AccountView: View {
         if model.queued > 0 {
           Text("\(model.queued) unsent changes on this iPhone will be lost.")
         }
+      }
+      .alert("Delete your account?", isPresented: $confirmingDeletion) {
+        Button("Delete account", role: .destructive) {
+          Task {
+            deleting = true
+            deletionError = await model.deleteAccount()
+            deleting = false
+            if deletionError == nil { dismiss() }
+          }
+        }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text("This permanently deletes your journal, workouts, meals, photos, videos, Coach conversations and Apple Health imports. It can't be undone. To keep a copy, download a backup from Settings on the website first.")
       }
     }
   }

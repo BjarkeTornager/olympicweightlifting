@@ -17,13 +17,18 @@ struct RootView: View {
             NavigationStack { TodayView() }
           }
           Tab("Coach", systemImage: "bubble.left.and.text.bubble.right", value: AppModel.Tab.coach) {
-            NavigationStack { CoachView() }
+            NavigationStack { AIConsentGate { CoachView() } }
           }
           Tab("Journal", systemImage: "book.closed", value: AppModel.Tab.journal) {
             NavigationStack { JournalView() }
           }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        .sheet(isPresented: $model.consentForVoice, onDismiss: {
+          if UserDefaults.standard.bool(forKey: AIConsent.key) { model.startVoice() }
+        }) {
+          AIConsentView()
+        }
         .fullScreenCover(
           isPresented: Binding(
             get: { model.voiceCall != nil }, set: { if !$0 { model.closeVoice() } })

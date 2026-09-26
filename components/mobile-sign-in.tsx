@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
-export default function MobileSignIn() {
+export default function MobileSignIn({ review }: { review: boolean }) {
   const [user, setUser] = useState<{ id: string; name: string } | null>(null),
     [ready, setReady] = useState(false),
+    [reviewing, setReviewing] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [parameters, setParameters] = useState<{
@@ -107,6 +108,30 @@ export default function MobileSignIn() {
       setBusy(false);
     }
   }
+  // Apple's reviewer signs in with the passcode from App Store Connect.
+  async function reviewSignIn(passcode: string) {
+    setBusy(true);
+    setError("");
+    try {
+      if (!parameters) return;
+      const response = await fetch("/api/mobile/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode, ...parameters }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error ?? "Sign-in failed. Try again.");
+      if (
+        typeof data.callback !== "string" ||
+        !data.callback.startsWith("liftjournal://auth?")
+      )
+        throw Error("Start sign-in again from the app.");
+      location.assign(data.callback);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sign-in failed. Try again.");
+      setBusy(false);
+    }
+  }
   return (
     <main className="mx-auto max-w-md px-6 py-20">
       <p className="eyebrow">Lift Journal for iPhone</p>
@@ -129,6 +154,39 @@ export default function MobileSignIn() {
               ? "Connect iPhone app"
               : "Continue with Google"}
         </Button>
+      )}
+      {review && ready && parameters && !user && (
+        <div className="mt-8">
+          {reviewing ? (
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const passcode = new FormData(event.currentTarget).get(
+                  "passcode",
+                );
+                void reviewSignIn(String(passcode ?? ""));
+              }}
+            >
+              <label>
+                App Review passcode
+                <input
+                  name="passcode"
+                  type="password"
+                  autoComplete="off"
+                  required
+                />
+              </label>
+              <Button variant="secondary" disabled={busy}>
+                {busy ? "Connecting…" : "Sign in for App Review"}
+              </Button>
+            </form>
+          ) : (
+            <Button variant="ghost" onClick={() => setReviewing(true)}>
+              App Review sign-in
+            </Button>
+          )}
+        </div>
       )}
       <p className="fine-print mt-8">
         Your journal stays in your account. <a href="/privacy">Privacy</a>

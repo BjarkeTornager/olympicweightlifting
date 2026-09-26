@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getPool } from "./db";
 import { getAuth } from "./auth";
 import { userAllowed } from "./access";
+import { isReviewEmail, reviewPasscodeMatches, reviewUserId } from "./review";
 import { ApiError } from "./agent/http";
 
 export const mobileChallenge = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
@@ -29,6 +30,29 @@ export async function authorizeMobile(headers: Headers, challenge: string) {
   const auth = await getAuth().api.getSession({ headers });
   if (!auth || !(await userAllowed(auth.user)))
     throw new ApiError("Sign in with an invited Google account.", 401);
+  return grant({
+    challenge,
+    sessionId: auth.session.id,
+    userId: auth.user.id,
+  });
+}
+
+// App Review signs in with the passcode from App Store Connect instead of
+// Google. There is no browser session behind it, so the app session gets the
+// usual 30-day limit.
+export async function authorizeReview(passcode: string, challenge: string) {
+  mobileChallenge.parse(challenge);
+  if (!reviewPasscodeMatches(passcode))
+    throw new ApiError("That review passcode is not valid.", 401);
+  return grant({ challenge, userId: await reviewUserId(), review: true });
+}
+
+async function grant(value: {
+  challenge: string;
+  userId: string;
+  sessionId?: string;
+  review?: true;
+}) {
   const code = randomBytes(32).toString("base64url");
   const pool = getPool();
   await pool.query(
@@ -36,14 +60,7 @@ export async function authorizeMobile(headers: Headers, challenge: string) {
   );
   await pool.query(
     "INSERT INTO auth_verifications(id,identifier,value,expires_at) VALUES($1,$1,$2,now()+interval '2 minutes')",
-    [
-      grantKey(code),
-      JSON.stringify({
-        challenge,
-        sessionId: auth.session.id,
-        userId: auth.user.id,
-      }),
-    ],
+    [grantKey(code), JSON.stringify(value)],
   );
   return { code };
 }
@@ -69,14 +86,24 @@ export async function exchangeMobile(raw: unknown) {
         "Sign-in could not be verified. Start again in the app.",
         401,
       );
-    const active = await client.query(
-      `SELECT s.expires_at, u.id, u.email, u.name, u.email_verified AS "emailVerified"
-       FROM auth_sessions s JOIN users u ON u.id=s.user_id
-       WHERE s.id=$1 AND s.user_id=$2 AND s.expires_at>now() FOR UPDATE OF s`,
-      [grant.sessionId, grant.userId],
-    );
+    const active = grant.review
+      ? await client.query(
+          `SELECT now()+interval '30 days' AS expires_at, u.id, u.email, u.name, u.email_verified AS "emailVerified"
+           FROM users u WHERE u.id=$1`,
+          [grant.userId],
+        )
+      : await client.query(
+          `SELECT s.expires_at, u.id, u.email, u.name, u.email_verified AS "emailVerified"
+           FROM auth_sessions s JOIN users u ON u.id=s.user_id
+           WHERE s.id=$1 AND s.user_id=$2 AND s.expires_at>now() FOR UPDATE OF s`,
+          [grant.sessionId, grant.userId],
+        );
     const user = active.rows[0];
-    if (!user || !(await userAllowed(user)))
+    if (
+      !user ||
+      Boolean(grant.review) !== isReviewEmail(user.email) ||
+      !(await userAllowed(user))
+    )
       throw new ApiError("Sign in with an invited Google account.", 401);
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(

@@ -35,8 +35,11 @@ export { MapTrifoldIcon as MapTrifold } from "@phosphor-icons/react/dist/ssr/Map
 export { SignInIcon as LogIn } from "@phosphor-icons/react/dist/ssr/SignIn";
 export { SignOutIcon as LogOut } from "@phosphor-icons/react/dist/ssr/SignOut";
 export { ChatCircleIcon as MessageCircle } from "@phosphor-icons/react/dist/ssr/ChatCircle";
+export { MicrophoneIcon as Mic } from "@phosphor-icons/react/dist/ssr/Microphone";
+export { MicrophoneSlashIcon as MicOff } from "@phosphor-icons/react/dist/ssr/MicrophoneSlash";
 export { MoonIcon as Moon } from "@phosphor-icons/react/dist/ssr/Moon";
 export { DotsThreeIcon as MoreHorizontal } from "@phosphor-icons/react/dist/ssr/DotsThree";
+export { PhoneDisconnectIcon as PhoneOff } from "@phosphor-icons/react/dist/ssr/PhoneDisconnect";
 export { PauseIcon as Pause } from "@phosphor-icons/react/dist/ssr/Pause";
 export { PersonSimpleRunIcon as PersonSimpleRun } from "@phosphor-icons/react/dist/ssr/PersonSimpleRun";
 export { PlayIcon as Play } from "@phosphor-icons/react/dist/ssr/Play";

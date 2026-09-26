@@ -37,6 +37,10 @@ export const test = base.extend<{
       await context.route("**/api/maps/config", (r) =>
         r.fulfill({ json: { key: "test-maps-key" } }),
       );
+      // Voice check-in stays hidden unless a test turns it on.
+      await context.route("**/api/voice/session", (r) =>
+        r.fulfill({ json: { enabled: false } }),
+      );
       await context.route("**/api/lifting-videos", (r) =>
         r.fulfill({ json: { videos: [] } }),
       );

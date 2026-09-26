@@ -8,7 +8,8 @@ import { TrackingStatus } from "./tracking-status";
 import { NextSession } from "./next-session";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
-import { Plus, ChevronRight } from "./ui/icons";
+import { Plus, ChevronRight, Mic } from "./ui/icons";
+import { useVoiceEnabled } from "@/lib/use-voice-checkin";
 import { BarbellIcon, BowlIcon, SleepIcon } from "./ui/journal-icons";
 
 export function Today({
@@ -23,6 +24,7 @@ export function Today({
   const state = journal.state!,
     date = today();
   const [checkinOpen, setCheckinOpen] = useState(false);
+  const voiceEnabled = useVoiceEnabled(journal.identity?.id);
   const meals = state.nutrition.meals.filter((m) => m.date === date);
   const sleep = state.health.checkins.find((c) => c.date === date);
   const week = weeklyReview(state, date).current;
@@ -46,7 +48,13 @@ export function Today({
         <Button onClick={() => go("coach/capture")}>
           <Plus size={20} weight="bold" /> Log something
         </Button>
-        <span>A photo, a sentence, or your usual meal.</span>
+        {voiceEnabled ? (
+          <Button variant="secondary" onClick={() => go("coach/voice")}>
+            <Mic size={20} /> Check in by voice
+          </Button>
+        ) : (
+          <span>A photo, a sentence, or your usual meal.</span>
+        )}
       </div>
       <NextSession state={state} update={journal.update} go={go} />
       <section

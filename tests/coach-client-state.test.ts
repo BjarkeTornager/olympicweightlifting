@@ -71,8 +71,10 @@ test("Coach links open the matching entry, and an in-memory draft wins over a ro
   const sleep = coachEntryIntent("coach/photo/abc/sleep", state);
   assert.equal(sleep.initialSleepLog, true);
   assert.equal(sleep.initialCardioLog, false);
+  assert.equal(coachEntryIntent("coach/voice", state).initialVoice, true);
   assert.deepEqual(coachEntryIntent("coach", state), {
     initialCapture: false,
+    initialVoice: false,
     initialMemories: undefined,
     initialVideoReview: false,
     initialTrainingPrompt: undefined,

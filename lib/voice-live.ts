@@ -21,6 +21,25 @@ export function base64ToFloat32(data: string) {
   return samples;
 }
 
+// Google's prepaid voice credit ran out: retrying cannot help.
+export const VOICE_CREDIT_MESSAGE =
+  "Voice is paused because its Google credit has run out. You can keep typing to Coach.";
+export const isCreditError = (message: string) =>
+  /prepayment credits|credit has run out|RESOURCE_EXHAUSTED/i.test(message);
+
+// A coach turn that promises an action ("let me check that") but ends
+// without doing it leaves the athlete in silence; the app then nudges it.
+export const promisesAction = (text: string) =>
+  /\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add)/i.test(
+    text
+      .trim()
+      .split(/(?<=[.?!])\s+/)
+      .at(-1) ?? "",
+  );
+export const WAITING_NUDGE =
+  "(The athlete is waiting: do what you just said now, then answer.)";
+export const NUDGE_AFTER_MS = 2500;
+
 export type FunctionCall = {
   id: string;
   name: string;

@@ -116,6 +116,8 @@ export async function runTurn(
     signal?: AbortSignal;
     directLogging?: boolean;
     liftingBriefReview?: boolean;
+    // Observes each executed tool call; used by offline evals.
+    onToolCall?: (name: string, args: unknown, ok: boolean) => void;
   } = {},
 ) {
   const db = getDb();
@@ -637,6 +639,11 @@ export async function runTurn(
         } catch (e) {
           output = { error: toolError(name, e) };
         }
+        hooks.onToolCall?.(
+          name,
+          call.function.arguments,
+          !(output && typeof output === "object" && "error" in output),
+        );
         signal.throwIfAborted();
         emit?.({ type: EventType.STEP_FINISHED, stepName });
         const encoded = JSON.stringify(output);

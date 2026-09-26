@@ -285,3 +285,57 @@ test("OpenRouter adapter preserves tool IDs, JSON arguments and required privacy
     ),
   );
 });
+
+test("a reply blocked by the host's content filter is retried once on the fallback model", async (t) => {
+  const { mock } = await import("node:test");
+  const { callModel, FILTER_FALLBACK_MODEL } =
+    await import("../lib/agent/provider");
+  process.env.AGENT_PROVIDER = "openrouter";
+  process.env.AGENT_MODEL = "openai/gpt-5.6-luna";
+  process.env.OPENROUTER_API_KEY = "test-key";
+  const models: string[] = [];
+  const fetch = mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      models.push(body.model);
+      // Privacy routing is unchanged on the retry.
+      assert.equal(body.provider.zdr, true);
+      assert.equal(body.provider.data_collection, "deny");
+      const filtered = body.model !== FILTER_FALLBACK_MODEL;
+      return Response.json({
+        choices: [
+          {
+            finish_reason: filtered ? "content_filter" : "stop",
+            message: {
+              role: "assistant",
+              content: filtered
+                ? "I'm sorry, but I cannot assist with that request."
+                : "Three light doubles.",
+            },
+          },
+        ],
+      });
+    },
+  );
+  t.after(() => fetch.mock.restore());
+  const reply = await callModel(
+    [{ role: "user", content: "How many sets when I'm tired?" }],
+    [],
+    AbortSignal.timeout(5000),
+  );
+  assert.equal(reply.content, "Three light doubles.");
+  assert.deepEqual(models, ["openai/gpt-5.6-luna", FILTER_FALLBACK_MODEL]);
+  // The fallback itself is not retried again.
+  models.length = 0;
+  const direct = await callModel(
+    [{ role: "user", content: "Hi" }],
+    [],
+    AbortSignal.timeout(5000),
+    undefined,
+    { model: FILTER_FALLBACK_MODEL },
+  );
+  assert.equal(direct.content, "Three light doubles.");
+  assert.deepEqual(models, [FILTER_FALLBACK_MODEL]);
+});

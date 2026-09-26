@@ -95,9 +95,11 @@ final class VoiceCall {
         self.status = speaking ? .speaking : .listening
       }
     }
+    audio.onFailure = { [weak self] message in
+      Task { @MainActor in self?.stop(failure: message) }
+    }
     do {
       try audio.start()
-      observeInterruptions()
       try await connect(resume: false)
       meter()
       tasks.append(
@@ -127,8 +129,6 @@ final class VoiceCall {
     socket = nil
     audio.stop()
     level = 0
-    if let interruptions { NotificationCenter.default.removeObserver(interruptions) }
-    interruptions = nil
     connected(.failure(CancellationError()))
     error = failure
     status = failure == nil ? .ended : .failed
@@ -287,19 +287,6 @@ final class VoiceCall {
           try? await Task.sleep(for: .milliseconds(50))
         }
       })
-  }
-
-  private var interruptions: (any NSObjectProtocol)?
-
-  private func observeInterruptions() {
-    interruptions = NotificationCenter.default.addObserver(
-      forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
-    ) { [weak self] note in
-      let ended = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
-        .flatMap(AVAudioSession.InterruptionType.init) == .ended
-      guard ended else { return }
-      Task { @MainActor in try? self?.audio.restart() }
-    }
   }
 
   // MARK: Live events

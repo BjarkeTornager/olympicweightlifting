@@ -86,6 +86,9 @@ test(
           assert.match(all, /Earlier message sent at \d{4}-\d{2}-\d{2}T/);
           assert.match(all, /A's exchange 1/);
           assert.match(all, /A's exchange 10/);
+          // Today's whole record is in view without a tool call.
+          assert.match(all, /Everything recorded today \(\d{4}-\d{2}-\d{2}\) so far, in full/);
+          assert.match(all, /"eatenSoFar"/);
           assert.equal(messages.at(-1)!.content, "Thanks, that helps.");
           return { role: "assistant", content: "You’re welcome." };
         },

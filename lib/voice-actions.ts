@@ -13,6 +13,7 @@ import type { AgentAction } from "./agent/action-schema";
 import { guardChange } from "./agent/change-guards";
 import { newTurnReads } from "./agent/read-tools";
 import { listUserImages } from "./user-images";
+import { dayRange, journalForVoice } from "./journal-summary";
 import {
   recentConversations,
   searchConversations,
@@ -300,84 +301,6 @@ export type VoiceResult =
   | { ok: true; saveId?: string; title: string; detail: string }
   | { ok: true; data: unknown }
   | { ok: false; error: string };
-
-const dayRange = (from: string, to: string) => {
-  if (to < from) throw Error("The end date is before the start date.");
-  if ((Date.parse(to) - Date.parse(from)) / 86400000 > 13)
-    throw Error("Read at most 14 days at a time.");
-  return (day: string) => day >= from && day <= to;
-};
-
-// What the voice coach sees of the journal: compact, with the ids it needs
-// to correct an entry, and photo ids it can look at with view_photo.
-export function journalForVoice(state: JournalState, from: string, to: string) {
-  const inRange = dayRange(from, to);
-  const sets = (w: JournalState["sessions"][number]) =>
-    w.exercises.map((e) => ({
-      exercise: e.exerciseId,
-      sets: e.sets
-        .filter((x) => x.logged || x.result)
-        .map((x) => ({
-          weight_kg: x.weight,
-          reps: x.reps,
-          made: x.result !== "miss",
-        })),
-    }));
-  return {
-    meals: state.nutrition.meals
-      .filter((m) => inRange(m.date))
-      .map((m) => ({
-        meal_id: m.id,
-        date: m.date,
-        meal_type: m.type,
-        name: m.name,
-        photo_ids: m.photoIds,
-        items: m.items.map((i) => ({
-          name: i.name,
-          portion: i.portion,
-          calories: i.calories,
-          protein_g: i.protein,
-          carbs_g: i.carbs,
-          fat_g: i.fat,
-        })),
-      })),
-    workouts: state.sessions
-      .filter((w) => inRange(w.date))
-      .map((w) => ({
-        session_id: w.id,
-        date: w.date,
-        title: w.title,
-        exercises: sets(w),
-      })),
-    unfinishedWorkout: state.activeWorkout
-      ? {
-          date: state.activeWorkout.date,
-          title: state.activeWorkout.title,
-          exercises: sets(state.activeWorkout),
-        }
-      : null,
-    checkins: state.health.checkins
-      .filter((c) => inRange(c.date))
-      .map((c) => ({
-        date: c.date,
-        sleep_hours: c.sleepHours,
-        energy: c.energy,
-        soreness: c.soreness,
-        bodyweight: c.bodyweight,
-        notes: c.notes,
-      })),
-    activities: state.cardio.sessions
-      .filter((c) => inRange(c.date))
-      .map((c) => ({
-        date: c.date,
-        activity: c.activity,
-        minutes: Math.round(c.durationSeconds / 60),
-        distance_km: c.distanceKm,
-      })),
-    dailyTargets: state.nutrition.targets,
-    goals: state.profile.body ?? null,
-  };
-}
 
 export async function runVoiceTool(
   userId: string,

@@ -51,6 +51,8 @@ const readTools = new Set([
   "recall_conversations",
 ]);
 const MAX_CALL_MINUTES = 30;
+// The server refuses calls from an app older than this voice protocol.
+export const VOICE_CLIENT_VERSION = "3";
 
 type Session = {
   id: string;
@@ -69,6 +71,8 @@ type Session = {
   started: boolean;
   reconnecting: boolean;
   failures: number;
+  // Checks and saves still running; the call never ends in the middle.
+  pending: number;
   sources: Set<AudioBufferSourceNode>;
   playAt: number;
   closed: boolean;
@@ -196,7 +200,7 @@ export function useVoiceCheckin({
   const connect = async (s: Session, resume: boolean) => {
     const response = await privateFetch("/api/voice/session", {
       method: "POST",
-      headers: headers(),
+      headers: { ...headers(), "X-Voice-Client": VOICE_CLIENT_VERSION },
       body: JSON.stringify({
         timezone: timezone(),
         purpose: s.purpose,
@@ -350,6 +354,7 @@ export function useVoiceCheckin({
       started: false,
       reconnecting: false,
       failures: 0,
+      pending: 0,
       sources: new Set(),
       playAt: 0,
       closed: false,
@@ -385,7 +390,20 @@ export function useVoiceCheckin({
       s.capture.connect(silent).connect(context.destination);
       await ensureMic(s);
       await connect(s, false);
-      s.timers.push(setTimeout(() => stop(), MAX_CALL_MINUTES * 60000));
+      // A warning lets the coach finish the topic; the call then ends at a
+      // quiet moment rather than mid-sentence or mid-save.
+      s.timers.push(
+        setTimeout(
+          () =>
+            s.send?.({
+              realtimeInput: {
+                text: "(Two minutes left in this call: finish the current topic, then say goodbye and call end_check_in.)",
+              },
+            }),
+          (MAX_CALL_MINUTES - 2) * 60000,
+        ),
+        setTimeout(() => void endWhenIdle(s, 90000), MAX_CALL_MINUTES * 60000),
+      );
     } catch (e) {
       stop(
         e instanceof DOMException && e.name === "NotAllowedError"
@@ -414,6 +432,22 @@ export function useVoiceCheckin({
       if (!s.sources.size && !s.closed && !s.reconnecting)
         setStatus("listening");
     };
+  };
+
+  // Ends once nothing is playing and no check or save is running, or after
+  // the limit if something hangs.
+  const endWhenIdle = async (s: Session, limitMs: number) => {
+    const until = Date.now() + limitMs;
+    while (
+      !s.closed &&
+      Date.now() < until &&
+      (s.pending > 0 ||
+        s.sources.size > 0 ||
+        s.playAt > s.context.currentTime + 0.1)
+    )
+      await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 1200));
+    stop();
   };
 
   const respond = (
@@ -525,11 +559,23 @@ export function useVoiceCheckin({
     if (!s) return;
     if (call.name === "end_check_in") {
       respond(send, call, { result: "ended" });
-      // Let the goodbye finish playing before hanging up.
-      const remaining = Math.max(0, s.playAt - s.context.currentTime);
-      s.timers.push(setTimeout(() => stop(), remaining * 1000 + 1500));
+      // Let the goodbye and any running check or save finish first.
+      void endWhenIdle(s, 30000);
       return;
     }
+    s.pending++;
+    try {
+      await handleTool(s, call, send);
+    } finally {
+      s.pending--;
+    }
+  };
+
+  const handleTool = async (
+    s: Session,
+    call: FunctionCall,
+    send: (m: object) => void,
+  ) => {
     if (call.name === "open_camera") {
       try {
         await openCamera();

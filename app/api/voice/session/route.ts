@@ -39,6 +39,12 @@ export async function POST(request: Request) {
   try {
     const user = await requireAthlete(request, true);
     requireCurrentCoach(request);
+    // An older app would run the call with outdated tools and time limits.
+    if (Number(request.headers.get("x-voice-client") ?? 0) < 3)
+      throw new ApiError(
+        "Tap Reload update, or close and reopen the app, to use the latest voice coach.",
+        426,
+      );
     if (!voiceConfigured())
       throw new ApiError(
         "Voice check-in is not set up yet. You can keep logging with Coach.",

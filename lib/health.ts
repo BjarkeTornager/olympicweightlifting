@@ -80,7 +80,10 @@ export const healthSchema = z
         code: "custom",
         message: "Only one check-in per date is allowed",
       });
-    if (v.vitals && new Set(v.vitals.map((m) => m.date)).size !== v.vitals.length)
+    if (
+      v.vitals &&
+      new Set(v.vitals.map((m) => m.date)).size !== v.vitals.length
+    )
       ctx.addIssue({
         code: "custom",
         message: "Only one Apple Health summary per date is allowed",
@@ -216,6 +219,10 @@ export function dailyHealth(state: JournalState, date: string) {
     route: "food",
   });
   const sleep = recentCheckins.filter((c) => c.sleepHours != null);
+  // Apple Health's daily heart-rate and movement summaries, newest last.
+  const recentVitals = (state.health.vitals ?? [])
+    .filter((v) => v.date >= offsetDate(date, -13) && v.date <= date)
+    .sort((a, b) => a.date.localeCompare(b.date));
   const weights = recentCheckins.filter((c) => c.bodyweight != null);
   return {
     date,
@@ -260,6 +267,8 @@ export function dailyHealth(state: JournalState, date: string) {
         ) / 10
       : null,
     sleepSamples: sleep.length,
+    vitals: recentVitals.find((v) => v.date === date) ?? null,
+    recentVitals,
     latestWeight: weights.at(-1)
       ? { value: weights.at(-1)!.bodyweight, date: weights.at(-1)!.date }
       : null,

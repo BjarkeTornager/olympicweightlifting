@@ -85,8 +85,27 @@ export function journalForVoice(state: JournalState, from: string, to: string) {
       .map((c) => ({
         date: c.date,
         activity: c.activity,
+        title: c.title || undefined,
         minutes: Math.round(c.durationSeconds / 60),
         distance_km: c.distanceKm,
+        average_heart_rate: c.averageHeartRate ?? undefined,
+        max_heart_rate: c.maxHeartRate ?? undefined,
+        calories_kcal: c.caloriesKcal ?? undefined,
+        elevation_gain_m: c.elevationGainM ?? undefined,
+      })),
+    // Measured by the athlete's watch or phone and imported from Apple
+    // Health: resting heart rate, heart rate variability, the day's average
+    // heart rate, steps and active energy.
+    heart_and_movement: (state.health.vitals ?? [])
+      .filter((v) => inRange(v.date))
+      .map((v) => ({
+        date: v.date,
+        resting_heart_rate: v.restingHeartRate ?? undefined,
+        hrv_ms: v.heartRateVariabilityMs ?? undefined,
+        average_heart_rate: v.averageHeartRate ?? undefined,
+        steps: v.steps ?? undefined,
+        active_energy_kcal: v.activeEnergyKcal ?? undefined,
+        source: "Apple Health",
       })),
     dailyTargets: state.nutrition.targets,
     goals: state.profile.body ?? null,
@@ -154,7 +173,19 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
       `Drinks: ${formatLitres(day.hydration.totalMl)} of about ${formatLitres(day.hydration.targetMl)}`,
     );
   for (const a of day.activities)
-    parts.push(`Activity: ${a.activity}, ${a.minutes} min`);
+    parts.push(
+      `Activity: ${a.title ?? a.activity}, ${a.minutes} min${a.distance_km != null ? `, ${a.distance_km} km` : ""}${a.average_heart_rate != null ? `, ${a.average_heart_rate} bpm average` : ""}`,
+    );
+  for (const v of day.heart_and_movement) {
+    const heart = [
+      v.resting_heart_rate != null
+        ? `resting heart rate ${v.resting_heart_rate} bpm`
+        : "",
+      v.hrv_ms != null ? `HRV ${Math.round(v.hrv_ms)} ms` : "",
+      v.steps != null ? `${v.steps.toLocaleString("en-GB")} steps` : "",
+    ].filter(Boolean);
+    if (heart.length) parts.push(`From Apple Health: ${heart.join(", ")}`);
+  }
   const target = day.dailyTargets.calories;
   if (day.meals.length)
     parts.push(

@@ -1,7 +1,9 @@
 #!/bin/sh
-# Archives a Release build and uploads it to App Store Connect for internal
-# TestFlight testing. Uses the Apple Account signed in to Xcode (Settings ›
-# Apple Accounts) and automatic signing for team 9B79882UPS.
+# Archives a Release build and uploads it to App Store Connect for TestFlight.
+# Internal testers get it after processing; the external group needs it added
+# (and, for the first build of a version, Beta App Review). Uses the Apple
+# Account signed in to Xcode (Settings › Apple Accounts) and automatic signing
+# for team 9B79882UPS.
 #
 # Usage: ios/scripts/testflight.sh
 # The build number is set from the UTC date and time, so every upload is

@@ -10,9 +10,6 @@
 	<string>9B79882UPS</string>
 	<key>signingStyle</key>
 	<string>automatic</string>
-	<!-- Internal testers only; such a build can never be sent to external testers or the App Store. -->
-	<key>testFlightInternalTestingOnly</key>
-	<true/>
 	<key>uploadSymbols</key>
 	<true/>
 	<key>manageAppVersionAndBuildNumber</key>

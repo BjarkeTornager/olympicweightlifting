@@ -17,7 +17,7 @@ struct RootView: View {
             NavigationStack { TodayView() }
           }
           Tab("Coach", systemImage: "bubble.left.and.text.bubble.right", value: AppModel.Tab.coach) {
-            NavigationStack { CoachView() }
+            NavigationStack { AIConsentGate { CoachView() } }
           }
           Tab("Journal", systemImage: "book.closed", value: AppModel.Tab.journal) {
             NavigationStack { JournalView() }

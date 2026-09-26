@@ -1,6 +1,6 @@
 # Lift Journal for iPhone
 
-A native SwiftUI app for the Lift Journal backend on Railway. It uses the same server and database as the website. The first builds go to TestFlight for the owner only. See the [plan](../docs/native-ios-app-plan-2026-09-26.md).
+A native SwiftUI app for the Lift Journal backend on Railway. It uses the same server and database as the website. It is tested through TestFlight: internal testers, plus external testers who join from a public link or QR code. See the [plan](../docs/native-ios-app-plan-2026-09-26.md) and the [external beta runbook](../docs/external-testflight-beta-2026-09-26.md).
 
 - **Name:** Lift Journal on the home screen. Suggested App Store name: "Lift Journal: Train & Recover".
 - **Bundle ID:** `com.bjarketornager.liftjournal`. **Team:** 9B79882UPS (individual membership).
@@ -34,7 +34,7 @@ The Xcode project uses folder-synchronised groups: a file added under `LiftJourn
 
 **Saving.** Each change is one typed action with its own ID. It is queued on disk first, then sent to `POST /api/v1/actions`. The server applies it to the current journal and saves each ID only once, so an offline change never overwrites another device's work.
 
-**Sign-in.** Google sign-in goes through the website with PKCE (`/mobile`, then `liftjournal://auth`, then `/api/mobile/token`). The app gets its own session, which better-auth extends each time the app uses it. It is stored in the Keychain on this device only, and is readable after the first unlock so background Health syncs work while the phone is locked.
+**Sign-in.** Google sign-in goes through the website with PKCE (`/mobile`, then `liftjournal://auth`, then `/api/mobile/token`). Apple's reviewer uses the App Review sign-in on the same page instead: a passcode (`APP_REVIEW_PASSCODE`) opens one fixed, empty account, and removing the variable turns it off. The app gets its own session, which better-auth extends each time the app uses it. It is stored in the Keychain on this device only, and is readable after the first unlock so background Health syncs work while the phone is locked.
 
 ## Build and test
 
@@ -64,7 +64,7 @@ Set these as environment variables in the scheme, or prefix them with `SIMCTL_CH
 ios/scripts/testflight.sh
 ```
 
-The script archives a Release build, sets the build number from the UTC time, signs it automatically for team 9B79882UPS using the Apple Account in Xcode, and uploads it as **TestFlight Internal Only**. Such a build can never reach external testers or the App Store by accident. It appears under App Store Connect › TestFlight after processing. Internal builds need no review and last 90 days.
+The script archives a Release build, sets the build number from the UTC time, signs it automatically for team 9B79882UPS using the Apple Account in Xcode, and uploads it. It appears under App Store Connect › TestFlight after processing and goes to internal testers without review. To reach external testers, add it to the external group; the first build of each version goes through Beta App Review. Builds last 90 days.
 
 Before the first upload, these one-time steps are needed: the paid developer account in Xcode › Settings › Apple Accounts, at least one registered iPhone, and the app record in App Store Connect. Testers are App Store Connect users in an internal TestFlight group; the owner's everyday Apple Account is invited with the Marketing role.
 
@@ -72,6 +72,6 @@ Deploy the server before uploading a build that needs new endpoints. Never remov
 
 ## Privacy
 
-`Resources/PrivacyInfo.xcprivacy` declares name, email, user ID, health, fitness, photos and other user content. All of it is linked to the account, used for app functionality, and never for tracking. The app uses no third-party SDKs and no analytics, and logs no health values. The app switcher shows a cover instead of health data. Coach sends journal content to the server's AI providers; external testing will need an explicit consent screen for that (App Review guideline 5.1.2).
+`Resources/PrivacyInfo.xcprivacy` declares name, email, user ID, health, fitness, photos and other user content. All of it is linked to the account, used for app functionality, and never for tracking. The app uses no third-party SDKs and no analytics, and logs no health values. The app switcher shows a cover instead of health data. Coach sends journal content to the server's AI providers, so the Coach tab asks for permission first (`AIConsent`, App Review guideline 5.1.2(i)); it can be withdrawn in Account and resets on sign-out. Account › Delete account removes the account and everything stored for it (guideline 5.1.1(v)).
 
 The previous prototype (September 2026) is in Git history before this directory was rebuilt.

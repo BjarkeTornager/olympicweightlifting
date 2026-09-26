@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 20 September 2026.</p>
+        <p className="lead">Last updated 26 September 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -92,7 +92,10 @@ export default function PrivacyPage() {
           OpenRouter model for that turn. Journal records, photos and earlier
           conversation are not included in that routing call. If routing is
           unavailable, Coach uses the configured model. See{" "}
-          <a href="https://typesafe.ai/legal/privacy-policy" className="underline">
+          <a
+            href="https://typesafe.ai/legal/privacy-policy"
+            className="underline"
+          >
             TypeSafe’s privacy policy
           </a>
           .
@@ -101,14 +104,11 @@ export default function PrivacyPage() {
           If you ask Coach to plan a run, walk or ride, the named start, end and
           optional via places are sent to Google Maps Geocoding, Places and
           Directions so a suggested route can be shown. The interactive map
-          loads Google Maps in your browser. Google sees the place names and
-          map tiles you request, not your journal. Suggested routes are not GPS
+          loads Google Maps in your browser. Google sees the place names and map
+          tiles you request, not your journal. Suggested routes are not GPS
           tracks, live navigation or saved cardio unless you later log the
           activity. See{" "}
-          <a
-            href="https://policies.google.com/privacy"
-            className="underline"
-          >
+          <a href="https://policies.google.com/privacy" className="underline">
             Google’s privacy policy
           </a>
           .
@@ -143,9 +143,9 @@ export default function PrivacyPage() {
           private to your account, synchronized and included in journal exports.
           Coach can retrieve it with your training evidence for lifting advice,
           sharing those details with your assistant provider. Edit or clear it
-          in Train → Lifting brief & video. Clearing the brief keeps earlier chats,
-          approved memories and training records. Coach-proposed brief changes
-          require your review before saving.
+          in Train → Lifting brief & video. Clearing the brief keeps earlier
+          chats, approved memories and training records. Coach-proposed brief
+          changes require your review before saving.
         </p>
         <p>
           Upload & analyse lift privately stores your video for background
@@ -228,6 +228,40 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section className="space-y-3">
+        <h2>iPhone app, Apple Health and voice check-ins</h2>
+        <p>
+          If you connect Apple Health in the iPhone app, it reads the sleep,
+          resting heart rate, heart rate variability, steps, active energy,
+          distances and workouts you allow in iOS. It sends nightly sleep, daily
+          summaries and workouts to your account so they appear in your journal;
+          iOS may deliver new data in the background. The app never writes to
+          Apple Health. Apple Health data is used only to show your journal and
+          to give Coach context when you ask it for advice. It is never used for
+          advertising, sold, or shared with anyone except the AI provider, and
+          only after you allow that. Turn the connection off in the app under
+          Account › Apple Health, or in the Health app’s sharing settings;
+          imported entries stay in your journal until you delete them or your
+          account.
+        </p>
+        <p>
+          Before Coach first sends anything, the iPhone app asks your permission
+          to share data with third-party AI: your messages, the photos you
+          attach, and relevant journal records, including imported Apple Health
+          data, go to the assistant provider described above. You can withdraw
+          permission in Account; signing out resets it.
+        </p>
+        <p>
+          Voice check-ins stream your microphone audio directly to Google’s
+          Gemini Live API using a single-use token, and Google’s spoken replies
+          come back the same way. We store the transcript in your account so
+          Coach can save what you reported; audio is not stored. See{" "}
+          <a href="https://policies.google.com/privacy" className="underline">
+            Google’s privacy policy
+          </a>
+          .
+        </p>
+      </section>
+      <section className="space-y-3">
         <h2>Food journal and private images</h2>
         <p>
           Coach can find saved images and display them in private chat
@@ -286,8 +320,10 @@ export default function PrivacyPage() {
           When you ask Coach for a daily plan or health guidance, relevant
           check-ins, meals and training records are sent to the configured
           assistant provider. The overview also displays simple suggestions
-          based on your entries. The app does not collect wearable or clinical
-          data, monitor you in the background, or diagnose conditions.
+          based on your entries. The website does not collect wearable or
+          clinical data or monitor you in the background; the iPhone app reads
+          Apple Health only as described below. Lift Journal does not diagnose
+          conditions.
         </p>
       </section>
       <section className="space-y-3">
@@ -303,7 +339,11 @@ export default function PrivacyPage() {
         <h2>Export, correction and deletion</h2>
         <p>
           You can edit your profile and workouts, and export a journal backup
-          from Settings. To request an account export, correction or deletion,
+          from Settings. In the iPhone app, Account › Delete account permanently
+          deletes your account straight away: your journal, photos, videos,
+          voice transcripts, Coach conversations, Apple Health imports,
+          reminders, sessions and invitation. Signing in again then needs a new
+          invitation. To request an export, correction or deletion another way,
           contact the person who invited you to Lift Journal. We will verify the
           account before acting on a request.
         </p>

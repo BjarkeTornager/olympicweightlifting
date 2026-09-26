@@ -176,7 +176,34 @@ final class AppModel {
     await expire(message: nil)
   }
 
+  /// Permanently deletes the account and its journal on the server, then
+  /// signs out. Returns a message when it could not be deleted.
+  func deleteAccount() async -> String? {
+    guard let saved = session else { return nil }
+    var request = URLRequest(url: LiftServer.origin.appending(path: "api/account"))
+    request.httpMethod = "DELETE"
+    LiftHeaders.apply(to: &request, token: saved.token, account: saved.accountID)
+    do {
+      let (data, response) = try await LiftServer.session().data(for: request)
+      let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+      if status == 200 {
+        await expire(message: nil)
+        return nil
+      }
+      if status == 401 {
+        await expire(message: "Sign in again to open your journal.")
+        return nil
+      }
+      struct Failure: Decodable { let error: String }
+      return (try? JSONDecoder().decode(Failure.self, from: data))?.error
+        ?? "Your account could not be deleted. Try again shortly."
+    } catch {
+      return await handle(error)
+    }
+  }
+
   private func expire(message: String?) async {
+    AIConsent.reset()
     await Credentials.shared.clear()
     await HealthSync.shared.markConnected(false)
     Storage.removeAll()

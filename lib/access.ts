@@ -1,4 +1,5 @@
 import { getPool } from "./db";
+import { isReviewEmail, reviewEnabled } from "./review";
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export const ownerEmail = () => normalizeEmail(process.env.OWNER_EMAIL ?? "");
@@ -38,6 +39,9 @@ export async function userAllowed(user: {
   email: string;
   emailVerified: boolean;
 }) {
+  // The App Review account has no Google identity and works only while its
+  // passcode is configured.
+  if (isReviewEmail(user.email)) return reviewEnabled() && user.emailVerified;
   if (!(await emailAllowed(user.email))) return false;
   if (process.env.NODE_ENV !== "production") return true;
   if (!user.emailVerified) return false;

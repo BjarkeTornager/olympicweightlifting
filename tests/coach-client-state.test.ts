@@ -40,7 +40,7 @@ const preview = (extra: Partial<ActionPreview> = {}): ActionPreview => ({
   ...extra,
 });
 
-test("Coach links open the matching entry, and an in-memory draft wins over a route prompt", () => {
+test("Coach links open the matching entry as a task, keeping any in-memory draft as the person's words", () => {
   const state = emptyJournal();
   assert.equal(coachEntryIntent("coach/capture", state).initialCapture, true);
   assert.equal(coachEntryIntent("coach/plans", state).initialMemories, "plans");
@@ -50,20 +50,22 @@ test("Coach links open the matching entry, and an in-memory draft wins over a ro
   );
   const video = coachEntryIntent("coach/lifting/video", state);
   assert.equal(video.initialVideoReview, true);
-  assert.equal(video.initialTrainingPrompt, undefined);
-  assert.match(
-    coachEntryIntent("coach/training/new", state).initialTrainingPrompt!,
-    /reusable training program/,
-  );
-  assert.match(
-    coachEntryIntent("coach/training/missing-id", state).initialTrainingPrompt!,
-    /“my program”/,
+  assert.equal(video.initialTask, undefined);
+  const program = coachEntryIntent("coach/training/new", state);
+  assert.equal(program.initialTask?.label, "Build a training program");
+  assert.match(program.initialTask!.instruction, /reusable training program/);
+  assert.equal(program.initialTrainingPrompt, undefined);
+  assert.equal(
+    coachEntryIntent("coach/training/missing-id", state).initialTask?.label,
+    "Edit “my program”",
   );
   assert.equal(
-    coachEntryIntent("coach/training/new", state, "My own words")
-      .initialTrainingPrompt,
-    "My own words",
+    coachEntryIntent("coach/lifting/plan", state).initialTask?.label,
+    "Build my lifting plan",
   );
+  const drafted = coachEntryIntent("coach/training/new", state, "My own words");
+  assert.equal(drafted.initialTrainingPrompt, "My own words");
+  assert.equal(drafted.initialTask?.label, "Build a training program");
   const activity = coachEntryIntent("coach/photo/abc/cardio/log", state);
   assert.equal(activity.initialPhotoId, "abc");
   assert.equal(activity.initialCardioLog, true);
@@ -78,6 +80,7 @@ test("Coach links open the matching entry, and an in-memory draft wins over a ro
     initialMemories: undefined,
     initialVideoReview: false,
     initialTrainingPrompt: undefined,
+    initialTask: undefined,
     initialCardioLog: false,
     initialActivityPhotoLog: false,
     initialSleepLog: false,

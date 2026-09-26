@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, coachTask } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
@@ -69,11 +69,7 @@ for (const source of ["workout", "coach", "coach-shortcut"] as const) {
         });
       const input = r.request().postDataJSON();
       expect(input.photoIds).toEqual([photo.id]);
-      if (source === "coach-shortcut")
-        expect(input.message).toContain(
-          "Log my workout from the attached photo",
-        );
-      else expect(input.message).toBe(activityLoggingPrompt(true));
+      expect(input.message).toBe(activityLoggingPrompt(true));
       if (source === "workout") expect(input.id).toBe(photo.id);
       started = true;
       await wait;
@@ -150,8 +146,12 @@ for (const source of ["workout", "coach", "coach-shortcut"] as const) {
       ).toBeEnabled();
       if (source === "coach-shortcut") {
         await page
-          .getByRole("button", { name: "Add workout", exact: true })
+          .getByRole("button", { name: "Add images", exact: true })
           .click();
+        await page
+          .getByRole("button", { name: "Log walk, run or ride" })
+          .click();
+        await expect(coachTask(page)).toHaveText("Activity screenshot");
         await expect(
           page.getByRole("img", { name: "Image ready to send" }),
         ).toHaveCount(1);
@@ -202,9 +202,8 @@ for (const source of ["workout", "coach", "coach-shortcut"] as const) {
     // A copied/deep-linked URL can attach the saved photo, but cannot save again.
     await page.goto(`/#coach/photo/${photo.id}/cardio/log`);
     await page.reload();
-    await expect(page.getByLabel("Message your coach")).toHaveValue(
-      activityLoggingPrompt(true),
-    );
+    await expect(coachTask(page)).toHaveText("Activity screenshot");
+    await expect(page.getByLabel("Message your coach")).toHaveValue("");
     expect(saves).toBe(1);
   });
 }

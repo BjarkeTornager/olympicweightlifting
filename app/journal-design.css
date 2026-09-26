@@ -2404,11 +2404,15 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 /* Voice check-in */
 .voice-checkin { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .voice-checkin > .dialog-title, .voice-checkin > .muted { align-self: stretch; }
-.voice-orb { display: grid; place-items: center; width: 96px; height: 96px; margin-top: 8px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
-.voice-orb.listening { animation: voice-breathe 2.4s ease-in-out infinite; }
-.voice-orb.speaking { background: var(--accent-solid); color: var(--on-solid); animation: voice-breathe 0.9s ease-in-out infinite; }
-.voice-orb.failed { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
-@keyframes voice-breathe { 50% { transform: scale(1.06); } }
+.voice-visual { --voice: var(--line-strong); --level: 0; display: grid; justify-items: center; gap: 14px; margin-top: 8px; }
+.voice-visual.speaking { --voice: var(--accent-solid); }
+.voice-visual.listening:not(.muted) { --voice: var(--success-solid); }
+.voice-visual.failed { --voice: var(--danger-solid); }
+.voice-orb { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); transform: scale(calc(1 + var(--level) * 0.35)); box-shadow: 0 0 0 calc(var(--level) * 22px) color-mix(in srgb, var(--voice) 22%, transparent); transition: transform 90ms linear, box-shadow 90ms linear, background 200ms; }
+.voice-visual.speaking .voice-orb { background: var(--accent-solid); color: var(--on-solid); }
+.voice-visual.failed .voice-orb { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
+.voice-bars { display: flex; align-items: center; gap: 5px; height: 40px; }
+.voice-bars > span { width: 6px; height: 4px; border-radius: 3px; background: var(--voice); transition: height 70ms linear, background 200ms; }
 @keyframes voice-spin { to { transform: rotate(360deg); } }
 .voice-checkin .spin { animation: voice-spin 1s linear infinite; }
 .voice-status { margin: 0; min-height: 1.4em; text-align: center; color: var(--ink-2); font-size: 15px; }
@@ -2425,6 +2429,15 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .voice-actions .button { min-height: 48px; min-width: 132px; }
 .voice-checkin > .fine-print { margin: 0; text-align: center; }
 @media (prefers-reduced-motion: reduce) {
-  .voice-orb.listening, .voice-orb.speaking, .voice-checkin .spin { animation: none; }
+  .voice-orb, .voice-bars > span { transition: none; }
+  .voice-checkin .spin { animation: none; }
 }
+
+/* What Coach is asked to do, shown as a label instead of pasted text */
+.composer-task { display: flex; width: fit-content; align-items: center; gap: 4px; margin: 0 0 6px; padding: 4px 4px 4px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.composer-task button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.composer-task button:hover { background: var(--accent-line); }
+.composer-send-controls { margin-left: auto; }
+.chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
+.chat-task:only-child { margin: 0; font-size: 15px; opacity: 1; }
 }

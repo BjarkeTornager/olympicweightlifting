@@ -401,7 +401,6 @@ export function Journal(props: PrivateSessionProps) {
                 key={identity?.id ?? "guest"}
                 journal={journal}
                 go={go}
-                onLogin={() => setLogin(true)}
               />
             )}
             {section === "images" && (
@@ -416,7 +415,6 @@ export function Journal(props: PrivateSessionProps) {
               <FoodView
                 key={identity?.id ?? "guest"}
                 journal={journal}
-                onLogin={() => setLogin(true)}
                 go={go}
               />
             )}

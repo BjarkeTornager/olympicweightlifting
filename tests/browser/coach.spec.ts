@@ -1,4 +1,4 @@
-import { test, expect, openTodayOverview } from "./fixtures";
+import { test, expect, openTodayOverview, coachTask } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -207,7 +207,8 @@ test.describe("focused Coach conversation", () => {
     );
     await expect(composer).toHaveValue(/from my health overview/);
     expect(requests).toBe(0);
-    await page.getByRole("button", { name: "Log sleep", exact: true }).click();
+    // The sleep screenshot link is a labelled task, not pasted text.
+    await expect(coachTask(page)).toHaveText("Sleep screenshot");
     await expect(composer).toHaveValue(
       /^I slept 7 hours 47 minutes last night\./,
     );

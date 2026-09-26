@@ -275,9 +275,8 @@ test.describe("authenticated photo UI", () => {
       });
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/#food");
-    await page.getByLabel("Food date", { exact: true }).fill("2026-09-06");
-    await page.getByText("Add photos", { exact: true }).click();
+    // Photos are kept in one library, reached from Journal → Images.
+    await page.goto("/#images");
     await page.getByLabel("Photo label", { exact: true }).fill("Lunch plate");
     await page.getByLabel("Upload image", { exact: true }).setInputFiles({
       name: "plate.jpg",
@@ -290,9 +289,7 @@ test.describe("authenticated photo UI", () => {
       }),
     ).toBeVisible();
     await expect(page.getByRole("img", { name: "Lunch plate" })).toBeVisible();
-    await page
-      .getByRole("button", { name: "Log meal", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Log meal", exact: true }).click();
     await expect(
       page.getByRole("img", { name: "Image ready to send" }),
     ).toBeVisible();
@@ -314,9 +311,8 @@ test.describe("authenticated photo UI", () => {
     await page.getByLabel("Food date", { exact: true }).fill("2026-09-06");
     await expect(page.getByText("Photo lunch", { exact: true })).toBeVisible();
     expect(writes).toBe(1);
-    await expect(
-      page.getByRole("link", { name: "Download photo", exact: true }),
-    ).toBeVisible();
+    // The saved meal shows its source photo.
+    await expect(page.getByRole("img", { name: "Photo lunch" })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,

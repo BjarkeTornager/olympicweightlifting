@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, coachTask } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -79,7 +79,7 @@ test.describe("sleep with Coach", () => {
         expect(input.message).toMatch(
           source === "screenshot"
             ? /Log my sleep from this screenshot/
-            : /7 hours 47 minutes/,
+            : /^Help me log my sleep\.[\s\S]*\n\nI slept 7 hours 47 minutes/,
         );
         expect(state.health.checkins[0].sleepHours).toBeNull();
         return r.fulfill({
@@ -118,20 +118,12 @@ test.describe("sleep with Coach", () => {
         await page.goto("/#health");
         await page
           .locator(".page-heading")
-          .getByRole("button", { name: "Log sleep with Coach", exact: true })
+          .getByRole("button", { name: "Log sleep", exact: true })
           .click();
-        await expect(page.getByLabel("Message your coach")).toHaveValue(
-          /Help me log my sleep/,
-        );
+        await expect(coachTask(page)).toHaveText("Logging sleep");
         await page
           .getByLabel("Message your coach")
           .fill("I slept 7 hours 47 minutes last night.");
-        await page
-          .getByRole("button", { name: "Log sleep", exact: true })
-          .click();
-        await expect(page.getByLabel("Message your coach")).toHaveValue(
-          /I slept 7 hours 47 minutes last night/,
-        );
       }
       await expect(
         page.getByText("Ready to help", { exact: true }),

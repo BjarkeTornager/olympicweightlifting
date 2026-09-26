@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, coachTask } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -258,9 +258,7 @@ test("lifting learning and nutrition are discoverable, responsive and do not sen
     ).toBe(true);
   }
   await page.getByRole("button", { name: "Plan food around training" }).click();
-  await expect(page.getByLabel("Message your coach")).toHaveValue(
-    /Help me fuel my Olympic weightlifting training/,
-  );
+  await expect(coachTask(page)).toHaveText("Fuel my training");
   expect(posts).toBe(0);
   await page.goto("/#workout/coaching");
   await page.getByRole("button", { name: "Get technique feedback" }).click();
@@ -276,9 +274,7 @@ test("lifting learning and nutrition are discoverable, responsive and do not sen
   });
   await expect(dialog.getByRole("alert")).toContainText("could not be opened");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page.getByLabel("Message your coach")).toHaveValue(
-    /Help me fuel my Olympic weightlifting training/,
-  );
+  await expect(coachTask(page)).toHaveText("Fuel my training");
   expect(posts).toBe(0);
   await page.goto("/#coach/lifting/technique");
   await expect(dialog).toBeVisible();

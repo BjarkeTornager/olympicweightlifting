@@ -1,8 +1,6 @@
 "use client";
 import { CoachOpening } from "./coach-opening";
 import { AgreedPlans } from "./coach-memory";
-import { CardioProgress } from "./cardio";
-import { ImageLibrary } from "./image-library";
 import { useState } from "react";
 import {
   Check,
@@ -362,11 +360,9 @@ export function DailyOverview({
 export function HealthView({
   journal,
   go,
-  onLogin,
 }: {
   journal: JournalController;
   go: (route: string) => void;
-  onLogin: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null),
     [deleting, setDeleting] = useState<string | null>(null),
@@ -381,13 +377,10 @@ export function HealthView({
       <div className="page-heading">
         <div>
           <h1>Health</h1>
-          <p className="lead">
-            Sleep, energy and recovery, in your own words and numbers.
-          </p>
         </div>
         <div className="button-row">
           <Button variant="secondary" onClick={() => go("coach/sleep")}>
-            <Moon size={16} /> Log sleep with Coach
+            <Moon size={16} /> Log sleep
           </Button>
           <Button onClick={() => setEditing(today())}>
             <Plus size={16} /> Daily check-in
@@ -462,16 +455,10 @@ export function HealthView({
             );
           })}
         </div>
-        <p className="fine-print">
-          Select a day to add or edit it. The chart shows recorded hours only.
-        </p>
       </section>
       <section className="panel health-records">
         <div className="section-top">
           <h2>Your check-ins</h2>
-          <button className="text-link" onClick={() => go("coach")}>
-            Talk with Coach
-          </button>
         </div>
         {!records.length && (
           <div className="health-empty">
@@ -520,18 +507,8 @@ export function HealthView({
           </Button>
         )}
       </section>
-      <CardioProgress state={journal.state!} compact />
-      <ImageLibrary
-        key={journal.identity?.id ?? "guest"}
-        accountId={journal.identity?.id}
-        onLogin={onLogin}
-        go={go}
-        scope="health"
-      />
       <p className="health-footnote">
-        Your entries sync with your account and are included in journal backups.
-        Coach supports everyday habits and training decisions; medical concerns
-        belong with a qualified clinician.
+        For medical concerns, talk to a qualified clinician.
       </p>
       <CheckinDialog
         journal={journal}

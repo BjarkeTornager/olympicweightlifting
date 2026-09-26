@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, coachTask } from "./fixtures";
 import type { BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
@@ -252,9 +252,7 @@ test("Train programs show strength, custom movements, cardio and recovery across
   await panel
     .getByRole("button", { name: "Edit with Coach", exact: true })
     .click();
-  await expect(
-    page.getByRole("textbox", { name: "Message your coach", exact: true }),
-  ).toHaveValue(/Update my saved training program “Strength and movement”/);
+  await expect(coachTask(page)).toHaveText("Edit “Strength and movement”");
   await page.goto("/#workout/choose");
   await panel.locator(".training-day > summary").first().click();
   await panel

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, MessageCircle } from "@/components/ui/icons";
+import { Plus, MessageCircle, Search } from "@/components/ui/icons";
 import type { JournalController } from "../journal";
 import { today, uid } from "@/lib/domain";
 import {
@@ -44,17 +44,14 @@ function TargetBar({
     />
   );
 }
-import { ImageLibrary } from "../image-library";
 import { FoodPhotoImage } from "../food-photo";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 export function FoodView({
   journal,
-  onLogin,
   go,
 }: {
   journal: JournalController;
-  onLogin: () => void;
   go: (route: string) => void;
 }) {
   const nutrition = journal.state!.nutrition;
@@ -66,6 +63,7 @@ export function FoodView({
   const [targets, setTargets] = useState(nutrition.targets),
     [showTargets, setShowTargets] = useState(false);
   const [removeMealId, setRemoveMealId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const run = async (work: () => Promise<unknown>, message?: string) => {
     setError("");
     setNotice("");
@@ -88,6 +86,9 @@ export function FoodView({
     ...(group ? { foodGroup: group } : {}),
     ...(search.trim() ? { query: search.trim() } : {}),
   });
+  // Search stays tucked away until needed, and open while a filter is active.
+  const searching =
+    searchOpen || Boolean(search || mealType || group || allDates);
   const filterKey = JSON.stringify([allDates, date, mealType, group, search]);
   const [mealWindow, setMealWindow] = useState({ key: "", limit: 20 });
   const mealLimit = mealWindow.key === filterKey ? mealWindow.limit : 20;
@@ -115,9 +116,6 @@ export function FoodView({
       <div className="page-heading compact">
         <div>
           <h1>Food</h1>
-          <p className="lead">
-            Log a meal, photograph your plate, or repeat a usual meal.
-          </p>
         </div>
         <div className="button-row">
           <Button onClick={() => go("coach/capture")}>
@@ -178,6 +176,7 @@ export function FoodView({
           Daily targets
         </Button>
       </div>
+      {!hasFood && <p className="muted">No meals logged for this date.</p>}
       {hasFood && (
         <section className="food-totals" aria-label={`Food totals for ${date}`}>
           <div className="food-calories">
@@ -219,13 +218,6 @@ export function FoodView({
           </div>
         </section>
       )}
-      <p className="fine-print">
-        {hasFood
-          ? `${meals.length} meals logged. Totals reflect recorded food only.`
-          : "No meals logged for this date. This does not mean you ate nothing."}{" "}
-        Diet goal: {nutrition.targets.goal} weight. Photo estimates depend on
-        portions, ingredients and cooking fats.
-      </p>
       {(hasFood || nutrition.completeDays?.includes(date)) && (
         <section
           className="food-completeness"
@@ -237,10 +229,6 @@ export function FoodView({
                 ? "Food log marked complete"
                 : "Is everything logged for this day?"}
             </strong>
-            <p className="fine-print">
-              Only days you mark complete enter weekly intake averages. Editing
-              food reopens the day. Portions can still be estimates.
-            </p>
           </div>
           <Button
             variant="secondary"
@@ -268,59 +256,69 @@ export function FoodView({
         </section>
       )}
       <section className="panel">
-        <h2>{allDates ? "Your meals" : `Meals · ${date}`}</h2>
-        <div className="food-search-controls">
-          <label>
-            Search food or ingredients
-            <input
-              type="search"
-              value={search}
-              maxLength={160}
-              placeholder="Try chicken, oats or a meal name"
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-          <label>
-            Filter meal type
-            <select
-              value={mealType}
-              onChange={(e) => setMealType(e.target.value as typeof mealType)}
-            >
-              <option value="">All meals</option>
-              {mealTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Filter food group
-            <select
-              value={group}
-              onChange={(e) => setGroup(e.target.value as typeof group)}
-            >
-              <option value="">All food groups</option>
-              {Object.entries(foodGroups).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="food-check">
-            <input
-              type="checkbox"
-              checked={allDates}
-              onChange={(e) => setAllDates(e.target.checked)}
-            />
-            Search all logged dates
-          </label>
+        <div className="section-top">
+          <h2>{allDates ? "Your meals" : `Meals · ${date}`}</h2>
+          {!searching && (
+            <Button variant="ghost" onClick={() => setSearchOpen(true)}>
+              <Search size={16} /> Search meals
+            </Button>
+          )}
         </div>
-        <p className="fine-print" role="status">
-          {filteredMeals.length} matching meals. Daily totals above always
-          reflect {date}. Older foods may not have ingredient tags.
-        </p>
+        {searching && (
+          <div className="food-search-controls">
+            <label>
+              Search food or ingredients
+              <input
+                type="search"
+                value={search}
+                maxLength={160}
+                placeholder="Try chicken, oats or a meal name"
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+            <label>
+              Filter meal type
+              <select
+                value={mealType}
+                onChange={(e) => setMealType(e.target.value as typeof mealType)}
+              >
+                <option value="">All meals</option>
+                {mealTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Filter food group
+              <select
+                value={group}
+                onChange={(e) => setGroup(e.target.value as typeof group)}
+              >
+                <option value="">All food groups</option>
+                {Object.entries(foodGroups).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="food-check">
+              <input
+                type="checkbox"
+                checked={allDates}
+                onChange={(e) => setAllDates(e.target.checked)}
+              />
+              Search all logged dates
+            </label>
+          </div>
+        )}
+        {searching && (
+          <p className="fine-print" role="status">
+            {filteredMeals.length} matching meals.
+          </p>
+        )}
         {!filteredMeals.length && (
           <p className="muted">
             No matching meals. Change the filters or log a meal with Coach.
@@ -463,19 +461,7 @@ export function FoodView({
             </button>
           ))}
         </div>
-        <p className="fine-print">
-          Days with partial logging are included; this is not a measurement of
-          your full intake.
-        </p>
       </section>
-      <ImageLibrary
-        key={accountId ?? "guest"}
-        accountId={accountId}
-        onLogin={onLogin}
-        go={go}
-        scope="food"
-        date={date}
-      />
       <Dialog
         open={Boolean(editor)}
         onOpenChange={(open) => {

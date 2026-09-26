@@ -1,69 +1,9 @@
 "use client";
-import { Dumbbell, Moon, Utensils, X } from "@/components/ui/icons";
-import { sleepLoggingPrompt, type UserImage } from "@/lib/images";
+import { X } from "@/components/ui/icons";
+import type { UserImage } from "@/lib/images";
 import { Button } from "./ui/button";
 import { FoodPhotoImage } from "./food-photo";
 import { ImageBadge } from "./image-library";
-
-// Shortcuts that add a logging instruction to the draft; nothing is sent.
-export function ComposerQuickActions({
-  disabled,
-  hasText,
-  photoCount,
-  onDraft,
-}: {
-  disabled: boolean;
-  hasText: boolean;
-  photoCount: number;
-  onDraft: (text: string) => void;
-}) {
-  return (
-    <div className="composer-quick-actions">
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={disabled}
-        onClick={() =>
-          onDraft(
-            "Log what I ate with sensible portion estimates. Save it now, label assumptions, and let me correct details afterward.",
-          )
-        }
-      >
-        <Utensils size={16} /> <span>Log food</span>
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={disabled}
-        onClick={() =>
-          onDraft(
-            hasText
-              ? "Please use this to log my sleep. Ask about any unclear date or time asleep and save the entry."
-              : sleepLoggingPrompt(photoCount > 0),
-          )
-        }
-      >
-        <Moon size={16} /> <span>Log sleep</span>
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={disabled}
-        onClick={() =>
-          onDraft(
-            photoCount
-              ? "Log my workout from the attached photo and any details I provided."
-              : hasText
-                ? "Please log this workout."
-                : "Log my workout: ",
-          )
-        }
-      >
-        <Dumbbell size={16} /> <span>Add workout</span>
-      </Button>
-    </div>
-  );
-}
 
 export function ComposerAttachments({
   photoIds,

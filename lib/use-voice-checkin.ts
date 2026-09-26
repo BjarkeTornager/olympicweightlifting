@@ -23,6 +23,9 @@ export type SaveResult = { ok: boolean; detail: string };
 type Session = {
   socket?: WebSocket;
   context: AudioContext;
+  // Live levels for the on-screen voice: the coach's output and the mic.
+  output: AnalyserNode;
+  input?: AnalyserNode;
   stream?: MediaStream;
   sources: Set<AudioBufferSourceNode>;
   playAt: number;
@@ -64,6 +67,14 @@ export function useVoiceCheckin({
 
   useEffect(() => () => stop(), [stop]);
 
+  // Who is audible right now, for drawing the voice. Null when not in a call.
+  const analyser = useCallback(
+    (who: "coach" | "you") =>
+      (who === "coach" ? session.current?.output : session.current?.input) ??
+      null,
+    [],
+  );
+
   const toggleMute = () => {
     mutedRef.current = !mutedRef.current;
     setMuted(mutedRef.current);
@@ -74,8 +85,13 @@ export function useVoiceCheckin({
     // iOS only lets audio start from the tap itself, before any await.
     const context = new AudioContext();
     void context.resume();
+    const output = context.createAnalyser();
+    output.fftSize = 256;
+    output.smoothingTimeConstant = 0.6;
+    output.connect(context.destination);
     const s: Session = {
       context,
+      output,
       sources: new Set(),
       playAt: 0,
       closed: false,
@@ -146,6 +162,10 @@ export function useVoiceCheckin({
                 });
             };
             mic.connect(capture);
+            s.input = context.createAnalyser();
+            s.input.fftSize = 256;
+            s.input.smoothingTimeConstant = 0.6;
+            mic.connect(s.input);
             // Nothing is audible; the graph only runs while connected.
             const silent = context.createGain();
             silent.gain.value = 0;
@@ -195,7 +215,7 @@ export function useVoiceCheckin({
     buffer.copyToChannel(samples, 0);
     const source = s.context.createBufferSource();
     source.buffer = buffer;
-    source.connect(s.context.destination);
+    source.connect(s.output);
     s.playAt = Math.max(s.playAt, s.context.currentTime + 0.05);
     source.start(s.playAt);
     s.playAt += buffer.duration;
@@ -269,6 +289,7 @@ export function useVoiceCheckin({
     toggleMute,
     start: () => void start(),
     stop: () => stop(),
+    analyser,
   };
 }
 

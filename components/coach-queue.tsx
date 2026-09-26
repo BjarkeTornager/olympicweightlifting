@@ -1,4 +1,5 @@
 "use client";
+import { displayMessage } from "@/lib/coach-tasks";
 import { ChevronDown, X } from "@/components/ui/icons";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
 import { Button } from "./ui/button";
@@ -11,8 +12,12 @@ export {
   type QueuedMessage,
 } from "@/lib/coach-queue";
 
-const messageLabel = (job: QueuedMessage) =>
-  videoFeedbackLabel(job.question, job.photoIds.length) ?? job.question;
+const messageLabel = (job: QueuedMessage) => {
+  const video = videoFeedbackLabel(job.question, job.photoIds.length);
+  if (video) return video;
+  const { label, text } = displayMessage(job.question);
+  return [label, text].filter(Boolean).join(" · ");
+};
 
 export function CoachQueue({
   queue,

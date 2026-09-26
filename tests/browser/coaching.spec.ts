@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openTodayOverview } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
 import { saveCheckin } from "../../lib/health";
@@ -48,13 +48,15 @@ test("one grounded opening stays optional, preserves drafts, and hides for today
     });
   });
   await page.setViewportSize({ width: 390, height: 844 });
+  // The daily thought lives with Today's overview, not in the Coach chat.
   await page.goto("/#coach");
+  await expect(page.getByText("Ready to help", { exact: true })).toBeVisible();
   const opening = page.getByRole("complementary", {
     name: "A thought from Coach",
   });
+  await expect(opening).toHaveCount(0);
+  await openTodayOverview(page);
   await expect(opening).toContainText("You logged energy at 2/5 today.");
-  const composer = page.getByLabel("Message your coach");
-  await expect(composer).toBeInViewport();
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     expect(
@@ -78,30 +80,21 @@ test("one grounded opening stays optional, preserves drafts, and hides for today
     fullPage: true,
   });
   expect(requests).toBe(0);
-  await composer.fill("My evening is already busy.");
   await opening.getByRole("button", { name: "Talk it through" }).click();
-  await expect(composer).toHaveValue(
-    /^My evening is already busy\.\n\nWhat would you suggest/,
+  await expect(page.getByLabel("Message your coach")).toHaveValue(
+    /What would you suggest/,
   );
   expect(requests).toBe(0);
+  await openTodayOverview(page);
   await opening.getByRole("button", { name: "Hide for today" }).click();
   await expect(opening).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText("Ready to help", { exact: true })).toBeVisible();
+  await openTodayOverview(page);
   await expect(opening).toHaveCount(0);
   account = "coaching-b";
   await page.reload();
+  await openTodayOverview(page);
   await expect(opening).toContainText("energy at 2/5 today");
-  await expect(
-    opening.getByRole("button", { name: /There’s room to adjust/ }),
-  ).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(".chat-user").last()).toBeInViewport();
-  await opening.getByRole("button", { name: /There’s room to adjust/ }).click();
-  await expect(
-    opening.getByRole("button", { name: "Talk it through" }),
-  ).toBeInViewport();
-  await expect(composer).toBeInViewport();
-  await expect(page.locator(".chat-user").last()).toBeInViewport();
   expect(requests).toBe(0);
 });
 

@@ -69,6 +69,7 @@ test("meal and ingredient tags survive editing and reload, filter history and re
   await expect(dialog).toHaveCount(0);
   await expect(page.locator(".food-tags")).toContainText("blueberries");
   await page.reload();
+  await page.getByRole("button", { name: "Search meals" }).click();
   await page.getByLabel("Search all logged dates").check();
   await page.getByLabel("Filter meal type").selectOption("dinner");
   await page.getByLabel("Search food or ingredients").fill("chicken");
@@ -112,6 +113,7 @@ test("meal and ingredient tags survive editing and reload, filter history and re
       { name: "rice", evidence: "reported" },
     ]);
   await page.reload();
+  await page.getByRole("button", { name: "Search meals" }).click();
   await page.getByLabel("Search all logged dates").check();
   await page.getByLabel("Filter meal type").selectOption("dinner");
   await page.getByLabel("Search food or ingredients").fill("chicken");

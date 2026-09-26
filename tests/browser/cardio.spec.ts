@@ -1,4 +1,4 @@
-import { test, expect, browserUser } from "./fixtures";
+import { test, expect, browserUser, coachTask } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
 import { saveCardio } from "../../lib/cardio";
@@ -270,6 +270,12 @@ for (const source of ["text", "screenshot"] as const) {
         });
       const input = r.request().postDataJSON();
       expect(input.photoIds).toEqual(source === "screenshot" ? [photo.id] : []);
+      // The task's instruction reaches Coach ahead of the person's own words.
+      expect(input.message).toMatch(
+        source === "screenshot"
+          ? /^Log my completed activity[\s\S]*\n\nLog my cycling activity/
+          : /^Help me log a cardio activity[\s\S]*\n\nI cycled 20 km/,
+      );
       expect(state.cardio.sessions).toHaveLength(0);
       return r.fulfill({
         json: {
@@ -301,9 +307,8 @@ for (const source of ["text", "screenshot"] as const) {
       await page
         .getByRole("button", { name: "Log activity with Coach", exact: true })
         .click();
-      await expect(page.getByLabel("Message your coach")).toHaveValue(
-        /Log my completed activity/,
-      );
+      await expect(coachTask(page)).toHaveText("Activity screenshot");
+      await expect(page.getByLabel("Message your coach")).toHaveValue("");
       await page
         .getByLabel("Message your coach")
         .fill("Log my cycling activity from this screenshot for today.");
@@ -312,8 +317,10 @@ for (const source of ["text", "screenshot"] as const) {
       await page
         .getByRole("button", { name: "Log with Coach", exact: true })
         .click();
-      await expect(page.getByLabel("Message your coach")).toHaveValue(
-        /Help me log a cardio activity/,
+      await expect(coachTask(page)).toHaveText("Logging a walk, run or ride");
+      await expect(page.getByLabel("Message your coach")).toHaveAttribute(
+        "placeholder",
+        "What did you do, and for how long?",
       );
       await page
         .getByLabel("Message your coach")

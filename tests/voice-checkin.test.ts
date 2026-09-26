@@ -120,6 +120,50 @@ test("voice instructions carry the date, the records and the save rules", () => 
   assert.deepEqual(setup.generationConfig.responseModalities, ["AUDIO"]);
 });
 
+test("the coach asks only about missing topics and keeps to English", () => {
+  const s = emptyJournal();
+  const clock = localClock("2026-09-25T12:00:00Z", "Europe/Copenhagen");
+  assert.deepEqual(voiceContext(s, clock.date).missing, [
+    "training",
+    "food",
+    "last night's sleep",
+  ]);
+  s.nutrition.meals.push(meal("2026-09-25", "Oats", "breakfast"));
+  s.health.checkins.push({
+    date: "2026-09-25",
+    sleepHours: 7,
+    energy: null,
+    soreness: null,
+    waterMl: null,
+    bodyweight: null,
+    notes: "",
+    updatedAt: new Date().toISOString(),
+  });
+  assert.deepEqual(voiceContext(s, clock.date).missing, ["training"]);
+  const w = createWorkout(s, days[0], "2026-09-25");
+  w.exercises[0].sets[0] = {
+    ...w.exercises[0].sets[0],
+    weight: 60,
+    reps: 2,
+    logged: true,
+    result: "success",
+  };
+  s.sessions.push(w);
+  const context = voiceContext(s, clock.date);
+  assert.deepEqual(context.missing, []);
+  const text = voiceInstruction(context, clock);
+  assert.match(text, /Topics still missing today: none/);
+  assert.match(text, /do not ask about training, food or sleep/);
+  // Only exercises actually done appear in the day.
+  assert.ok(context.day.workouts[0].exercises.every((e) => e.sets.length));
+  assert.match(text, /Always speak English/);
+  assert.match(text, /Short answers like "not yet"/);
+  assert.equal(
+    voiceSetup(text).generationConfig.speechConfig.languageCode,
+    "en-US",
+  );
+});
+
 test("voice tokens are single use, short lived and lock the configuration", async () => {
   process.env.GEMINI_API_KEY = "test-key";
   let sent: { url: string; init: RequestInit } | null = null;

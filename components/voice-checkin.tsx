@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { useVoiceCheckin, type VoiceStatus } from "@/lib/use-voice-checkin";
+import { updateAppNow } from "@/lib/use-service-worker";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { Camera, Check, LoaderCircle, Mic, MicOff, PhoneOff } from "./ui/icons";
@@ -156,10 +157,14 @@ export function VoiceCheckin({
           </>
         ) : (
           <>
-            <Button onClick={() => voice.start(purpose)}>
-              <Mic size={18} />
-              {voice.status === "idle" ? "Start talking" : "Talk again"}
-            </Button>
+            {voice.outdated ? (
+              <Button onClick={() => void updateAppNow()}>Update now</Button>
+            ) : (
+              <Button onClick={() => voice.start(purpose)}>
+                <Mic size={18} />
+                {voice.status === "idle" ? "Start talking" : "Talk again"}
+              </Button>
+            )}
             {receipts.length > 0 && (
               <Button
                 variant="secondary"

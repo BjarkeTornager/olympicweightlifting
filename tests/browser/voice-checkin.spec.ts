@@ -41,6 +41,7 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     browserName !== "chromium",
     "Synthetic microphone is Chromium-only",
   );
+  test.setTimeout(90000);
   await context.grantPermissions(["microphone", "camera"]);
   await context.route("**/api/journal", (r) =>
     r.fulfill({
@@ -403,6 +404,28 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     )
     .toBe(true);
 
+  // A goodbye the athlete talks over does not end the call.
+  server.send(
+    JSON.stringify({
+      toolCall: {
+        functionCalls: [{ id: "call-early", name: "end_check_in", args: {} }],
+      },
+    }),
+  );
+  await page.waitForTimeout(1500);
+  server.send(
+    JSON.stringify({
+      serverContent: {
+        inputTranscription: { text: "Not yet, one more thing." },
+      },
+    }),
+  );
+  await page.waitForTimeout(13000);
+  await expect(dialog.getByRole("button", { name: "End" })).toBeVisible();
+  await expect(
+    dialog.getByText("Call ended. Everything saved is in Coach, with Undo."),
+  ).toHaveCount(0);
+
   // The coach checks the journal and then says goodbye; the call waits for
   // the check to finish instead of cutting it off.
   server.send(
@@ -427,9 +450,10 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   await expect
     .poll(() => JSON.stringify(received).includes("call-read"))
     .toBe(true);
+  // After the check, the goodbye stands once the athlete stays quiet.
   await expect(
     dialog.getByText("Call ended. Everything saved is in Coach, with Undo."),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20000 });
   await dialog.getByRole("button", { name: "Review in Coach" }).click();
   // Both saves from the call appear in Coach with Undo, labelled as voice.
   await expect(

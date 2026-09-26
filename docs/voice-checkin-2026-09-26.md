@@ -46,3 +46,14 @@ The first real use showed the relay was the problem: the voice coach forwarded a
 - **Transcript view**: saves appear inline as receipts in one scrolling conversation with a one-line summary, instead of a growing list that pushed the transcript away.
 
 Not device-verified: background/foreground resume and Continue on a physical iPhone.
+
+## Update: English, missing topics only, safe goodbyes and releases (26 September, late afternoon)
+
+Evidence from the owner's calls (`voice_calls` transcripts and deployment logs):
+
+- **Spanish and a "different voice"**: speech recognition heard a short reply as "¿Qué fue?" and the instructions said to follow the athlete's language. Reproduced against the API; fixed with an English-only rule (switch only on an explicit request, ask to repeat when unclear) and `speechConfig.languageCode: "en-US"`. A resume test kept the same voice (≈131 Hz before, 129 Hz after), so the change of voice was the language, not resumption.
+- **Asking about logged topics**: the context held the whole day, but the model still walked training → food → sleep. The server now decides which topics are missing and the instruction says exactly which to ask about, or none.
+- **Calls ending early**: several transcripts end after short replies ("Not yet.") without a goodbye. `end_check_in` now leaves a 12-second window; anything the athlete says cancels the hang-up. The coach must ask "Anything else?" and hear a clear no.
+- **Releases**: the container was replaced with roughly 13 seconds without a server, and #13's version check refused an older app's reconnect. Ongoing calls may now reconnect regardless of app version (only new calls need the current client), reconnects retry for about 40 seconds (continuing from the last lines when no resumption handle exists), saves retry with one id, `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS=30` and `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=20` keep the old server serving until the new one is live (also recorded in `.railway/railway.ts`, which now preserves the voice and search keys).
+- **Diagnostics**: dropped sockets, `goAway`, reconnects and failures are logged via `POST /api/voice/event` (codes and short reasons only). An outdated app gets an **Update now** button.
+- **Restate** would not have prevented any of these: audio runs between the phone and Google, and saves are already transactional and idempotent.

@@ -51,6 +51,8 @@ const readTools = new Set([
   "recall_conversations",
 ]);
 const MAX_CALL_MINUTES = 30;
+// After the coach's goodbye, how long the athlete has to keep talking.
+const ENDING_GRACE_MS = 12000;
 // The server refuses calls from an app older than this voice protocol.
 export const VOICE_CLIENT_VERSION = "3";
 
@@ -73,6 +75,8 @@ type Session = {
   failures: number;
   // Checks and saves still running; the call never ends in the middle.
   pending: number;
+  // The coach said goodbye; the call ends unless the athlete keeps talking.
+  ending?: ReturnType<typeof setTimeout>;
   sources: Set<AudioBufferSourceNode>;
   playAt: number;
   closed: boolean;
@@ -106,6 +110,8 @@ export function useVoiceCheckin({
   const [muted, setMuted] = useState(false);
   const [camera, setCamera] = useState<MediaStream | null>(null);
   const [capturing, setCapturing] = useState(false);
+  // The server refused this app version; the screen offers an update.
+  const [outdated, setOutdated] = useState(false);
   const mutedRef = useRef(false);
   const session = useRef<Session | null>(null);
   const transcript = useRef<Entry[]>([]);
@@ -140,6 +146,21 @@ export function useVoiceCheckin({
     const timer = setTimeout(() => persist(s), 4000);
     return () => clearTimeout(timer);
   }, [lines, persist]);
+
+  // Connection problems are reported (codes only, never content) so a
+  // dropped call can be diagnosed on the server. A plain fetch: a report
+  // must never sign the athlete out.
+  const report = useCallback(
+    (event: string, details: Record<string, string | number> = {}) =>
+      void fetch("/api/voice/event", {
+        method: "POST",
+        headers: privateRequestHeaders(headers()),
+        cache: "no-store",
+        keepalive: true,
+        body: JSON.stringify({ event, ...details }),
+      }).catch(() => {}),
+    [headers],
+  );
 
   const stop = useCallback(
     (failure?: string) => {
@@ -209,6 +230,7 @@ export function useVoiceCheckin({
       signal: AbortSignal.timeout(15000),
     });
     const data = await response.json();
+    if (response.status === 426) setOutdated(true);
     if (!response.ok) throw Error(data.error ?? "Voice could not start.");
     if (s.closed) return;
     const previous = s.socket;
@@ -223,7 +245,13 @@ export function useVoiceCheckin({
       socket.onopen = () => send({ setup: data.setup });
       socket.onclose = (event) => {
         fail(Error(event.reason || "The voice connection closed."));
-        if (!s.closed && s.socket === socket) void recover(s);
+        if (!s.closed && s.socket === socket) {
+          report("socket_closed", {
+            code: event.code,
+            reason: event.reason.slice(0, 200),
+          });
+          void recover(s);
+        }
       };
       socket.onmessage = (event) => {
         const raw =
@@ -254,6 +282,11 @@ export function useVoiceCheckin({
           } else if (e.type === "heard") {
             setLines((l) => appendLine(l, "you", e.text));
             s.lineClosed = true;
+            // Still talking after the coach's goodbye: the call goes on.
+            if (s.ending) {
+              clearTimeout(s.ending);
+              s.ending = undefined;
+            }
           } else if (e.type === "said") {
             const fresh = s.lineClosed;
             s.lineClosed = false;
@@ -262,7 +295,10 @@ export function useVoiceCheckin({
           else if (e.type === "toolCall")
             e.calls.forEach((call) => void handle(call, send));
           // The connection is about to end: continue on a fresh one.
-          else if (e.type === "goAway") void recover(s);
+          else if (e.type === "goAway") {
+            report("go_away");
+            void recover(s);
+          }
         }
       };
     });
@@ -277,20 +313,48 @@ export function useVoiceCheckin({
     }
     s.reconnecting = true;
     setStatus("reconnecting");
+    // Retries for about 40 seconds: long enough to ride out a server release.
+    const waits = [1000, 2000, 4000, 8000, 12000, 15000];
     try {
       while (true) {
         try {
           await ensureMic(s);
+          const resumed = Boolean(s.handle);
           await connect(s, true);
+          if (!resumed) {
+            // Without a resumption handle the conversation starts fresh;
+            // give the coach the last few lines to carry on from.
+            const recent = transcript.current
+              .flatMap((e) =>
+                e.role === "save"
+                  ? []
+                  : [`${e.role === "you" ? "Athlete" : "Coach"}: ${e.text}`],
+              )
+              .slice(-8)
+              .join("\n");
+            s.send?.({
+              realtimeInput: {
+                text: `(The call reconnected. Continue where you left off; the last lines were:\n${recent})`,
+              },
+            });
+          }
+          report("reconnected", {
+            attempts: s.failures + 1,
+            resumed: Number(resumed),
+          });
           return;
         } catch (e) {
           if (s.closed) return;
-          if (++s.failures >= 3 || !s.handle)
+          const wait = waits[s.failures++];
+          if (wait === undefined)
             throw e instanceof Error ? e : Error("The call dropped.");
-          await new Promise((r) => setTimeout(r, 1000 * s.failures));
+          await new Promise((r) => setTimeout(r, wait));
         }
       }
     } catch (e) {
+      report("reconnect_failed", {
+        reason: e instanceof Error ? e.message.slice(0, 200) : "unknown",
+      });
       stop(
         `${e instanceof Error ? e.message : "The call dropped."} Anything already saved is in Coach.`,
       );
@@ -558,9 +622,17 @@ export function useVoiceCheckin({
     const s = session.current;
     if (!s) return;
     if (call.name === "end_check_in") {
-      respond(send, call, { result: "ended" });
-      // Let the goodbye and any running check or save finish first.
-      void endWhenIdle(s, 30000);
+      respond(send, call, {
+        result:
+          "The call ends in a few seconds unless the athlete keeps talking; if they do, carry on.",
+      });
+      // A premature goodbye must not cut the athlete off: the call stays
+      // open briefly, and anything they say cancels the hang-up.
+      if (s.ending) clearTimeout(s.ending);
+      s.ending = setTimeout(() => {
+        s.ending = undefined;
+        void endWhenIdle(s, 30000);
+      }, ENDING_GRACE_MS);
       return;
     }
     s.pending++;
@@ -621,26 +693,37 @@ export function useVoiceCheckin({
           state: "saving",
         },
       ]);
-    let result: ActionResult;
-    try {
-      const response = await privateFetch("/api/voice/action", {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({
-          id: crypto.randomUUID(),
-          name: call.name,
-          args: call.args ?? {},
-          timezone: timezone(),
-          seenPhotoIds: s.photos,
-        }),
-        signal: AbortSignal.timeout(20000),
-      });
-      const data = await response.json();
-      result = response.ok
-        ? data
-        : { ok: false, error: data.error ?? "That could not be done." };
-    } catch {
-      result = { ok: false, error: "The connection to the journal failed." };
+    let result: ActionResult = {
+      ok: false,
+      error: "The connection to the journal failed.",
+    };
+    // One id for every attempt: a retry after a lost reply never saves twice.
+    const id = crypto.randomUUID();
+    for (const wait of [0, 1500, 3000, 6000, 10000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      try {
+        const response = await privateFetch("/api/voice/action", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            id,
+            name: call.name,
+            args: call.args ?? {},
+            timezone: timezone(),
+            seenPhotoIds: s.photos,
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
+        // A release in progress answers 502/503; try again shortly.
+        if (response.status >= 502) continue;
+        const data = await response.json();
+        result = response.ok
+          ? data
+          : { ok: false, error: data.error ?? "That could not be done." };
+        break;
+      } catch {
+        /* Network or server restart: retry with the same id. */
+      }
     }
     if (!reading) {
       setReceipt(call.id, result.ok ? "saved" : "failed");
@@ -672,6 +755,7 @@ export function useVoiceCheckin({
     start: (purpose?: VoicePurpose) => void start(purpose),
     stop: () => stop(),
     resume: () => void resumeCall(),
+    outdated,
     analyser,
     camera,
     capturing,

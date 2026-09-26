@@ -40,6 +40,15 @@ export default defineRailway(() => {
       VIDEO_SAM3_URL: preserve(),
       VIDEO_SAM3_TOKEN: preserve(),
       VIDEO_SAM3_PILOT_EMAIL: preserve(),
+      EXA_API_KEY: preserve(),
+      GEMINI_API_KEY: preserve(),
+      VOICE_NAME: preserve(),
+      VOICE_MODEL: preserve(),
+      // Releases without downtime: the previous server keeps serving until
+      // the new one is live, then gets time to finish open requests. Calls
+      // and saves in progress are not cut off by a deploy.
+      RAILWAY_DEPLOYMENT_OVERLAP_SECONDS: "30",
+      RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "20",
     },
   });
   return project("olympicweightlifting", {

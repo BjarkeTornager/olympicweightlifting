@@ -24,6 +24,11 @@ struct RootView: View {
           }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        .sheet(isPresented: $model.consentForVoice, onDismiss: {
+          if UserDefaults.standard.bool(forKey: AIConsent.key) { model.startVoice() }
+        }) {
+          AIConsentView()
+        }
         .fullScreenCover(
           isPresented: Binding(
             get: { model.voiceCall != nil }, set: { if !$0 { model.closeVoice() } })

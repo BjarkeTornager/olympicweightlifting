@@ -35,6 +35,8 @@ final class AppModel {
   var voiceEnabled = false
   /// The spoken check-in on screen, if any.
   var voiceCall: VoiceCall?
+  /// Voice streams audio to Google, so the first call asks for AI permission.
+  var consentForVoice = false
   /// Counts finished calls, so Coach reloads what the call saved.
   var voiceEnded = 0
   var queued = 0
@@ -310,6 +312,10 @@ final class AppModel {
 
   func startVoice() {
     guard voiceCall == nil || voiceCall?.inCall == false else { return }
+    guard UserDefaults.standard.bool(forKey: AIConsent.key) else {
+      consentForVoice = true
+      return
+    }
     voiceCall = VoiceCall(app: self)
   }
 

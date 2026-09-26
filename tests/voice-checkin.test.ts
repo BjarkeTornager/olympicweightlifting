@@ -85,6 +85,10 @@ test("voice instructions carry the date, the records and the save rules", () => 
   assert.match(text, /with Bjarke/);
   assert.match(text, /Food: Nothing recorded/);
   assert.match(text, /Never add sets, foods or amounts they did not say/);
+  // The whole day is in context from the start.
+  assert.match(text, /Everything recorded for 2026-09-25 so far, in full/);
+  assert.match(text, /"eatenSoFar":\{"calories":0/);
+  assert.match(text, /Never end the call while you are checking something/);
   const setup = voiceSetup(text);
   assert.equal(setup.model, "models/gemini-3.8-live-extended-thinking");
   const names = setup.tools[0].functionDeclarations.map((f) => f.name);

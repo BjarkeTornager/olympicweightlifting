@@ -57,8 +57,15 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     args: Record<string, unknown>;
     seenPhotoIds: string[];
   }[] = [];
-  await context.route("**/api/voice/action", (r) => {
+  let releaseRead!: () => void;
+  const readHeld = new Promise<void>((resolve) => (releaseRead = resolve));
+  await context.route("**/api/voice/action", async (r) => {
     const body = r.request().postDataJSON();
+    // A slow journal read, to check the call never ends in the middle of it.
+    if (body.name === "read_journal") {
+      await readHeld;
+      return r.fulfill({ json: { ok: true, data: { meals: [] } } });
+    }
     actions.push(body);
     const proposal: ActionPreview = {
       id: crypto.randomUUID(),
@@ -130,7 +137,8 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   await context.route("**/api/voice/session", (r) =>
     r.request().method() === "GET"
       ? r.fulfill({ json: { enabled: true } })
-      : ((sessionBody = r.request().postDataJSON()),
+      : (expect(r.request().headers()["x-voice-client"]).toBe("3"),
+        (sessionBody = r.request().postDataJSON()),
         sessionBodies.push(r.request().postDataJSON()),
         r.fulfill({
           json: {
@@ -395,13 +403,30 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     )
     .toBe(true);
 
+  // The coach checks the journal and then says goodbye; the call waits for
+  // the check to finish instead of cutting it off.
   server.send(
     JSON.stringify({
       toolCall: {
-        functionCalls: [{ id: "call-2", name: "end_check_in", args: {} }],
+        functionCalls: [
+          {
+            id: "call-read",
+            name: "read_journal",
+            args: { from: today(), to: today() },
+          },
+          { id: "call-2", name: "end_check_in", args: {} },
+        ],
       },
     }),
   );
+  await page.waitForTimeout(2500);
+  await expect(
+    dialog.getByText("Call ended. Everything saved is in Coach, with Undo."),
+  ).toHaveCount(0);
+  releaseRead();
+  await expect
+    .poll(() => JSON.stringify(received).includes("call-read"))
+    .toBe(true);
   await expect(
     dialog.getByText("Call ended. Everything saved is in Coach, with Undo."),
   ).toBeVisible();

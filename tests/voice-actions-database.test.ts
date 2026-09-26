@@ -194,6 +194,39 @@ test(
       );
 
       await t.test(
+        "goals set by voice save the plan as daily targets",
+        async () => {
+          const a = await user();
+          const saved = await run(a, "set_goals", {
+            summary: "34, 182 cm, 88 kg, want to get to 81",
+            age: 34,
+            sex: "male",
+            heightCm: 182,
+            weightKg: 88,
+            targetWeightKg: 81,
+            targetDate: "",
+            activity: "moderate",
+            trainingDays: 4,
+            sessionMinutes: 75,
+            experience: "developing",
+          });
+          assert.ok(saved.ok);
+          assert.match(saved.detail, /2,350 kcal a day/);
+          const { state } = await readJournal(a);
+          assert.equal(state.profile.body?.targetWeightKg, 81);
+          assert.equal(state.profile.body?.targetDate, null);
+          assert.equal(state.nutrition.targets.calories, 2350);
+          // Missing details are refused, not guessed.
+          await assert.rejects(
+            run(a, "set_goals", {
+              summary: "I want to be 80 kg",
+              targetWeightKg: 80,
+            }),
+          );
+        },
+      );
+
+      await t.test(
         "a repeated call id returns the same save, not a second one",
         async () => {
           const a = await user();

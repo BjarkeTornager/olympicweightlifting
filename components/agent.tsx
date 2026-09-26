@@ -64,6 +64,7 @@ export function TrainingAgent({
   initialVideoReview = false,
   initialCapture = false,
   initialVoice = false,
+  initialVoicePurpose = "checkin",
   initialMemories,
 }: {
   journal: JournalController;
@@ -80,6 +81,7 @@ export function TrainingAgent({
   initialVideoReview?: boolean;
   initialCapture?: boolean;
   initialVoice?: boolean;
+  initialVoicePurpose?: "checkin" | "goals";
   initialMemories?: "memories" | "plans";
 }) {
   const entryPrompt = initialTrainingPrompt ?? "";
@@ -166,6 +168,7 @@ export function TrainingAgent({
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
   const [captureOpen, setCaptureOpen] = useState(initialCapture);
   const [voiceOpen, setVoiceOpen] = useState(initialVoice);
+  const [voicePurpose, setVoicePurpose] = useState(initialVoicePurpose);
   const [handledEntry, setHandledEntry] = useState(entryId);
   const [wasVisible, setWasVisible] = useState(visible);
   // Apply a navigation intent once without discarding an existing draft or run.
@@ -174,7 +177,10 @@ export function TrainingAgent({
     setLoadingImage(Boolean(initialPhotoId));
     if (initialVideoReview) setVideoOpen(true);
     if (initialCapture) setCaptureOpen(true);
-    if (initialVoice) setVoiceOpen(true);
+    if (initialVoice) {
+      setVoicePurpose(initialVoicePurpose);
+      setVoiceOpen(true);
+    }
     if (initialMemories) {
       setMemoriesOpen(true);
       setMemoryTab(initialMemories);
@@ -546,6 +552,8 @@ export function TrainingAgent({
         <span>Food, sleep or training</span>
       </div>
       <VoiceCheckin
+        key={voicePurpose}
+        purpose={voicePurpose}
         open={voiceOpen && visible}
         onOpenChange={setVoiceOpen}
         accountId={accountId ?? ""}
@@ -564,6 +572,7 @@ export function TrainingAgent({
           voiceEnabled
             ? () => {
                 setCaptureOpen(false);
+                setVoicePurpose("checkin");
                 setVoiceOpen(true);
               }
             : undefined
@@ -870,7 +879,10 @@ export function TrainingAgent({
                     <Button
                       type="button"
                       className="composer-talk-button"
-                      onClick={() => setVoiceOpen(true)}
+                      onClick={() => {
+                        setVoicePurpose("checkin");
+                        setVoiceOpen(true);
+                      }}
                     >
                       <Mic size={20} />
                       Talk

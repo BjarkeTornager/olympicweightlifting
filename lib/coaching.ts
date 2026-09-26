@@ -1,3 +1,4 @@
+import { planGoals } from "./body-goals";
 import { z } from "zod";
 import type { JournalState } from "./model";
 import { formatSleepDuration, offsetDate } from "./health";
@@ -201,6 +202,15 @@ export function coachingContext(state: JournalState, date: string) {
       initiative: preferences.initiative,
       focus: preferences.focus,
     },
+    // Saved body goals and the plan the app derives from them.
+    ...(state.profile.body
+      ? {
+          goals: {
+            ...state.profile.body,
+            plan: planGoals(state.profile.body, date),
+          },
+        }
+      : {}),
     approvedMemories: preferences.memories ?? [],
     agreedPlans: (preferences.plans ?? []).filter((p) => p.status === "active"),
     // Keep user-supplied focus separate from instructions, and keep this small.

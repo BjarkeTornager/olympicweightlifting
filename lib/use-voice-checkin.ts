@@ -34,6 +34,7 @@ const saveLabels: Record<string, string> = {
   log_sleep: "Sleep",
   log_activity: "Activity",
   clear_unfinished_workout: "Unfinished workout",
+  set_goals: "Goals",
   undo_save: "Undo",
 };
 type Session = {
@@ -109,7 +110,7 @@ export function useVoiceCheckin({
     setMuted(mutedRef.current);
   };
 
-  const start = async () => {
+  const start = async (purpose: "checkin" | "goals" = "checkin") => {
     if (session.current) return;
     // iOS only lets audio start from the tap itself, before any await.
     const context = new AudioContext();
@@ -146,6 +147,7 @@ export function useVoiceCheckin({
         headers: headers(),
         body: JSON.stringify({
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          purpose,
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -431,7 +433,7 @@ export function useVoiceCheckin({
     saves,
     muted,
     toggleMute,
-    start: () => void start(),
+    start: (purpose?: "checkin" | "goals") => void start(purpose),
     stop: () => stop(),
     analyser,
     camera,

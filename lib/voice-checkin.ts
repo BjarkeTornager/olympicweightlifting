@@ -2,6 +2,7 @@ import type { JournalState, Workout } from "./model";
 import { EXERCISES } from "./domain";
 import { cardioActivities } from "./cardio";
 import { foodGroups } from "./nutrition";
+import { describePlan, planGoals } from "./body-goals";
 import { nextTraining } from "./next-training";
 import { formatSleepDuration } from "./health";
 import { localClock } from "./agent/time-context";
@@ -58,13 +59,19 @@ export function voiceContext(state: JournalState, date: string) {
       ? `${active.title}, started ${active.date}, ${loggedSets(active)} sets logged`
       : null,
     nextPlanned: next.canStart ? next.title : null,
+    goals: state.profile.body
+      ? describePlan(state.profile.body, planGoals(state.profile.body, date))
+      : null,
   };
 }
+
+export type VoicePurpose = "checkin" | "goals";
 
 export function voiceInstruction(
   context: ReturnType<typeof voiceContext>,
   clock: ReturnType<typeof localClock>,
   name?: string,
+  purpose: VoicePurpose = "checkin",
 ) {
   return `You are the athlete's Olympic weightlifting coach doing a short spoken end-of-day check-in${name ? ` with ${name}` : ""}. Sound like a real coach at the platform: warm, confident, direct and energetic, with short natural sentences, genuine encouragement for good work and calm matter-of-factness about misses. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 
@@ -73,7 +80,8 @@ Already recorded for ${context.date}:
 - Food: ${context.food}
 - Sleep last night: ${context.sleep}
 - Training: ${context.training}
-${context.unfinishedWorkout ? `- An unfinished workout is open: ${context.unfinishedWorkout}. It does not stop you logging other training.\n` : ""}${context.nextPlanned ? `- Next planned session in the programme: ${context.nextPlanned}\n` : ""}
+${context.unfinishedWorkout ? `- An unfinished workout is open: ${context.unfinishedWorkout}. It does not stop you logging other training.\n` : ""}${context.nextPlanned ? `- Next planned session in the programme: ${context.nextPlanned}\n` : ""}- Goals: ${context.goals ?? "Not set up yet"}
+${purpose === "goals" ? "\nThe athlete opened this call to set up their goals. Do that first; offer the check-in afterwards only if they want it.\n" : ""}
 How to run the check-in:
 - Open with one short, friendly line and your first question. Ask only about what is not recorded yet, one topic at a time: training, then food, then last night's sleep. Skip anything already recorded unless the athlete brings it up.
 - Keep every reply to one or two short sentences. This is a spoken conversation, not a report. No lectures, no nutrition advice unless asked.
@@ -87,6 +95,7 @@ How to run the check-in:
 - log_meal: estimate calories, protein, carbs and fat yourself from the foods and portions; never ask the athlete for numbers.
 - You can fix things yourself, but never change anything the athlete didn't ask about without saying so. Leave an old unfinished workout alone unless the athlete asks or a save is refused because of it; then tell them in one sentence and call clear_unfinished_workout (it saves any logged sets to history, or removes an empty draft), and save again. If the athlete corrects something you just saved, call undo_save with its save_id and save the corrected version. Never send the athlete to another screen to fix it.
 - If a save is refused for another reason, say briefly why in plain words and what you will do, then try once more with the fix.
+- Goals: when the athlete wants to set or change goals, ask one short question at a time for age, sex, height, current weight, goal weight, a target date if they have one, how active they are outside training (low, moderate, high), how many days a week they can train, how long a session is, and their experience (new, developing, experienced). Never guess these. Then call set_goals. The app calculates daily calories, macros and sessions a week; read the result back in two short sentences, including any warning, and do not invent your own numbers.
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids.
 - When everything is covered, say a short goodbye and call end_check_in. Also call it if the athlete says they are done.
 - Speak the athlete's language; default to English.`;
@@ -231,6 +240,47 @@ export function voiceTools() {
               distance_km: number(),
             },
             required: ["summary", "date", "activity", "minutes"],
+          },
+        },
+        {
+          name: "set_goals",
+          description:
+            "Save the athlete's body and goal details. Returns the daily calories, macros and sessions a week the app calculated.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: summaryField,
+              age: { type: "INTEGER" },
+              sex: { type: "STRING", enum: ["male", "female", "unspecified"] },
+              heightCm: number(),
+              weightKg: number("Current bodyweight"),
+              targetWeightKg: number("Goal bodyweight"),
+              targetDate: text("YYYY-MM-DD, only if the athlete gave one"),
+              activity: {
+                type: "STRING",
+                enum: ["low", "moderate", "high"],
+                description: "Movement outside training",
+              },
+              trainingDays: {
+                type: "INTEGER",
+                description: "Days a week available to train",
+              },
+              sessionMinutes: { type: "INTEGER" },
+              experience: {
+                type: "STRING",
+                enum: ["new", "developing", "experienced"],
+              },
+            },
+            required: [
+              "summary",
+              "age",
+              "sex",
+              "heightCm",
+              "weightKg",
+              "targetWeightKg",
+              "activity",
+              "trainingDays",
+            ],
           },
         },
         {

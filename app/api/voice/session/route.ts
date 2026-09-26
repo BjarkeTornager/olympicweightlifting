@@ -48,8 +48,9 @@ export async function POST(request: Request) {
         "Please wait a minute before starting another call.",
         429,
       );
-    const { timezone } = z
+    const { timezone, purpose } = z
       .object({
+        purpose: z.enum(["checkin", "goals"]).default("checkin"),
         timezone: z
           .string()
           .max(100)
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
         voiceContext(state, clock.date),
         clock,
         state.profile.name || user.name?.split(" ")[0],
+        purpose,
       ),
     );
     let token: string;

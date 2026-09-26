@@ -93,6 +93,7 @@ test("voice instructions carry the date, the records and the save rules", () => 
     "log_meal",
     "log_sleep",
     "log_activity",
+    "set_goals",
     "clear_unfinished_workout",
     "undo_save",
     "open_camera",

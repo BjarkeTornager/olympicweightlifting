@@ -74,9 +74,13 @@ test("Coach links open the matching entry as a task, keeping any in-memory draft
   assert.equal(sleep.initialSleepLog, true);
   assert.equal(sleep.initialCardioLog, false);
   assert.equal(coachEntryIntent("coach/voice", state).initialVoice, true);
+  const goals = coachEntryIntent("coach/voice/goals", state);
+  assert.equal(goals.initialVoice, true);
+  assert.equal(goals.initialVoicePurpose, "goals");
   assert.deepEqual(coachEntryIntent("coach", state), {
     initialCapture: false,
     initialVoice: false,
+    initialVoicePurpose: "checkin",
     initialMemories: undefined,
     initialVideoReview: false,
     initialTrainingPrompt: undefined,

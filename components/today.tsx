@@ -6,6 +6,7 @@ import { weeklyReview } from "@/lib/weekly-review";
 import type { JournalController } from "./journal";
 import { TrackingStatus } from "./tracking-status";
 import { NextSession } from "./next-session";
+import { GoalsCard } from "./goals";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
 import { Plus, ChevronRight, Mic } from "./ui/icons";
@@ -104,6 +105,7 @@ export function Today({
           <ChevronRight size={17} aria-hidden="true" />
         </button>
       </section>
+      <GoalsCard journal={journal} go={go} voiceEnabled={voiceEnabled} />
       <TrackingStatus accountId={journal.identity.id} go={go} />
       <section className="today-week" aria-label="This week at a glance">
         <div className="today-week-heading">

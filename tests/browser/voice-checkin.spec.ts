@@ -201,7 +201,10 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   expect(received[0]).toEqual({
     setup: { model: "models/gemini-3.8-live-extended-thinking" },
   });
-  expect(sessionBody).toEqual({ timezone: expect.any(String) });
+  expect(sessionBody).toEqual({
+    timezone: expect.any(String),
+    purpose: "checkin",
+  });
   // The synthetic microphone reaches Google as 16 kHz PCM chunks.
   await expect.poll(() => audioChunks).toBeGreaterThan(3);
 

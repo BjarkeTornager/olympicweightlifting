@@ -27,7 +27,11 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Train. Drafts with logged sets can only be finished, never discarded
     // (voice-actions-database.test.ts). Health, privacy and evidence text is
     // unchanged.
-    "f91fcbac03dd7159c3d4db82d65c53010d88126a80248a9f23eb6bf40a80f0c0",
+    // Revised 2026-09-26 again, deliberate and reviewed: one added paragraph
+    // for set_body_goals. Coach collects the athlete's stated details without
+    // guessing and reports the app's calculated plan instead of its own
+    // figures; it saves only through a reviewed change (body-goals.test.ts).
+    "550453a9acf1e7f75bf9f3c42298ae01acfc25c12cba7dea0281588805d9b0d0",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

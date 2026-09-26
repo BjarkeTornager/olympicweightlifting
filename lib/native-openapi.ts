@@ -150,6 +150,13 @@ export function buildOpenApi() {
           responses: ok("Today"),
         },
       },
+      "/api/v1/trends": {
+        get: {
+          operationId: "getTrends",
+          parameters: [query("date", true), query("days", false, "integer")],
+          responses: ok("Trends"),
+        },
+      },
       "/api/v1/journal": {
         get: {
           operationId: "getJournal",

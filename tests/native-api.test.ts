@@ -19,6 +19,7 @@ import {
   buildCoach,
   buildJournal,
   buildToday,
+  buildTrends,
   nativeAction,
 } from "../lib/native-api";
 import { nativeClient } from "../lib/native-client";
@@ -305,4 +306,21 @@ test("daily heart-rate summaries replace the day's previous summary", () => {
   assert.throws(() =>
     healthSyncSchema.parse({ timezone: tz, days: [{ date, extra: 1 }] }),
   );
+});
+
+test("trends give one row per day, oldest first, with gaps left empty", () => {
+  const state = emptyJournal();
+  applyVitals(state, { date, restingHeartRate: 51, steps: 9000 }, now);
+  addDrink(state, { date: "2026-09-25", ml: 750, kind: "water" }, now);
+  state.cardio.sessions.push(cardioFromWorkout(workout(), tz, now));
+  const trends = buildTrends(state, date, 3);
+  assert.deepEqual(
+    trends.days.map((d) => d.date),
+    ["2026-09-24", "2026-09-25", "2026-09-26"],
+  );
+  assert.equal(trends.days[0].restingHeartRate, undefined);
+  assert.equal(trends.days[1].waterMl, 750);
+  assert.equal(trends.days[2].restingHeartRate, 51);
+  assert.equal(trends.days[2].cardioMinutes, 50);
+  assert.equal(trends.days[2].waterMl, undefined, "no drinks is not 0 ml");
 });

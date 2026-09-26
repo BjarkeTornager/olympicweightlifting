@@ -39,7 +39,12 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // poor sleep and ordinary soreness are answered practically rather than
     // refused (found by the Coach evals). Pain and red-flag guidance is
     // unchanged.
-    "955553175ef943533b5cc482ea63c59250fe1677faa81ac3187329ac78efd8c0",
+    // Revised 2026-09-26, deliberate and reviewed: heart rate, HRV, steps,
+    // active energy and workouts imported from Apple Health by the iPhone
+    // app are recorded measurements Coach may use and attribute; it still
+    // must not claim live monitoring or medical records, or read heart rate
+    // clinically (native-api.test.ts covers the imported data).
+    "7bab066b42c733ef170a1c70e51e29956ab83724b50a19858e38d68ca08261d9",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

@@ -324,3 +324,27 @@ test("trends give one row per day, oldest first, with gaps left empty", () => {
   assert.equal(trends.days[2].cardioMinutes, 50);
   assert.equal(trends.days[2].waterMl, undefined, "no drinks is not 0 ml");
 });
+
+test("Coach's view of the day includes Apple Health heart rate and workout details", async () => {
+  const { dayForCoach, describeDay } = await import("../lib/journal-summary");
+  const { dailyHealth } = await import("../lib/health");
+  const state = emptyJournal();
+  applyVitals(
+    state,
+    { date, restingHeartRate: 52, heartRateVariabilityMs: 61.4, steps: 9120 },
+    now,
+  );
+  state.cardio.sessions.push(cardioFromWorkout(workout(), tz, now));
+  const day = dayForCoach(state, date);
+  assert.equal(day.heart_and_movement[0].resting_heart_rate, 52);
+  assert.equal(day.heart_and_movement[0].source, "Apple Health");
+  assert.equal(day.activities[0].average_heart_rate, 148);
+  assert.equal(day.activities[0].title, "Outdoor Run");
+  const sentence = describeDay(day);
+  assert.match(sentence, /Outdoor Run, 50 min, 10 km, 148 bpm average/);
+  assert.match(
+    sentence,
+    /From Apple Health: resting heart rate 52 bpm, HRV 61 ms, 9,120 steps/,
+  );
+  assert.equal(dailyHealth(state, date).vitals?.restingHeartRate, 52);
+});

@@ -1,0 +1,516 @@
+{
+  "revision": 12,
+  "next": {
+    "programmeId": "stability-power-base-v1",
+    "programmeName": "Stability & Power Base",
+    "dayId": "monday",
+    "title": "Snatch + Back Squat",
+    "position": 1,
+    "count": 4,
+    "builtIn": true,
+    "canStart": true
+  },
+  "programmes": [
+    {
+      "id": "stability-power-base-v1",
+      "name": "Stability & Power Base",
+      "builtIn": true,
+      "active": true,
+      "days": [
+        {
+          "id": "gym_accessories",
+          "name": "Gym Accessories",
+          "notes": "Normal gym · rack, barbell and floor space · no platform or dropped lifts",
+          "exercises": [
+            {
+              "exerciseId": "romanian_deadlift",
+              "name": "Romanian deadlift",
+              "sets": 3,
+              "reps": 8,
+              "notes": "Start and finish from the rack. Keep the bar close, lower under control and do not drop it. Record total bar weight.",
+              "text": "3 × 8"
+            },
+            {
+              "exerciseId": "strict_press",
+              "name": "Strict press",
+              "sets": 3,
+              "reps": 8,
+              "notes": "Press from the rack without leg drive. Use a lighter bar if needed and leave 2–3 reps in reserve. No jerks or dropped bars.",
+              "text": "3 × 8"
+            },
+            {
+              "exerciseId": "barbell_row",
+              "name": "Barbell row",
+              "sets": 3,
+              "reps": 10,
+              "notes": "Start from the rack, hinge to row and avoid heaving. Lower every rep under control. Record total bar weight.",
+              "text": "3 × 10"
+            },
+            {
+              "exerciseId": "split_squat",
+              "name": "Split squat",
+              "sets": 3,
+              "reps": 16,
+              "notes": "One logged set is 8 reps per leg: enter 16 total reps. Enter 0 kg for bodyweight, otherwise total added weight. Use rack safeties with a barbell; bodyweight sessions stay at 0 until you choose a loaded baseline.",
+              "text": "3 × 16 total · 8 per leg"
+            },
+            {
+              "exerciseId": "dead_bug",
+              "name": "Dead bug",
+              "sets": 3,
+              "reps": 16,
+              "weight": 0,
+              "notes": "Alternate sides slowly. One logged set is 8 per side: enter 16 total reps and 0 kg. No automatic weight increases.",
+              "text": "3 × 16 total · 8 per side · 0 kg"
+            }
+          ],
+          "cardio": []
+        },
+        {
+          "id": "monday",
+          "name": "Snatch + Back Squat",
+          "notes": "Receiving stability and foundational leg strength",
+          "exercises": [
+            {
+              "exerciseId": "snatch",
+              "name": "Snatch",
+              "sets": 6,
+              "reps": 1,
+              "notes": "Pause for 2 seconds in the receiving position on technical reps.",
+              "text": "6 × 1–2"
+            },
+            {
+              "exerciseId": "snatch_pull",
+              "name": "Snatch pull",
+              "sets": 4,
+              "reps": 3,
+              "notes": "Maintain snatch positions and speed.",
+              "text": "4 × 3"
+            },
+            {
+              "exerciseId": "back_squat",
+              "name": "Back squat",
+              "sets": 4,
+              "reps": 4,
+              "notes": "Leave 1–3 reps in reserve.",
+              "text": "4 × 4"
+            },
+            {
+              "exerciseId": "upper_back",
+              "name": "Rows / pull-ups",
+              "sets": 3,
+              "reps": 8,
+              "notes": "Choose rows or pull-ups.",
+              "text": "3 × 6–10"
+            },
+            {
+              "exerciseId": "trunk",
+              "name": "Trunk work",
+              "sets": 3,
+              "reps": 10,
+              "notes": "Choose one trunk exercise and keep the quality high.",
+              "text": "3 × Controlled"
+            }
+          ],
+          "cardio": []
+        },
+        {
+          "id": "wednesday",
+          "name": "Clean & Jerk + Front Squat",
+          "notes": "Decisive jerk lockout and clean-specific leg strength",
+          "exercises": [
+            {
+              "exerciseId": "clean_and_jerk",
+              "name": "Clean & jerk",
+              "sets": 6,
+              "reps": 1,
+              "notes": "Create immediate, unmistakable elbow lockout and hold it.",
+              "text": "6 × 1"
+            },
+            {
+              "exerciseId": "pause_clean",
+              "name": "Pause clean",
+              "sets": 3,
+              "reps": 2,
+              "notes": "Use a pause clean or a clean + front squat complex.",
+              "text": "3 × 1–2"
+            },
+            {
+              "exerciseId": "front_squat",
+              "name": "Front squat",
+              "sets": 4,
+              "reps": 3,
+              "notes": "Stay upright; leave 1–3 reps in reserve.",
+              "text": "4 × 3"
+            },
+            {
+              "exerciseId": "push_press",
+              "name": "Push press",
+              "sets": 4,
+              "reps": 4,
+              "notes": "Drive vertically and finish every rep with a hard lockout.",
+              "text": "4 × 4"
+            },
+            {
+              "exerciseId": "triceps_upper_back",
+              "name": "Triceps / upper back",
+              "sets": 3,
+              "reps": 10,
+              "notes": "Select one triceps or upper-back accessory.",
+              "text": "3 × 8–12"
+            }
+          ],
+          "cardio": []
+        },
+        {
+          "id": "friday",
+          "name": "Power + Overhead Stability",
+          "notes": "Specific power and a stable overhead receiving position",
+          "exercises": [
+            {
+              "exerciseId": "power_snatch",
+              "name": "Power snatch",
+              "sets": 5,
+              "reps": 2,
+              "notes": "Receive tall and connected; do not chase borderline depth.",
+              "text": "5 × 2"
+            },
+            {
+              "exerciseId": "snatch_balance",
+              "name": "Snatch balance",
+              "sets": 4,
+              "reps": 2,
+              "notes": "Emphasize speed under the bar and a stable bottom position.",
+              "text": "4 × 2"
+            },
+            {
+              "exerciseId": "overhead_squat",
+              "name": "Overhead squat",
+              "sets": 3,
+              "reps": 3,
+              "notes": "Pause for 3 seconds in the bottom of every rep.",
+              "text": "3 × 3"
+            },
+            {
+              "exerciseId": "power_clean",
+              "name": "Power clean",
+              "sets": 5,
+              "reps": 2,
+              "notes": "Keep each lift crisp and establish your own working load.",
+              "text": "5 × 2"
+            },
+            {
+              "exerciseId": "posterior_chain",
+              "name": "Posterior chain",
+              "sets": 3,
+              "reps": 6,
+              "notes": "Skip this if it would interfere with Saturday's coached session.",
+              "text": "3 × 5–8"
+            }
+          ],
+          "cardio": []
+        },
+        {
+          "id": "saturday",
+          "name": "Coached Session",
+          "notes": "Competition lifts, coach feedback and repeatable execution",
+          "exercises": [
+            {
+              "exerciseId": "snatch",
+              "name": "Snatch",
+              "sets": 5,
+              "reps": 1,
+              "notes": "Focus on receiving position, stability and repeatability.",
+              "text": "5 × Coach determines"
+            },
+            {
+              "exerciseId": "clean_and_jerk",
+              "name": "Clean & jerk",
+              "sets": 5,
+              "reps": 1,
+              "notes": "Focus on a legal, decisive jerk lockout.",
+              "text": "5 × Coach determines"
+            }
+          ],
+          "cardio": []
+        }
+      ]
+    }
+  ],
+  "recent": [
+    {
+      "id": "7a1c3f8e-2a51-4c1e-9d0b-0c1f7c1e2a11",
+      "title": "Gym Accessories",
+      "date": "2026-09-25",
+      "exercises": 5,
+      "loggedSets": 0
+    }
+  ],
+  "exercises": [
+    {
+      "id": "snatch",
+      "name": "Snatch",
+      "category": "Snatch"
+    },
+    {
+      "id": "power_snatch",
+      "name": "Power snatch",
+      "category": "Snatch"
+    },
+    {
+      "id": "snatch_pull",
+      "name": "Snatch pull",
+      "category": "Snatch"
+    },
+    {
+      "id": "snatch_balance",
+      "name": "Snatch balance",
+      "category": "Overhead"
+    },
+    {
+      "id": "overhead_squat",
+      "name": "Overhead squat",
+      "category": "Overhead"
+    },
+    {
+      "id": "clean",
+      "name": "Clean",
+      "category": "Clean"
+    },
+    {
+      "id": "pause_clean",
+      "name": "Pause clean",
+      "category": "Clean"
+    },
+    {
+      "id": "power_clean",
+      "name": "Power clean",
+      "category": "Clean"
+    },
+    {
+      "id": "clean_pull",
+      "name": "Clean pull",
+      "category": "Clean"
+    },
+    {
+      "id": "clean_and_jerk",
+      "name": "Clean & jerk",
+      "category": "Competition"
+    },
+    {
+      "id": "jerk",
+      "name": "Jerk",
+      "category": "Jerk"
+    },
+    {
+      "id": "push_press",
+      "name": "Push press",
+      "category": "Jerk"
+    },
+    {
+      "id": "back_squat",
+      "name": "Back squat",
+      "category": "Strength"
+    },
+    {
+      "id": "front_squat",
+      "name": "Front squat",
+      "category": "Strength"
+    },
+    {
+      "id": "upper_back",
+      "name": "Rows / pull-ups",
+      "category": "Accessory"
+    },
+    {
+      "id": "trunk",
+      "name": "Trunk work",
+      "category": "Accessory"
+    },
+    {
+      "id": "triceps_upper_back",
+      "name": "Triceps / upper back",
+      "category": "Accessory"
+    },
+    {
+      "id": "posterior_chain",
+      "name": "Posterior chain",
+      "category": "Accessory"
+    },
+    {
+      "id": "romanian_deadlift",
+      "name": "Romanian deadlift",
+      "category": "Accessory"
+    },
+    {
+      "id": "strict_press",
+      "name": "Strict press",
+      "category": "Accessory"
+    },
+    {
+      "id": "barbell_row",
+      "name": "Barbell row",
+      "category": "Accessory"
+    },
+    {
+      "id": "split_squat",
+      "name": "Split squat",
+      "category": "Accessory"
+    },
+    {
+      "id": "dead_bug",
+      "name": "Dead bug",
+      "category": "Accessory"
+    },
+    {
+      "id": "bench_press",
+      "name": "Barbell bench press",
+      "category": "Chest"
+    },
+    {
+      "id": "dumbbell_bench_press",
+      "name": "Dumbbell bench press",
+      "category": "Chest"
+    },
+    {
+      "id": "incline_dumbbell_press",
+      "name": "Incline dumbbell press",
+      "category": "Chest"
+    },
+    {
+      "id": "chest_press_machine",
+      "name": "Machine chest press",
+      "category": "Chest"
+    },
+    {
+      "id": "cable_fly",
+      "name": "Cable chest fly",
+      "category": "Chest"
+    },
+    {
+      "id": "push_up",
+      "name": "Push-up",
+      "category": "Chest"
+    },
+    {
+      "id": "lat_pulldown",
+      "name": "Lat pulldown",
+      "category": "Back"
+    },
+    {
+      "id": "seated_cable_row",
+      "name": "Seated cable row",
+      "category": "Back"
+    },
+    {
+      "id": "dumbbell_row",
+      "name": "Single-arm dumbbell row",
+      "category": "Back"
+    },
+    {
+      "id": "pull_up",
+      "name": "Pull-up",
+      "category": "Back"
+    },
+    {
+      "id": "dumbbell_shoulder_press",
+      "name": "Dumbbell shoulder press",
+      "category": "Shoulders"
+    },
+    {
+      "id": "lateral_raise",
+      "name": "Dumbbell lateral raise",
+      "category": "Shoulders"
+    },
+    {
+      "id": "face_pull",
+      "name": "Cable face pull",
+      "category": "Shoulders"
+    },
+    {
+      "id": "reverse_fly",
+      "name": "Dumbbell reverse fly",
+      "category": "Shoulders"
+    },
+    {
+      "id": "dumbbell_curl",
+      "name": "Dumbbell biceps curl",
+      "category": "Arms"
+    },
+    {
+      "id": "hammer_curl",
+      "name": "Hammer curl",
+      "category": "Arms"
+    },
+    {
+      "id": "cable_triceps_pushdown",
+      "name": "Cable triceps pushdown",
+      "category": "Arms"
+    },
+    {
+      "id": "overhead_triceps_extension",
+      "name": "Dumbbell overhead triceps extension",
+      "category": "Arms"
+    },
+    {
+      "id": "deadlift",
+      "name": "Conventional deadlift",
+      "category": "Legs"
+    },
+    {
+      "id": "goblet_squat",
+      "name": "Goblet squat",
+      "category": "Legs"
+    },
+    {
+      "id": "leg_press",
+      "name": "Seated leg press",
+      "category": "Legs"
+    },
+    {
+      "id": "leg_extension",
+      "name": "Leg extension",
+      "category": "Legs"
+    },
+    {
+      "id": "seated_leg_curl",
+      "name": "Seated leg curl",
+      "category": "Legs"
+    },
+    {
+      "id": "hip_thrust",
+      "name": "Barbell hip thrust",
+      "category": "Glutes"
+    },
+    {
+      "id": "glute_bridge",
+      "name": "Glute bridge",
+      "category": "Glutes"
+    },
+    {
+      "id": "bulgarian_split_squat",
+      "name": "Bulgarian split squat",
+      "category": "Legs"
+    },
+    {
+      "id": "reverse_lunge",
+      "name": "Reverse lunge",
+      "category": "Legs"
+    },
+    {
+      "id": "standing_calf_raise",
+      "name": "Standing calf raise",
+      "category": "Legs"
+    },
+    {
+      "id": "hanging_knee_raise",
+      "name": "Hanging knee raise",
+      "category": "Core"
+    },
+    {
+      "id": "crunch",
+      "name": "Abdominal crunch",
+      "category": "Core"
+    }
+  ]
+}

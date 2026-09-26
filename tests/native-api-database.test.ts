@@ -179,3 +179,132 @@ test(
     }
   },
 );
+
+test(
+  "the iPhone app creates a programme, follows it, logs and corrects sets, and reads the session back",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db");
+    const { readJournal } = await import("../lib/server");
+    const { applyNativeAction } = await import("../lib/native-actions");
+    const { buildTraining, findSession } =
+      await import("../lib/native-training");
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Train test',$1||'@example.test',true)",
+      [id],
+    );
+    const save = (action: Record<string, unknown>) =>
+      applyNativeAction(
+        id,
+        { id: crypto.randomUUID(), timezone: tz, action },
+        now,
+      );
+    try {
+      await save({
+        kind: "create_training_program",
+        trainingProgram: {
+          name: "Autumn strength",
+          days: [
+            {
+              name: "Squat day",
+              exercises: [
+                { exerciseId: "back_squat", sets: 3, reps: 5, weight: 100 },
+                // No weight: choose a load when training.
+                { exerciseId: "snatch", sets: 2, reps: 2 },
+              ],
+            },
+          ],
+        },
+      });
+      let journal = await readJournal(id);
+      let training = buildTraining(
+        journal.state,
+        journal.revision,
+        "2026-09-26",
+      );
+      const autumn = training.programmes.find(
+        (p) => p.name === "Autumn strength",
+      )!;
+      assert.ok(autumn && !autumn.builtIn && !autumn.active);
+      assert.equal(autumn.days[0].exercises[1].weight, undefined);
+
+      await save({ kind: "use_programme", programmeId: autumn.id });
+      journal = await readJournal(id);
+      training = buildTraining(journal.state, journal.revision, "2026-09-26");
+      assert.equal(training.programmes.find((p) => p.active)?.id, autumn.id);
+      assert.equal(training.next?.title, "Squat day");
+      await assert.rejects(
+        save({ kind: "use_programme", programmeId: "no-such-programme" }),
+        (e: Error & { status?: number }) => e.status === 422,
+      );
+
+      await save({
+        kind: "start_training_day",
+        trainingProgramId: autumn.id,
+        dayId: autumn.days[0].id,
+        date: "2026-09-26",
+      });
+      await save({
+        kind: "log_sets",
+        exerciseId: "back_squat",
+        sets: [{ weight: 100, reps: 5, result: "success" }],
+      });
+      await save({
+        kind: "log_sets",
+        exerciseId: "back_squat",
+        sets: [{ weight: 100, reps: 3, result: "miss" }],
+      });
+      journal = await readJournal(id);
+      training = buildTraining(journal.state, journal.revision, "2026-09-26");
+      const squat = training.activeWorkout!.exercises.find(
+        (e) => e.exerciseId === "back_squat",
+      )!;
+      assert.deepEqual(
+        squat.sets.map((s) => [s.logged, s.result]),
+        [
+          [true, "success"],
+          [true, "miss"],
+          [false, ""],
+        ],
+      );
+      await save({
+        kind: "correct_workout_set",
+        workoutId: training.activeWorkout!.id,
+        entryId: squat.entryId,
+        setId: squat.sets[1].id,
+        setChanges: { reps: 5, result: "success" },
+      });
+      await save({ kind: "finish_workout" });
+      journal = await readJournal(id);
+      training = buildTraining(journal.state, journal.revision, "2026-09-26");
+      assert.equal(training.activeWorkout, undefined);
+      const session = findSession(journal.state, training.recent[0].id)!;
+      assert.equal(session.finished, true);
+      assert.equal(training.recent[0].topSet, "Back squat 100 kg × 5");
+      assert.deepEqual(
+        session.exercises[0].sets
+          .filter((s) => s.logged)
+          .map((s) => [s.weight, s.reps, s.result]),
+        [
+          [100, 5, "success"],
+          [100, 5, "success"],
+        ],
+      );
+      await save({
+        kind: "delete_training_program",
+        trainingProgramId: autumn.id,
+      });
+      journal = await readJournal(id);
+      assert.equal(
+        buildTraining(journal.state, journal.revision, "2026-09-26").programmes
+          .length,
+        1,
+      );
+    } finally {
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);

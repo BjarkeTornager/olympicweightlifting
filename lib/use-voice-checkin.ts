@@ -10,6 +10,7 @@ import { privateFetch, privateRequestHeaders } from "./private-fetch";
 import {
   appendLine,
   base64ToFloat32,
+  createBargeInGate,
   liveEvents,
   pcmToBase64,
   type Entry,
@@ -466,12 +467,28 @@ export function useVoiceCheckin({
     try {
       await context.audioWorklet.addModule("/voice-capture-worklet.js");
       s.capture = new AudioWorkletNode(context, "voice-capture");
+      // Background noise must not cut the coach off mid-sentence.
+      const gate = createBargeInGate();
+      const playback = new Float32Array(output.fftSize);
       s.capture.port.onmessage = ({ data: pcm }) => {
-        if (!mutedRef.current)
+        if (mutedRef.current) return;
+        const coachSpeaking =
+          s.sources.size > 0 || s.playAt > context.currentTime;
+        // How loud the coach is right now: its echo must not count as the
+        // athlete speaking.
+        output.getFloatTimeDomainData(playback);
+        let energy = 0;
+        for (const x of playback) energy += x * x;
+        const coachLevel = Math.sqrt(energy / playback.length);
+        for (const chunk of gate(
+          new Int16Array(pcm as ArrayBuffer),
+          coachSpeaking,
+          coachLevel,
+        ))
           s.send?.({
             realtimeInput: {
               audio: {
-                data: pcmToBase64(pcm as ArrayBuffer),
+                data: pcmToBase64(chunk.buffer as ArrayBuffer),
                 mimeType: "audio/pcm;rate=16000",
               },
             },

@@ -146,7 +146,10 @@ public final class VoiceAudio: @unchecked Sendable {
     }
     // nil: the tap uses whatever the bus delivers, so a format that changed
     // under voice processing can never make installTap throw.
-    input.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+    // @Sendable: runs on the audio thread. Without it, a closure formed in
+    // this main-actor method is main-actor isolated, and Swift's runtime
+    // isolation check traps when Core Audio calls it (a crash on device).
+    input.installTap(onBus: 0, bufferSize: 1024, format: nil) { @Sendable [weak self] buffer, _ in
       self?.captured(buffer)
     }
     engine.prepare()
@@ -236,7 +239,8 @@ public final class VoiceAudio: @unchecked Sendable {
       return (state.generation, state.scheduled == 1)
     }
     if started { onSpeaking?(true) }
-    player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+    // @Sendable for the same reason: Core Audio calls this on its own thread.
+    player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { @Sendable [weak self] _ in
       guard let self else { return }
       let finished = self.lock.withLock { state -> Bool in
         guard state.generation == generation, state.scheduled > 0 else { return false }

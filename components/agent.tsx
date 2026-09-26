@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   ChevronDown,
   LoaderCircle,
+  Mic,
   CalendarDays,
   Table2,
 } from "@/components/ui/icons";
@@ -34,6 +35,8 @@ import { CoachOpening } from "./coach-opening";
 import { CoachMemoryBook } from "./coach-memory";
 import { LiftingVideoDialog } from "./lifting-video-upload";
 import { QuickCapture } from "./quick-capture";
+import { VoiceCheckin } from "./voice-checkin";
+import { useVoiceEnabled, type SaveResult } from "@/lib/use-voice-checkin";
 import { CoachTurn, type Turn } from "./coach-turn";
 import { proposalNeedsReview } from "@/lib/coach-proposals";
 import {
@@ -63,6 +66,7 @@ export function TrainingAgent({
   initialTrainingPrompt,
   initialVideoReview = false,
   initialCapture = false,
+  initialVoice = false,
   initialMemories,
 }: {
   journal: JournalController;
@@ -77,6 +81,7 @@ export function TrainingAgent({
   initialTrainingPrompt?: string;
   initialVideoReview?: boolean;
   initialCapture?: boolean;
+  initialVoice?: boolean;
   initialMemories?: "memories" | "plans";
 }) {
   const entryPrompt = initialSleepLog
@@ -159,6 +164,7 @@ export function TrainingAgent({
   const [uploadProgress, setUploadProgress] = useState("");
   const [checkinDate, setCheckinDate] = useState<string | null>(null);
   const [captureOpen, setCaptureOpen] = useState(initialCapture);
+  const [voiceOpen, setVoiceOpen] = useState(initialVoice);
   const [handledEntry, setHandledEntry] = useState(entryId);
   const [wasVisible, setWasVisible] = useState(visible);
   // Apply a navigation intent once without discarding an existing draft or run.
@@ -167,6 +173,7 @@ export function TrainingAgent({
     setLoadingImage(Boolean(initialPhotoId));
     if (initialVideoReview) setVideoOpen(true);
     if (initialCapture) setCaptureOpen(true);
+    if (initialVoice) setVoiceOpen(true);
     if (initialMemories) {
       setMemoriesOpen(true);
       setMemoryTab(initialMemories);
@@ -222,6 +229,50 @@ export function TrainingAgent({
     setNotice,
   });
   const { queue, failedMessage, busy, backgroundResult, enqueue } = run;
+  const voiceEnabled = useVoiceEnabled(accountId);
+  // A spoken report becomes an ordinary queued Coach message; the call waits
+  // for that turn so it can tell the athlete what was saved.
+  const voiceWaits = useRef(new Map<string, (r: SaveResult) => void>());
+  useEffect(() => {
+    for (const [id, resolve] of voiceWaits.current) {
+      const turn = turns.find((t) => t.id === id);
+      if (turn?.status !== "done" && turn?.status !== "failed") continue;
+      voiceWaits.current.delete(id);
+      const saved = (turn.proposals ?? [])
+        .filter((p) => p.status === "saved")
+        .map((p) => p.title);
+      resolve(
+        saved.length
+          ? { ok: true, detail: saved.join("; ") }
+          : {
+              ok: false,
+              detail:
+                turn.status === "failed"
+                  ? "Coach could not save it. It is kept in Coach to retry."
+                  : `Nothing saved. Coach replied: ${(turn.reply ?? "").slice(0, 400)}`,
+            },
+      );
+    }
+  }, [turns]);
+  const saveSpoken = (report: string) =>
+    new Promise<SaveResult>((resolve) => {
+      if (queue.length >= MAX_QUEUED_MESSAGES)
+        return resolve({ ok: false, detail: QUEUE_FULL_MESSAGE });
+      const job = queuedMessage(
+        crypto.randomUUID(),
+        `From my spoken check-in (transcribed, so numbers may be misheard): ${report}`,
+        [],
+      );
+      voiceWaits.current.set(job.id, resolve);
+      enqueue(job);
+      setTimeout(() => {
+        if (voiceWaits.current.delete(job.id))
+          resolve({
+            ok: false,
+            detail: "Coach is still working on it. Check Coach afterwards.",
+          });
+      }, 90000);
+    });
   // Opening Coach acknowledges a reply that finished in the background.
   if (visible && backgroundResult) run.setBackgroundResult(null);
   // Read by the photo loader, which must not restart when the queue changes.
@@ -544,8 +595,21 @@ export function TrainingAgent({
         <Button onClick={() => setCaptureOpen(true)}>
           <Plus size={19} /> Log something
         </Button>
-        <span>Food, sleep or training</span>
+        {voiceEnabled ? (
+          <Button variant="secondary" onClick={() => setVoiceOpen(true)}>
+            <Mic size={19} /> Check in by voice
+          </Button>
+        ) : (
+          <span>Food, sleep or training</span>
+        )}
       </div>
+      <VoiceCheckin
+        open={voiceOpen && visible}
+        onOpenChange={setVoiceOpen}
+        headers={headers}
+        onSave={saveSpoken}
+        onReview={() => setView("conversation")}
+      />
       <QuickCapture
         journal={journal}
         open={captureOpen && visible}

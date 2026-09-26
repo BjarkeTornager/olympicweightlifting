@@ -13,6 +13,7 @@ export function coachEntryIntent(
 ) {
   return {
     initialCapture: route === "coach/capture",
+    initialVoice: route === "coach/voice",
     initialMemories:
       route === "coach/plans"
         ? ("plans" as const)

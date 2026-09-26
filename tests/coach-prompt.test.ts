@@ -35,7 +35,11 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // a time with log_drink instead of overwriting the check-in water total,
     // and drinks with energy are also logged as a meal in one bundle
     // (hydration.test.ts). Health, privacy and evidence text is unchanged.
-    "655968bc19151d011c16558fd92465bcbc8336525f01b808e1531cd4d3c2f302",
+    // Revised 2026-09-26, deliberate and reviewed: tiredness, low energy,
+    // poor sleep and ordinary soreness are answered practically rather than
+    // refused (found by the Coach evals). Pain and red-flag guidance is
+    // unchanged.
+    "955553175ef943533b5cc482ea63c59250fe1677faa81ac3187329ac78efd8c0",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

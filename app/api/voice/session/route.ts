@@ -8,6 +8,7 @@ import {
 } from "@/lib/agent/http";
 import { localClock } from "@/lib/agent/time-context";
 import { logFailure } from "@/lib/error-log";
+import { isCreditError, VOICE_CREDIT_MESSAGE } from "@/lib/voice-live";
 import { allowRequest, readJournal } from "@/lib/server";
 import { recentConversations } from "@/lib/conversation-memory";
 import {
@@ -98,7 +99,9 @@ export async function POST(request: Request) {
     } catch (error) {
       logFailure("voice_token_failed", error);
       throw new ApiError(
-        "Voice check-in is unavailable right now. You can keep logging with Coach.",
+        error instanceof Error && isCreditError(error.message)
+          ? VOICE_CREDIT_MESSAGE
+          : "Voice check-in is unavailable right now. You can keep logging with Coach.",
         503,
       );
     }

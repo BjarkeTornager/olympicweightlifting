@@ -15,6 +15,11 @@ import {
   type Entry,
   type FunctionCall,
   type Receipt,
+  isCreditError,
+  NUDGE_AFTER_MS,
+  promisesAction,
+  VOICE_CREDIT_MESSAGE,
+  WAITING_NUDGE,
 } from "./voice-live";
 
 export type VoiceStatus =
@@ -79,6 +84,9 @@ type Session = {
   pending: number;
   // The coach said goodbye; the call ends unless the athlete keeps talking.
   ending?: ReturnType<typeof setTimeout>;
+  // The coach's words in the current turn, and a prompt if it stalls.
+  turnText: string;
+  nudge?: ReturnType<typeof setTimeout>;
   sources: Set<AudioBufferSourceNode>;
   playAt: number;
   closed: boolean;
@@ -284,6 +292,7 @@ export function useVoiceCheckin({
           } else if (e.type === "heard") {
             setLines((l) => appendLine(l, "you", e.text));
             s.lineClosed = true;
+            clearTimeout(s.nudge);
             // Still talking after the coach's goodbye: the call goes on.
             if (s.ending) {
               clearTimeout(s.ending);
@@ -292,10 +301,22 @@ export function useVoiceCheckin({
           } else if (e.type === "said") {
             const fresh = s.lineClosed;
             s.lineClosed = false;
+            s.turnText = (fresh ? "" : s.turnText) + e.text;
             setLines((l) => appendLine(l, "coach", e.text, fresh));
-          } else if (e.type === "turnComplete") s.lineClosed = true;
-          else if (e.type === "toolCall")
+          } else if (e.type === "turnComplete") {
+            s.lineClosed = true;
+            // "Let me check that" with nothing following would leave the
+            // athlete in silence; prompt the coach to carry on.
+            clearTimeout(s.nudge);
+            if (promisesAction(s.turnText))
+              s.nudge = setTimeout(() => {
+                if (!s.pending)
+                  send({ realtimeInput: { text: WAITING_NUDGE } });
+              }, NUDGE_AFTER_MS);
+          } else if (e.type === "toolCall") {
+            clearTimeout(s.nudge);
             e.calls.forEach((call) => void handle(call, send));
+          }
           // The connection is about to end: continue on a fresh one.
           else if (e.type === "goAway") {
             report("go_away");
@@ -348,7 +369,10 @@ export function useVoiceCheckin({
         } catch (e) {
           if (s.closed) return;
           const wait = waits[s.failures++];
-          if (wait === undefined)
+          if (
+            wait === undefined ||
+            (e instanceof Error && isCreditError(e.message))
+          )
             throw e instanceof Error ? e : Error("The call dropped.");
           await new Promise((r) => setTimeout(r, wait));
         }
@@ -358,7 +382,9 @@ export function useVoiceCheckin({
         reason: e instanceof Error ? e.message.slice(0, 200) : "unknown",
       });
       stop(
-        `${e instanceof Error ? e.message : "The call dropped."} Anything already saved is in Coach.`,
+        e instanceof Error && isCreditError(e.message)
+          ? VOICE_CREDIT_MESSAGE
+          : `${e instanceof Error ? e.message : "The call dropped."} Anything already saved is in Coach.`,
       );
     } finally {
       s.reconnecting = false;
@@ -421,6 +447,7 @@ export function useVoiceCheckin({
       reconnecting: false,
       failures: 0,
       pending: 0,
+      turnText: "",
       sources: new Set(),
       playAt: 0,
       closed: false,

@@ -2,6 +2,13 @@ import { createParser } from "eventsource-parser";
 import { z } from "zod";
 import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
 
+// The host's content filter blocked the reply; another model may answer.
+export class ContentFiltered extends Error {
+  constructor() {
+    super("The assistant's host blocked this reply.");
+  }
+}
+
 const routerChunk = z.object({
   error: z.unknown().optional(),
   choices: z
@@ -102,6 +109,8 @@ export async function readModelStream(
       if (chunk.error) throw Error("The assistant stream was interrupted.");
       const choice = chunk.choices?.[0];
       if (!choice) return; // usage-only frame
+      if (choice.finish_reason === "content_filter")
+        throw new ContentFiltered();
       if (
         choice.finish_reason &&
         !["stop", "tool_calls"].includes(choice.finish_reason)

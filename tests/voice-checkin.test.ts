@@ -13,8 +13,10 @@ import {
 import {
   appendLine,
   base64ToFloat32,
+  isCreditError,
   liveEvents,
   pcmToBase64,
+  VOICE_CREDIT_MESSAGE,
 } from "../lib/voice-live";
 
 const meal = (date: string, name: string, type: "breakfast" | "dinner") =>
@@ -164,7 +166,9 @@ test("the coach asks only about missing topics and keeps to English", () => {
   assert.match(text, /do not ask about training, food or sleep/);
   // Only exercises actually done appear in the day.
   assert.ok(context.day.workouts[0].exercises.every((e) => e.sets.length));
-  assert.match(text, /Always speak English/);
+  assert.match(text, /1\. Speak English only, in every reply/);
+  assert.match(text, /Never say something is saved/);
+  assert.match(text, /Never announce a check or save and then go quiet/);
   assert.match(text, /Short answers like "not yet"/);
   assert.equal(
     voiceSetup(text).generationConfig.speechConfig.languageCode,
@@ -208,6 +212,22 @@ test("voice tokens are single use, short lived and lock the configuration", asyn
     ),
     /403/,
   );
+  // Out of prepaid credit: a clear message, and no pointless retries.
+  await assert.rejects(
+    mintVoiceToken(
+      setup,
+      (async () =>
+        new Response("{}", { status: 402 })) as unknown as typeof fetch,
+    ),
+    (e: Error) =>
+      e.message === VOICE_CREDIT_MESSAGE && isCreditError(e.message),
+  );
+  assert.ok(
+    isCreditError(
+      "Your prepayment credits are depleted. Please go to AI Studio",
+    ),
+  );
+  assert.ok(!isCreditError("The voice connection closed."));
 });
 
 test("live messages become ordered events", () => {

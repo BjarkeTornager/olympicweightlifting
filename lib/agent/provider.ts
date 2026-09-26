@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { readModelStream } from "./model-stream";
+import { readModelStream, ContentFiltered } from "./model-stream";
 import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
 export class ProviderError extends Error {
   constructor(
@@ -66,7 +66,16 @@ export function providerConfig() {
     key: process.env.OLLAMA_API_KEY,
   };
 }
-export type ModelResponse = ModelMessage & { truncated?: boolean };
+export type ModelResponse = ModelMessage & {
+  truncated?: boolean;
+  // The host's content filter replaced the reply with a refusal.
+  filtered?: boolean;
+};
+// Azure's content filter, which fronts every zero-retention OpenAI model,
+// blocks ordinary fitness questions ("how many sets when I'm tired?"). A
+// filtered reply is retried once on a model served outside Azure, with the
+// same zero-retention, no-collection routing.
+export const FILTER_FALLBACK_MODEL = "google/gemini-3.8-flash";
 export type ModelOptions = { purpose?: "video_review"; model?: string };
 
 function openAiChatModel(model: string) {
@@ -228,6 +237,9 @@ export function parseModelResponse(
     ...(response.choices[0].finish_reason === "length"
       ? { truncated: true }
       : {}),
+    ...(response.choices[0].finish_reason === "content_filter"
+      ? { filtered: true }
+      : {}),
   };
 }
 export async function providerResponseError(
@@ -293,6 +305,44 @@ export async function providerResponseError(
 }
 
 export async function callModel(
+  messages: ModelMessage[],
+  tools: ToolDefinition[],
+  signal: AbortSignal,
+  onText?: (delta: string) => void,
+  options: ModelOptions = {},
+): Promise<ModelResponse> {
+  const retry = () => {
+    console.warn(
+      JSON.stringify({
+        event: "coach_content_filter_fallback",
+        from: options.model ?? providerConfig()?.model ?? null,
+        to: FILTER_FALLBACK_MODEL,
+      }),
+    );
+    return requestModel(messages, tools, signal, onText, {
+      ...options,
+      model: FILTER_FALLBACK_MODEL,
+    });
+  };
+  const canRetry =
+    providerConfig()?.kind === "openrouter" &&
+    (options.model ?? providerConfig()?.model) !== FILTER_FALLBACK_MODEL;
+  try {
+    const response = await requestModel(
+      messages,
+      tools,
+      signal,
+      onText,
+      options,
+    );
+    return response.filtered && canRetry ? await retry() : response;
+  } catch (e) {
+    if (e instanceof ContentFiltered && canRetry) return retry();
+    throw e;
+  }
+}
+
+async function requestModel(
   messages: ModelMessage[],
   tools: ToolDefinition[],
   signal: AbortSignal,

@@ -6,7 +6,7 @@ import { usualMeals } from "@/lib/usual-meals";
 import { today } from "@/lib/domain";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
-import { Camera, MessageCircle, Undo2 } from "./ui/icons";
+import { Camera, MessageCircle, Mic, Undo2 } from "./ui/icons";
 
 export function QuickCapture({
   journal,
@@ -14,6 +14,7 @@ export function QuickCapture({
   onOpenChange,
   onDescribe,
   onPhoto,
+  onVoice,
   photoDisabled,
 }: {
   journal: JournalController;
@@ -21,6 +22,8 @@ export function QuickCapture({
   onOpenChange: (v: boolean) => void;
   onDescribe: () => void;
   onPhoto: (file: File | File[]) => void;
+  // Present only when the server has voice check-in configured.
+  onVoice?: () => void;
   photoDisabled: boolean;
 }) {
   const [notice, setNotice] = useState("");
@@ -52,6 +55,11 @@ export function QuickCapture({
       }}
     >
       <div className="quick-capture-options">
+        {onVoice && (
+          <Button className="quick-capture-voice" onClick={onVoice}>
+            <Mic size={22} /> Check in by voice
+          </Button>
+        )}
         <label
           className={`food-upload quick-capture-photo ${photoDisabled ? "disabled" : ""}`}
         >

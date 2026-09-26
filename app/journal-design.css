@@ -1776,6 +1776,8 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: 20px;
+}.quick-capture-voice {
+  grid-column: 1 / -1;
 }.quick-capture-options > * {
   min-height: 64px;
   white-space: normal;

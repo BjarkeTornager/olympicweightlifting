@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createWorkout, days, emptyJournal } from "../lib/domain";
 import { localClock } from "../lib/agent/time-context";
 import { mealSchema } from "../lib/nutrition";
+import { addDrink } from "../lib/hydration";
 import {
   mintVoiceToken,
   voiceContext,
@@ -102,6 +103,8 @@ test("voice instructions carry the date, the records and the save rules", () => 
     "read_journal",
     "list_photos",
     "view_photo",
+    "log_drink",
+    "delete_drink",
     "log_sleep",
     "log_activity",
     "set_goals",
@@ -127,6 +130,7 @@ test("the coach asks only about missing topics and keeps to English", () => {
     "training",
     "food",
     "last night's sleep",
+    "drinks today",
   ]);
   s.nutrition.meals.push(meal("2026-09-25", "Oats", "breakfast"));
   s.health.checkins.push({
@@ -139,7 +143,10 @@ test("the coach asks only about missing topics and keeps to English", () => {
     notes: "",
     updatedAt: new Date().toISOString(),
   });
-  assert.deepEqual(voiceContext(s, clock.date).missing, ["training"]);
+  assert.deepEqual(voiceContext(s, clock.date).missing, [
+    "training",
+    "drinks today",
+  ]);
   const w = createWorkout(s, days[0], "2026-09-25");
   w.exercises[0].sets[0] = {
     ...w.exercises[0].sets[0],
@@ -149,6 +156,7 @@ test("the coach asks only about missing topics and keeps to English", () => {
     result: "success",
   };
   s.sessions.push(w);
+  addDrink(s, { date: "2026-09-25", ml: 500, kind: "water" });
   const context = voiceContext(s, clock.date);
   assert.deepEqual(context.missing, []);
   const text = voiceInstruction(context, clock);

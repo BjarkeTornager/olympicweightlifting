@@ -12,6 +12,7 @@ import {
 import { checkinPatchSchema } from "../health";
 import { mealInputSchema, dietTargetsSchema } from "../nutrition";
 import { bodyGoalsInputSchema } from "../body-goals";
+import { drinkInputSchema } from "../hydration";
 const date = workoutSchema.shape.date;
 const exerciseId = trainingExerciseId;
 const set = z
@@ -66,6 +67,9 @@ const recordCheckinSchema = z
 const recordMealSchema = z
   .object({ kind: z.literal("record_meal"), meal: mealInputSchema })
   .strict();
+const logDrinkSchema = z
+  .object({ kind: z.literal("log_drink"), drink: drinkInputSchema })
+  .strict();
 const recordSessionSchema = z
   .object({
     kind: z.literal("record_session"),
@@ -99,6 +103,7 @@ const bundleEntrySchema = z.discriminatedUnion("kind", [
   recordCardioSchema,
   recordCheckinSchema,
   recordMealSchema,
+  logDrinkSchema,
   recordSessionSchema,
   progressSchema,
   repeatMealActionSchema,
@@ -221,6 +226,10 @@ const singleActionSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("delete_meal"), mealId: z.string().uuid() })
     .strict(),
+  logDrinkSchema,
+  z
+    .object({ kind: z.literal("delete_drink"), drinkId: z.string().uuid() })
+    .strict(),
   z
     .object({ kind: z.literal("set_diet_targets"), targets: dietTargetsSchema })
     .strict(),
@@ -316,6 +325,8 @@ export const actionToolSchema = z
       "set_diet_targets",
       "set_body_goals",
       "delete_meal",
+      "log_drink",
+      "delete_drink",
       "record_session",
       "log_workout_progress",
       "merge_sessions",
@@ -420,6 +431,12 @@ export const actionToolSchema = z
       .optional(),
     mealId: z.string().uuid().optional(),
     targets: dietTargetsSchema.optional(),
+    drink: drinkInputSchema
+      .optional()
+      .describe(
+        "For log_drink: one drink as reported, ml as a whole number (a glass ≈ 250, a bottle ≈ 500, a can ≈ 330 unless stated). Log each drink separately; the day's total adds up.",
+      ),
+    drinkId: z.string().uuid().optional(),
     bodyGoals: bodyGoalsInputSchema
       .optional()
       .describe(
@@ -437,6 +454,7 @@ export type AgentAction = z.infer<typeof actionSchema>;
 // Deletions, targets, plans and durable memories still use prepare_change.
 export const loggingKinds = [
   "record_meal",
+  "log_drink",
   "repeat_meal",
   "update_meal",
   "record_checkin",
@@ -473,6 +491,7 @@ export const loggingToolSchema = actionToolSchema
     meal: true,
     mealId: true,
     checkin: true,
+    drink: true,
   })
   .extend({
     kind: z.enum(loggingKinds),

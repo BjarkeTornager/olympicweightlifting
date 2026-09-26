@@ -39,6 +39,8 @@ const saveLabels: Record<string, string> = {
   update_meal: "Meal updated",
   delete_meal: "Meal deleted",
   log_sleep: "Sleep",
+  log_drink: "Drink",
+  delete_drink: "Drink removed",
   log_activity: "Activity",
   clear_unfinished_workout: "Unfinished workout",
   set_goals: "Goals",

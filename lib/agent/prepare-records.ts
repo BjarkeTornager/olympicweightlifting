@@ -1,3 +1,9 @@
+import {
+  addDrink,
+  formatLitres,
+  hydrationForDay,
+  removeDrink,
+} from "../hydration";
 import { applyGoals, describePlan } from "../body-goals";
 import {
   repeatMeal,
@@ -84,6 +90,27 @@ export function prepareDeleteMeal(
     meal,
     title: "Delete a meal",
     detail: `Removes “${meal.name}” from ${meal.date}. Its photos stay in your library.`,
+  };
+}
+
+export function prepareDrink(
+  next: JournalState,
+  action: ActionOf<"log_drink" | "delete_drink">,
+  currentDate: string,
+): PreparedChange {
+  const drink =
+    action.kind === "log_drink"
+      ? (() => {
+          if (action.drink.date > currentDate)
+            throw Error("Drinks cannot be dated in the future.");
+          return addDrink(next, action.drink);
+        })()
+      : removeDrink(next, action.drinkId);
+  const day = hydrationForDay(next, drink.date);
+  const what = `${drink.ml} ml ${drink.name || drink.kind}`;
+  return {
+    title: action.kind === "log_drink" ? "Log a drink" : "Remove a drink",
+    detail: `${action.kind === "log_drink" ? what : `Removes ${what}`}. ${formatLitres(day.totalMl)} of about ${formatLitres(day.targetMl)} on ${drink.date}.`,
   };
 }
 

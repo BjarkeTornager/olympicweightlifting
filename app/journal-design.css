@@ -2456,4 +2456,13 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .goals-form .checkin-number-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .goals-plan { display: grid; gap: 6px; padding: 14px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); line-height: 1.45; }
 .goals-plan .fine-print { margin: 0; }
+/* Drinks */
+.hydration-row { display: grid; gap: 10px; padding-bottom: 14px; }
+.hydration-row > .list-row { cursor: default; }
+.hydration-progress { height: 8px; margin: 0 16px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
+.hydration-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-solid); transition: width 200ms; }
+.hydration-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
+.hydration-actions .button { min-height: 44px; }
+.hydration-row > .notice { margin: 0 16px; }
+@media (prefers-reduced-motion: reduce) { .hydration-progress > span { transition: none; } }
 }

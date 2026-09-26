@@ -3,8 +3,8 @@ import HealthKit
 import LiftAPI
 import os
 
-/// Reads sleep, daily heart-rate and movement summaries, and workouts from
-/// Apple Health and sends them to the journal in one batch. The server
+/// Reads sleep, daily heart-rate and movement summaries, workouts and their
+/// GPS routes from Apple Health and sends them to the journal. The server
 /// decides what is saved: it never overwrites a manual entry, never logs a
 /// workout twice, and leaves an entry alone once the athlete edits or
 /// deletes it. The app only reads Apple Health; it never writes to it.
@@ -26,6 +26,7 @@ public actor HealthSync {
     HKQuantityType(.distanceSwimming),
     HKQuantityType(.distanceRowing),
     HKObjectType.workoutType(),
+    HKSeriesType.workoutRoute(),
   ]
 
   public struct Summary: Sendable, Equatable {
@@ -33,6 +34,7 @@ public actor HealthSync {
     public var nightsImported: Int
     public var workoutsImported: Int
     public var daysUpdated: Int
+    public var routesImported = 0
   }
 
   public nonisolated let store = HKHealthStore()
@@ -43,6 +45,7 @@ public actor HealthSync {
   private let defaults = UserDefaults.standard
   private let log = Logger(subsystem: "com.bjarketornager.liftjournal", category: "health")
   private var running = false
+  private var rerun = false
   private var observing = false
 
   init() {
@@ -53,6 +56,8 @@ public actor HealthSync {
     static let connected = "health.connected"
     static let lastSync = "health.lastSync"
     static let anchor = "health.workoutAnchor"
+    static let routesDone = "health.routesDone"
+    static let routesBackfilled = "health.routesBackfilled"
   }
 
   /// Whether the athlete has connected Apple Health in this app.
@@ -66,16 +71,50 @@ public actor HealthSync {
     if !value {
       defaults.removeObject(forKey: Key.lastSync)
       defaults.removeObject(forKey: Key.anchor)
+      defaults.removeObject(forKey: Key.routesDone)
+      defaults.removeObject(forKey: Key.routesBackfilled)
     }
   }
 
+  /// Whether Apple would show its permission sheet because the app now asks
+  /// for something new, such as workout routes after an update.
+  public func needsAccess() async -> Bool {
+    guard Self.isAvailable else { return false }
+    return (try? await store.statusForAuthorizationRequest(toShare: [], read: Self.readTypes)) == .shouldRequest
+  }
+
   /// Read everything new since the last sync and send it. Safe to call often:
-  /// overlapping calls are skipped and a repeated batch changes nothing.
+  /// a call during a sync makes it go round once more, and a repeated batch
+  /// changes nothing.
   @discardableResult
   public func sync(client: Client, now: Date = .now) async throws -> Summary? {
-    guard Self.isAvailable, connected, !running else { return nil }
+    guard Self.isAvailable, connected else { return nil }
+    // Apple Health often reports a workout and then its route moments
+    // apart: a call that arrives mid-sync runs once more afterwards.
+    guard !running else {
+      rerun = true
+      return nil
+    }
     running = true
-    defer { running = false }
+    defer {
+      running = false
+      rerun = false
+    }
+    var summary = try await run(client: client, now: now)
+    while rerun {
+      rerun = false
+      let next = try await run(client: client, now: .now)
+      summary.at = next.at
+      summary.nightsImported += next.nightsImported
+      summary.workoutsImported += next.workoutsImported
+      summary.daysUpdated += next.daysUpdated
+      summary.routesImported += next.routesImported
+    }
+    continuation.yield(summary)
+    return summary
+  }
+
+  private func run(client: Client, now: Date) async throws -> Summary {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: now)
     // First sync: two weeks (the server's limit for sleep). Later: from the
@@ -122,9 +161,17 @@ public actor HealthSync {
       first = false
       if !page.more { break }
     }
+    // A route can reach Apple Health after its workout, so routes go in a
+    // pass of their own. A failure here leaves the rest of the sync intact.
+    do {
+      summary.routesImported = try await sendRoutes(client: client, now: now, calendar: calendar)
+    } catch let error as HKError where error.code == .errorAuthorizationNotDetermined {
+      log.info("Routes are not allowed yet")
+    } catch {
+      log.error("Route sync failed: \(error.localizedDescription, privacy: .public)")
+    }
     defaults.set(now, forKey: Key.lastSync)
     log.info("Health sync finished")
-    continuation.yield(summary)
     return summary
   }
 
@@ -363,6 +410,106 @@ public actor HealthSync {
     }
   }
 
+  // MARK: Routes
+
+  /// Send the GPS routes of recent workouts that have not been sent yet,
+  /// newest first. The first pass looks back 60 days, later ones a week.
+  /// Returns how many routes the journal saved.
+  private func sendRoutes(client: Client, now: Date, calendar: Calendar) async throws -> Int {
+    let backfilled = defaults.bool(forKey: Key.routesBackfilled)
+    let since =
+      calendar.date(byAdding: .day, value: backfilled ? -7 : -60, to: calendar.startOfDay(for: now)) ?? now
+    let workouts = try await HKSampleQueryDescriptor(
+      predicates: [.workout(HKQuery.predicateForSamples(withStart: since, end: nil))],
+      sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)]
+    ).result(for: store)
+    let ids = workouts.map { $0.uuid.uuidString.lowercased() }
+    // Workouts older than the window are never looked at again.
+    var done = Set(defaults.stringArray(forKey: Key.routesDone) ?? []).intersection(ids)
+    let limit = 20
+    let candidates = zip(workouts, ids).filter { workout, id in
+      !done.contains(id) && (workout.metadata?[HKMetadataKeyIndoorWorkout] as? Bool) != true
+    }
+    var routes: [Components.Schemas.HealthRoute] = []
+    var named = Set<String>()
+    for (workout, id) in candidates.prefix(limit) {
+      let track = try await track(of: workout)
+      guard track.count >= 2 else {
+        // Give a watch two days to hand over a route before giving up.
+        if workout.endDate < now.addingTimeInterval(-2 * 86400) { done.insert(id) }
+        continue
+      }
+      let path = RouteShape.simplify(track)
+      let places = await placeNames(path)
+      if places.complete { named.insert(id) }
+      routes.append(
+        .init(
+          workoutId: id,
+          path: path.map { [($0.lat * 1e5).rounded() / 1e5, ($0.lng * 1e5).rounded() / 1e5] },
+          startPlace: places.start,
+          endPlace: places.end,
+          farthestPlace: places.farthest
+        ))
+    }
+    var saved = 0
+    for start in stride(from: 0, to: routes.count, by: 10) {
+      let batch = Array(routes[start..<min(start + 10, routes.count)])
+      let result = try await client.syncHealth(
+        body: .json(.init(timezone: TimeZone.current.identifier, routes: batch))
+      ).value()
+      for r in result.routes ?? [] {
+        if r.result == "saved" { saved += 1 }
+        // Pending: the workout is not in the journal yet; send it again later.
+        // Without every place name, it is sent again to fill them in.
+        if r.result != "pending" && named.contains(r.workoutId) { done.insert(r.workoutId) }
+        if r.result == "skipped" { done.insert(r.workoutId) }
+      }
+    }
+    defaults.set(Array(done), forKey: Key.routesDone)
+    if candidates.count <= limit { defaults.set(true, forKey: Key.routesBackfilled) }
+    return saved
+  }
+
+  /// Every GPS fix recorded with a workout, leaving out inaccurate ones.
+  private func track(of workout: HKWorkout) async throws -> [RoutePoint] {
+    let routes = try await HKSampleQueryDescriptor(
+      predicates: [.workoutRoute(HKQuery.predicateForObjects(from: workout))],
+      sortDescriptors: [SortDescriptor(\.startDate)]
+    ).result(for: store)
+    var points: [RoutePoint] = []
+    for route in routes {
+      for try await location in HKWorkoutRouteQueryDescriptor(route).results(for: store) {
+        guard (0...50).contains(location.horizontalAccuracy) else { continue }
+        points.append(RoutePoint(lat: location.coordinate.latitude, lng: location.coordinate.longitude))
+      }
+    }
+    return points
+  }
+
+  /// Names for the start and, for an out-and-back, the turning point, or
+  /// for a one-way route its end. `complete` is false if a lookup failed.
+  private func placeNames(_ path: [RoutePoint]) async
+    -> (start: String?, end: String?, farthest: String?, complete: Bool)
+  {
+    guard let first = path.first, let last = path.last else { return (nil, nil, nil, true) }
+    let loop = RouteShape.isLoop(path)
+    let second = loop ? path[RouteShape.farthestIndex(path)] : last
+    var names: [String?] = []
+    var complete = true
+    for point in [first, second] {
+      switch await PlaceNames.shared.name(lat: point.lat, lng: point.lng) {
+      case .named(let name): names.append(name)
+      case .unnamed: names.append(nil)
+      case .failed:
+        names.append(nil)
+        complete = false
+      }
+    }
+    return loop
+      ? (names[0], names[0], names[1], complete)
+      : (names[0], names[1], nil, complete)
+  }
+
   // MARK: Background delivery
 
   /// Ask Apple Health to wake the app when new sleep, workouts or resting
@@ -374,6 +521,7 @@ public actor HealthSync {
     let types: [(HKSampleType, HKUpdateFrequency)] = [
       (HKCategoryType(.sleepAnalysis), .hourly),
       (HKObjectType.workoutType(), .immediate),
+      (HKSeriesType.workoutRoute(), .immediate),
       (HKQuantityType(.restingHeartRate), .hourly),
     ]
     for (type, frequency) in types {

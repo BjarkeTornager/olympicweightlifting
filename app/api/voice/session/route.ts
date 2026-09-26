@@ -12,6 +12,7 @@ import { isCreditError, VOICE_CREDIT_MESSAGE } from "@/lib/voice-live";
 import { nativeClient } from "@/lib/native-client";
 import { allowRequest, readJournal } from "@/lib/server";
 import { recentConversations } from "@/lib/conversation-memory";
+import { routeNotesFor } from "@/lib/workout-routes";
 import {
   mintVoiceToken,
   VOICE_MODEL,
@@ -88,7 +89,11 @@ export async function POST(request: Request) {
     const { state } = await readJournal(user.id);
     const setup = voiceSetup(
       voiceInstruction(
-        voiceContext(state, clock.date),
+        voiceContext(
+          state,
+          clock.date,
+          await routeNotesFor(user.id, state, clock.date, clock.date),
+        ),
         clock,
         state.profile.name || user.name?.split(" ")[0],
         purpose,

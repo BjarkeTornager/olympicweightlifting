@@ -77,11 +77,13 @@ export const visualSchema = z
       .object({
         ...base,
         kind: z.literal("route_map"),
-        activity: z.enum(["run", "walk", "bike"]),
-        distanceKm: z.number().finite().gt(0).max(200),
-        durationSeconds: z.number().int().gt(0).max(86400),
+        activity: z.enum(["run", "walk", "bike", "other"]),
+        distanceKm: z.number().finite().gt(0).max(1000),
+        durationSeconds: z.number().int().gt(0).max(604800),
         targetKm: z.number().finite().gt(0).max(80).optional(),
         loop: z.boolean().optional(),
+        // The GPS track Apple Health recorded, rather than a suggestion.
+        recorded: z.boolean().optional(),
         stops: z
           .array(
             z

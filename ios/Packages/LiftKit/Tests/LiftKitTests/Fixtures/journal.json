@@ -7,7 +7,8 @@
       "kind": "cardio",
       "title": "Outdoor Run",
       "detail": "50 min · 10 km · 148 bpm avg",
-      "fromAppleHealth": true
+      "fromAppleHealth": true,
+      "hasRoute": false
     },
     {
       "id": "5b7f0c43-7a57-4a53-9a4c-2f8cf2f0c001",

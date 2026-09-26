@@ -4,7 +4,9 @@ import { importedCardioIds } from "@/lib/health-sync";
 import { buildJournal } from "@/lib/native-api";
 import { requireNative } from "@/lib/native-actions";
 import { foodDate } from "@/lib/nutrition";
+import { offsetDate } from "@/lib/health";
 import { readJournal } from "@/lib/server";
+import { routeNotesFor } from "@/lib/workout-routes";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,12 @@ export async function GET(request: Request) {
       readJournal(user.id),
       importedCardioIds(user.id),
     ]);
+    const routes = await routeNotesFor(
+      user.id,
+      snapshot.state,
+      offsetDate(before, -days),
+      offsetDate(before, -1),
+    );
     return Response.json(
       buildJournal(
         snapshot.state,
@@ -31,6 +39,7 @@ export async function GET(request: Request) {
         before,
         days,
         fromAppleHealth,
+        routes,
       ),
       { headers: { "Cache-Control": "private, no-store" } },
     );

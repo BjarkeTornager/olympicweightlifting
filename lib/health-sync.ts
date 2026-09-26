@@ -26,6 +26,7 @@ import { nativeRequests } from "./native-api";
 import { foodDate } from "./nutrition";
 import { localClock, timeZoneSchema } from "./reminders";
 import { writeJournal } from "./server";
+import { healthRouteSchema, pruneRoutes, saveRoutes } from "./workout-routes";
 
 // What the iPhone app reads from Apple Health and sends in one batch: nights
 // of sleep samples, daily heart-rate and movement summaries, and workouts.
@@ -65,6 +66,8 @@ export const healthSyncSchema = z
     workouts: z.array(healthWorkoutSchema).max(200).default([]),
     // Workouts Apple Health reports as deleted since the app's last sync.
     deletedWorkoutIds: z.array(z.string().uuid()).max(500).default([]),
+    // GPS tracks of workouts, sent once each after the workout itself.
+    routes: z.array(healthRouteSchema).max(20).default([]),
   })
   .strict()
   .register(nativeRequests, { id: "HealthSyncRequest" });
@@ -373,6 +376,7 @@ export async function syncHealth(
       ...new Set([
         ...input.workouts.map((w) => w.id),
         ...input.deletedWorkoutIds,
+        ...input.routes.map((r) => r.workoutId),
       ]),
     ];
     const receipts = ids.length
@@ -462,12 +466,27 @@ export async function syncHealth(
             importedAt: receipt.importedAt,
           },
         });
+    const routes = await saveRoutes(
+      tx,
+      userId,
+      state,
+      input.routes,
+      [
+        ...receiptWrites,
+        ...receipts.filter(
+          (r) => !receiptWrites.some((w) => w.workoutId === r.workoutId),
+        ),
+      ],
+      now,
+    );
+    await pruneRoutes(tx, userId, state, input.deletedWorkoutIds);
     return {
       revision,
       changed,
       sleep: sleep.sort((a, b) => a.date.localeCompare(b.date)),
       daysUpdated,
       workouts,
+      routes,
     };
   });
 }

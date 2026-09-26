@@ -4,6 +4,7 @@ import { cardioActivities } from "./cardio";
 import { foodGroups } from "./nutrition";
 import { describePlan, planGoals } from "./body-goals";
 import { dayForCoach, describeDay } from "./journal-summary";
+import type { RouteNote } from "./route-summary";
 import { VOICE_CREDIT_MESSAGE } from "./voice-live";
 import { drinkKinds, hydrationForDay } from "./hydration";
 import { nextTraining } from "./next-training";
@@ -33,7 +34,11 @@ const loggedSets = (w: Workout) =>
 
 // What is already recorded for the athlete's local date, so the voice coach
 // asks only about what is missing. Absent records stay unknown, never zero.
-export function voiceContext(state: JournalState, date: string) {
+export function voiceContext(
+  state: JournalState,
+  date: string,
+  routes?: Map<string, RouteNote>,
+) {
   const meals = state.nutrition.meals
     .filter((m) => m.date === date)
     .map((m) => `${m.type}: ${m.name}`);
@@ -63,7 +68,7 @@ export function voiceContext(state: JournalState, date: string) {
       : null,
     nextPlanned: next.canStart ? next.title : null,
     // Every entry of the day in full, so nothing has to be asked twice.
-    day: dayForCoach(state, date),
+    day: dayForCoach(state, date, routes),
     // Decided here rather than left to the model, which asked about topics
     // already logged.
     missing: [

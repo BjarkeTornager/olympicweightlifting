@@ -85,6 +85,13 @@
       "when": 1790438108889,
       "tag": "0011_native_health_imports",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790452988804,
+      "tag": "0012_workout_routes",
+      "breakpoints": true
     }
   ]
 }

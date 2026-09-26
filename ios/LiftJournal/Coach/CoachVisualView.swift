@@ -111,31 +111,9 @@ struct CoachVisualView: View {
   // MARK: Route
 
   private var route: some View {
-    let path = (visual.path ?? []).compactMap { pair -> CLLocationCoordinate2D? in
-      pair.count == 2 ? CLLocationCoordinate2D(latitude: pair[0], longitude: pair[1]) : nil
-    }
-    return VStack(alignment: .leading, spacing: 8) {
-      Map(interactionModes: [.pan, .zoom]) {
-        MapPolyline(coordinates: path)
-          .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-        ForEach(Array((visual.stops ?? []).enumerated()), id: \.offset) { index, stop in
-          Marker(
-            stop.label, systemImage: index == 0 ? "flag.fill" : "mappin",
-            coordinate: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng))
-        }
-      }
-      .frame(height: 220)
-      .clipShape(.rect(cornerRadius: 14))
-      HStack(spacing: 16) {
-        if let km = visual.distanceKm {
-          Label(km.formatted(.number.precision(.fractionLength(0...1))) + " km", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-        }
-        if let seconds = visual.durationSeconds {
-          Label(Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)), systemImage: "clock")
-        }
-      }
-      .font(.footnote)
-      .foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 8) {
+      RouteMap(visual: visual)
+      RouteFacts(visual: visual)
     }
   }
 }

@@ -1,4 +1,5 @@
 #if DEBUG && targetEnvironment(simulator)
+  import CoreLocation
   import HealthKit
   import LiftStore
 
@@ -17,7 +18,9 @@
       let steps = HKQuantityType(.stepCount)
       let energy = HKQuantityType(.activeEnergyBurned)
       let distance = HKQuantityType(.distanceWalkingRunning)
-      let write: Set<HKSampleType> = [sleep, resting, hrv, heart, steps, energy, distance, .workoutType()]
+      let write: Set<HKSampleType> = [
+        sleep, resting, hrv, heart, steps, energy, distance, .workoutType(), HKSeriesType.workoutRoute(),
+      ]
       try await store.requestAuthorization(toShare: write, read: HealthSync.readTypes)
 
       let calendar = Calendar.current
@@ -81,6 +84,47 @@
       try await builder.addSamples(run)
       try await builder.endCollection(at: end)
       _ = try await builder.finishWorkout()
+      try await seedWalk(store: store, distance: distance)
+    }
+
+    /// Today's out-and-back walk along the Copenhagen lakes, with its route.
+    private static func seedWalk(store: HKHealthStore, distance: HKQuantityType) async throws {
+      let start = Date.now.addingTimeInterval(-3 * 3600)
+      let end = start.addingTimeInterval(40 * 60)
+      let configuration = HKWorkoutConfiguration()
+      configuration.activityType = .walking
+      configuration.locationType = .outdoor
+      let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: .local())
+      try await builder.beginCollection(at: start)
+      try await builder.addSamples([
+        HKQuantitySample(
+          type: distance, quantity: HKQuantity(unit: .meterUnit(with: .kilo), doubleValue: 3.2),
+          start: start, end: end)
+      ])
+      try await builder.endCollection(at: end)
+      guard let workout = try await builder.finishWorkout() else { return }
+      // From Nørreport along Peblinge and Sortedams lakes and back, one fix
+      // every two seconds.
+      let corners: [(Double, Double)] = [
+        (55.6836, 12.5716), (55.6862, 12.5629), (55.6893, 12.5585), (55.6935, 12.5647), (55.6960, 12.5730),
+      ]
+      let out = (0..<600).map { i -> CLLocationCoordinate2D in
+        let t = Double(i) / 599 * Double(corners.count - 1)
+        let k = min(Int(t), corners.count - 2)
+        let f = t - Double(k)
+        return CLLocationCoordinate2D(
+          latitude: corners[k].0 + (corners[k + 1].0 - corners[k].0) * f,
+          longitude: corners[k].1 + (corners[k + 1].1 - corners[k].1) * f)
+      }
+      let track = out + out.reversed()
+      let locations = track.enumerated().map { i, c in
+        CLLocation(
+          coordinate: c, altitude: 10, horizontalAccuracy: 5, verticalAccuracy: 5,
+          timestamp: start.addingTimeInterval(Double(i) * 2))
+      }
+      let route = HKWorkoutRouteBuilder(healthStore: store, device: .local())
+      try await route.insertRouteData(locations)
+      _ = try await route.finishRoute(with: workout, metadata: nil)
     }
   }
 #endif

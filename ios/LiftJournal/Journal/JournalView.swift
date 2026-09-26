@@ -48,7 +48,17 @@ struct JournalView: View {
     List {
       ForEach(days, id: \.0) { day, entries in
         Section(Self.heading(day)) {
-          ForEach(entries, id: \.id) { JournalRow(item: $0) }
+          ForEach(entries, id: \.id) { item in
+            if item.hasRoute == true {
+              NavigationLink {
+                ActivityRouteView(id: item.id, title: item.title)
+              } label: {
+                JournalRow(item: item)
+              }
+            } else {
+              JournalRow(item: item)
+            }
+          }
         }
       }
       if let nextBefore, query.isEmpty {
@@ -126,6 +136,10 @@ struct JournalRow: View {
         }
       }
       Spacer(minLength: 0)
+      if item.hasRoute == true {
+        Image(systemName: "map.fill").font(.caption).foregroundStyle(.secondary)
+          .accessibilityLabel("Route recorded")
+      }
       if item.fromAppleHealth { AppleHealthMark() }
     }
     .accessibilityElement(children: .combine)

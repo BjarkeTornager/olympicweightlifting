@@ -16,6 +16,7 @@ import { trainingSummary, workoutTotals } from "../training";
 import type { JournalState, Workout } from "../model";
 import { queryFoodJournal } from "../nutrition";
 import { cardioSummary } from "../cardio";
+import { routeNotesFor } from "../workout-routes";
 import { dailyHealth } from "../health";
 import { listFoodPhotos } from "../food-photos";
 import { listUserImages } from "../user-images";
@@ -157,9 +158,11 @@ export async function runReadTool(
         entries = summary.entries.slice(offset, offset + PAGE);
       entries.forEach((s) => reads.cardio.add(s.id));
       if (!a.activity) reads.cardioRanges.push({ from: a.from, to: a.to });
+      const routes = await routeNotesFor(userId, state, a.from, a.to);
       return {
         ...summary,
-        entries,
+        // A GPS route Apple Health recorded: place names, never coordinates.
+        entries: entries.map((e) => ({ ...e, route: routes.get(e.id) })),
         nextOffset: nextOffset(offset, summary.sessions),
       };
     }

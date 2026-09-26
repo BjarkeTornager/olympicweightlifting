@@ -6,6 +6,7 @@ import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
 import { mealTypes, totalNutrients } from "./nutrition";
 import type { SavedVisual } from "./coach-visuals";
+import { describeRoute, type RouteNote } from "./route-summary";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -70,6 +71,10 @@ const activityView = z
     maxHeartRate: int.optional(),
     caloriesKcal: z.number().optional(),
     fromAppleHealth: z.boolean(),
+    // A GPS route was recorded: GET /api/v1/activities/{id}/route draws it.
+    hasRoute: z.boolean().optional(),
+    // Where it went, such as "From Vesterbro out to Frederiksberg Have and back".
+    routeText: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Activity" });
@@ -188,6 +193,7 @@ const journalItem = z
     title: z.string(),
     detail: z.string(),
     fromAppleHealth: z.boolean(),
+    hasRoute: z.boolean().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "JournalItem" });
@@ -252,6 +258,18 @@ export const healthSyncResult = z
         .strict()
         .register(nativeResponses, { id: "WorkoutSyncResult" }),
     ),
+    // "pending" means the workout is not in the journal yet: send it again.
+    routes: z
+      .array(
+        z
+          .object({
+            workoutId: uuid,
+            result: z.enum(["saved", "unchanged", "skipped", "pending"]),
+          })
+          .strict()
+          .register(nativeResponses, { id: "RouteSyncResult" }),
+      )
+      .optional(),
   })
   .strict()
   .register(nativeResponses, { id: "HealthSyncResult" });
@@ -376,9 +394,15 @@ const workoutSummary = (w: JournalState["sessions"][number]) => ({
   loggedSets: loggedSets(w),
 });
 
+const routeText = (note?: RouteNote) => {
+  const text = note ? describeRoute(note) : "";
+  return text ? text[0]!.toUpperCase() + text.slice(1) : undefined;
+};
+
 function activity(
   e: JournalState["cardio"]["sessions"][number],
   fromAppleHealth: Set<string>,
+  routes: Map<string, RouteNote>,
 ) {
   return defined({
     id: e.id,
@@ -392,6 +416,8 @@ function activity(
     maxHeartRate: e.maxHeartRate,
     caloriesKcal: e.caloriesKcal,
     fromAppleHealth: fromAppleHealth.has(e.id),
+    hasRoute: routes.has(e.id),
+    routeText: routeText(routes.get(e.id)),
   });
 }
 
@@ -400,6 +426,7 @@ export function buildToday(
   revision: number,
   date: string,
   fromAppleHealth: Set<string>,
+  routes: Map<string, RouteNote> = new Map(),
 ): TodayView {
   const health = dailyHealth(state, date);
   const hydration = hydrationForDay(state, date);
@@ -498,7 +525,7 @@ export function buildToday(
       activities: state.cardio.sessions
         .filter((s) => s.date === date)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .map((e) => activity(e, fromAppleHealth)),
+        .map((e) => activity(e, fromAppleHealth, routes)),
       sessionsThisWeek: health.sessionsThisWeek,
       priorities: health.priorities.map((p) => ({
         id: p.id,
@@ -521,6 +548,7 @@ export function buildJournal(
   before: string,
   days: number,
   fromAppleHealth: Set<string>,
+  routes: Map<string, RouteNote> = new Map(),
 ): JournalFeed {
   const from = offsetDate(before, -days);
   const inRange = (d: string) => d < before && d >= from;
@@ -548,6 +576,7 @@ export function buildJournal(
         .filter(Boolean)
         .join(" · "),
       fromAppleHealth: fromAppleHealth.has(e.id),
+      hasRoute: routes.has(e.id),
     });
   for (const m of state.nutrition.meals.filter((m) => inRange(m.date))) {
     const total = totalNutrients(m.items);
@@ -702,6 +731,8 @@ const coachVisual = z
     activity: z.string().optional(),
     distanceKm: z.number().optional(),
     durationSeconds: int.optional(),
+    loop: z.boolean().optional(),
+    recorded: z.boolean().optional(),
     path: z.array(z.array(z.number())).optional(),
     stops: z
       .array(
@@ -751,7 +782,7 @@ type HistoryTurn = {
   visuals?: SavedVisual[];
 };
 
-function flattenVisual({ id, content }: SavedVisual) {
+export function flattenVisual({ id, content }: SavedVisual) {
   const { kind, title, caption } = content;
   const common = { id, kind, title, caption };
   switch (content.kind) {
@@ -769,6 +800,8 @@ function flattenVisual({ id, content }: SavedVisual) {
         activity: content.activity,
         distanceKm: content.distanceKm,
         durationSeconds: content.durationSeconds,
+        loop: content.loop,
+        recorded: content.recorded,
         path: content.path.map(([lat, lng]) => [lat, lng]),
         stops: content.stops,
       };

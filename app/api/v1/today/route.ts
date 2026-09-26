@@ -4,6 +4,7 @@ import { buildToday } from "@/lib/native-api";
 import { requireNative } from "@/lib/native-actions";
 import { foodDate } from "@/lib/nutrition";
 import { readJournal } from "@/lib/server";
+import { routeNotesFor } from "@/lib/workout-routes";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,15 @@ export async function GET(request: Request) {
       readJournal(user.id),
       importedCardioIds(user.id),
     ]);
+    const routes = await routeNotesFor(user.id, snapshot.state, date, date);
     return Response.json(
-      buildToday(snapshot.state, snapshot.revision, date, fromAppleHealth),
+      buildToday(
+        snapshot.state,
+        snapshot.revision,
+        date,
+        fromAppleHealth,
+        routes,
+      ),
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (e) {

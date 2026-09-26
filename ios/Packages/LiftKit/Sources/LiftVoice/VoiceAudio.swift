@@ -26,11 +26,13 @@ public final class VoiceAudio: @unchecked Sendable {
   // Touched only on the main thread.
   private var engine: AVAudioEngine?
   private var player: AVAudioPlayerNode?
-  private var converter: AVAudioConverter?
   private var observers: [any NSObjectProtocol] = []
   private var running = false
+  private var rebuildPending = false
 
   private struct State {
+    /// Made from the format the microphone actually delivers.
+    var converter: AVAudioConverter?
     var pending: [Int16] = []
     var scheduled = 0
     var generation = 0
@@ -73,14 +75,14 @@ public final class VoiceAudio: @unchecked Sendable {
         MainActor.assumeIsolated {
           guard let self, changed == self.engine.map(ObjectIdentifier.init) else { return }
           self.log.notice("Audio configuration changed; restarting")
-          self.rebuild()
+          self.scheduleRebuild()
         }
       },
       center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) {
         [weak self] _ in
         MainActor.assumeIsolated {
           self?.log.notice("Media services were reset; restarting")
-          self?.rebuild()
+          self?.scheduleRebuild()
         }
       },
       center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) {
@@ -90,7 +92,7 @@ public final class VoiceAudio: @unchecked Sendable {
         MainActor.assumeIsolated {
           guard type == .ended else { return }
           self?.log.notice("Audio interruption ended; restarting")
-          self?.rebuild()
+          self?.scheduleRebuild()
         }
       },
       center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) {
@@ -114,7 +116,20 @@ public final class VoiceAudio: @unchecked Sendable {
   /// After an interruption (a phone call, Siri), audio starts again.
   @MainActor
   public func restart() {
-    rebuild()
+    scheduleRebuild()
+  }
+
+  /// iOS often sends several changes in a row; restart once they settle.
+  @MainActor
+  private func scheduleRebuild() {
+    guard running, !rebuildPending else { return }
+    rebuildPending = true
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(300))
+      guard let self else { return }
+      self.rebuildPending = false
+      self.rebuild()
+    }
   }
 
   @MainActor
@@ -126,22 +141,19 @@ public final class VoiceAudio: @unchecked Sendable {
     engine.attach(player)
     engine.connect(player, to: engine.mainMixerNode, format: playback)
     let format = input.outputFormat(forBus: 0)
-    guard format.sampleRate > 0, format.channelCount > 0,
-      let converter = AVAudioConverter(from: format, to: capture)
-    else {
+    guard format.sampleRate > 0, format.channelCount > 0 else {
       throw VoiceAudioError("The microphone isn't available right now.")
     }
-    // Voice processing can report several microphone channels.
-    if format.channelCount > 1 { converter.downmix = true }
-    input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+    // nil: the tap uses whatever the bus delivers, so a format that changed
+    // under voice processing can never make installTap throw.
+    input.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
       self?.captured(buffer)
     }
     engine.prepare()
     try engine.start()
-    player.play()
+    if engine.isRunning { player.play() }
     self.engine = engine
     self.player = player
-    self.converter = converter
     preferSpeaker()
     log.notice(
       "Audio started: mic \(format.sampleRate, privacy: .public) Hz × \(format.channelCount, privacy: .public), output \(engine.outputNode.outputFormat(forBus: 0).sampleRate, privacy: .public) Hz"
@@ -157,12 +169,12 @@ public final class VoiceAudio: @unchecked Sendable {
     }
     engine = nil
     player = nil
-    converter = nil
     // Anything queued for the old engine will never play.
     let wasSpeaking = lock.withLock { state -> Bool in
       state.generation += 1
       defer { state.scheduled = 0 }
       state.pending = []
+      state.converter = nil
       return state.scheduled > 0
     }
     if wasSpeaking { onSpeaking?(false) }
@@ -201,9 +213,9 @@ public final class VoiceAudio: @unchecked Sendable {
       let buffer = AVAudioPCMBuffer(pcmFormat: playback, frameCapacity: AVAudioFrameCount(count)),
       let out = buffer.floatChannelData?[0]
     else {
-      if running, engine?.isRunning == false {
+      if running, engine?.isRunning != true {
         log.notice("Audio engine not running while the coach speaks; restarting")
-        rebuild()
+        scheduleRebuild()
       }
       return
     }
@@ -233,7 +245,7 @@ public final class VoiceAudio: @unchecked Sendable {
       }
       if finished { self.onSpeaking?(false) }
     }
-    if !player.isPlaying { player.play() }
+    if !player.isPlaying, engine.isRunning { player.play() }
   }
 
   /// The athlete talked over the coach: drop what is still queued.
@@ -244,15 +256,25 @@ public final class VoiceAudio: @unchecked Sendable {
       state.scheduled = 0
     }
     player?.stop()
-    if running { player?.play() }
+    // Starting a player on a stopped engine raises an exception.
+    if running, engine?.isRunning == true { player?.play() }
     onSpeaking?(false)
   }
 
   // MARK: Capture
 
   private func captured(_ buffer: AVAudioPCMBuffer) {
-    // The converter is replaced only after this tap is removed.
-    guard let converter = unsafeConverter() else { return }
+    let format = buffer.format
+    guard format.sampleRate > 0, format.channelCount > 0 else { return }
+    let converter = lock.withLock { state -> AVAudioConverter? in
+      if let current = state.converter, current.inputFormat == format { return current }
+      let made = AVAudioConverter(from: format, to: capture)
+      // Voice processing can deliver several microphone channels.
+      if format.channelCount > 1 { made?.downmix = true }
+      state.converter = made
+      return made
+    }
+    guard let converter else { return }
     let ratio = capture.sampleRate / buffer.format.sampleRate
     let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 16
     guard let output = AVAudioPCMBuffer(pcmFormat: capture, frameCapacity: capacity) else { return }
@@ -292,12 +314,6 @@ public final class VoiceAudio: @unchecked Sendable {
     for chunk in chunks { onChunk?(chunk) }
   }
 
-  private func unsafeConverter() -> AVAudioConverter? {
-    // Read from the audio thread; written on the main thread only while no
-    // tap is installed, so it is never read mid-write.
-    nonisolated(unsafe) let current = converter
-    return current
-  }
 }
 
 public struct VoiceAudioError: LocalizedError {

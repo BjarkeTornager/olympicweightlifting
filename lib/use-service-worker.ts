@@ -47,3 +47,26 @@ export function useServiceWorkerUpdate() {
   };
   return { updateReady, activate };
 }
+
+// Fetches the newest app version and switches to it now, for when an old
+// cached app has been refused by the server.
+export async function updateAppNow() {
+  const reg =
+    "serviceWorker" in navigator
+      ? await navigator.serviceWorker.getRegistration()
+      : undefined;
+  await reg?.update().catch(() => {});
+  const waiting = reg?.waiting ?? reg?.installing;
+  if (!waiting || !navigator.serviceWorker.controller) {
+    location.reload();
+    return;
+  }
+  navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    () => location.reload(),
+    { once: true },
+  );
+  waiting.postMessage({ type: "ACTIVATE" });
+  // Reload anyway if the switch does not happen promptly.
+  setTimeout(() => location.reload(), 4000);
+}

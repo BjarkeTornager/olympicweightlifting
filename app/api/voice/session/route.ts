@@ -39,8 +39,14 @@ export async function POST(request: Request) {
   try {
     const user = await requireAthlete(request, true);
     requireCurrentCoach(request);
-    // An older app would run the call with outdated tools and time limits.
-    if (Number(request.headers.get("x-voice-client") ?? 0) < 3)
+    const raw = await readJson(request, 4000);
+    // An older app would start a call with outdated tools and time limits.
+    // A call already in progress may still reconnect, so a release never
+    // cuts off a conversation.
+    if (
+      Number(request.headers.get("x-voice-client") ?? 0) < 3 &&
+      !(raw && typeof raw === "object" && "resumeHandle" in raw)
+    )
       throw new ApiError(
         "Tap Reload update, or close and reopen the app, to use the latest voice coach.",
         426,
@@ -73,7 +79,7 @@ export async function POST(request: Request) {
           }),
       })
       .strict()
-      .parse(await readJson(request, 4000));
+      .parse(raw);
     const clock = localClock(new Date(), timezone);
     const { state } = await readJournal(user.id);
     const setup = voiceSetup(

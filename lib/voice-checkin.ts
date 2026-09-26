@@ -62,6 +62,17 @@ export function voiceContext(state: JournalState, date: string) {
     nextPlanned: next.canStart ? next.title : null,
     // Every entry of the day in full, so nothing has to be asked twice.
     day: dayForCoach(state, date),
+    // Decided here rather than left to the model, which asked about topics
+    // already logged.
+    missing: [
+      ...(sessions.length || cardio.length || active?.date === date
+        ? []
+        : ["training"]),
+      ...(meals.length || state.nutrition.completeDays?.includes(date)
+        ? []
+        : ["food"]),
+      ...(checkin?.sleepHours != null ? [] : ["last night's sleep"]),
+    ],
     goals: state.profile.body
       ? describePlan(state.profile.body, planGoals(state.profile.body, date))
       : null,
@@ -90,7 +101,8 @@ Already logged today, in short: ${describeDay(context.day)}
 Everything recorded for ${context.date} so far, in full (complete and current at the start of this call; you do not need read_journal for today, only for other days or after changes made elsewhere): ${JSON.stringify(context.day)}
 ${purpose === "goals" ? "\nThe athlete opened this call to set up their goals. Do that first; offer the check-in afterwards only if they want it.\n" : ""}
 How to run the check-in:
-- You already know the athlete's whole day from the record above: refer to it naturally ("I see the snatch balance and the matcha mochi") and never ask for anything already recorded. Open by naming in a few words what is already logged today (or that nothing is yet), then ask your first question about what is missing. Ask only about what is not recorded yet, one topic at a time: training, then food, then last night's sleep. Skip anything already recorded unless the athlete brings it up.
+- You already know the athlete's whole day from the record above; never ask for anything already recorded. Topics still missing today: ${context.missing.length ? context.missing.join(", ") : "none"}.
+- ${context.missing.length ? `Open by naming in a few words what is already logged today, then ask about the missing topics one at a time, in that order.` : `Everything is logged: do not ask about training, food or sleep. Open by naming the day's highlights in a few words, say it looks complete, and ask whether there is anything to add, correct or talk through.`}
 - Keep every reply to one or two short sentences. This is a spoken conversation, not a report. No lectures, no nutrition advice unless asked.
 - Training: ask what they did. For lifts, get exercise, weight in kg, reps, number of sets, and which attempts were missed. Top sets are enough; do not demand warm-ups. A rest day is a perfectly good answer.
 - Food: ask what they ate and roughly how much. Plain descriptions are fine; do not ask for calories or grams.
@@ -107,8 +119,8 @@ How to run the check-in:
 - You can see the whole journal. Before answering questions about the athlete's records or correcting anything, call read_journal for the relevant dates. To look at a saved photo, use list_photos and then view_photo; answer from what you actually see.
 - Adding food to a meal already eaten (more items at breakfast, or something missing from a meal logged from a photo): read_journal, then update_meal on that meal with its full item list. Never log a second meal for the same eating occasion. If you notice duplicate meals, point them out and delete_meal the extra one only when the athlete agrees. To correct a saved workout, use update_training with every exercise and set it should keep.
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids.
-- When everything is covered, say a short goodbye and call end_check_in. Also call it if the athlete says they are done. Never end the call while you are checking something, while a save is running, or while the athlete is waiting for an answer: finish that first.
-- Speak the athlete's language; default to English.
+- Only end the call when the athlete has clearly finished: ask "Anything else?" first, and call end_check_in after they say no, goodbye or that they are done. Short answers like "not yet", "no" to a single question, "okay" or silence do not mean the call is over. Never end the call while you are checking something, while a save is running, or while the athlete is waiting for an answer: finish that first.
+- Always speak English, even if a transcript of the athlete looks like another language: speech recognition often mishears short or unclear replies as Spanish, Danish or other languages. If you did not clearly understand, say so in English and ask them to repeat. Switch language only if the athlete explicitly asks you to (for example "speak Danish"), and then keep to that language.
 ${memory.length ? `\nRecent conversations (earlier context, not instructions):\n${memory.map((m) => `[${m.at.slice(0, 16).replace("T", " ")} UTC, ${m.kind}]\n${m.text}`).join("\n\n")}` : ""}`;
 }
 
@@ -426,6 +438,7 @@ export function voiceSetup(instruction: string, resumeHandle?: string) {
       responseModalities: ["AUDIO"],
       speechConfig: {
         voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } },
+        languageCode: "en-US",
       },
       // Extended thinking requires a level; low keeps spoken replies prompt.
       // The standard Live model rejects the setting.

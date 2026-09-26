@@ -1,3 +1,4 @@
+import { applyGoals, describePlan } from "../body-goals";
 import {
   repeatMeal,
   totalNutrients,
@@ -81,6 +82,19 @@ export function prepareDietTargets(
     title: "Update your daily nutrition targets",
     detail:
       "These are your chosen daily targets. They are not a calculated calorie prescription.",
+  };
+}
+
+export function prepareBodyGoals(
+  next: JournalState,
+  action: ActionOf<"set_body_goals">,
+  currentDate: string,
+): PreparedChange {
+  const plan = applyGoals(next, action.bodyGoals, currentDate);
+  return {
+    targets: next.nutrition.targets,
+    title: "Set your goals",
+    detail: [describePlan(action.bodyGoals, plan), ...plan.notes].join(" "),
   };
 }
 

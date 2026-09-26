@@ -21,7 +21,9 @@ export function VoiceCheckin({
   headers,
   onSaved,
   onReview,
+  purpose = "checkin",
 }: {
+  purpose?: "checkin" | "goals";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accountId: string;
@@ -52,8 +54,12 @@ export function VoiceCheckin({
         if (!next) voice.stop();
         onOpenChange(next);
       }}
-      title="Check in by voice"
-      description="A short spoken check-in about today’s training, food and sleep."
+      title={purpose === "goals" ? "Set up your goals" : "Check in by voice"}
+      description={
+        purpose === "goals"
+          ? "Tell Coach about yourself and your goal weight. It works out your daily calories and training."
+          : "A short spoken check-in about today’s training, food and sleep."
+      }
       className="voice-checkin"
     >
       {voice.camera ? (
@@ -134,7 +140,7 @@ export function VoiceCheckin({
           </>
         ) : (
           <>
-            <Button onClick={voice.start}>
+            <Button onClick={() => voice.start(purpose)}>
               <Mic size={18} />
               {voice.status === "idle" ? "Start talking" : "Talk again"}
             </Button>

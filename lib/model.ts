@@ -4,6 +4,7 @@ import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 import { coachingSchema } from "./coaching";
 import { liftingBriefSchema } from "./lifting-brief";
+import { bodyGoalsSchema } from "./body-goals";
 import {
   storedCustomProgramSchema,
   isTrainingProgram,
@@ -138,6 +139,7 @@ export const journalSchema = z
         timezone: z.string().max(100).optional(),
         coaching: coachingSchema.optional(),
         lifting: liftingBriefSchema.nullable().optional(),
+        body: bodyGoalsSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

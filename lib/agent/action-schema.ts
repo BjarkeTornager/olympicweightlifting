@@ -11,6 +11,7 @@ import {
 } from "../training-program-schema";
 import { checkinPatchSchema } from "../health";
 import { mealInputSchema, dietTargetsSchema } from "../nutrition";
+import { bodyGoalsInputSchema } from "../body-goals";
 const date = workoutSchema.shape.date;
 const exerciseId = trainingExerciseId;
 const set = z
@@ -222,6 +223,12 @@ const singleActionSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
+      kind: z.literal("set_body_goals"),
+      bodyGoals: bodyGoalsInputSchema,
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal("record_session"),
       workout: trainingInputSchema,
       separateSession: z.boolean().optional(),
@@ -304,6 +311,7 @@ export const actionToolSchema = z
       "record_meal",
       "update_meal",
       "set_diet_targets",
+      "set_body_goals",
       "record_session",
       "log_workout_progress",
       "merge_sessions",
@@ -408,6 +416,11 @@ export const actionToolSchema = z
       .optional(),
     mealId: z.string().uuid().optional(),
     targets: dietTargetsSchema.optional(),
+    bodyGoals: bodyGoalsInputSchema
+      .optional()
+      .describe(
+        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights.",
+      ),
     checkin: checkinPatchSchema
       .describe(
         "Partial update: include date and ONLY the fields the user explicitly reports or corrects. Omit every unchanged field. For a sleep-only report send {date,sleepHours}; do not fill energy, soreness, waterMl, bodyweight or notes. A null value DELETES a saved measurement and an empty notes string DELETES the note: use either only when explicitly asked to clear it.",

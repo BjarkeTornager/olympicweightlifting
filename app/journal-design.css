@@ -2444,4 +2444,12 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .coach-workspace .composer-talk-button:hover { background: var(--accent-hover); }
 .chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
 .chat-task:only-child { margin: 0; font-size: 15px; opacity: 1; }
+/* Goals */
+.goals-start { display: grid; gap: 10px; }
+.goals-start h2 { margin: 0; }
+.goals-start p { margin: 0; }
+.goals-form select { width: 100%; min-width: 0; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 11px; font-size: 16px; }
+.goals-form .checkin-number-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.goals-plan { display: grid; gap: 6px; padding: 14px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); line-height: 1.45; }
+.goals-plan .fine-print { margin: 0; }
 }

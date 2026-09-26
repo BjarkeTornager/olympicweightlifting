@@ -13,7 +13,9 @@ export function coachEntryIntent(
 ) {
   return {
     initialCapture: route === "coach/capture",
-    initialVoice: route === "coach/voice",
+    initialVoice: route === "coach/voice" || route === "coach/voice/goals",
+    initialVoicePurpose:
+      route === "coach/voice/goals" ? ("goals" as const) : ("checkin" as const),
     initialMemories:
       route === "coach/plans"
         ? ("plans" as const)

@@ -6,6 +6,7 @@ import { uid } from "./domain";
 import { readJournal, writeJournal } from "./server";
 import { cardioActivitySchema } from "./cardio";
 import { foodGroupSchema } from "./nutrition";
+import { bodyGoalsInputSchema } from "./body-goals";
 import type { JournalState } from "./model";
 import { prepareAction, type ActionPreview } from "./agent/actions";
 import type { AgentAction } from "./agent/action-schema";
@@ -85,6 +86,11 @@ export const voiceToolArgs = {
     distance_km: z.number().min(0).max(10000).optional(),
   }),
   clear_unfinished_workout: z.object({ summary: summarySchema }),
+  set_goals: bodyGoalsInputSchema.extend({
+    summary: summarySchema,
+    // Models sometimes send an empty string for "no date".
+    targetDate: z.preprocess((v) => v || null, date.nullable()),
+  }),
   undo_save: z.object({ save_id: z.string().uuid() }),
 };
 export type VoiceToolName = keyof typeof voiceToolArgs;
@@ -194,6 +200,16 @@ export function voiceAction(
         },
       };
     }
+    case "set_goals": {
+      // The summary is for the journal receipt, not part of the goals.
+      const details = Object.entries(voiceToolArgs.set_goals.parse(raw));
+      return {
+        kind: "set_body_goals",
+        bodyGoals: bodyGoalsInputSchema.parse(
+          Object.fromEntries(details.filter(([key]) => key !== "summary")),
+        ),
+      };
+    }
     case "clear_unfinished_workout": {
       voiceToolArgs.clear_unfinished_workout.parse(raw);
       const draft = state.activeWorkout;
@@ -294,6 +310,7 @@ export async function runVoiceTool(
     workout: prepared.workout,
     ...(prepared.meal ? { meal: prepared.meal } : {}),
     ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
+    ...(prepared.targets ? { targets: prepared.targets } : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
     ...(prepared.workoutReview
       ? { workoutReview: prepared.workoutReview }

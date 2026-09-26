@@ -88,7 +88,12 @@ test("a spoken check-in streams the microphone, saves through Coach and reports 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/#coach");
   await expect(page.getByText("Ready to help", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Check in by voice" }).click();
+  // Reached the way people look for it: through Log something.
+  await page.getByRole("button", { name: "Log something" }).click();
+  await page
+    .getByRole("dialog", { name: "Log something" })
+    .getByRole("button", { name: "Check in by voice" })
+    .click();
   const dialog = page.getByRole("dialog", { name: "Check in by voice" });
   await dialog.getByRole("button", { name: "Start talking" }).click();
 

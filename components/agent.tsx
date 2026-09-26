@@ -614,6 +614,14 @@ export function TrainingAgent({
         journal={journal}
         open={captureOpen && visible}
         onOpenChange={setCaptureOpen}
+        onVoice={
+          voiceEnabled
+            ? () => {
+                setCaptureOpen(false);
+                setVoiceOpen(true);
+              }
+            : undefined
+        }
         photoDisabled={
           uploading || loadingImage || !accountId || photoIds.length >= 4
         }

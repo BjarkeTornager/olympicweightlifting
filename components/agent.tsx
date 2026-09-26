@@ -36,7 +36,7 @@ import { LiftingVideoDialog } from "./lifting-video-upload";
 import { QuickCapture } from "./quick-capture";
 import { coachTasks, taskMessage, type CoachTask } from "@/lib/coach-tasks";
 import { VoiceCheckin } from "./voice-checkin";
-import { useVoiceEnabled, type SaveResult } from "@/lib/use-voice-checkin";
+import { useVoiceEnabled } from "@/lib/use-voice-checkin";
 import { CoachTurn, type Turn } from "./coach-turn";
 import { proposalNeedsReview } from "@/lib/coach-proposals";
 import {
@@ -235,49 +235,6 @@ export function TrainingAgent({
   });
   const { queue, failedMessage, busy, backgroundResult, enqueue } = run;
   const voiceEnabled = useVoiceEnabled(accountId);
-  // A spoken report becomes an ordinary queued Coach message; the call waits
-  // for that turn so it can tell the athlete what was saved.
-  const voiceWaits = useRef(new Map<string, (r: SaveResult) => void>());
-  useEffect(() => {
-    for (const [id, resolve] of voiceWaits.current) {
-      const turn = turns.find((t) => t.id === id);
-      if (turn?.status !== "done" && turn?.status !== "failed") continue;
-      voiceWaits.current.delete(id);
-      const saved = (turn.proposals ?? [])
-        .filter((p) => p.status === "saved")
-        .map((p) => p.title);
-      resolve(
-        saved.length
-          ? { ok: true, detail: saved.join("; ") }
-          : {
-              ok: false,
-              detail:
-                turn.status === "failed"
-                  ? "Coach could not save it. It is kept in Coach to retry."
-                  : `Nothing saved. Coach replied: ${(turn.reply ?? "").slice(0, 400)}`,
-            },
-      );
-    }
-  }, [turns]);
-  const saveSpoken = (report: string) =>
-    new Promise<SaveResult>((resolve) => {
-      if (queue.length >= MAX_QUEUED_MESSAGES)
-        return resolve({ ok: false, detail: QUEUE_FULL_MESSAGE });
-      const job = queuedMessage(
-        crypto.randomUUID(),
-        `From my spoken check-in (transcribed, so numbers may be misheard): ${report}`,
-        [],
-      );
-      voiceWaits.current.set(job.id, resolve);
-      enqueue(job);
-      setTimeout(() => {
-        if (voiceWaits.current.delete(job.id))
-          resolve({
-            ok: false,
-            detail: "Coach is still working on it. Check Coach afterwards.",
-          });
-      }, 90000);
-    });
   // Opening Coach acknowledges a reply that finished in the background.
   if (visible && backgroundResult) run.setBackgroundResult(null);
   // Read by the photo loader, which must not restart when the queue changes.
@@ -586,19 +543,17 @@ export function TrainingAgent({
         <Button onClick={() => setCaptureOpen(true)}>
           <Plus size={19} /> Log something
         </Button>
-        {voiceEnabled ? (
-          <Button variant="secondary" onClick={() => setVoiceOpen(true)}>
-            <Mic size={19} /> Check in by voice
-          </Button>
-        ) : (
-          <span>Food, sleep or training</span>
-        )}
+        <span>Food, sleep or training</span>
       </div>
       <VoiceCheckin
         open={voiceOpen && visible}
         onOpenChange={setVoiceOpen}
+        accountId={accountId ?? ""}
         headers={headers}
-        onSave={saveSpoken}
+        onSaved={() => {
+          void journal.sync(true);
+          void coach.refresh();
+        }}
         onReview={() => setView("conversation")}
       />
       <QuickCapture
@@ -907,20 +862,35 @@ export function TrainingAgent({
                   >
                     <Plus size={20} />
                   </Button>
-                  <Button
-                    type="submit"
-                    className="composer-send-button"
-                    disabled={
-                      !ready ||
-                      uploading ||
-                      queue.length >= MAX_QUEUED_MESSAGES ||
-                      photoIds.length > 4 ||
-                      (!message.trim() && !photoIds.length && !task)
-                    }
-                  >
-                    <Send size={17} />
-                    Send
-                  </Button>
+                  {/* With nothing to send, the main action is talking to Coach. */}
+                  {voiceEnabled &&
+                  !message.trim() &&
+                  !photoIds.length &&
+                  !task ? (
+                    <Button
+                      type="button"
+                      className="composer-talk-button"
+                      onClick={() => setVoiceOpen(true)}
+                    >
+                      <Mic size={20} />
+                      Talk
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      className="composer-send-button"
+                      disabled={
+                        !ready ||
+                        uploading ||
+                        queue.length >= MAX_QUEUED_MESSAGES ||
+                        photoIds.length > 4 ||
+                        (!message.trim() && !photoIds.length && !task)
+                      }
+                    >
+                      <Send size={17} />
+                      Send
+                    </Button>
+                  )}
                 </div>
               </div>
               <Dialog

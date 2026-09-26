@@ -1,13 +1,9 @@
 "use client";
 import { useEffect, useRef } from "react";
-import {
-  useVoiceCheckin,
-  type SaveResult,
-  type VoiceStatus,
-} from "@/lib/use-voice-checkin";
+import { useVoiceCheckin, type VoiceStatus } from "@/lib/use-voice-checkin";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
-import { Check, LoaderCircle, Mic, MicOff, PhoneOff } from "./ui/icons";
+import { Camera, Check, LoaderCircle, Mic, MicOff, PhoneOff } from "./ui/icons";
 
 const statusText = {
   idle: "Coach asks what’s missing for today. Just answer out loud.",
@@ -21,17 +17,29 @@ const statusText = {
 export function VoiceCheckin({
   open,
   onOpenChange,
+  accountId,
   headers,
-  onSave,
+  onSaved,
   onReview,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  accountId: string;
   headers: () => Record<string, string>;
-  onSave: (report: string) => Promise<SaveResult>;
+  onSaved: () => void;
   onReview: () => void;
 }) {
-  const voice = useVoiceCheckin({ headers, onSave });
+  const viewfinder = useRef<HTMLVideoElement>(null);
+  const voice = useVoiceCheckin({
+    accountId,
+    headers,
+    onSaved,
+    video: viewfinder,
+  });
+  const { camera } = voice;
+  useEffect(() => {
+    if (viewfinder.current) viewfinder.current.srcObject = camera;
+  }, [camera]);
   const live = voice.status === "listening" || voice.status === "speaking";
   const transcript = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -48,13 +56,31 @@ export function VoiceCheckin({
       description="A short spoken check-in about today’s training, food and sleep."
       className="voice-checkin"
     >
-      <VoiceVisual
-        status={voice.status}
-        muted={voice.muted}
-        analyser={voice.analyser}
-      />
+      {voice.camera ? (
+        <div className="voice-camera">
+          <video ref={viewfinder} autoPlay playsInline muted />
+          <div className="voice-actions">
+            <Button
+              onClick={() => void voice.shutter()}
+              disabled={voice.capturing}
+            >
+              <Camera size={18} />
+              {voice.capturing ? "Saving photo…" : "Take photo"}
+            </Button>
+            <Button variant="secondary" onClick={voice.closeCamera}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <VoiceVisual
+          status={voice.status}
+          muted={voice.muted}
+          analyser={voice.analyser}
+        />
+      )}
       <p className="voice-status" role="status">
-        {voice.status === "failed"
+        {voice.error
           ? voice.error
           : voice.muted && live
             ? "Muted"
@@ -79,12 +105,12 @@ export function VoiceCheckin({
                 <Check size={16} />
               ) : null}
               <span>
-                <strong>{save.topic}</strong>{" "}
-                {save.state === "failed"
-                  ? `not saved: ${save.detail}`
-                  : save.state === "saving"
-                    ? "saving…"
-                    : "saved"}
+                <strong>{save.label}</strong>{" "}
+                {save.state === "saving"
+                  ? "saving…"
+                  : save.state === "saved"
+                    ? "saved"
+                    : "not saved yet"}
               </span>
             </li>
           ))}

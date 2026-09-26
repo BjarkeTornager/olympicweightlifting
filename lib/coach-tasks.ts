@@ -6,6 +6,9 @@ import {
 } from "./images";
 import { liftingPrompt } from "./lifting-coach";
 
+// Marks a Coach message saved from a spoken check-in.
+export const VOICE_PREFIX = "[voice] ";
+
 // A logging or planning request Coach should handle. The instruction goes to
 // the model; the person only sees the label and writes their own words.
 export type CoachTask = {
@@ -129,6 +132,11 @@ export function displayMessage(message: string): {
   text: string;
 } {
   const trimmed = message.trim();
+  if (trimmed.startsWith(VOICE_PREFIX))
+    return {
+      label: "From your voice check-in",
+      text: trimmed.slice(VOICE_PREFIX.length).trim(),
+    };
   for (const [instruction, label] of knownInstructions()) {
     if (trimmed === instruction) return { label, text: "" };
     if (trimmed.startsWith(instruction))

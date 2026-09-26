@@ -163,9 +163,11 @@ export function prepareSession(
     );
   if (planned) requireNoDraft(next);
   if (action.kind === "record_session") {
-    if (next.activeWorkout)
+    // An unfinished workout from another day does not block recording a
+    // finished session; one on the same day is where these sets belong.
+    if (next.activeWorkout?.date === action.workout.date)
       throw Error(
-        "An ongoing workout exists. Read current_workout and use log_workout_progress or finish_workout; do not split it into another history entry.",
+        "An ongoing workout exists on this date. Read current_workout and use log_workout_progress or finish_workout; do not split it into another history entry.",
       );
     if (
       next.sessions.some((s) => s.date === action.workout.date) &&
@@ -293,6 +295,23 @@ export function prepareFinishWorkout(
     workout: next.sessions.at(-1) ?? null,
     title: "Finish your workout",
     detail: "Saves logged sets to History. Unlogged planned sets are left out.",
+  };
+}
+
+// Clears an abandoned draft. Only a draft without logged sets can go;
+// anything performed must be finished into history instead.
+export function prepareDiscardWorkout(next: JournalState): PreparedChange {
+  const draft = next.activeWorkout;
+  if (!draft) throw Error("There is no unfinished workout.");
+  if (draft.exercises.some((e) => e.sets.some(isValidLoggedSet)))
+    throw Error(
+      "This unfinished workout has logged sets. Use finish_workout to keep them in History instead.",
+    );
+  next.activeWorkout = null;
+  return {
+    workout: null,
+    title: "Clear an unfinished workout",
+    detail: `Removes “${draft.title}” from ${draft.date}. It had no logged sets, so nothing performed is lost.`,
   };
 }
 

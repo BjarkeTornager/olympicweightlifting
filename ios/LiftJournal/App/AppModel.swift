@@ -123,7 +123,9 @@ final class AppModel {
         self.health.lastSync = summary.at
         self.health.lastResult = Self.describe(summary)
         self.health.error = nil
-        if summary.nightsImported + summary.workoutsImported + summary.daysUpdated + summary.routesImported > 0 {
+        if summary.nightsImported + summary.workoutsImported + summary.daysUpdated + summary.routesImported
+          + summary.bodyFatUpdated > 0
+        {
           await self.loadToday()
         }
       }
@@ -361,6 +363,9 @@ final class AppModel {
     if s.workoutsImported > 0 { parts.append("\(s.workoutsImported) \(s.workoutsImported == 1 ? "workout" : "workouts")") }
     if s.daysUpdated > 0 { parts.append("\(s.daysUpdated) \(s.daysUpdated == 1 ? "day" : "days") of heart and movement") }
     if s.routesImported > 0 { parts.append("\(s.routesImported) \(s.routesImported == 1 ? "route" : "routes")") }
+    if s.bodyFatUpdated > 0 {
+      parts.append("\(s.bodyFatUpdated) body fat \(s.bodyFatUpdated == 1 ? "reading" : "readings")")
+    }
     return parts.isEmpty ? "Up to date" : "Added " + parts.joined(separator: ", ")
   }
 

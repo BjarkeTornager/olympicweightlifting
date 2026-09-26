@@ -3,7 +3,7 @@ import SwiftUI
 /// Colours per kind of record, used the same way everywhere, as the Health
 /// app does for its categories.
 enum Category {
-  case sleep, heart, activity, water, food, training, checkin, coach
+  case sleep, heart, activity, water, food, training, checkin, coach, body
 
   var tint: Color {
     switch self {
@@ -15,6 +15,7 @@ enum Category {
     case .training: .blue
     case .checkin: .teal
     case .coach: .purple
+    case .body: .mint
     }
   }
 
@@ -28,6 +29,7 @@ enum Category {
     case .training: "figure.strengthtraining.olympic"
     case .checkin: "face.smiling"
     case .coach: "waveform"
+    case .body: "scalemass.fill"
     }
   }
 }

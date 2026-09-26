@@ -1,6 +1,7 @@
 import type { JournalState } from "./model";
 import { formatLitres, hydrationForDay } from "./hydration";
 import { describeRoute, type RouteNote } from "./route-summary";
+import { bodyFatByDate } from "./body-composition";
 
 // A compact, complete picture of the journal for a date range, shared by
 // both coaches: every entry with the ids needed to correct it.
@@ -117,6 +118,14 @@ export function journalForVoice(
         active_energy_kcal: v.activeEnergyKcal ?? undefined,
         source: "Apple Health",
       })),
+    // Body fat readings: reported, or measured by a smart scale through
+    // Apple Health. The athlete's own report wins on the same day.
+    body_fat: bodyFatByDate(state, from, to).map((b) => ({
+      date: b.date,
+      percent: b.percent,
+      method: b.method ?? undefined,
+      source: b.source === "apple-health" ? "Apple Health" : "reported",
+    })),
     dailyTargets: state.nutrition.targets,
     goals: state.profile.body ?? null,
   };
@@ -180,8 +189,14 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
     parts.push(
       `${m.meal_type[0].toUpperCase()}${m.meal_type.slice(1)}: ${m.name} (${Math.round(m.items.reduce((t, i) => t + i.calories, 0))} kcal)`,
     );
-  for (const c of day.checkins)
+  for (const c of day.checkins) {
     if (c.sleep_hours != null) parts.push(`Sleep: ${c.sleep_hours} h`);
+    if (c.bodyweight != null) parts.push(`Bodyweight: ${c.bodyweight} kg`);
+  }
+  for (const b of day.body_fat)
+    parts.push(
+      `Body fat: ${b.percent}%${b.method ? ` (${b.method})` : ""}${b.source === "Apple Health" ? " from Apple Health" : ""}`,
+    );
   if (day.hydration.recorded)
     parts.push(
       `Drinks: ${formatLitres(day.hydration.totalMl)} of about ${formatLitres(day.hydration.targetMl)}`,

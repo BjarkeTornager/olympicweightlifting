@@ -23,6 +23,10 @@
     "bodyweight": 81.4,
     "notes": ""
   },
+  "body": {
+    "bodyweight": 81.4,
+    "bodyweightDate": "2026-09-26"
+  },
   "nutrition": {
     "calories": 300,
     "protein": 11,

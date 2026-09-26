@@ -6,7 +6,7 @@ A private health journal for strength training, cardio, nutrition and recovery, 
 
 ## Native iPhone app
 
-The repository now includes a real SwiftUI app with native Coach, Today, Train, Journal and account screens. Open `ios/LiftJournal.xcodeproj` in Xcode. Simulator testing and personal-device installation can use a free Apple account; TestFlight requires membership. See [iPhone setup, privacy and verification](ios/README.md).
+`ios/` holds a native SwiftUI app on the same backend. It has Today, Apple Health sync (sleep, heart rate and workouts), Coach and Journal, and ships to TestFlight for internal testing. See [iPhone app](ios/README.md) and the [plan](docs/native-ios-app-plan-2026-09-26.md).
 
 ## Run the new app
 

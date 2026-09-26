@@ -1,5 +1,7 @@
 # Website testing and direct App Store release
 
+> **Superseded 26 September 2026.** The owner has enrolled in the Apple Developer Program and TestFlight is now the first distribution target. See the [native iPhone app plan](../docs/native-ios-app-plan-2026-09-26.md). The reference material below still applies.
+
 Reviewed 6 September 2026 against Apple's current documentation and this repository.
 
 **Owner decision, 6 September 2026: use the website for testing now, then release the native app directly through the App Store when ready. TestFlight and Ad Hoc testing are not planned.**

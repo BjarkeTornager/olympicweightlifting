@@ -1,72 +1,76 @@
 # Lift Journal for iPhone
 
-A native SwiftUI client for the existing private Railway health journal. Requires iOS 18 or later and Xcode 26.3 or later. There is no embedded web view, third-party SDK, Apple Health integration, wearable integration or background sensor collection. Google sign-in uses Apple's secure web authentication session.
+A native SwiftUI app for the Lift Journal backend on Railway. It uses the same server and database as the website. The first builds go to TestFlight for the owner only. See the [plan](../docs/native-ios-app-plan-2026-09-26.md).
 
-## Preview
+- **Name:** Lift Journal on the home screen. Suggested App Store name: "Lift Journal: Train & Recover".
+- **Bundle ID:** `com.bjarketornager.liftjournal`. **Team:** 9B79882UPS (individual membership).
+- **Requirements:** iPhone with iOS 26 or later. Built with Xcode 27 and the iOS 27 SDK, in Swift 6 language mode.
 
-Passing iPhone simulator screenshots with synthetic data: [Coach](previews/native-coach.png), [Today](previews/native-today.png), [Cardio](previews/native-cardio.png), and [private reconnection](previews/native-private-reconnect.png).
+## What it does
 
-## Run in the simulator
+- **Today:** sleep, resting heart rate, HRV and steps; water with one-tap +250/+500 ml; food totals; the current or next session; today's workouts; a check-in for energy, soreness and bodyweight.
+- **Apple Health:** reads sleep with its stages, resting heart rate, HRV, average heart rate, steps, active energy, and every workout (runs, walks, rides, swims, rows, hikes and more) with distance and heart rate. New data arrives in the background through HealthKit background delivery. Nothing is written to Apple Health.
+- **Coach:** the same conversation as the website, streamed over AG-UI. You can attach photos from the camera or library, and Coach's saves come with Undo.
+- **Journal:** everything recorded, a fortnight at a time, filtered by training, food or recovery. Entries that came from Apple Health are marked.
 
-Open `LiftJournal.xcodeproj`, select the **LiftJournal** scheme and an iPhone simulator, then Run. No Apple Developer membership is needed. The normal app connects to `https://lift-journal-production.up.railway.app`; sign in with the owner or an invited Google account. An invitation does not share another account's journal.
+Programmes, routines, set-by-set training, lifting videos, voice check-in and backups are still on the website. They come next (see the plan).
 
-The checked-in project needs no project generator or package installation. If you add Swift source files, regenerate it with `python3 ios/generate-project.py`. Preserve your personal signing settings locally; do not commit certificates, profiles or account credentials.
+## How it fits together
 
-## Install on your own iPhone with a free Apple account
+| Path | Purpose |
+| --- | --- |
+| `LiftJournal/` | App target: SwiftUI screens and `@Observable` models, default `MainActor` isolation |
+| `Packages/LiftKit/Sources/LiftAPI` | Client generated at build time by Swift OpenAPI Generator from `openapi.json`, plus the Coach event stream |
+| `Packages/LiftKit/Sources/LiftStore` | Keychain session, the offline change queue (`Outbox`), per-account cache, and the HealthKit reader (`HealthSync`) |
+| `Config/` | Build settings (`*.xcconfig`), Info.plist additions and entitlements (HealthKit and background delivery) |
+| `LiftJournal/Preview Content` | Synthetic preview data. It is a development asset and never ships in an archive |
 
-1. Add your Apple Account in **Xcode → Settings → Accounts**.
-2. Connect and trust your iPhone. Enable Developer Mode on the phone if Xcode requests it.
-3. Select the LiftJournal app target's **Signing & Capabilities**, enable automatic signing and choose your **Personal Team**. If Xcode requires a unique bundle identifier, choose one for this personal installation.
-4. Select your iPhone as the destination and Run. Follow any device trust prompt.
+The Xcode project uses folder-synchronised groups: a file added under `LiftJournal/` joins the app target automatically, and no project generator is needed.
 
-Free personal provisioning expires after seven days, so you may need to run the app from Xcode again. TestFlight and App Store distribution require an Apple Developer Program membership. This repository contains a buildable app; it does not imply a signed installation, TestFlight availability or App Store approval. No membership purchase or enrollment is performed.
+**Contract with the server.** The app calls `/api/v1/*`: `config`, `today`, `journal`, `actions`, `health/sync` and `coach`. These views are shaped for the app and described by zod schemas in `lib/native-api.ts`. `npm run openapi` writes `Packages/LiftKit/Sources/LiftAPI/openapi.json` and the JSON fixtures the Swift tests decode, and a server test fails when either is stale. Responses are written to survive change: no closed enums, extra fields allowed, and timestamps as plain strings. The server can therefore add fields and values without breaking an installed build.
 
-Apple: [membership options](https://developer.apple.com/support/compare-memberships/) and [running on a device](https://developer.apple.com/documentation/xcode/running-your-app-in-simulator-or-on-a-device).
+**Versioning.** Every request carries `X-Client: ios/<version>/<build>`. The server supports every build until `MIN_IOS_BUILD` is raised on purpose. After that, older builds get HTTP 426 and show "Install the latest build from TestFlight". The website's feature-version headers do not apply to the app.
 
-Current plan: use the Railway website for testing, then release the native app directly through the App Store. See [website testing and App Store readiness](DISTRIBUTION.md). TestFlight testing is not planned.
+**Saving.** Each change is one typed action with its own ID. It is queued on disk first, then sent to `POST /api/v1/actions`. The server applies it to the current journal and saves each ID only once, so an offline change never overwrites another device's work.
 
-## Native workflows
+**Sign-in.** Google sign-in goes through the website with PKCE (`/mobile`, then `liftjournal://auth`, then `/api/mobile/token`). The app gets its own session, which better-auth extends each time the app uses it. It is stored in the Keychain on this device only, and is readable after the first unlock so background Health syncs work while the phone is locked.
 
-- **Coach:** AG-UI streaming conversation, stable reading position, native keyboard composer, camera/photo picker, categorized attachments, expandable proposals, review/save/undo, tables, bar charts and connected diagram steps.
-- **Today:** reported sleep, food intake, weekly movement and journal-based next steps; quick activity, food and check-in forms.
-- **Train:** five programmes including Gym Accessories, active workout continuation, exact loads/reps, made/miss, finishing logged work, 23 technique guides and YouTube links, cardio history and weekly chart.
-- **Journal:** searchable strength, cardio, food and recovery history, activity corrections and entry deletion. Food adds meal-type and food-group filters, ingredient search, and editing of saved meal/ingredient tags with visible estimate labels. The image library keeps Food, Sleep, Activity and other categories separate, with manual corrections.
-- **You:** account, owner-only invitation management, refresh, JSON export, pending-save recovery and sign-out.
-
-Manual forms use the server's existing domain rules. Coach proposals are never automatically committed. Missing optional measurements remain absent; reported activity calories stay separate from food intake. Native JSON editing preserves unrelated journal fields.
-
-This first native version does not yet provide every advanced web control: backup import/merge, routine editing, exercise reordering, the rest timer, detailed strength PR comparisons, and a separate diet-target editor remain available on the web (Coach can prepare diet targets). It requires connectivity to verify access and obtain a prepared manual save. Confirmed data is held in memory, not available on an offline cold start. Unsaved form text is kept while that form remains open; prepared pending writes survive app restarts.
-
-## Authentication and privacy
-
-The app creates a PKCE verifier and state, then opens `/mobile` in `ASWebAuthenticationSession`. Google completes on the existing Railway origin. The user explicitly connects the app; the browser receives a random, single-use two-minute code bound to the PKCE challenge. The fixed `liftjournal://auth` callback carries code and state only. The app validates state, exchanges code plus verifier over HTTPS, and stores its separate signed session in Keychain with `WhenUnlockedThisDeviceOnly` protection. It never embeds an OAuth client secret or provider key.
-
-The server checks verified owner/invitation admission during handoff and every private API request. Signed Bearer sessions use the same account checks, origin checks and revocation rules as the website. Native sign-out revokes only that device's session. The network client refuses redirects and uses an ephemeral session without cookie or response caches. Private screens, including presented sheets, are covered in a separate privacy window when inactive or awaiting account verification.
-
-A prepared save is written to an account-namespaced file with complete iOS file protection and backup exclusion before submission. Each payload retains the same mutation ID and revision for an exact retry. No optimistic success is displayed before server acknowledgement. Recovery offers retry, export and explicit discard; it does not overwrite another device's revision. Exports contain sensitive user data and are created only by the user's action. The image catalog and pixels remain private on the server; JSON exports do not include pixels.
-
-`PrivacyInfo.xcprivacy` declares account identity, health, fitness, images and other user content collected for app functionality, linked to the user's account, without tracking. Before any future public distribution, review the actual hosting/provider practices, privacy disclosures, required account-deletion flow, signing and App Store requirements. Real Google handoff, camera use and physical device keyboard/app-switcher behavior still require an on-device acceptance pass.
-
-## Verify without touching real health data
-
-The fixture is an explicit, localhost-only synthetic API. It uses the actual domain preparation rules, but never calls Railway, PostgreSQL, Google or the Coach provider. The `LIFT_TEST_SERVER` override and synthetic token are compiled only in Debug; Release always uses the fixed Railway origin.
+## Build and test
 
 ```sh
-# From the repository root, keep this terminal running:
-LIFT_IOS_FIXTURE=true node --import tsx scripts/ios-fixture.ts
+# Swift tests (app and LiftKit) on a simulator
+ios/scripts/test.sh
 
-# In a second terminal, substitute an available iPhone simulator name:
-xcodebuild -project ios/LiftJournal.xcodeproj -scheme LiftJournal \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  -parallel-testing-enabled NO -derivedDataPath /tmp/lift-ios-build \
-  CODE_SIGNING_ALLOWED=NO test
-
-# Compile the physical-device release without claiming a signed install:
-xcodebuild -project ios/LiftJournal.xcodeproj -scheme LiftJournal \
-  -configuration Release -destination 'generic/platform=iOS' \
-  -derivedDataPath /tmp/lift-ios-device CODE_SIGNING_ALLOWED=NO build
+# Server side: contract, Apple Health import and actions
+npm test
 ```
 
-Native unit tests cover lossless round trips, callback binding, precise durations, missing values and invalid numbers. Native UI tests cover cardio/Coach review, sleep/food/strength forms, ingredient logging and saved-meal group edits, interrupted acknowledgement retries and private-sheet hiding on offline reactivation. Backend tests use a disposable `_test` database to cover signed sessions, wrong proof, expiry, replay, revocation, account isolation, read-only preparation, stale revisions and duplicate retry. Browser tests cover the Google bridge and the existing web workflows.
+Open `ios/LiftJournal.xcodeproj` in Xcode 27 and run the **LiftJournal** scheme. The first time, Xcode asks you to trust the Swift OpenAPI Generator build plugin: choose **Trust & Enable**. On the command line, pass `-skipPackagePluginValidation`.
 
-Food structure and query examples: [Food records and Coach queries](../docs/food-data.md). [Native food tags preview](previews/native-food-tags.png) uses synthetic data.
+### Against a local server
+
+Debug builds can talk to a local `npm run dev` server, with a disposable local account and synthetic Apple Health data in the simulator:
+
+```sh
+LIFT_SERVER=http://127.0.0.1:3100 LIFT_TEST_TOKEN=<bearer> LIFT_TEST_ACCOUNT=<user id>
+```
+
+Set these as environment variables in the scheme, or prefix them with `SIMCTL_CHILD_` for `xcrun simctl launch`. Add the launch argument `-seedHealth` to write a few days of synthetic sleep, heart rate and a run into the simulator's Health data. That seeder is compiled only for Debug simulator builds. Release builds always use the Railway origin.
+
+## Ship to TestFlight
+
+```sh
+ios/scripts/testflight.sh
+```
+
+The script archives a Release build, sets the build number from the UTC time, signs it automatically for team 9B79882UPS using the Apple Account in Xcode, and uploads it as **TestFlight Internal Only**. Such a build can never reach external testers or the App Store by accident. It appears under App Store Connect › TestFlight after processing. Internal builds need no review and last 90 days.
+
+Before the first upload, these one-time steps are needed: the paid developer account in Xcode › Settings › Apple Accounts, at least one registered iPhone, and the app record in App Store Connect. Testers are App Store Connect users in an internal TestFlight group; the owner's everyday Apple Account is invited with the Marketing role.
+
+Deploy the server before uploading a build that needs new endpoints. Never remove or rename a response field that installed builds read without raising `MIN_IOS_BUILD`.
+
+## Privacy
+
+`Resources/PrivacyInfo.xcprivacy` declares name, email, user ID, health, fitness, photos and other user content. All of it is linked to the account, used for app functionality, and never for tracking. The app uses no third-party SDKs and no analytics, and logs no health values. The app switcher shows a cover instead of health data. Coach sends journal content to the server's AI providers; external testing will need an explicit consent screen for that (App Review guideline 5.1.2).
+
+The previous prototype (September 2026) is in Git history before this directory was rebuilt.

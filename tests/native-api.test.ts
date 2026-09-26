@@ -77,6 +77,11 @@ test("every action the app can send is a valid journal action", () => {
   const examples = [
     { kind: "log_drink", drink: { date, ml: 250, kind: "water" } },
     { kind: "delete_drink", drinkId: crypto.randomUUID() },
+    {
+      kind: "record_body_fat",
+      bodyFat: { date, percent: 14, method: "scale" },
+    },
+    { kind: "delete_body_fat", date },
     { kind: "record_checkin", checkin: { date, energy: 4, soreness: 2 } },
     { kind: "delete_cardio", cardioId: crypto.randomUUID() },
     { kind: "start_programme", dayId: days[0].id, date },

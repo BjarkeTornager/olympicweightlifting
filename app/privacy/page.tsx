@@ -231,12 +231,13 @@ export default function PrivacyPage() {
         <h2>iPhone app, Apple Health and voice check-ins</h2>
         <p>
           If you connect Apple Health in the iPhone app, it reads the sleep,
-          resting heart rate, heart rate variability, steps, active energy,
-          distances and workouts you allow in iOS. It sends nightly sleep, daily
-          summaries and workouts to your account so they appear in your journal;
-          iOS may deliver new data in the background. The app never writes to
-          Apple Health. Apple Health data is used only to show your journal and
-          to give Coach context when you ask it for advice. It is never used for
+          resting heart rate, heart rate variability, steps, active energy, body
+          fat percentage (for example from a smart scale), distances and
+          workouts you allow in iOS. It sends nightly sleep, daily summaries and
+          workouts to your account so they appear in your journal; iOS may
+          deliver new data in the background. The app never writes to Apple
+          Health. Apple Health data is used only to show your journal and to
+          give Coach context when you ask it for advice. It is never used for
           advertising, sold, or shared with anyone except the AI provider, and
           only after you allow that. Turn the connection off in the app under
           Account › Apple Health, or in the Health app’s sharing settings;

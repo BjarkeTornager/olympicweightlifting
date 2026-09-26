@@ -11,7 +11,8 @@ import {
 } from "../training-program-schema";
 import { checkinPatchSchema } from "../health";
 import { mealInputSchema, dietTargetsSchema } from "../nutrition";
-import { bodyGoalsInputSchema } from "../body-goals";
+import { bodyGoalsRequestSchema } from "../body-goals";
+import { bodyFatInputSchema } from "../body-composition";
 import { drinkInputSchema } from "../hydration";
 const date = workoutSchema.shape.date;
 const exerciseId = trainingExerciseId;
@@ -70,6 +71,9 @@ const recordMealSchema = z
 const logDrinkSchema = z
   .object({ kind: z.literal("log_drink"), drink: drinkInputSchema })
   .strict();
+const recordBodyFatSchema = z
+  .object({ kind: z.literal("record_body_fat"), bodyFat: bodyFatInputSchema })
+  .strict();
 const recordSessionSchema = z
   .object({
     kind: z.literal("record_session"),
@@ -104,6 +108,7 @@ const bundleEntrySchema = z.discriminatedUnion("kind", [
   recordCheckinSchema,
   recordMealSchema,
   logDrinkSchema,
+  recordBodyFatSchema,
   recordSessionSchema,
   progressSchema,
   repeatMealActionSchema,
@@ -230,13 +235,15 @@ const singleActionSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("delete_drink"), drinkId: z.string().uuid() })
     .strict(),
+  recordBodyFatSchema,
+  z.object({ kind: z.literal("delete_body_fat"), date }).strict(),
   z
     .object({ kind: z.literal("set_diet_targets"), targets: dietTargetsSchema })
     .strict(),
   z
     .object({
       kind: z.literal("set_body_goals"),
-      bodyGoals: bodyGoalsInputSchema,
+      bodyGoals: bodyGoalsRequestSchema,
     })
     .strict(),
   z
@@ -327,6 +334,8 @@ export const actionToolSchema = z
       "delete_meal",
       "log_drink",
       "delete_drink",
+      "record_body_fat",
+      "delete_body_fat",
       "record_session",
       "log_workout_progress",
       "merge_sessions",
@@ -437,10 +446,15 @@ export const actionToolSchema = z
         "For log_drink: one drink as reported, ml as a whole number (a glass ≈ 250, a bottle ≈ 500, a can ≈ 330 unless stated). Log each drink separately; the day's total adds up.",
       ),
     drinkId: z.string().uuid().optional(),
-    bodyGoals: bodyGoalsInputSchema
+    bodyGoals: bodyGoalsRequestSchema
       .optional()
       .describe(
-        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights.",
+        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights. Optional: focus (lose_fat, build_muscle, recomposition or maintain) as they describe it, bodyFatPercent if they state a current reading, and targetBodyFatPercent if they name one.",
+      ),
+    bodyFat: bodyFatInputSchema
+      .optional()
+      .describe(
+        "For record_body_fat: one body fat reading as reported, with its date and method if they say it (scale, dexa, calipers, tape, estimate or other; null if unknown). One reading per date; a new one for the same date replaces it. delete_body_fat takes only date.",
       ),
     checkin: checkinPatchSchema
       .describe(
@@ -458,6 +472,7 @@ export const loggingKinds = [
   "repeat_meal",
   "update_meal",
   "record_checkin",
+  "record_body_fat",
   "record_cardio",
   "update_cardio",
   "record_session",
@@ -492,6 +507,7 @@ export const loggingToolSchema = actionToolSchema
     mealId: true,
     checkin: true,
     drink: true,
+    bodyFat: true,
   })
   .extend({
     kind: z.enum(loggingKinds),

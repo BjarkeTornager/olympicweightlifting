@@ -2,11 +2,14 @@
 import { useState } from "react";
 import {
   applyGoals,
-  bodyGoalsInputSchema,
+  bodyGoalsRequestSchema,
   describePlan,
+  planForState,
   planGoals,
+  splitGoals,
   type BodyGoalsInput,
 } from "@/lib/body-goals";
+import { latestBodyFat, type BodyFocus } from "@/lib/body-composition";
 import { today } from "@/lib/domain";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
@@ -25,7 +28,7 @@ export function GoalsCard({
 }) {
   const [open, setOpen] = useState(false);
   const body = journal.state!.profile.body;
-  const plan = body ? planGoals(body, today()) : null;
+  const plan = planForState(journal.state!, today());
   return (
     <>
       {body && plan ? (
@@ -79,7 +82,16 @@ export function GoalsCard({
   );
 }
 
-type Draft = Record<keyof BodyGoalsInput, string>;
+type Draft = Record<
+  keyof BodyGoalsInput | "focus" | "bodyFatPercent" | "targetBodyFatPercent",
+  string
+>;
+const focusLabels: Record<BodyFocus, string> = {
+  lose_fat: "Lose fat",
+  build_muscle: "Build muscle",
+  recomposition: "Recomposition (lose fat, build muscle)",
+  maintain: "Maintain",
+};
 
 function GoalsForm({
   journal,
@@ -105,12 +117,28 @@ function GoalsForm({
       body?.sessionMinutes ?? state.profile.lifting?.minutesPerSession ?? 75,
     ),
     experience: body?.experience ?? "developing",
+    focus: state.profile.bodyTargets?.focus ?? "",
+    bodyFatPercent: String(latestBodyFat(state, today())?.percent ?? ""),
+    targetBodyFatPercent: String(
+      state.profile.bodyTargets?.targetBodyFatPercent ?? "",
+    ),
   }));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const number = (v: string) => (v.trim() ? Number(v) : NaN);
-  const parsed = bodyGoalsInputSchema.safeParse({
+  const optional = (v: string) => (v.trim() ? Number(v) : undefined);
+  const knownFat = latestBodyFat(state, today())?.percent;
+  const parsed = bodyGoalsRequestSchema.safeParse({
     ...draft,
+    focus: draft.focus || undefined,
+    // Record a body fat reading only when it changed.
+    bodyFatPercent:
+      optional(draft.bodyFatPercent) === knownFat
+        ? undefined
+        : optional(draft.bodyFatPercent),
+    targetBodyFatPercent: draft.targetBodyFatPercent.trim()
+      ? Number(draft.targetBodyFatPercent)
+      : null,
     age: number(draft.age),
     heightCm: number(draft.heightCm),
     weightKg: number(draft.weightKg),
@@ -119,7 +147,14 @@ function GoalsForm({
     trainingDays: number(draft.trainingDays),
     sessionMinutes: number(draft.sessionMinutes),
   });
-  const plan = parsed.success ? planGoals(parsed.data, today()) : null;
+  const split = parsed.success ? splitGoals(parsed.data) : null;
+  const plan = split
+    ? planGoals(split.goals, today(), {
+        focus: split.composition.focus,
+        targetBodyFatPercent: split.composition.targetBodyFatPercent,
+        bodyFatPercent: optional(draft.bodyFatPercent) ?? null,
+      })
+    : null;
   const field = (key: keyof Draft) => ({
     value: draft[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -189,6 +224,25 @@ function GoalsForm({
           <input inputMode="numeric" required {...field("trainingDays")} />
         </label>
         <label>
+          Focus
+          <select {...field("focus")}>
+            <option value="">From my goal weight</option>
+            {(Object.keys(focusLabels) as BodyFocus[]).map((f) => (
+              <option key={f} value={f}>
+                {focusLabels[f]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Body fat now (%, optional)
+          <input inputMode="decimal" {...field("bodyFatPercent")} />
+        </label>
+        <label>
+          Goal body fat (%, optional)
+          <input inputMode="decimal" {...field("targetBodyFatPercent")} />
+        </label>
+        <label>
           Experience
           <select {...field("experience")}>
             <option value="new">Learning the lifts</option>
@@ -197,9 +251,9 @@ function GoalsForm({
           </select>
         </label>
       </div>
-      {plan && parsed.success ? (
+      {plan && split ? (
         <div className="goals-plan" role="status">
-          <strong>{describePlan(parsed.data, plan)}</strong>
+          <strong>{describePlan(split.goals, plan)}</strong>
           {plan.notes.map((note) => (
             <p key={note} className="fine-print">
               {note}

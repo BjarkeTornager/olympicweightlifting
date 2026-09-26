@@ -7,6 +7,13 @@ import { nextTraining } from "./next-training";
 import { mealTypes, totalNutrients } from "./nutrition";
 import type { SavedVisual } from "./coach-visuals";
 import { describeRoute, type RouteNote } from "./route-summary";
+import {
+  bodyFatByDate,
+  bodyFatMethods,
+  latestBodyFat,
+  weightTrend,
+} from "./body-composition";
+import { planForState } from "./body-goals";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -164,6 +171,27 @@ const priorityView = z
   .strict()
   .register(nativeResponses, { id: "Priority" });
 
+// Body composition at a glance: the latest body fat and weight, lean mass,
+// and the goal's focus and targets.
+const bodyView = z
+  .object({
+    bodyFatPercent: z.number().optional(),
+    bodyFatDate: day.optional(),
+    bodyFatMethod: z.string().optional(),
+    bodyFatFromAppleHealth: z.boolean().optional(),
+    bodyweight: z.number().optional(),
+    bodyweightDate: day.optional(),
+    // Average change a week over the last four weeks of weigh-ins.
+    weeklyWeightChangeKg: z.number().optional(),
+    leanMassKg: z.number().optional(),
+    // lose_fat, build_muscle, recomposition or maintain.
+    focus: z.string().optional(),
+    targetWeightKg: z.number().optional(),
+    targetBodyFatPercent: z.number().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "Body" });
+
 export const todayView = z
   .object({
     date: day,
@@ -172,6 +200,8 @@ export const todayView = z
     sleep: sleepView,
     vitals: vitalsView.optional(),
     checkin: checkinView.optional(),
+    // Optional: builds from before body composition must still decode.
+    body: bodyView.optional(),
     nutrition: nutritionView,
     hydration: hydrationView,
     activeWorkout: workoutView.optional(),
@@ -189,7 +219,15 @@ const journalItem = z
   .object({
     id: z.string(),
     date: day,
-    kind: z.enum(["strength", "cardio", "meal", "sleep", "checkin", "vitals"]),
+    kind: z.enum([
+      "strength",
+      "cardio",
+      "meal",
+      "sleep",
+      "checkin",
+      "vitals",
+      "body",
+    ]),
     title: z.string(),
     detail: z.string(),
     fromAppleHealth: z.boolean(),
@@ -241,6 +279,7 @@ export const healthSyncResult = z
         .register(nativeResponses, { id: "SleepSyncResult" }),
     ),
     daysUpdated: int,
+    bodyFatUpdated: int.optional(),
     workouts: z.array(
       z
         .object({
@@ -294,6 +333,24 @@ const deleteDrink = z
   .object({ kind: z.literal("delete_drink"), drinkId: uuid })
   .strict()
   .register(nativeRequests, { id: "DeleteDrinkAction" });
+const recordBodyFat = z
+  .object({
+    kind: z.literal("record_body_fat"),
+    bodyFat: z
+      .object({
+        date: day,
+        percent: z.number().min(3).max(70),
+        method: z.enum(bodyFatMethods).optional(),
+      })
+      .strict()
+      .register(nativeRequests, { id: "BodyFatInput" }),
+  })
+  .strict()
+  .register(nativeRequests, { id: "RecordBodyFatAction" });
+const deleteBodyFat = z
+  .object({ kind: z.literal("delete_body_fat"), date: day })
+  .strict()
+  .register(nativeRequests, { id: "DeleteBodyFatAction" });
 const recordCheckin = z
   .object({
     kind: z.literal("record_checkin"),
@@ -356,6 +413,8 @@ export const nativeAction = z
   .discriminatedUnion("kind", [
     logDrink,
     deleteDrink,
+    recordBodyFat,
+    deleteBodyFat,
     recordCheckin,
     deleteCardio,
     startProgramme,
@@ -421,6 +480,37 @@ function activity(
   });
 }
 
+function bodyForToday(state: JournalState, date: string) {
+  const fat = latestBodyFat(state, date);
+  const weights = state.health.checkins
+    .filter(
+      (c) =>
+        c.bodyweight != null &&
+        c.date <= date &&
+        c.date >= offsetDate(date, -30),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const weight = weights.at(-1);
+  const plan = planForState(state, date);
+  const body = defined({
+    bodyFatPercent: fat?.percent,
+    bodyFatDate: fat?.date,
+    bodyFatMethod: fat?.method ?? undefined,
+    bodyFatFromAppleHealth: fat ? fat.source === "apple-health" : undefined,
+    bodyweight: weight?.bodyweight ?? undefined,
+    bodyweightDate: weight?.date,
+    weeklyWeightChangeKg: weightTrend(state, date)?.kg_per_week ?? undefined,
+    leanMassKg:
+      fat && weight?.bodyweight
+        ? Math.round(weight.bodyweight * (1 - fat.percent / 100) * 10) / 10
+        : undefined,
+    focus: plan?.focus,
+    targetWeightKg: state.profile.body?.targetWeightKg,
+    targetBodyFatPercent: plan?.targetBodyFatPercent ?? undefined,
+  });
+  return Object.keys(body).length ? body : undefined;
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
@@ -474,6 +564,7 @@ export function buildToday(
               notes: checkin.notes,
             })
           : undefined,
+      body: bodyForToday(state, date),
       nutrition: defined({
         ...totalNutrients(meals.flatMap((m) => m.items)),
         targetCalories: state.nutrition.targets?.calories,
@@ -632,7 +723,24 @@ export function buildJournal(
         fromAppleHealth: true,
       });
   }
-  const order = ["strength", "cardio", "meal", "sleep", "checkin", "vitals"];
+  for (const b of bodyFatByDate(state, from, offsetDate(before, -1)))
+    items.push({
+      id: `body-fat-${b.date}`,
+      date: b.date,
+      kind: "body",
+      title: "Body fat",
+      detail: `${b.percent}%${b.method ? ` · ${b.method}` : ""}`,
+      fromAppleHealth: b.source === "apple-health",
+    });
+  const order = [
+    "strength",
+    "cardio",
+    "meal",
+    "sleep",
+    "checkin",
+    "body",
+    "vitals",
+  ];
   items.sort(
     (a, b) =>
       b.date.localeCompare(a.date) ||
@@ -868,6 +976,8 @@ const trendDay = z
     waterMl: int.optional(),
     calories: z.number().optional(),
     protein: z.number().optional(),
+    bodyweight: z.number().optional(),
+    bodyFatPercent: z.number().optional(),
     cardioMinutes: int,
     strengthSessions: int,
   })
@@ -899,6 +1009,7 @@ export function buildTrends(
     const meals = state.nutrition.meals.filter((m) => m.date === d);
     const food = totalNutrients(meals.flatMap((m) => m.items));
     const water = hydrationForDay(state, d);
+    const fat = bodyFatByDate(state, d, d)[0];
     return defined({
       date: d,
       sleepHours: checkin?.sleepHours,
@@ -910,6 +1021,8 @@ export function buildTrends(
       waterMl: water.recorded ? water.totalMl : undefined,
       calories: meals.length ? food.calories : undefined,
       protein: meals.length ? food.protein : undefined,
+      bodyweight: checkin?.bodyweight ?? undefined,
+      bodyFatPercent: fat?.percent,
       cardioMinutes: Math.round(
         state.cardio.sessions
           .filter((s) => s.date === d)

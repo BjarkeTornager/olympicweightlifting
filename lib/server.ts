@@ -115,6 +115,7 @@ export async function writeJournal(
       state.health.drinks ??= previous.health.drinks;
       // Apple Health summaries come only from the iPhone sync.
       state.health.vitals ??= previous.health.vitals;
+      state.health.bodyFat ??= previous.health.bodyFat;
       state.nutrition.completeDays ??= previous.nutrition.completeDays?.filter(
         (date) =>
           canonicalJson(

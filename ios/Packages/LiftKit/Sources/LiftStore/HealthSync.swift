@@ -21,6 +21,7 @@ public actor HealthSync {
     HKQuantityType(.heartRate),
     HKQuantityType(.stepCount),
     HKQuantityType(.activeEnergyBurned),
+    HKQuantityType(.bodyFatPercentage),
     HKQuantityType(.distanceWalkingRunning),
     HKQuantityType(.distanceCycling),
     HKQuantityType(.distanceSwimming),
@@ -35,6 +36,7 @@ public actor HealthSync {
     public var workoutsImported: Int
     public var daysUpdated: Int
     public var routesImported = 0
+    public var bodyFatUpdated = 0
   }
 
   public nonisolated let store = HKHealthStore()
@@ -109,6 +111,7 @@ public actor HealthSync {
       summary.workoutsImported += next.workoutsImported
       summary.daysUpdated += next.daysUpdated
       summary.routesImported += next.routesImported
+      summary.bodyFatUpdated += next.bodyFatUpdated
     }
     continuation.yield(summary)
     return summary
@@ -152,6 +155,7 @@ public actor HealthSync {
       if first {
         summary.nightsImported = result.sleep.filter { ["imported", "updated"].contains($0.result) }.count
         summary.daysUpdated = result.daysUpdated
+        summary.bodyFatUpdated = result.bodyFatUpdated ?? 0
       }
       summary.workoutsImported += result.workouts.filter {
         ["imported", "updated", "matched"].contains($0.result)
@@ -249,7 +253,9 @@ public actor HealthSync {
     async let average = daily(.heartRate, .discreteAverage, bpm, from: start, to: now)
     async let steps = daily(.stepCount, .cumulativeSum, .count(), from: start, to: now)
     async let energy = daily(.activeEnergyBurned, .cumulativeSum, .kilocalorie(), from: start, to: now)
-    let (r, h, a, s, e) = try await (resting, hrv, average, steps, energy)
+    // A smart scale's last reading of the day, as a fraction of 1.
+    async let fat = daily(.bodyFatPercentage, .mostRecent, .percent(), from: start, to: now)
+    let (r, h, a, s, e, f) = try await (resting, hrv, average, steps, energy, fat)
     return dates.compactMap { date in
       let key = calendar.startOfDay(for: date)
       // Values outside the server's ranges are left out rather than
@@ -260,10 +266,11 @@ public actor HealthSync {
         heartRateVariabilityMs: h[key].flatMap { (1...500).contains($0) ? ($0 * 10).rounded() / 10 : nil },
         averageHeartRate: a[key].map { Int($0.rounded()) }.flatMap { (20...250).contains($0) ? $0 : nil },
         steps: s[key].map { Int($0.rounded()) }.flatMap { (0...200_000).contains($0) ? $0 : nil },
-        activeEnergyKcal: e[key].map { Int($0.rounded()) }.flatMap { (0...20_000).contains($0) ? $0 : nil }
+        activeEnergyKcal: e[key].map { Int($0.rounded()) }.flatMap { (0...20_000).contains($0) ? $0 : nil },
+        bodyFatPercent: f[key].map { ($0 * 1000).rounded() / 10 }.flatMap { (3...70).contains($0) ? $0 : nil }
       )
       let empty = [day.restingHeartRate, day.averageHeartRate, day.steps, day.activeEnergyKcal]
-        .allSatisfy { $0 == nil } && day.heartRateVariabilityMs == nil
+        .allSatisfy { $0 == nil } && day.heartRateVariabilityMs == nil && day.bodyFatPercent == nil
       return empty ? nil : day
     }
   }
@@ -288,7 +295,10 @@ public actor HealthSync {
     }
     var values: [Date: Double] = [:]
     collection.enumerateStatistics(from: start, to: end) { statistics, _ in
-      let quantity = option.contains(.cumulativeSum) ? statistics.sumQuantity() : statistics.averageQuantity()
+      let quantity =
+        option.contains(.cumulativeSum)
+        ? statistics.sumQuantity()
+        : option.contains(.mostRecent) ? statistics.mostRecentQuantity() : statistics.averageQuantity()
       if let quantity { values[statistics.startDate] = quantity.doubleValue(for: unit) }
     }
     return values
@@ -523,6 +533,7 @@ public actor HealthSync {
       (HKObjectType.workoutType(), .immediate),
       (HKSeriesType.workoutRoute(), .immediate),
       (HKQuantityType(.restingHeartRate), .hourly),
+      (HKQuantityType(.bodyFatPercentage), .hourly),
     ]
     for (type, frequency) in types {
       let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in

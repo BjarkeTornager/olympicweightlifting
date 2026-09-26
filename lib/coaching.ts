@@ -1,4 +1,5 @@
-import { planGoals } from "./body-goals";
+import { planForState } from "./body-goals";
+import { bodyFatTrend, latestBodyFat, weightTrend } from "./body-composition";
 import { z } from "zod";
 import type { JournalState } from "./model";
 import { formatSleepDuration, offsetDate } from "./health";
@@ -191,6 +192,17 @@ export function coachSuggestion(
   };
 }
 
+function bodyComposition(state: JournalState, date: string) {
+  const value = {
+    latestBodyFat: latestBodyFat(state, date),
+    bodyFatTrend: bodyFatTrend(state, offsetDate(date, -90), date),
+    weightTrend: weightTrend(state, date),
+  };
+  return Object.values(value).some((v) => v != null)
+    ? { bodyComposition: value }
+    : {};
+}
+
 export function coachingContext(state: JournalState, date: string) {
   const preferences = state.profile.coaching ?? {
     initiative: "gentle",
@@ -202,15 +214,22 @@ export function coachingContext(state: JournalState, date: string) {
       initiative: preferences.initiative,
       focus: preferences.focus,
     },
-    // Saved body goals and the plan the app derives from them.
+    // Saved body goals, focus and target body fat, and the plan the app
+    // derives from them with the latest body fat reading.
     ...(state.profile.body
       ? {
           goals: {
             ...state.profile.body,
-            plan: planGoals(state.profile.body, date),
+            focus: state.profile.bodyTargets?.focus,
+            targetBodyFatPercent:
+              state.profile.bodyTargets?.targetBodyFatPercent ?? undefined,
+            plan: planForState(state, date),
           },
         }
       : {}),
+    // How the body is changing: four weeks of weigh-ins, 90 days of body
+    // fat. Left out when nothing is recorded.
+    ...bodyComposition(state, date),
     approvedMemories: preferences.memories ?? [],
     agreedPlans: (preferences.plans ?? []).filter((p) => p.status === "active"),
     // Keep user-supplied focus separate from instructions, and keep this small.

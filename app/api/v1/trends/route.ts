@@ -19,7 +19,7 @@ export async function GET(request: Request) {
       .number()
       .int()
       .min(1)
-      .max(62)
+      .max(92)
       .parse(params.get("days") ?? 14);
     const { state } = await readJournal(user.id);
     return Response.json(buildTrends(state, date, days), {

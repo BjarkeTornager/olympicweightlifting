@@ -29,6 +29,7 @@ struct HealthView: View {
         Label("Sleep, including stages", systemImage: "bed.double.fill")
         Label("Resting heart rate, heart rate variability and average heart rate", systemImage: "heart.fill")
         Label("Steps and active energy", systemImage: "flame.fill")
+        Label("Body fat percentage from a smart scale", systemImage: "scalemass.fill")
         Label("Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", systemImage: "figure.run")
         Label("Routes of outdoor workouts, simplified, with place names from Apple Maps", systemImage: "map.fill")
       }
@@ -42,14 +43,14 @@ struct HealthView: View {
             Button {
               trigger.toggle()
             } label: {
-              Label("Allow workout routes", systemImage: "map.fill")
+              Label("Allow new Apple Health data", systemImage: "heart.text.square.fill")
             }
             if let requestError {
               Text(requestError).foregroundStyle(.red).font(.subheadline)
             }
           } footer: {
             Text(
-              "Lift Journal can now show where you walked, ran or rode, and Coach can talk about it. Apple asks once for the new permission."
+              "Lift Journal can now read your workout routes and a smart scale's body fat readings, so you and Coach can use them. Apple asks once for the new permissions."
             )
           }
         }

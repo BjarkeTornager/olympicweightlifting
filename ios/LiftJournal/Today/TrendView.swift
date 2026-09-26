@@ -3,10 +3,11 @@ import LiftAPI
 import SwiftUI
 
 enum Trend: Hashable {
-  case sleep, heart, activity, water, food
+  case sleep, heart, activity, water, food, body
 
   var title: String {
     switch self {
+    case .body: "Body"
     case .sleep: "Sleep"
     case .heart: "Heart"
     case .activity: "Activity"
@@ -22,6 +23,7 @@ enum Trend: Hashable {
     case .activity: .activity
     case .water: .water
     case .food: .food
+    case .body: .body
     }
   }
 }
@@ -40,9 +42,15 @@ struct TrendView: View {
     List {
       Section {
         Picker("Range", selection: $range) {
-          Text("Week").tag(7)
-          Text("2 Weeks").tag(14)
-          Text("Month").tag(30)
+          if trend == .body {
+            Text("Month").tag(30)
+            Text("2 Months").tag(60)
+            Text("3 Months").tag(90)
+          } else {
+            Text("Week").tag(7)
+            Text("2 Weeks").tag(14)
+            Text("Month").tag(30)
+          }
         }
         .pickerStyle(.segmented)
         .listRowBackground(Color.clear)
@@ -56,14 +64,16 @@ struct TrendView: View {
         } else {
           VStack(alignment: .leading, spacing: 12) {
             headline
-            chart.frame(height: 220)
+            chart.frame(height: trend == .body ? 320 : 220)
           }
           .padding(.vertical, 6)
         }
       }
       if trends != nil {
         Section("Days") {
-          ForEach(days.reversed(), id: \.date) { day in
+          // Body is weighed now and then: list only the days with a reading.
+          let listed = trend == .body ? days.filter { $0.bodyweight != nil || $0.bodyFatPercent != nil } : days
+          ForEach(listed.reversed(), id: \.date) { day in
             LabeledContent(JournalView.heading(day.date)) {
               Text(value(day)).monospacedDigit()
             }
@@ -74,6 +84,7 @@ struct TrendView: View {
     .navigationTitle(trend.title)
     .navigationBarTitleDisplayMode(.large)
     .task(id: range) { await load() }
+    .onAppear { if trend == .body && range < 30 { range = 90 } }
   }
 
   private func load() async {
@@ -110,6 +121,15 @@ struct TrendView: View {
         BigValue(value: average { $0.waterMl.map(Double.init) }.map(Format.number) ?? "–", unit: "ml")
       case .food:
         BigValue(value: average(\.calories).map(Format.number) ?? "–", unit: "kcal")
+      case .body:
+        HStack(spacing: 16) {
+          BigValue(
+            value: days.last(where: { $0.bodyweight != nil })?.bodyweight.map { $0.formatted() } ?? "–",
+            unit: "kg")
+          BigValue(
+            value: days.last(where: { $0.bodyFatPercent != nil })?.bodyFatPercent.map { $0.formatted() } ?? "–",
+            unit: "% fat")
+        }
       }
     }
   }
@@ -181,6 +201,27 @@ struct TrendView: View {
             }
         }
       }
+    case .body:
+      // Weight and body fat on their own scales, one above the other.
+      VStack(spacing: 12) {
+        Chart(days.filter { $0.bodyweight != nil }, id: \.date) { day in
+          LineMark(x: .value("Day", date(day), unit: .day), y: .value("kg", day.bodyweight ?? 0))
+            .foregroundStyle(tint)
+            .interpolationMethod(.catmullRom)
+          PointMark(x: .value("Day", date(day), unit: .day), y: .value("kg", day.bodyweight ?? 0))
+            .foregroundStyle(tint)
+        }
+        .chartYScale(domain: .automatic(includesZero: false))
+        .chartYAxisLabel("kg")
+        Chart(days.filter { $0.bodyFatPercent != nil }, id: \.date) { day in
+          LineMark(x: .value("Day", date(day), unit: .day), y: .value("%", day.bodyFatPercent ?? 0))
+            .foregroundStyle(Color.orange)
+          PointMark(x: .value("Day", date(day), unit: .day), y: .value("%", day.bodyFatPercent ?? 0))
+            .foregroundStyle(Color.orange)
+        }
+        .chartYScale(domain: .automatic(includesZero: false))
+        .chartYAxisLabel("% body fat")
+      }
     case .food:
       Chart {
         ForEach(days, id: \.date) { day in
@@ -216,6 +257,9 @@ struct TrendView: View {
       day.waterMl.map { "\($0.formatted()) ml" } ?? "–"
     case .food:
       [day.calories.map { "\(Format.number($0)) kcal" }, day.protein.map { "\(Format.number($0)) g protein" }]
+        .compactMap { $0 }.joined(separator: " · ").nonEmpty ?? "–"
+    case .body:
+      [day.bodyweight.map { "\($0.formatted()) kg" }, day.bodyFatPercent.map { "\($0.formatted())% fat" }]
         .compactMap { $0 }.joined(separator: " · ").nonEmpty ?? "–"
     }
   }

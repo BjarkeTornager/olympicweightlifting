@@ -253,6 +253,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Lift Journal";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo of a meal or a workout summary to log it with Coach.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talk to Coach in a spoken check-in. Your voice goes to Google's speech model only during a call.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lift Journal reads your sleep, heart rate, steps and workouts so they appear in your journal and your Coach can use them.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lift Journal only reads from Apple Health. It does not save data to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -282,6 +283,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Lift Journal";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo of a meal or a workout summary to log it with Coach.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talk to Coach in a spoken check-in. Your voice goes to Google's speech model only during a call.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lift Journal reads your sleep, heart rate, steps and workouts so they appear in your journal and your Coach can use them.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lift Journal only reads from Apple Health. It does not save data to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

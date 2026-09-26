@@ -25,6 +25,10 @@ final class CoachModel {
   var reply = ""
   var error: String?
   var busyReceipt: String?
+  /// Photos attached to the message being answered.
+  var sendingPhotos = 0
+  /// Counts sends, for the send haptic.
+  var sentCount = 0
 
   private var task: Task<Void, Never>?
 
@@ -46,9 +50,15 @@ final class CoachModel {
     let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
     let message = text.isEmpty ? "Here's a photo." : text
     let photos = attachments
+    // The message leaves the text field at once, as in Messages; it comes
+    // back only if it could not be sent.
+    draft = ""
+    attachments = []
+    sentCount += 1
     sending = true
     asking = message
-    step = photos.isEmpty ? "Sending" : "Uploading photos"
+    sendingPhotos = photos.count
+    step = photos.isEmpty ? nil : "Uploading photos"
     reply = ""
     error = nil
     task = Task {
@@ -75,19 +85,19 @@ final class CoachModel {
           switch event {
           case .step(let text): step = text
           case .reply(let text): reply = text
-          case .finished: step = "Saving"
+          case .finished: step = nil
           }
         }
-        draft = ""
-        attachments = []
         await load(app)
         asking = nil
         reply = ""
         await app.loadToday()
       } catch {
-        // The message stays in the composer so it can be sent again.
+        // Nothing was saved: put the message back so it can be sent again.
         asking = nil
         reply = ""
+        if draft.isEmpty { draft = text }
+        if attachments.isEmpty { attachments = photos }
         self.error = await app.handle(error) ?? error.localizedDescription
         await load(app)
       }

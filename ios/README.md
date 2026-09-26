@@ -8,12 +8,13 @@ A native SwiftUI app for the Lift Journal backend on Railway. It uses the same s
 
 ## What it does
 
-- **Today:** sleep, resting heart rate, HRV and steps; water with one-tap +250/+500 ml; food totals; the current or next session; today's workouts; a check-in for energy, soreness and bodyweight.
+- **Today:** Health-style summary cards for sleep, heart, activity, how you feel, water, food and training. Each card opens a Swift Charts view of the last week, fortnight or month (`/api/v1/trends`). It also has one-tap water and a check-in sheet.
+- **Voice check-in:** the same spoken check-in as the website (Gemini Live with a single-use token from `/api/voice/session`; saves through `/api/voice/action`). Audio uses AVAudioEngine with Apple's voice processing for echo cancellation, and a call keeps going with the screen locked. The protocol lives in the `LiftVoice` module and mirrors `lib/voice-live.ts`.
 - **Apple Health:** reads sleep with its stages, resting heart rate, HRV, average heart rate, steps, active energy, and every workout (runs, walks, rides, swims, rows, hikes and more) with distance and heart rate. New data arrives in the background through HealthKit background delivery. Nothing is written to Apple Health.
-- **Coach:** the same conversation as the website, streamed over AG-UI. You can attach photos from the camera or library, and Coach's saves come with Undo.
-- **Journal:** everything recorded, a fortnight at a time, filtered by training, food or recovery. Entries that came from Apple Health are marked.
+- **Coach:** the same conversation as the website, streamed over AG-UI, in Messages style. Replies render natively: headings, nested lists, tables, quotes and code. Coach's visuals render as native components: tables as grids, bar charts in Swift Charts, diagrams as steps, photo galleries, and routes on Apple Maps. You can attach photos from the camera or library, and Coach's saves come with Undo. A microphone in the text field starts a voice check-in.
+- **Journal:** everything recorded, a fortnight at a time, with the standard search field and a filter menu. Entries that came from Apple Health are marked.
 
-Programmes, routines, set-by-set training, lifting videos, voice check-in and backups are still on the website. They come next (see the plan).
+Programmes, routines, set-by-set training, lifting videos and backups are still on the website. They come next (see the plan).
 
 ## How it fits together
 

@@ -27,4 +27,45 @@ struct LiftJournalTests {
   func preview() {
     #expect(PreviewData.today?.hydration.totalMl == 750)
   }
+
+  @Test("Coach replies parse into the same blocks the website renders")
+  func markdownBlocks() {
+    let blocks = MarkdownBlock.parse(
+      """
+      ### Your week
+
+      You trained **4 times**.
+      Protein was low.
+
+      - Strength
+      - Cardio
+        - two runs
+
+      | Day | Sleep |
+      | --- | --- |
+      | Mon | 7 h |
+
+      1. Eat more
+      2. Rest
+
+      > Logged only
+      """)
+    #expect(blocks.count == 6)
+    #expect(blocks[0] == .heading("Your week"))
+    #expect(blocks[1] == .paragraph("You trained **4 times**.\nProtein was low."))
+    guard case .list(false, _, let items) = blocks[2] else {
+      Issue.record("expected a bullet list")
+      return
+    }
+    #expect(items.map(\.text) == ["Strength", "Cardio"])
+    #expect(items[1].children == [.list(ordered: false, start: 1, items: [.init(text: "two runs", children: [])])])
+    #expect(blocks[3] == .table(header: ["Day", "Sleep"], rows: [["Mon", "7 h"]]))
+    guard case .list(true, 1, let steps) = blocks[4] else {
+      Issue.record("expected a numbered list")
+      return
+    }
+    #expect(steps.count == 2)
+    #expect(blocks[5] == .quote("Logged only"))
+    #expect(MarkdownBlock.cells(#"| a \| b | `x|y` |"#) == ["a | b", "`x|y`"])
+  }
 }

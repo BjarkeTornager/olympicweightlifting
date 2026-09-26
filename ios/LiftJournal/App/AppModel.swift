@@ -27,8 +27,16 @@ final class AppModel {
   var loadingToday = false
   var todayError: String?
 
-  /// A short confirmation or problem shown at the bottom of the screen.
+  /// A save that did not go through, shown as an alert.
   var notice: Notice?
+  /// Counts successful saves, for the success haptic.
+  var saves = 0
+  /// Whether the server offers the spoken check-in.
+  var voiceEnabled = false
+  /// The spoken check-in on screen, if any.
+  var voiceCall: VoiceCall?
+  /// Counts finished calls, so Coach reloads what the call saved.
+  var voiceEnded = 0
   var queued = 0
   var refused: [Outbox.Item] = []
 
@@ -59,11 +67,13 @@ final class AppModel {
   // MARK: Launch and session
 
   func start() async {
-    if let config = try? await client.getConfig().value(),
-      let build = Int(LiftServer.clientHeader.split(separator: "/").last ?? ""),
-      build < config.minimumBuild
-    {
-      updateRequired = true
+    if let config = try? await client.getConfig().value() {
+      voiceEnabled = config.voice
+      if let build = Int(LiftServer.clientHeader.split(separator: "/").last ?? ""),
+        build < config.minimumBuild
+      {
+        updateRequired = true
+      }
     }
     #if DEBUG
       await useTestSession()
@@ -230,11 +240,12 @@ final class AppModel {
     guard let outbox else { return }
     let outcome = await outbox.submit(action, client: client)
     switch outcome {
-    case .saved(let result):
-      notice = Notice(text: confirmation ?? result.title, undo: undo)
+    case .saved:
+      saves += 1
       await loadToday()
     case .queued:
-      notice = Notice(text: "Saved on this iPhone. It will sync when you're back online.")
+      // Shown in Today's queue section until it is sent.
+      saves += 1
     case .refused(let message):
       notice = Notice(text: message, problem: true)
     }
@@ -266,6 +277,19 @@ final class AppModel {
 
   func removeDrink(id: String) async {
     await save(.deleteDrink(.init(kind: .deleteDrink, drinkId: id)), confirmation: "Drink removed")
+  }
+
+  // MARK: Voice
+
+  func startVoice() {
+    guard voiceCall == nil || voiceCall?.inCall == false else { return }
+    voiceCall = VoiceCall(app: self)
+  }
+
+  func closeVoice() {
+    voiceCall?.stop()
+    voiceCall = nil
+    voiceEnded += 1
   }
 
   // MARK: Apple Health

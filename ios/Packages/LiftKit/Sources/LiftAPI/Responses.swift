@@ -11,6 +11,11 @@ public struct APIFailure: LocalizedError, Sendable {
   /// This build is no longer supported: install the latest from TestFlight.
   public var updateRequired: Bool { status == 426 }
 
+  public init(status: Int, message: String) {
+    self.status = status
+    self.message = message
+  }
+
   init(status: Int, body: Components.Schemas.ErrorBody?) {
     self.status = status
     message = body?.error ?? "The journal did not respond (\(status)). Try again shortly."
@@ -54,6 +59,14 @@ extension Operations.GetToday.Output {
 }
 extension Operations.GetJournal.Output {
   public func value() throws -> Components.Schemas.JournalFeed {
+    switch self {
+    case .ok(let ok): try ok.body.json
+    case .default(let status, let failure): throw APIFailure(status: status, body: try? failure.body.json)
+    }
+  }
+}
+extension Operations.GetTrends.Output {
+  public func value() throws -> Components.Schemas.Trends {
     switch self {
     case .ok(let ok): try ok.body.json
     case .default(let status, let failure): throw APIFailure(status: status, body: try? failure.body.json)

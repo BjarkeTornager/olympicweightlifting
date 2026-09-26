@@ -2,6 +2,8 @@ import LiftAPI
 import LiftStore
 import SwiftUI
 
+/// The day at a glance, in the style of the Health app's Summary: one card
+/// per kind of record, each opening a chart of recent days.
 struct TodayView: View {
   @Environment(AppModel.self) private var model
   @State private var showingAccount = false
@@ -12,9 +14,7 @@ struct TodayView: View {
       if let today = model.today {
         content(today)
       } else if model.loadingToday {
-        ProgressView("Opening your journal")
-          .frame(maxWidth: .infinity)
-          .listRowBackground(Color.clear)
+        ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
       } else {
         ContentUnavailableView(
           "Today isn't available", systemImage: "wifi.slash",
@@ -23,19 +23,41 @@ struct TodayView: View {
     }
     .navigationTitle("Today")
     .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+    .navigationDestination(for: Trend.self) { TrendView(trend: $0) }
     .refreshable {
       await model.flush()
       await model.loadToday()
       await model.syncHealth(force: true)
     }
     .toolbar {
+      ToolbarItem(placement: .topBarTrailing) { logMenu }
+      ToolbarSpacer(.fixed, placement: .topBarTrailing)
       ToolbarItem(placement: .topBarTrailing) {
-        Button("Account", systemImage: "person.crop.circle") { showingAccount = true }
+        Button {
+          showingAccount = true
+        } label: {
+          Avatar(name: model.session?.name ?? "")
+        }
+        .accessibilityLabel("Account")
       }
     }
     .sheet(isPresented: $showingAccount) { AccountView() }
-    .sheet(isPresented: $showingCheckin) {
-      CheckinSheet(existing: model.today?.checkin)
+    .sheet(isPresented: $showingCheckin) { CheckinSheet(existing: model.today?.checkin) }
+    .sensoryFeedback(.success, trigger: model.saves)
+  }
+
+  private var logMenu: some View {
+    Menu {
+      Button("250 ml Water", systemImage: "drop.fill") { Task { await model.logDrink(ml: 250) } }
+      Button("500 ml Water", systemImage: "drop.fill") { Task { await model.logDrink(ml: 500) } }
+      Button("Check In", systemImage: "face.smiling") { showingCheckin = true }
+      Divider()
+      if model.voiceEnabled {
+        Button("Talk to Coach", systemImage: "waveform") { model.startVoice() }
+      }
+      Button("Write to Coach", systemImage: "text.bubble") { model.tab = .coach }
+    } label: {
+      Label("Log", systemImage: "plus")
     }
   }
 
@@ -44,266 +66,283 @@ struct TodayView: View {
     if !model.refused.isEmpty || model.queued > 0 {
       QueueSection()
     }
-    if let next = today.priorities.first {
+    if model.voiceEnabled {
       Section {
-        VStack(alignment: .leading, spacing: 6) {
-          Text(next.category.capitalized)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.tint)
+        VoiceCheckinRow(reason: today.priorities.first?.title)
+      }
+    } else if let next = today.priorities.first {
+      Section {
+        VStack(alignment: .leading, spacing: 4) {
           Text(next.title).font(.headline)
           Text(next.reason).font(.subheadline).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 4)
       }
     }
-    RecoverySection(today: today, showCheckin: { showingCheckin = true })
-    HydrationSection(hydration: today.hydration)
-    FoodSection(nutrition: today.nutrition)
-    TrainingSection(today: today)
     Section {
-      EmptyView()
-    } footer: {
-      if let updated = model.todayUpdated {
-        Text("Updated \(updated.formatted(.relative(presentation: .named)))")
-      } else if model.todayError != nil {
-        Text("Showing your last saved copy. \(model.todayError ?? "")")
-      }
-    }
-  }
-}
-
-// MARK: Sleep, heart and check-in
-
-struct RecoverySection: View {
-  @Environment(AppModel.self) private var model
-  let today: Today
-  let showCheckin: () -> Void
-
-  var body: some View {
-    Section("Recovery") {
-      HStack {
-        Label {
-          VStack(alignment: .leading, spacing: 2) {
-            Text("Sleep")
-            if let average = today.sleep.averageHours, today.sleep.nights > 1 {
-              Text("\(hours(average)) average over \(today.sleep.nights) nights")
-                .font(.caption).foregroundStyle(.secondary)
-            }
-          }
-        } icon: {
-          Image(systemName: "bed.double.fill").foregroundStyle(.indigo)
-        }
-        Spacer()
-        if let text = today.sleep.text {
-          VStack(alignment: .trailing, spacing: 2) {
-            Text(text).font(.headline.monospacedDigit())
-            if today.sleep.fromAppleHealth { AppleHealthBadge() }
-          }
-        } else {
-          Text("Not recorded").foregroundStyle(.secondary)
-        }
-      }
-      if let vitals = today.vitals {
-        HStack(spacing: 0) {
-          Stat(value: vitals.restingHeartRate.map { "\($0)" }, unit: "bpm", label: "Resting heart rate")
-          Stat(value: vitals.heartRateVariabilityMs.map { "\(Int($0.rounded()))" }, unit: "ms", label: "HRV")
-          Stat(value: vitals.steps.map { $0.formatted() }, unit: nil, label: "Steps")
-        }
-        .padding(.vertical, 4)
-      } else if !model.health.connected && model.health.available {
+      if model.health.available && !model.health.connected {
         NavigationLink {
           HealthView()
         } label: {
-          Label("Connect Apple Health for sleep, heart rate and workouts", systemImage: "heart.fill")
-            .foregroundStyle(.pink)
-        }
-      }
-      Button(action: showCheckin) {
-        HStack {
-          Label("How do you feel?", systemImage: "face.smiling")
-          Spacer()
-          if let checkin = today.checkin {
-            Text(checkinSummary(checkin)).foregroundStyle(.secondary).font(.subheadline)
-          } else {
-            Text("Check in").foregroundStyle(.tint)
+          HStack(spacing: 12) {
+            IconBadge(symbol: "heart.fill", tint: .pink)
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Connect Apple Health")
+              Text("Sleep, heart rate and workouts, without typing")
+                .font(.subheadline).foregroundStyle(.secondary)
+            }
           }
         }
       }
-      .foregroundStyle(.primary)
+      NavigationLink(value: Trend.sleep) { SleepCard(today: today) }
+      NavigationLink(value: Trend.heart) { HeartCard(today: today) }
+      NavigationLink(value: Trend.activity) { ActivityCard(today: today) }
+      CheckinCard(checkin: today.checkin) { showingCheckin = true }
+    } header: {
+      Text("Recovery")
     }
-  }
-
-  private func hours(_ value: Double) -> String {
-    let minutes = Int((value * 60).rounded())
-    return "\(minutes / 60) h \(minutes % 60) min"
-  }
-
-  private func checkinSummary(_ c: Components.Schemas.Checkin) -> String {
-    [
-      c.energy.map { "Energy \($0)/5" },
-      c.soreness.map { "Soreness \($0)/5" },
-      c.bodyweight.map { "\($0.formatted()) kg" },
-    ].compactMap { $0 }.joined(separator: " · ")
-  }
-}
-
-struct Stat: View {
-  let value: String?
-  let unit: String?
-  let label: String
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 2) {
-      HStack(alignment: .firstTextBaseline, spacing: 2) {
-        Text(value ?? "–").font(.title3.bold().monospacedDigit())
-        if let unit, value != nil { Text(unit).font(.caption).foregroundStyle(.secondary) }
+    .headerProminence(.increased)
+    Section {
+      NavigationLink(value: Trend.water) { WaterCard(hydration: today.hydration) }
+      ForEach(today.hydration.drinks.reversed(), id: \.id) { drink in
+        LabeledContent(drink.name.isEmpty ? drink.kind.capitalized : drink.name) {
+          Text("\(drink.ml) ml").monospacedDigit()
+        }
+        .swipeActions {
+          Button("Delete", systemImage: "trash", role: .destructive) {
+            Task { await model.removeDrink(id: drink.id) }
+          }
+        }
       }
-      Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+      NavigationLink(value: Trend.food) { FoodCard(nutrition: today.nutrition) }
+    } header: {
+      Text("Nutrition")
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .accessibilityElement(children: .combine)
+    .headerProminence(.increased)
+    Section {
+      TrainingCard(today: today)
+      ForEach(today.activities, id: \.id) { ActivityRow(activity: $0) }
+    } header: {
+      Text("Training")
+    } footer: {
+      Text(
+        "\(today.sessionsThisWeek) sessions in the last seven days. Workouts from Apple Health appear here by themselves."
+      )
+    }
+    .headerProminence(.increased)
   }
 }
 
-struct AppleHealthBadge: View {
+// MARK: Cards
+
+/// Starts a spoken check-in, the quickest way to fill in the day.
+struct VoiceCheckinRow: View {
+  @Environment(AppModel.self) private var model
+  let reason: String?
+
   var body: some View {
-    Label("Apple Health", systemImage: "heart.fill")
-      .font(.caption2)
-      .foregroundStyle(.pink)
-      .labelStyle(.titleAndIcon)
+    Button {
+      model.startVoice()
+    } label: {
+      HStack(spacing: 14) {
+        Image(systemName: "waveform")
+          .font(.title2.weight(.semibold))
+          .foregroundStyle(.white)
+          .frame(width: 48, height: 48)
+          .background(
+            LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: .circle)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Check In by Voice").font(.headline).foregroundStyle(Color.primary)
+          Text(reason ?? "Coach asks about what's missing today.")
+            .font(.subheadline).foregroundStyle(Color.secondary)
+            .lineLimit(2)
+        }
+      }
+      .padding(.vertical, 4)
+    }
+    .tint(.primary)
+    .accessibilityHint("Starts a spoken conversation with Coach")
   }
 }
 
-// MARK: Water
+struct SleepCard: View {
+  let today: Today
 
-struct HydrationSection: View {
+  var body: some View {
+    SummaryCard(
+      title: "Sleep", category: .sleep, caption: today.sleep.hours != nil ? "Last night" : nil
+    ) {
+      if let hours = today.sleep.hours {
+        let minutes = Int((hours * 60).rounded())
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+          BigValue(value: "\(minutes / 60)", unit: "h")
+          BigValue(value: "\(minutes % 60)", unit: "min")
+          Spacer()
+          if today.sleep.fromAppleHealth { AppleHealthMark() }
+        }
+        if let average = today.sleep.averageHours, today.sleep.nights > 1 {
+          Text("\(Format.hours(average)) on average over \(today.sleep.nights) nights")
+            .font(.footnote).foregroundStyle(.secondary)
+        }
+      } else {
+        Text("No sleep recorded for last night").foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+struct HeartCard: View {
+  @Environment(AppModel.self) private var model
+  let today: Today
+
+  var body: some View {
+    SummaryCard(title: "Heart", category: .heart) {
+      if let vitals = today.vitals,
+        vitals.restingHeartRate != nil || vitals.heartRateVariabilityMs != nil
+      {
+        HStack {
+          MiniValue(value: vitals.restingHeartRate.map(String.init), unit: "bpm", label: "Resting")
+          MiniValue(
+            value: vitals.heartRateVariabilityMs.map { Format.number($0) }, unit: "ms",
+            label: "Variability")
+          MiniValue(value: vitals.averageHeartRate.map(String.init), unit: "bpm", label: "Average")
+        }
+      } else if model.health.connected {
+        Text("No heart rate from Apple Health yet today").foregroundStyle(.secondary)
+      } else {
+        Text("Connect Apple Health to see your heart rate").foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+struct ActivityCard: View {
+  @Environment(AppModel.self) private var model
+  let today: Today
+
+  var body: some View {
+    SummaryCard(title: "Activity", category: .activity) {
+      if let vitals = today.vitals, vitals.steps != nil || vitals.activeEnergyKcal != nil {
+        HStack {
+          MiniValue(value: vitals.steps.map { $0.formatted() }, label: "Steps")
+          MiniValue(
+            value: vitals.activeEnergyKcal.map { $0.formatted() }, unit: "kcal", label: "Active energy")
+          Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+        }
+      } else if !model.health.connected {
+        Text("Connect Apple Health for steps and workouts").foregroundStyle(.secondary)
+      } else {
+        Text("No steps recorded yet today").foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+struct CheckinCard: View {
+  let checkin: Components.Schemas.Checkin?
+  let open: () -> Void
+
+  var body: some View {
+    Button(action: open) {
+      SummaryCard(title: "How You Feel", category: .checkin) {
+        if let checkin {
+          HStack {
+            MiniValue(value: checkin.energy.map { "\($0)" }, unit: "/5", label: "Energy")
+            MiniValue(value: checkin.soreness.map { "\($0)" }, unit: "/5", label: "Soreness")
+            MiniValue(value: checkin.bodyweight.map { $0.formatted() }, unit: "kg", label: "Weight")
+          }
+        } else {
+          Text("Tap to check in").foregroundStyle(Color.secondary)
+        }
+      }
+    }
+    .tint(.primary)
+  }
+}
+
+struct WaterCard: View {
   @Environment(AppModel.self) private var model
   let hydration: Components.Schemas.Hydration
 
   var body: some View {
-    Section {
-      VStack(alignment: .leading, spacing: 10) {
-        HStack(alignment: .firstTextBaseline) {
-          Text(litres(hydration.totalMl)).font(.title2.bold().monospacedDigit())
-          Text("of \(litres(hydration.targetMl))\(hydration.estimatedTarget ? " (estimate)" : "")")
-            .foregroundStyle(.secondary)
+    SummaryCard(title: "Water", category: .water) {
+      let (value, unit) = Format.litres(hydration.totalMl)
+      let (target, targetUnit) = Format.litres(hydration.targetMl)
+      HStack(alignment: .center) {
+        VStack(alignment: .leading, spacing: 4) {
+          BigValue(value: value, unit: unit)
+          Text("of \(target) \(targetUnit)\(hydration.estimatedTarget ? " (estimate)" : "")")
+            .font(.footnote).foregroundStyle(.secondary)
         }
-        ProgressView(value: min(1, Double(hydration.totalMl) / Double(max(1, hydration.targetMl))))
-          .tint(.cyan)
-        HStack {
-          ForEach([250, 500], id: \.self) { ml in
-            Button("+\(ml) ml") { Task { await model.logDrink(ml: ml) } }
-              .buttonStyle(.bordered)
-              .tint(.cyan)
-          }
+        Spacer()
+        Gauge(value: min(1, Double(hydration.totalMl) / Double(max(1, hydration.targetMl)))) {
+          Image(systemName: "drop.fill")
         }
-        .padding(.top, 2)
+        .gaugeStyle(.accessoryCircularCapacity)
+        .tint(.cyan)
       }
-      .padding(.vertical, 4)
-      ForEach(hydration.drinks.reversed(), id: \.id) { drink in
-        HStack {
-          Text(drink.name.isEmpty ? drink.kind.capitalized : drink.name)
-          Spacer()
-          Text("\(drink.ml) ml").foregroundStyle(.secondary).monospacedDigit()
-        }
-        .swipeActions {
-          Button("Delete", role: .destructive) { Task { await model.removeDrink(id: drink.id) } }
+      HStack(spacing: 8) {
+        ForEach([250, 500], id: \.self) { ml in
+          Button("+\(ml) ml") { Task { await model.logDrink(ml: ml) } }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(.cyan)
         }
       }
-    } header: {
-      Label("Water", systemImage: "drop.fill")
     }
-  }
-
-  private func litres(_ ml: Int) -> String {
-    ml < 1000
-      ? "\(ml) ml"
-      : (Double(ml) / 1000).formatted(.number.precision(.fractionLength(0...2))) + " L"
   }
 }
 
-// MARK: Food
-
-struct FoodSection: View {
-  @Environment(AppModel.self) private var model
+struct FoodCard: View {
   let nutrition: Components.Schemas.Nutrition
 
   var body: some View {
-    Section {
-      HStack(spacing: 0) {
-        Stat(value: Int(nutrition.calories.rounded()).formatted(), unit: target(nutrition.targetCalories, "kcal"), label: "Energy")
-        Stat(value: Int(nutrition.protein.rounded()).formatted(), unit: target(nutrition.targetProtein, "g"), label: "Protein")
+    SummaryCard(
+      title: "Food", category: .food,
+      caption: "\(nutrition.meals.count) \(nutrition.meals.count == 1 ? "meal" : "meals")"
+    ) {
+      HStack {
+        MiniValue(
+          value: Format.number(nutrition.calories),
+          unit: nutrition.targetCalories.map { "/ \(Format.number($0)) kcal" } ?? "kcal",
+          label: "Energy")
+        MiniValue(
+          value: Format.number(nutrition.protein),
+          unit: nutrition.targetProtein.map { "/ \(Format.number($0)) g" } ?? "g", label: "Protein")
       }
-      .padding(.vertical, 4)
       ForEach(nutrition.meals, id: \.id) { meal in
         HStack {
-          VStack(alignment: .leading) {
-            Text(meal.name)
-            Text(meal._type.capitalized).font(.caption).foregroundStyle(.secondary)
-          }
+          Text(meal.name).font(.subheadline)
           Spacer()
-          Text("\(Int(meal.calories.rounded())) kcal").foregroundStyle(.secondary).monospacedDigit()
+          Text("\(Format.number(meal.calories)) kcal")
+            .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
         }
       }
-      Button {
-        model.tab = .coach
-      } label: {
-        Label("Log food with Coach", systemImage: "camera")
-      }
-    } header: {
-      Label("Food", systemImage: "fork.knife")
     }
-  }
-
-  private func target(_ value: Double?, _ unit: String) -> String {
-    value.map { "/ \(Int($0.rounded())) \(unit)" } ?? unit
   }
 }
 
-// MARK: Training
-
-struct TrainingSection: View {
-  @Environment(AppModel.self) private var model
+struct TrainingCard: View {
   let today: Today
 
   var body: some View {
-    Section {
+    SummaryCard(title: "Strength", category: .training) {
       if let active = today.activeWorkout {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("In progress").font(.caption.weight(.semibold)).foregroundStyle(.orange)
-          Text(active.title).font(.headline)
-          Text("\(active.loggedSets) sets logged across \(active.exercises) exercises")
-            .font(.subheadline).foregroundStyle(.secondary)
+        Text(active.title).font(.headline)
+        Text("In progress · \(active.loggedSets) sets across \(active.exercises) exercises")
+          .font(.subheadline).foregroundStyle(.orange)
+      } else if !today.strengthToday.isEmpty {
+        ForEach(today.strengthToday, id: \.id) { session in
+          Text(session.title).font(.headline)
+          Text("\(session.loggedSets) sets").font(.subheadline).foregroundStyle(.secondary)
         }
       } else if let next = today.nextSession {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("Next · \(next.programName) \(next.position) of \(next.count)")
-            .font(.caption.weight(.semibold)).foregroundStyle(.tint)
-          Text(next.title).font(.headline)
-          Text("\(next.exercises) exercises").font(.subheadline).foregroundStyle(.secondary)
-        }
-      }
-      ForEach(today.strengthToday, id: \.id) { session in
-        Label {
-          VStack(alignment: .leading) {
-            Text(session.title)
-            Text("\(session.loggedSets) sets").font(.caption).foregroundStyle(.secondary)
-          }
-        } icon: {
-          Image(systemName: "figure.strengthtraining.olympic")
-        }
-      }
-      ForEach(today.activities, id: \.id) { activity in
-        ActivityRow(activity: activity)
-      }
-      if today.activeWorkout == nil && today.strengthToday.isEmpty && today.activities.isEmpty {
-        Text("Nothing recorded yet today. Workouts from Apple Health appear here automatically.")
+        Text(next.title).font(.headline)
+        Text("Next in \(next.programName) · \(next.position) of \(next.count)")
           .font(.subheadline).foregroundStyle(.secondary)
+      } else {
+        Text("No strength session planned").foregroundStyle(.secondary)
       }
-    } header: {
-      Label("Training", systemImage: "figure.run")
-    } footer: {
-      Text("\(today.sessionsThisWeek) sessions in the last seven days")
     }
   }
 }
@@ -312,14 +351,14 @@ struct ActivityRow: View {
   let activity: Components.Schemas.Activity
 
   var body: some View {
-    HStack(alignment: .top) {
-      Image(systemName: ActivityRow.symbol(activity.activity))
-        .foregroundStyle(.green)
-        .frame(width: 28)
+    HStack(spacing: 12) {
+      IconBadge(symbol: ActivityRow.symbol(activity.activity), tint: .green)
       VStack(alignment: .leading, spacing: 2) {
-        Text(activity.title)
-        Text(details).font(.caption).foregroundStyle(.secondary)
-        if activity.fromAppleHealth { AppleHealthBadge() }
+        HStack(spacing: 4) {
+          Text(activity.title)
+          if activity.fromAppleHealth { AppleHealthMark() }
+        }
+        Text(details).font(.subheadline).foregroundStyle(.secondary)
       }
     }
     .accessibilityElement(children: .combine)
@@ -329,8 +368,8 @@ struct ActivityRow: View {
     [
       activity.durationText,
       activity.distanceKm.map { $0.formatted(.number.precision(.fractionLength(0...2))) + " km" },
-      activity.averageHeartRate.map { "\($0) bpm avg" },
-      activity.caloriesKcal.map { "\(Int($0.rounded())) kcal" },
+      activity.averageHeartRate.map { "\($0) bpm" },
+      activity.caloriesKcal.map { "\(Format.number($0)) kcal" },
     ].compactMap { $0 }.joined(separator: " · ")
   }
 

@@ -1,0 +1,53 @@
+{
+  "revision": 12,
+  "items": [
+    {
+      "id": "6f0a3f8e-2a51-4c1e-9d0b-0c1f7c1e2a10",
+      "date": "2026-09-26",
+      "kind": "cardio",
+      "title": "Outdoor Run",
+      "detail": "50 min · 10 km · 148 bpm avg",
+      "fromAppleHealth": true
+    },
+    {
+      "id": "5b7f0c43-7a57-4a53-9a4c-2f8cf2f0c001",
+      "date": "2026-09-26",
+      "kind": "meal",
+      "title": "Oats with berries",
+      "detail": "300 kcal · 11 g protein · estimated",
+      "fromAppleHealth": false
+    },
+    {
+      "id": "sleep-2026-09-26",
+      "date": "2026-09-26",
+      "kind": "sleep",
+      "title": "Sleep",
+      "detail": "7 h 30 min",
+      "fromAppleHealth": true
+    },
+    {
+      "id": "checkin-2026-09-26",
+      "date": "2026-09-26",
+      "kind": "checkin",
+      "title": "Check-in",
+      "detail": "energy 4/5 · soreness 2/5 · 81.4 kg",
+      "fromAppleHealth": false
+    },
+    {
+      "id": "vitals-2026-09-26",
+      "date": "2026-09-26",
+      "kind": "vitals",
+      "title": "Heart and movement",
+      "detail": "resting 52 bpm · HRV 61 ms · 9,120 steps",
+      "fromAppleHealth": true
+    },
+    {
+      "id": "7a1c3f8e-2a51-4c1e-9d0b-0c1f7c1e2a11",
+      "date": "2026-09-25",
+      "kind": "strength",
+      "title": "Gym Accessories",
+      "detail": "5 exercises · 0 sets",
+      "fromAppleHealth": false
+    }
+  ]
+}

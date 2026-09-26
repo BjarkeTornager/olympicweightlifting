@@ -63,6 +63,27 @@ export const healthImportReceipts = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.date] })],
 );
+// One row per Apple Health workout the iPhone app has offered. It remembers
+// which cardio entry the workout became, so a re-delivered workout is not
+// logged twice and an entry the athlete edited or deleted stays that way.
+export const healthWorkoutImports = pgTable(
+  "health_workout_imports",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workoutId: text("workout_id").notNull(),
+    cardioId: text("cardio_id"),
+    // "imported", "matched" (enriched a manual entry) or "removed".
+    status: text("status").notNull(),
+    digest: text("digest").notNull(),
+    entryDigest: text("entry_digest"),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.workoutId] })],
+);
 export const foodPhotos = pgTable(
   "food_photos",
   {

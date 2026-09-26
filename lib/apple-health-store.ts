@@ -11,7 +11,7 @@ import { userAllowed } from "./access";
 import { calculateImportedSleep } from "./apple-health";
 import { ApiError } from "./agent/http";
 import { emptyJournal } from "./domain";
-import { journalSchema } from "./model";
+import { journalSchema, type JournalState } from "./model";
 import { saveCheckin } from "./health";
 import { allowRequest, writeJournal } from "./server";
 
@@ -55,13 +55,85 @@ export async function authorizeHealthImport(request: Request) {
   return { userId: row.user.id, hash };
 }
 
+export type ImportedSleep = ReturnType<typeof calculateImportedSleep>;
+export type SleepImportResult = "imported" | "updated" | "unchanged" | "preserved";
+type Transaction = Parameters<
+  Parameters<ReturnType<typeof getDb>["transaction"]>[0]
+>[0];
+
+// Decide what one night's imported sleep does to the journal, and apply it.
+// A manual edit, deletion, or older client removing provenance takes priority.
+export function applySleepImport(
+  state: JournalState,
+  receipt: { digest: string; hours: string } | undefined,
+  sleep: ImportedSleep,
+  now = new Date(),
+) {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify({
+        date: sleep.date,
+        timezone: sleep.timezone,
+        intervals: sleep.intervals,
+      }),
+    )
+    .digest("hex");
+  const existing = state.health.checkins.find((c) => c.date === sleep.date);
+  const stillImported = Boolean(
+    receipt &&
+    existing?.sleepImport?.digest === receipt.digest &&
+    existing.sleepHours === Number(receipt.hours),
+  );
+  let result: SleepImportResult;
+  if ((receipt && !stillImported) || (!receipt && existing?.sleepHours != null))
+    result = "preserved";
+  else if (receipt?.digest === digest) result = "unchanged";
+  else {
+    const checkin = saveCheckin(
+      state,
+      { date: sleep.date, sleepHours: sleep.hours },
+      sleep.date,
+    );
+    checkin.sleepImport = {
+      provider: "apple-health",
+      digest,
+      start: sleep.start,
+      end: sleep.end,
+      importedAt: now.toISOString(),
+    };
+    result = receipt ? "updated" : "imported";
+  }
+  return {
+    result,
+    digest,
+    changed: result === "imported" || result === "updated",
+    sleepHours:
+      result === "preserved" ? (existing?.sleepHours ?? null) : sleep.hours,
+  };
+}
+
+export async function saveSleepReceipt(
+  tx: Transaction,
+  userId: string,
+  sleep: ImportedSleep,
+  digest: string,
+) {
+  await tx
+    .insert(healthImportReceipts)
+    .values({ userId, date: sleep.date, digest, hours: String(sleep.hours) })
+    .onConflictDoUpdate({
+      target: [healthImportReceipts.userId, healthImportReceipts.date],
+      set: { digest, hours: String(sleep.hours) },
+    });
+}
+
 export async function importSleep(
   userId: string,
   tokenHash: string,
   raw: unknown,
   now = new Date(),
 ) {
-  let sleep: ReturnType<typeof calculateImportedSleep>;
+  let sleep: ImportedSleep;
   try {
     sleep = calculateImportedSleep(raw, now);
   } catch (error) {
@@ -72,15 +144,6 @@ export async function importSleep(
       422,
     );
   }
-  const digest = createHash("sha256")
-    .update(
-      JSON.stringify({
-        date: sleep.date,
-        timezone: sleep.timezone,
-        intervals: sleep.intervals,
-      }),
-    )
-    .digest("hex");
   return getDb().transaction(async (tx) => {
     // Disconnect/rotation and import serialize on the same credential row.
     const [connection] = await tx
@@ -108,7 +171,6 @@ export async function importSleep(
       .where(eq(journals.userId, userId))
       .for("update");
     const state = journalSchema.parse(row.state);
-    const existing = state.health.checkins.find((c) => c.date === sleep.date);
     const [receipt] = await tx
       .select()
       .from(healthImportReceipts)
@@ -118,51 +180,16 @@ export async function importSleep(
           eq(healthImportReceipts.date, sleep.date),
         ),
       );
-    let result: "imported" | "updated" | "unchanged" | "preserved";
-    // A manual edit, deletion, or older client removing provenance takes priority.
-    const stillImported = Boolean(
-      receipt &&
-      existing?.sleepImport?.digest === receipt.digest &&
-      existing.sleepHours === Number(receipt.hours),
-    );
-    if (
-      (receipt && !stillImported) ||
-      (!receipt && existing?.sleepHours != null)
-    )
-      result = "preserved";
-    else if (receipt?.digest === digest) result = "unchanged";
-    else {
-      const checkin = saveCheckin(
-        state,
-        { date: sleep.date, sleepHours: sleep.hours },
-        sleep.date,
-      );
-      checkin.sleepImport = {
-        provider: "apple-health",
-        digest,
-        start: sleep.start,
-        end: sleep.end,
-        importedAt: now.toISOString(),
-      };
+    const outcome = applySleepImport(state, receipt, sleep, now);
+    if (outcome.changed) {
       await writeJournal(
         userId,
         { state, revision: row.revision, mutationId: crypto.randomUUID() },
         tx,
       );
-      await tx
-        .insert(healthImportReceipts)
-        .values({
-          userId,
-          date: sleep.date,
-          digest,
-          hours: String(sleep.hours),
-        })
-        .onConflictDoUpdate({
-          target: [healthImportReceipts.userId, healthImportReceipts.date],
-          set: { digest, hours: String(sleep.hours) },
-        });
-      result = receipt ? "updated" : "imported";
+      await saveSleepReceipt(tx, userId, sleep, outcome.digest);
     }
+    const result = outcome.result;
     await tx
       .update(healthConnections)
       .set({ lastSyncAt: now, lastDate: sleep.date, lastResult: result })
@@ -170,8 +197,7 @@ export async function importSleep(
     return {
       result,
       date: sleep.date,
-      sleepHours:
-        result === "preserved" ? (existing?.sleepHours ?? null) : sleep.hours,
+      sleepHours: outcome.sleepHours,
       message:
         result === "preserved"
           ? "Your manual entry or deletion was kept."

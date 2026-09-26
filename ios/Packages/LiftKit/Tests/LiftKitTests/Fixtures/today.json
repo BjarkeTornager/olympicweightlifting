@@ -1,0 +1,108 @@
+{
+  "date": "2026-09-26",
+  "revision": 12,
+  "name": "Alex",
+  "sleep": {
+    "hours": 7.5,
+    "text": "7 h 30 min",
+    "fromAppleHealth": true,
+    "averageHours": 7.5,
+    "nights": 1
+  },
+  "vitals": {
+    "date": "2026-09-26",
+    "restingHeartRate": 52,
+    "heartRateVariabilityMs": 61.4,
+    "averageHeartRate": 71,
+    "steps": 9120,
+    "activeEnergyKcal": 540
+  },
+  "checkin": {
+    "energy": 4,
+    "soreness": 2,
+    "bodyweight": 81.4,
+    "notes": ""
+  },
+  "nutrition": {
+    "calories": 300,
+    "protein": 11,
+    "carbs": 54,
+    "fat": 5,
+    "meals": [
+      {
+        "id": "5b7f0c43-7a57-4a53-9a4c-2f8cf2f0c001",
+        "name": "Oats with berries",
+        "type": "breakfast",
+        "calories": 300,
+        "protein": 11,
+        "estimated": true,
+        "createdAt": "2026-09-26T18:00:00.000Z"
+      }
+    ]
+  },
+  "hydration": {
+    "totalMl": 750,
+    "targetMl": 2850,
+    "estimatedTarget": false,
+    "drinks": [
+      {
+        "id": "1d9e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a14",
+        "ml": 500,
+        "kind": "water",
+        "name": "",
+        "at": "2026-09-26T18:00:00.000Z"
+      },
+      {
+        "id": "2e0f3f8e-2a51-4c1e-9d0b-0c1f7c1e2a15",
+        "ml": 250,
+        "kind": "coffee",
+        "name": "",
+        "at": "2026-09-26T18:00:00.000Z"
+      }
+    ]
+  },
+  "nextSession": {
+    "programId": "stability-power-base-v1",
+    "programName": "Stability & Power Base",
+    "dayId": "monday",
+    "title": "Snatch + Back Squat",
+    "position": 1,
+    "count": 4,
+    "exercises": 5,
+    "canStart": true,
+    "custom": false
+  },
+  "strengthToday": [],
+  "activities": [
+    {
+      "id": "6f0a3f8e-2a51-4c1e-9d0b-0c1f7c1e2a10",
+      "activity": "running",
+      "title": "Outdoor Run",
+      "date": "2026-09-26",
+      "durationSeconds": 3000,
+      "durationText": "50 min",
+      "distanceKm": 10,
+      "averageHeartRate": 148,
+      "maxHeartRate": 171,
+      "caloriesKcal": 612,
+      "fromAppleHealth": true
+    }
+  ],
+  "sessionsThisWeek": 2,
+  "priorities": [
+    {
+      "id": "training",
+      "category": "TRAINING",
+      "title": "Your training is recorded",
+      "reason": "1 session saved today. Review your work or ask Coach how it fits your week.",
+      "action": "Review session"
+    },
+    {
+      "id": "nutrition",
+      "category": "NUTRITION",
+      "title": "Keep your food picture up to date",
+      "reason": "300 kcal and 11 g protein across 1 logged meal. These are recorded totals, not your full daily intake.",
+      "action": "Review food"
+    }
+  ]
+}

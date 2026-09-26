@@ -50,17 +50,40 @@ export const checkinSchema = z
       ) || v.notes.length > 0,
     "Enter at least one check-in value or note",
   );
+// Daily measurements the iPhone app reads from Apple Health. They are kept
+// apart from check-ins, which hold what the athlete reports, so an import
+// never overwrites a self-report and a manual edit never looks measured.
+export const vitalsSchema = z
+  .object({
+    date: foodDate,
+    restingHeartRate: z.number().int().min(20).max(250).nullable(),
+    heartRateVariabilityMs: z.number().finite().min(1).max(500).nullable(),
+    averageHeartRate: z.number().int().min(20).max(250).nullable(),
+    steps: z.number().int().min(0).max(200000).nullable(),
+    activeEnergyKcal: z.number().int().min(0).max(20000).nullable(),
+    source: z.literal("apple-health"),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type Vitals = z.infer<typeof vitalsSchema>;
 export const healthSchema = z
   .object({
     checkins: z.array(checkinSchema).max(5000).default([]),
     // Optional so journals and clients from before drink tracking still parse.
     drinks: z.array(drinkSchema).max(20000).optional(),
+    // Optional for the same reason; written only by the Apple Health sync.
+    vitals: z.array(vitalsSchema).max(5000).optional(),
   })
   .superRefine((v, ctx) => {
     if (new Set(v.checkins.map((c) => c.date)).size !== v.checkins.length)
       ctx.addIssue({
         code: "custom",
         message: "Only one check-in per date is allowed",
+      });
+    if (v.vitals && new Set(v.vitals.map((m) => m.date)).size !== v.vitals.length)
+      ctx.addIssue({
+        code: "custom",
+        message: "Only one Apple Health summary per date is allowed",
       });
   });
 export type Checkin = z.infer<typeof checkinSchema>;
@@ -241,6 +264,6 @@ export function dailyHealth(state: JournalState, date: string) {
       ? { value: weights.at(-1)!.bodyweight, date: weights.at(-1)!.date }
       : null,
     dataLimits:
-      "Journal records include self-reports and sleep explicitly imported through an optional Apple Health Shortcut, marked with their source. Missing entries do not mean zero intake, sleep or activity. Cardio includes user-reported duration, distance and optional heart rate or energy. No continuous wearable monitoring or clinical interpretation.",
+      "Journal records include self-reports plus sleep, workouts and daily heart-rate summaries the athlete chose to import from Apple Health, marked with their source. Missing entries do not mean zero intake, sleep or activity. Cardio includes duration, distance and optional heart rate or energy. No clinical interpretation.",
   };
 }

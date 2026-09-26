@@ -1,0 +1,21 @@
+{
+  "turns": [
+    {
+      "id": "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a12",
+      "question": "I had oats with berries for breakfast",
+      "fromVoice": false,
+      "photoIds": [],
+      "createdAt": "2026-09-26T18:00:00.000Z",
+      "status": "done",
+      "reply": "Saved your breakfast. **About 300 kcal** and 11 g protein.",
+      "receipts": [
+        {
+          "id": "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a13",
+          "title": "Log breakfast",
+          "detail": "Oats with berries · about 300 kcal",
+          "state": "saved"
+        }
+      ]
+    }
+  ]
+}

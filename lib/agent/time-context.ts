@@ -17,6 +17,19 @@ export function localClock(at: Date | string, timezone: string) {
   };
 }
 
+// The part of the day in words, and how to greet in it. Models greet from a
+// clock time unreliably ("good morning" at 12:20), so they are told this.
+export function partOfDay(time: string) {
+  const hour = Number(time.slice(0, 2));
+  return hour >= 5 && hour < 12
+    ? { name: "morning", greeting: "Good morning" }
+    : hour >= 12 && hour < 18
+      ? { name: "afternoon", greeting: "Good afternoon" }
+      : hour >= 18 && hour < 23
+        ? { name: "evening", greeting: "Good evening" }
+        : { name: "night", greeting: "Hi" };
+}
+
 export function imageTiming(
   image: { date: string; createdAt: Date | string },
   timezone: string,

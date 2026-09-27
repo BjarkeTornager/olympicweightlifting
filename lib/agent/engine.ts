@@ -33,6 +33,7 @@ import { recordedRouteVisual } from "../route-summary";
 import { recordedRoute, routeNotesFor } from "../workout-routes";
 import { emitDisplayedVisual } from "../agui-components";
 import { systemPrompt } from "./knowledge";
+import { turnTotals, type TurnMetrics } from "./turn-metrics";
 import { imageTiming, localClock } from "./time-context";
 import { specifications, toolDefinitions, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
@@ -137,6 +138,8 @@ export async function runTurn(
     onToolCall?: (name: string, args: unknown, ok: boolean) => void;
   } = {},
 ) {
+  const turnStarted = Date.now();
+  const metrics: TurnMetrics = { rounds: [] };
   const db = getDb();
   const existing = await db
     .select()
@@ -319,6 +322,23 @@ export async function runTurn(
     ...(hooks.signal ? [hooks.signal] : []),
   ]);
   const emit = hooks.emit;
+  const finished = () => {
+    metrics.totalMs = Date.now() - turnStarted;
+    return metrics;
+  };
+  // One line per turn for the host's logs: no ids, no text.
+  const logMetrics = (status: "done" | "failed") =>
+    console.info(
+      JSON.stringify({
+        event: "coach_turn_metrics",
+        status,
+        tier: metrics.tier ?? null,
+        route: metrics.route ?? null,
+        totalMs: metrics.totalMs ?? Date.now() - turnStarted,
+        firstTextMs: metrics.firstTextMs ?? null,
+        ...turnTotals(metrics),
+      }),
+    );
   try {
     // Short-lived proposals contain recovery snapshots. Conversation is retained for 90 days.
     await db
@@ -352,6 +372,11 @@ export async function runTurn(
     const modelOptions: ModelOptions | undefined = routed
       ? { model: routed.model }
       : undefined;
+    if (routed) {
+      metrics.tier = routed.tier;
+      metrics.route = routed.source;
+      metrics.routingMs = Date.now() - turnStarted;
+    }
     for (let round = 0; round < 5; round++) {
       signal.throwIfAborted();
       const messageId = `${input.id}-${round}`;
@@ -360,12 +385,14 @@ export async function runTurn(
         type: EventType.STEP_STARTED,
         stepName: "Preparing your response",
       });
+      const roundStarted = Date.now();
       const result = await model(
         messages,
         availableTools,
         signal,
         emit
           ? (delta) => {
+              metrics.firstTextMs ??= Date.now() - turnStarted;
               if (!started) {
                 emit({
                   type: EventType.TEXT_MESSAGE_START,
@@ -389,7 +416,9 @@ export async function runTurn(
         type: EventType.STEP_FINISHED,
         stepName: "Preparing your response",
       });
-      messages.push(result);
+      const { served, ...message } = result;
+      metrics.rounds.push({ ...served, ms: Date.now() - roundStarted });
+      messages.push(message);
       if (!result.tool_calls?.length) {
         if (
           hooks.directLogging &&
@@ -772,15 +801,16 @@ export async function runTurn(
       }
       await tx
         .update(agentTurns)
-        .set({ status: "done", response })
+        .set({ status: "done", response, metrics: finished() })
         .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
       signal.throwIfAborted();
     });
+    logMetrics("done");
     return response;
   } catch (e) {
     await db
       .update(agentTurns)
-      .set({ status: "failed" })
+      .set({ status: "failed", metrics: finished() })
       .where(
         and(
           eq(agentTurns.id, input.id),
@@ -788,6 +818,7 @@ export async function runTurn(
           eq(agentTurns.status, "running"),
         ),
       );
+    logMetrics("failed");
     throw e;
   }
 }

@@ -9,8 +9,24 @@ export class ContentFiltered extends Error {
   }
 }
 
+// OpenRouter reports usage on every response (the last frame of a stream).
+// Counts and cost only: nothing here repeats the conversation.
+export const usageSchema = z.object({
+  prompt_tokens: z.number().nonnegative().optional(),
+  completion_tokens: z.number().nonnegative().optional(),
+  prompt_tokens_details: z
+    .object({
+      cached_tokens: z.number().nonnegative().nullish(),
+      cache_write_tokens: z.number().nonnegative().nullish(),
+    })
+    .nullish(),
+  cost: z.number().nonnegative().nullish(),
+});
 const routerChunk = z.object({
   error: z.unknown().optional(),
+  // Metrics only: a malformed usage frame never fails the reply.
+  model: z.string().max(200).optional().catch(undefined),
+  usage: usageSchema.optional().catch(undefined),
   choices: z
     .array(
       z.object({
@@ -67,8 +83,8 @@ const ollamaChunk = z.object({
     .optional(),
 });
 
-// Provider framing only. Reasoning, raw errors, usage and credentials never
-// leave this adapter. Validate assembled messages again before tools execute.
+// Provider framing only. Reasoning, raw errors and credentials never leave
+// this adapter; usage leaves only as token counts and cost. Validate assembled messages again before tools execute.
 export async function readModelStream(
   response: Response,
   kind: "openrouter" | "ollama",
@@ -82,7 +98,9 @@ export async function readModelStream(
     content = "",
     pending = "",
     finished = false,
-    terminal = false;
+    terminal = false,
+    model: string | undefined,
+    usage: z.infer<typeof usageSchema> | undefined;
   const calls = new Map<
     number,
     { id: string; function: { name: string; arguments: string } }
@@ -107,6 +125,8 @@ export async function readModelStream(
     if (kind === "openrouter") {
       const chunk = routerChunk.parse(raw);
       if (chunk.error) throw Error("The assistant stream was interrupted.");
+      model = chunk.model ?? model;
+      usage = chunk.usage ?? usage;
       const choice = chunk.choices?.[0];
       if (!choice) return; // usage-only frame
       if (choice.finish_reason === "content_filter")
@@ -181,6 +201,8 @@ export async function readModelStream(
       throw Error("The assistant response ended early. Please try again.");
     return kind === "openrouter"
       ? {
+          model,
+          usage,
           choices: [
             {
               message: {

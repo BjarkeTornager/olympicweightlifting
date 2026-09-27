@@ -5,7 +5,8 @@
   },
   "include": [
     "./runner.ts",
-    "./workflow-runner.ts"
+    "./workflow-runner.ts",
+    "./bench-runner.ts"
   ],
   "exclude": [
     "../../node_modules",

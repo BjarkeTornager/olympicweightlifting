@@ -82,6 +82,10 @@ Jev's evidence includes the day's drinks and water total as well as the benchmar
 
 Run directories must be new `lift-gepa-*` directories outside the repository. They hold synthetic transcripts only.
 
+## A tool description (hard benchmark)
+
+`optimize_bench.py` with `bench-runner.ts` tunes one tool's description (`--tool`, default `log_entry`), scored on the hard Coach benchmark (`scripts/coach-bench`) with its train, validation and held-out splits. Scoring is the same as for the logging rules: pass or fail on the journal, then fewer rounds. The first run kept the current description; see [the report](../../docs/coach-hard-benchmark-2026-09-27.md).
+
 ## Sources
 
 - [GEPA project and pinned package source](https://github.com/gepa-ai/gepa)

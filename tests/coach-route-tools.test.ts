@@ -69,7 +69,7 @@ test("every heading and park bias Coach may send is explained in the tool text",
 });
 
 test("the Coach prompt teaches the fields the route planner now needs", () => {
-  const prompt = systemPrompt("2026-09-07", "Europe/Copenhagen");
+  const prompt = systemPrompt();
   assert.match(prompt, /parkBias/);
   assert.match(prompt, /Pass direction when they name a heading/);
   assert.match(prompt, /variant 1, 2 or 3/);

@@ -86,7 +86,7 @@ test(
         },
         async (messages) => {
           if (round++ === 0) {
-            assert.match(messages[0].content, /local request time is 20:30/);
+            assert.match(messages[1].content, /local request time is 20:30/);
             const earlier = messages.find((m) =>
               m.content.startsWith("Earlier message sent at"),
             )!;

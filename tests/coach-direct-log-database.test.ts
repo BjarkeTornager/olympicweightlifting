@@ -397,8 +397,8 @@ test(
               a,
               request,
               async (messages) => {
-                assert.ok(String(messages[0].content).includes(expected.date));
-                assert.ok(String(messages[0].content).includes(expected.time));
+                assert.ok(String(messages[1].content).includes(expected.date));
+                assert.ok(String(messages[1].content).includes(expected.time));
                 calls++;
                 throw Error("Synthetic provider interruption");
               },
@@ -409,8 +409,8 @@ test(
             a,
             { ...request, submittedAt: new Date().toISOString() },
             async (messages) => {
-              assert.ok(String(messages[0].content).includes(expected.date));
-              assert.ok(String(messages[0].content).includes(expected.time));
+              assert.ok(String(messages[1].content).includes(expected.date));
+              assert.ok(String(messages[1].content).includes(expected.time));
               calls++;
               return {
                 role: "assistant",

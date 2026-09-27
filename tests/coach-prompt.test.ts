@@ -5,7 +5,7 @@ import { systemPrompt } from "../lib/agent/knowledge";
 import { coachStyle } from "../lib/agent/coach-style";
 
 test("conversational prompt changes preserve the fixed health, privacy, evidence and action policy", () => {
-  const prompt = systemPrompt("2026-09-07", "Europe/Copenhagen");
+  const prompt = systemPrompt();
   assert.equal(prompt.split(coachStyle).length, 2);
   assert.equal(
     createHash("sha256")
@@ -60,14 +60,20 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // plus professional support for disordered eating
     // (body-composition.test.ts). Health, privacy and evidence text is
     // otherwise unchanged.
-    "8c049ae2d5b2de769606deffbb2b4d5122c0f2430fdc236369b11010cd6129bf",
+    // Revised 2026-09-27, deliberate and reviewed: the date, time and
+    // timezone moved out of these instructions into a system message sent
+    // right after them (requestTime), so this prefix is identical on every
+    // turn and the provider can cache it. The only diff is that one
+    // sentence: putting the old date sentence back reproduces the previous
+    // hash (8c049ae2…). prompt-cache-database.test.ts covers the order.
+    "d7c6bba3d03871e707b2f8aa19d7914753e8ba9edad9b872cd7efdd7f5572375",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
 });
 
 test("Coach policy separates reported events, previews and advice", () => {
-  const prompt = systemPrompt("2026-09-09", "Europe/Copenhagen", "09:30");
+  const prompt = systemPrompt();
   assert.match(
     prompt,
     /Use log_entry for ordinary logging and requested corrections/,
@@ -85,8 +91,5 @@ test("Coach policy separates reported events, previews and advice", () => {
     prompt,
     /If the person says preview, prepare for review or do not save, respect that/,
   );
-  assert.match(
-    systemPrompt("2026-09-09", "Europe/Copenhagen", "09:30", false),
-    /This client uses reviewed logging/,
-  );
+  assert.match(systemPrompt(false), /This client uses reviewed logging/);
 });

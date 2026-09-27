@@ -503,12 +503,7 @@ async function handle(message: {
   if (message.op === "info")
     return {
       baseline: coachStyle,
-      fixedHash: sha(
-        systemPrompt("2026-09-07", "Europe/Copenhagen").replace(
-          coachStyle,
-          "<COACH_STYLE>",
-        ),
-      ),
+      fixedHash: sha(systemPrompt().replace(coachStyle, "<COACH_STYLE>")),
       judgeHash: sha(judgePrompt),
       model: modelConfig.model,
       pricing,

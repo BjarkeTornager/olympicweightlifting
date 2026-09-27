@@ -253,7 +253,7 @@ test("Coach and the voice coach see body fat, weight trend and goals", () => {
   assert.equal(context.bodyComposition?.weightTrend?.kg_per_week, -0.2);
 
   // Coach's instructions name the whole role and the limits.
-  const prompt = systemPrompt(today, "Europe/Copenhagen");
+  const prompt = systemPrompt();
   assert.match(
     prompt,
     /fat-loss and muscle-building coach and nutrition guide/,

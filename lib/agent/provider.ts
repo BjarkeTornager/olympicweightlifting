@@ -27,6 +27,9 @@ export type ModelMessage = {
     id?: string;
     function: { name: string; arguments: Record<string, unknown> };
   }[];
+  // Ends the prefix that stays the same from turn to turn, so the provider
+  // caches it there and not only at the end of each whole request.
+  cacheBreakpoint?: boolean;
 };
 export function providerConfig() {
   const provider =
@@ -156,7 +159,15 @@ export function modelRequest(
                   image_url: { url: `data:image/jpeg;base64,${data}` },
                 })),
               ]
-            : m.content,
+            : m.cacheBreakpoint && openAiChatModel(model)
+              ? [
+                  {
+                    type: "text",
+                    text: m.content,
+                    prompt_cache_breakpoint: { mode: "explicit" },
+                  },
+                ]
+              : m.content,
           ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
           ...(m.tool_calls
             ? {

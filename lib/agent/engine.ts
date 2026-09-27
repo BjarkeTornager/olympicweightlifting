@@ -4,7 +4,7 @@ import { EventType } from "@ag-ui/core";
 import { searchWeb, webSearchEnabled } from "../web-search";
 import { visualSchema, type SavedVisual } from "../coach-visuals";
 import type { EmitCoachEvent } from "./stream";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
@@ -112,6 +112,11 @@ const withoutCoordinates = (visual: SavedVisual) =>
       }
     : visual;
 
+// A turn cannot run longer than its 90-second budget and 100-second stream,
+// so one still "running" after this was cut off (a crash or a forced stop)
+// and the same message may be retried.
+export const STALE_TURN_MS = 3 * 60000;
+
 export async function runTurn(
   userId: string,
   input: {
@@ -153,7 +158,11 @@ export async function runTurn(
     )
       throw new ApiError("That message identifier was already used.", 409);
     if (existing[0].response) return existing[0].response;
-    if (existing[0].status !== "failed")
+    const startedAt = existing[0].startedAt ?? existing[0].createdAt;
+    if (
+      existing[0].status !== "failed" &&
+      startedAt.getTime() > Date.now() - STALE_TURN_MS
+    )
       throw new ApiError(
         "That request is still running. Reconnect to check its saved status, or retry the same message shortly.",
         409,
@@ -198,12 +207,19 @@ export async function runTurn(
   const inserted = existing[0]
     ? await db
         .update(agentTurns)
-        .set({ status: "running" })
+        .set({ status: "running", startedAt: new Date() })
         .where(
           and(
             eq(agentTurns.id, input.id),
             eq(agentTurns.userId, userId),
-            eq(agentTurns.status, "failed"),
+            // Only one retry can take over a failed or cut-off turn.
+            or(
+              eq(agentTurns.status, "failed"),
+              and(
+                eq(agentTurns.status, "running"),
+                sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(Date.now() - STALE_TURN_MS)}`,
+              ),
+            ),
           ),
         )
         .returning({ id: agentTurns.id })
@@ -215,6 +231,7 @@ export async function runTurn(
           question: input.message,
           photoIds,
           createdAt: requestAt,
+          startedAt: new Date(),
         })
         .onConflictDoNothing()
         .returning({ id: agentTurns.id });

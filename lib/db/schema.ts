@@ -376,6 +376,9 @@ export const agentTurns = pgTable(
     response:
       jsonb("response").$type<import("../coach-visuals").CoachResponse>(),
     status: text("status").notNull().default("running"),
+    // When the current attempt began; a "running" turn older than
+    // STALE_TURN_MS was cut off and may be retried.
+    startedAt: timestamp("started_at", { withTimezone: true }),
     // Timings, token counts and cost of the turn's model calls; no text.
     metrics:
       jsonb("metrics").$type<import("../agent/turn-metrics").TurnMetrics>(),

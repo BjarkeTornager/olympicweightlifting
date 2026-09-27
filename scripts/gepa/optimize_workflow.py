@@ -98,6 +98,10 @@ def main():
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--max-usd", type=float, default=10)
     parser.add_argument("--baseline-only", action="store_true")
+    # Measurement only (no search): score the current rules on held-out too,
+    # several times, e.g. before and after a prompt or engine change.
+    parser.add_argument("--include-heldout", action="store_true")
+    parser.add_argument("--repeats", type=int, default=1)
     args = parser.parse_args()
     directory = Path(args.run_dir).resolve()
     if not directory.name.startswith("lift-gepa-") or str(directory).startswith(os.getcwd()):
@@ -105,6 +109,10 @@ def main():
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     if not 0 < args.max_usd <= 10:
         raise ValueError("The cap is at most $10.")
+    if (args.include_heldout or args.repeats != 1) and not args.baseline_only:
+        raise ValueError("--include-heldout and --repeats are for --baseline-only measurement runs.")
+    if not 1 <= args.repeats <= 5:
+        raise ValueError("Use 1 to 5 repeats.")
     bridge = Bridge(directory, args.max_usd)
 
     def save(name, value):
@@ -131,7 +139,9 @@ def main():
         (directory / "baseline.txt").write_text(baseline + "\n")
 
         # 1. Where the current rules stand, on the scenarios GEPA may see.
-        base = run_all([(evaluate_one, "baseline", baseline, e) for e in examples(TRAIN + VALIDATION)])
+        measured = TRAIN + VALIDATION + (HELDOUT if args.include_heldout else [])
+        base = run_all([(evaluate_one, "baseline", baseline, e)
+                        for _ in range(args.repeats) for e in examples(measured)])
         save("baseline.json", base)
         print("Baseline:", json.dumps(summary(base)), "spent", bridge.call("info")["spent"], flush=True)
         if args.baseline_only:

@@ -72,6 +72,14 @@ uv pip install --python /tmp/lift-gepa-venv/bin/python -r scripts/gepa/requireme
 - **Budget:** `--max-usd` is a hard cap of at most $10, counted from OpenRouter's reported cost (a missing cost counts as $0.05). The search stops at 65% of the cap to leave room for the held-out runs. Jev's flags have their own $0.50 cap.
 - **Promotion:** `comparison.json` marks a candidate eligible for review only if it differs from the current rules, passes at least as many held-out conversations and scores a higher mean. Like the style experiment, nothing is promoted automatically. A candidate becomes a normal prompt PR: reviewed diff, updated hash note, full tests.
 
+To measure a prompt or engine change without a search, score the current rules on every scenario, several times, before and after the change:
+
+```sh
+/tmp/lift-gepa-venv/bin/python -u scripts/gepa/optimize_workflow.py --run-dir /tmp/lift-gepa-measure-1 --baseline-only --include-heldout --repeats 2 --max-usd 2
+```
+
+Jev's evidence includes the day's drinks and water total as well as the benchmark's journal facts, which predate drink logging. Without them, Jev flags a correct water correction as a missed or wrong change.
+
 Run directories must be new `lift-gepa-*` directories outside the repository. They hold synthetic transcripts only.
 
 ## Sources

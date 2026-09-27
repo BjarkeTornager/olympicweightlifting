@@ -1,7 +1,8 @@
 import Charts
+import LiftTheme
 import SwiftUI
 
-/// A progress ring with rounded ends over a faint track, as in Fitness.
+/// A progress ring with rounded ends over a neutral track, as in Fitness.
 /// Past 100 % the ring stays full; the number beside it tells the rest.
 struct ProgressRing: View {
   let progress: Double
@@ -10,10 +11,10 @@ struct ProgressRing: View {
 
   var body: some View {
     ZStack {
-      Circle().stroke(tint.opacity(0.18), lineWidth: lineWidth)
+      Circle().stroke(Theme.track, lineWidth: lineWidth)
       Circle()
         .trim(from: 0, to: max(0.001, min(1, progress)))
-        .stroke(tint.gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+        .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
         .rotationEffect(.degrees(-90))
     }
     .animation(.spring(duration: 0.8, bounce: 0.2), value: progress)
@@ -49,9 +50,7 @@ struct TargetRing: View {
         .padding(.horizontal, 12)
       }
       .frame(width: 88, height: 88)
-      Text(title)
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(tint)
+      CardLabel(title: title)
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .ignore)
@@ -60,8 +59,9 @@ struct TargetRing: View {
 }
 
 /// A small chart of the last days, without axes: bars for amounts, a line
-/// for levels. Missing days are left out rather than drawn as zero; among
-/// bars they keep a faint stub, so the span of days stays visible.
+/// for levels. Earlier days are neutral and the latest is in colour. Missing
+/// days are left out rather than drawn as zero; among bars they keep a faint
+/// stub, so the span of days stays visible.
 struct Sparkline: View {
   enum Style { case bars, line }
   let values: [Double?]
@@ -76,7 +76,7 @@ struct Sparkline: View {
       if style == .bars {
         ForEach(values.indices.filter { values[$0] == nil }, id: \.self) { index in
           BarMark(x: .value("Day", String(index)), y: .value("Value", stub), width: .ratio(0.6))
-            .foregroundStyle(tint.opacity(0.12))
+            .foregroundStyle(Theme.track.opacity(0.6))
             .cornerRadius(3)
         }
       }
@@ -84,11 +84,11 @@ struct Sparkline: View {
         switch style {
         case .bars:
           BarMark(x: .value("Day", String(index)), y: .value("Value", value), width: .ratio(0.6))
-            .foregroundStyle(index == values.count - 1 ? AnyShapeStyle(tint.gradient) : AnyShapeStyle(tint.opacity(0.3)))
+            .foregroundStyle(index == values.count - 1 ? tint : Theme.track)
             .cornerRadius(3)
         case .line:
           LineMark(x: .value("Day", String(index)), y: .value("Value", value))
-            .foregroundStyle(tint.gradient)
+            .foregroundStyle(tint)
             .interpolationMethod(.catmullRom)
             .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
           if index == points.last?.0 {
@@ -129,13 +129,7 @@ struct MetricTile<Chart: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 6) {
-        TintedSymbol(symbol: symbol ?? category.symbol, tint: category.tint)
-        Text(title)
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(category.tint)
-        Spacer(minLength: 0)
-      }
+      CardLabel(title: title, symbol: symbol ?? category.symbol, tint: category.tint)
       if let value {
         HStack(alignment: .firstTextBaseline, spacing: 3) {
           Text(value)
@@ -171,22 +165,6 @@ struct MetricTile<Chart: View>: View {
   }
 }
 
-/// A category symbol on a soft circle of its colour.
-struct TintedSymbol: View {
-  let symbol: String
-  let tint: Color
-  var size: CGFloat = 22
-
-  var body: some View {
-    Image(systemName: symbol)
-      .font(.system(size: size * 0.5, weight: .bold))
-      .foregroundStyle(tint)
-      .frame(width: size, height: size)
-      .background(tint.opacity(0.15), in: .circle)
-      .accessibilityHidden(true)
-  }
-}
-
 /// How the day's energy splits between protein, carbs and fat, as one bar
 /// with a legend of the grams.
 struct MacroSplit: View {
@@ -196,9 +174,9 @@ struct MacroSplit: View {
 
   var body: some View {
     let parts = [
-      ("Protein", protein, protein * 4, Color.orange),
-      ("Carbs", carbs, carbs * 4, Color.yellow),
-      ("Fat", fat, fat * 9, Color.pink),
+      ("Protein", protein, protein * 4, Theme.protein),
+      ("Carbs", carbs, carbs * 4, Theme.carbs),
+      ("Fat", fat, fat * 9, Theme.fat),
     ]
     let total = parts.map(\.2).reduce(0, +)
     VStack(alignment: .leading, spacing: 10) {
@@ -206,7 +184,7 @@ struct MacroSplit: View {
         HStack(spacing: 3) {
           ForEach(parts, id: \.0) { part in
             Capsule()
-              .fill(total > 0 ? AnyShapeStyle(part.3.gradient) : AnyShapeStyle(Color.secondary.opacity(0.15)))
+              .fill(total > 0 ? part.3 : Theme.track)
               .frame(width: max(0, (proxy.size.width - 6) * (total > 0 ? part.2 / total : 1.0 / 3)))
           }
         }

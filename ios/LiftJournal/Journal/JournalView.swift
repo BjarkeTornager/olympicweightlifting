@@ -68,6 +68,7 @@ struct JournalView: View {
           .task(id: nextBefore) { await load(before: nextBefore) }
       }
     }
+    .themedList()
     .overlay {
       if days.isEmpty && !loading {
         if !query.isEmpty {

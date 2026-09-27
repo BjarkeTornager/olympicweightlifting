@@ -1,5 +1,6 @@
 import ActivityKit
 import LiftActivity
+import LiftTheme
 import SwiftUI
 import WidgetKit
 
@@ -46,7 +47,7 @@ struct WorkoutLiveActivity: Widget {
         }
       } compactLeading: {
         Image(systemName: "dumbbell.fill")
-          .foregroundStyle(.tint)
+          .foregroundStyle(Theme.accent)
       } compactTrailing: {
         RestClock(state: context.state, stale: context.isStale, compact: true)
           .frame(maxWidth: 52)
@@ -115,7 +116,7 @@ private struct RestClock: View {
         .monospacedDigit()
         .multilineTextAlignment(.trailing)
     } else if state.restEnds != nil {
-      Image(systemName: "bell.fill").foregroundStyle(.orange)
+      Image(systemName: "bell.fill").foregroundStyle(Theme.attention)
     } else {
       Text(compact ? "\(state.loggedSets)/\(state.totalSets)" : "\(state.loggedSets) of \(state.totalSets)")
         .monospacedDigit()
@@ -135,10 +136,11 @@ private struct SessionProgress: View {
       } currentValueLabel: {
         EmptyView()
       }
-      .tint(.accentColor)
+      .tint(Theme.accent)
     } else {
       ProgressView(value: Double(state.loggedSets), total: Double(max(state.totalSets, 1)))
-        .tint(.accentColor)
+        .tint(Theme.accent)
     }
   }
 }
+

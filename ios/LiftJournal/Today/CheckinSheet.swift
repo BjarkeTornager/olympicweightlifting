@@ -68,6 +68,7 @@ struct CheckinSheet: View {
             .lineLimit(2...6)
         }
       }
+      .themedList()
       .navigationTitle("Check In")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

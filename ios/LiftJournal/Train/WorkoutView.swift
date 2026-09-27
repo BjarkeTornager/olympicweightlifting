@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 /// The ongoing workout. Each exercise shows its sets; the next planned set is
@@ -49,7 +50,7 @@ struct WorkoutView: View {
           .padding(.horizontal, 16)
           .padding(.vertical, 12)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Theme.background)
         .safeAreaInset(edge: .bottom) {
           if let ends = train.restEnds {
             RestTimer(until: ends, extend: { train.extendRest(by: 30) }, done: train.stopRest)
@@ -163,14 +164,14 @@ private struct ExerciseCard: View {
       HStack(spacing: 12) {
         Group {
           if finished {
-            Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(.white)
+            Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(Theme.onAccent)
           } else {
             Text("\(number)").font(.system(.caption, design: .rounded, weight: .bold))
               .foregroundStyle(Category.training.tint)
           }
         }
         .frame(width: 28, height: 28)
-        .background(finished ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Category.training.tint.opacity(0.12)), in: .circle)
+        .background(finished ? Theme.accent : Theme.fill, in: .circle)
         .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 2) {
           Text(exercise.name).font(.headline)
@@ -211,17 +212,18 @@ private struct ExerciseCard: View {
           Label("Miss", systemImage: "xmark").frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
-        .tint(.red)
+        .tint(Theme.danger)
         Button {
           log(weight, reps, true)
         } label: {
           Group {
             if busy {
-              ProgressView().tint(.white)
+              ProgressView().tint(Theme.onAccent)
             } else {
               Label(next == nil ? "Add Set" : "Made", systemImage: "checkmark")
             }
           }
+          .foregroundStyle(Theme.onAccent)
           .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.borderedProminent)
@@ -256,7 +258,7 @@ private struct SetRow: View {
       Spacer()
       if set.logged {
         Image(systemName: set.result == "miss" ? "xmark.circle.fill" : "checkmark.circle.fill")
-          .foregroundStyle(set.result == "miss" ? .red : .green)
+          .foregroundStyle(set.result == "miss" ? Theme.danger : Theme.accent)
           .accessibilityLabel(set.result == "miss" ? "Missed" : "Made")
       } else if isNext {
         Text("Next").font(.caption.weight(.semibold)).foregroundStyle(.tint)
@@ -264,7 +266,7 @@ private struct SetRow: View {
     }
     .padding(.vertical, 9)
     .padding(.horizontal, 10)
-    .background(isNext ? Color.accentColor.opacity(0.08) : .clear, in: .rect(cornerRadius: 10, style: .continuous))
+    .background(isNext ? Theme.fill : .clear, in: .rect(cornerRadius: 10, style: .continuous))
     .accessibilityElement(children: .combine)
   }
 
@@ -309,7 +311,7 @@ struct NumberStepper: View {
     }
     .buttonStyle(.borderless)
     .padding(.vertical, 4)
-    .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 12))
+    .background(Theme.fill, in: .rect(cornerRadius: 12))
     .sensoryFeedback(.selection, trigger: value)
   }
 }
@@ -339,6 +341,7 @@ struct SetEditor: View {
           .pickerStyle(.segmented)
         }
       }
+      .themedList()
       .navigationTitle(title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -390,7 +393,7 @@ private struct RestTimer: View {
       let left = max(0, Int(until.timeIntervalSince(context.date).rounded()))
       HStack(spacing: 14) {
         Image(systemName: left == 0 ? "bell.fill" : "timer")
-          .foregroundStyle(left == 0 ? .orange : .accentColor)
+          .foregroundStyle(left == 0 ? Theme.attention : Theme.accent)
           .symbolEffect(.bounce, value: left == 0)
         VStack(alignment: .leading, spacing: 0) {
           Text(left == 0 ? "Rest over" : "Rest").font(.caption).foregroundStyle(.secondary)

@@ -1,3 +1,4 @@
+import LiftTheme
 import SwiftUI
 import UserNotifications
 
@@ -14,7 +15,7 @@ struct RemindersView: View {
       if status == .denied && settings.anyOn {
         Section {
           Label("Notifications are off for Lift Journal", systemImage: "bell.slash.fill")
-            .foregroundStyle(.orange)
+            .foregroundStyle(Theme.attention)
           Button("Open Settings") {
             if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
           }
@@ -24,7 +25,7 @@ struct RemindersView: View {
       }
       Section {
         Toggle(isOn: $settings.checkIn.on) {
-          row("Morning check-in", "sun.max.fill", .orange)
+          row("Morning check-in", "sun.max.fill", Theme.feltEnergy)
         }
         if settings.checkIn.on {
           DatePicker("Time", selection: time($settings.checkIn), displayedComponents: .hourAndMinute)
@@ -51,7 +52,7 @@ struct RemindersView: View {
       }
       Section {
         Toggle(isOn: $settings.windDown.on) {
-          row("Wind down", "bed.double.fill", .indigo)
+          row("Wind down", "bed.double.fill", Theme.sleep)
         }
         if settings.windDown.on {
           DatePicker("Time", selection: time($settings.windDown), displayedComponents: .hourAndMinute)
@@ -60,6 +61,8 @@ struct RemindersView: View {
         Text("A nudge towards bed, for a full night's sleep.")
       }
     }
+    .themedList()
+    .tint(Theme.accent)
     .navigationTitle("Reminders")
     .task { status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
     .onChange(of: settings) { _, new in

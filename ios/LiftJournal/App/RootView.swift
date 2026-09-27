@@ -1,3 +1,4 @@
+import LiftTheme
 import SwiftUI
 
 struct RootView: View {
@@ -74,6 +75,7 @@ struct UpdateRequiredView: View {
     } actions: {
       Link("Open TestFlight", destination: URL(string: "itms-beta://")!)
         .buttonStyle(.borderedProminent)
+        .foregroundStyle(Theme.onAccent)
     }
     .interactiveDismissDisabled()
   }

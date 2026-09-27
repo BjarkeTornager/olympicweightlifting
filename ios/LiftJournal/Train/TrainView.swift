@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 /// Train: what to do now (the ongoing workout or the next session), the
@@ -28,7 +29,7 @@ struct TrainView: View {
       .padding(.horizontal, 16)
       .padding(.bottom, 24)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Theme.background)
     .navigationTitle("Train")
     .navigationDestination(for: WorkoutRoute.self) { route in
       switch route {
@@ -55,14 +56,14 @@ struct TrainView: View {
       VStack(alignment: .leading, spacing: 18) {
         HStack(spacing: 16) {
           ZStack {
-            ProgressRing(progress: Double(logged) / Double(max(total, 1)), tint: .orange, lineWidth: 8)
+            ProgressRing(progress: Double(logged) / Double(max(total, 1)), tint: Theme.attention, lineWidth: 8)
             Text("\(logged)/\(total)")
               .font(.system(.subheadline, design: .rounded, weight: .bold))
               .monospacedDigit()
           }
           .frame(width: 64, height: 64)
           VStack(alignment: .leading, spacing: 3) {
-            Text("In progress").font(.caption.weight(.bold)).foregroundStyle(.orange)
+            Text("In progress").font(.caption.weight(.bold)).foregroundStyle(Theme.attention)
             Text(workout.title).font(.title2.weight(.bold))
             Text("\(logged) of \(total) sets logged").font(.subheadline).foregroundStyle(.secondary)
           }
@@ -94,7 +95,7 @@ struct TrainView: View {
                   .font(.system(.caption, design: .rounded, weight: .bold))
                   .foregroundStyle(Category.training.tint)
                   .frame(width: 24, height: 24)
-                  .background(Category.training.tint.opacity(0.12), in: .circle)
+                  .background(Theme.fill, in: .circle)
                 Text(exercise.name).font(.body.weight(.medium))
                 Spacer(minLength: 8)
                 Text(exercise.text)
@@ -135,10 +136,7 @@ struct TrainView: View {
         SectionHeading("Progress").padding(.horizontal, 4)
         if let week = weeks.last {
           VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-              TintedSymbol(symbol: "chart.bar.fill", tint: Category.training.tint)
-              Text("This Week").font(.subheadline.weight(.semibold)).foregroundStyle(Category.training.tint)
-            }
+            CardLabel(title: "This Week", symbol: "chart.bar.fill", tint: Category.training.tint)
             HStack {
               MiniValue(value: "\(week.sessions)", label: week.sessions == 1 ? "Session" : "Sessions")
               MiniValue(value: "\(week.sets)", label: "Sets")
@@ -251,7 +249,7 @@ private struct SessionDots: View {
       HStack(spacing: 4) {
         ForEach(1...max(count, 1), id: \.self) { step in
           Capsule()
-            .fill(step <= position ? AnyShapeStyle(Category.training.tint.gradient) : AnyShapeStyle(Category.training.tint.opacity(0.15)))
+            .fill(step <= position ? Category.training.tint : Theme.track)
             .frame(width: step == position ? 22 : 12, height: 6)
         }
       }
@@ -268,13 +266,7 @@ private struct BestTile: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      HStack(spacing: 6) {
-        TintedSymbol(symbol: "trophy.fill", tint: .yellow)
-        Text(best.name)
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
+      CardLabel(title: best.name, symbol: "trophy.fill", tint: Theme.record)
       HStack(alignment: .firstTextBaseline, spacing: 3) {
         Text(best.weight.formatted())
           .font(.system(.title2, design: .rounded, weight: .bold))
@@ -309,7 +301,7 @@ private struct DateBadge: View {
         .foregroundStyle(Color.primary)
     }
     .frame(width: 44, height: 44)
-    .background(Category.training.tint.opacity(0.1), in: .rect(cornerRadius: 11, style: .continuous))
+    .background(Theme.fill, in: .rect(cornerRadius: 11, style: .continuous))
     .accessibilityHidden(true)
   }
 }
@@ -328,13 +320,13 @@ private struct ProgrammeCard: View {
       HStack {
         Image("tab-train-fill")
           .renderingMode(.template)
-          .foregroundStyle(programme.active ? Color.accentColor : .secondary)
+          .foregroundStyle(programme.active ? Theme.accent : .secondary)
         Spacer()
         if programme.active {
           Text("Following")
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Color.accentColor.opacity(0.12), in: .capsule)
+            .background(Theme.fill, in: .capsule)
             .foregroundStyle(.tint)
         }
       }

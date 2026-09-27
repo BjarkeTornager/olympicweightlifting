@@ -1,5 +1,6 @@
 import Charts
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 enum Trend: Hashable {
@@ -81,6 +82,7 @@ struct TrendView: View {
         }
       }
     }
+    .themedList()
     .navigationTitle(trend.title)
     .navigationBarTitleDisplayMode(.large)
     .task(id: range) { await load() }
@@ -153,7 +155,7 @@ struct TrendView: View {
       Chart(days, id: \.date) { day in
         if let hours = day.sleepHours {
           BarMark(x: .value("Night", date(day), unit: .day), y: .value("Hours", hours))
-            .foregroundStyle(tint.gradient)
+            .foregroundStyle(tint)
             .cornerRadius(4)
         }
       }
@@ -174,12 +176,12 @@ struct TrendView: View {
           }
         }
       }
-      .chartForegroundStyleScale(["Resting (bpm)": tint, "HRV (ms)": Color.purple])
+      .chartForegroundStyleScale(["Resting (bpm)": tint, "HRV (ms)": Theme.variability])
     case .activity:
       Chart(days, id: \.date) { day in
         if let steps = day.steps {
           BarMark(x: .value("Day", date(day), unit: .day), y: .value("Steps", steps))
-            .foregroundStyle(tint.gradient)
+            .foregroundStyle(tint)
             .cornerRadius(4)
         }
       }
@@ -188,7 +190,7 @@ struct TrendView: View {
         ForEach(days, id: \.date) { day in
           if let ml = day.waterMl {
             BarMark(x: .value("Day", date(day), unit: .day), y: .value("ml", ml))
-              .foregroundStyle(tint.gradient)
+              .foregroundStyle(tint)
               .cornerRadius(4)
           }
         }
@@ -215,9 +217,9 @@ struct TrendView: View {
         .chartYAxisLabel("kg")
         Chart(days.filter { $0.bodyFatPercent != nil }, id: \.date) { day in
           LineMark(x: .value("Day", date(day), unit: .day), y: .value("%", day.bodyFatPercent ?? 0))
-            .foregroundStyle(Color.orange)
+            .foregroundStyle(Theme.bodyFat)
           PointMark(x: .value("Day", date(day), unit: .day), y: .value("%", day.bodyFatPercent ?? 0))
-            .foregroundStyle(Color.orange)
+            .foregroundStyle(Theme.bodyFat)
         }
         .chartYScale(domain: .automatic(includesZero: false))
         .chartYAxisLabel("% body fat")
@@ -227,7 +229,7 @@ struct TrendView: View {
         ForEach(days, id: \.date) { day in
           if let kcal = day.calories {
             BarMark(x: .value("Day", date(day), unit: .day), y: .value("kcal", kcal))
-              .foregroundStyle(tint.gradient)
+              .foregroundStyle(tint)
               .cornerRadius(4)
           }
         }

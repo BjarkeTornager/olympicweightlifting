@@ -1,9 +1,10 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 /// The Coach conversation as a text thread with a human coach, in the style
-/// of Messages: the athlete's texts and photos on the right in blue, the
-/// coach's on the left in grey, one bubble per paragraph, with the coach's
+/// of Messages: the athlete's texts and photos on the right in the accent
+/// colour, the coach's on the left on white, one bubble per paragraph, with the coach's
 /// avatar beside the last text of each reply.
 enum Speaker {
   case athlete, coach
@@ -17,11 +18,11 @@ struct MessageBubble<Content: View>: View {
 
   var body: some View {
     content
-      .foregroundStyle(speaker == .athlete ? Color.white : Color.primary)
-      .tint(speaker == .athlete ? .white : .accentColor)
+      .foregroundStyle(speaker == .athlete ? Theme.onAccent : Color.primary)
+      .tint(speaker == .athlete ? Theme.onAccent : Theme.accent)
       .padding(.horizontal, 13)
       .padding(.vertical, 8)
-      .background(speaker == .athlete ? Color.accentColor : Color(.systemGray5), in: shape)
+      .background(speaker == .athlete ? Theme.accent : Theme.surface, in: shape)
   }
 
   private var shape: UnevenRoundedRectangle {
@@ -63,9 +64,9 @@ struct CoachAvatar: View {
       .resizable()
       .scaledToFit()
       .frame(width: 16, height: 16)
-      .foregroundStyle(.white)
+      .foregroundStyle(Theme.onAccent)
       .frame(width: 28, height: 28)
-      .background(Color.accentColor.gradient, in: .circle)
+      .background(Theme.accent, in: .circle)
       .accessibilityHidden(true)
   }
 }

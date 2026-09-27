@@ -1,3 +1,4 @@
+import LiftTheme
 import SwiftUI
 
 /// The spoken check-in, full screen: a voice that moves with whoever is
@@ -26,6 +27,7 @@ struct VoiceCallView: View {
         transcript
         controls
       }
+      .background(Theme.background)
       .navigationTitle("Voice Check-In")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -98,6 +100,7 @@ struct VoiceCallView: View {
     } else if call.status == .failed {
       Button("Try Again") { Task { await call.start() } }
         .buttonStyle(.glassProminent)
+        .foregroundStyle(Theme.onAccent)
         .controlSize(.large)
         .padding(.vertical, 20)
     }
@@ -137,19 +140,20 @@ private struct SaveChip: View {
     } icon: {
       switch state {
       case .saving: ProgressView().controlSize(.mini)
-      case .saved: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-      case .failed: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+      case .saved: Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success)
+      case .failed: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.attention)
       }
     }
     .font(.footnote.weight(.medium))
     .padding(.horizontal, 12)
     .padding(.vertical, 6)
-    .background(Color(.secondarySystemFill), in: .capsule)
+    .background(Theme.fill, in: .capsule)
     .frame(maxWidth: .infinity)
   }
 }
 
-/// A soft, moving shape that grows with the voice being heard.
+/// A soft, moving shape in the theme's orb colours that grows with the voice
+/// being heard.
 struct VoiceOrb: View {
   let level: Float
   let active: Bool
@@ -163,7 +167,7 @@ struct VoiceOrb: View {
           Circle()
             .fill(
               AngularGradient(
-                colors: [.indigo, .purple, .pink, .blue, .indigo],
+                colors: Theme.orb,
                 center: .center, angle: .degrees(t * 40 + Double(layer) * 120))
             )
             .opacity(0.55 - Double(layer) * 0.12)

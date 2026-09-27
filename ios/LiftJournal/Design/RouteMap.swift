@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import MapKit
 import SwiftUI
 
@@ -17,13 +18,13 @@ struct RouteMap: View {
     let shown = visual.loop == true && stops.count > 2 ? Array(stops.dropLast()) : stops
     Map(interactionModes: [.pan, .zoom]) {
       MapPolyline(coordinates: path)
-        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        .stroke(Theme.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
       ForEach(Array(shown.enumerated()), id: \.offset) { index, stop in
         Marker(
           stop.label, systemImage: symbol(index, of: stops.count),
           coordinate: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng)
         )
-        .tint(index == 0 ? .green : .accentColor)
+        .tint(index == 0 ? Theme.success : Theme.accent)
       }
     }
     .mapStyle(.standard(pointsOfInterest: .excludingAll))
@@ -64,7 +65,7 @@ struct RouteFacts: View {
       if visual.recorded == true {
         Label("Apple Health", systemImage: "heart.fill")
           .labelStyle(.titleAndIcon)
-          .foregroundStyle(.pink)
+          .foregroundStyle(Theme.heart)
       }
     }
     .font(.footnote)

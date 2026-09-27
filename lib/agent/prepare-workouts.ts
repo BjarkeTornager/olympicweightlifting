@@ -247,9 +247,19 @@ export function prepareSetCorrection(
     entries.length === 1
       ? entries[0].sets.filter((s) => s.id === action.setId)
       : [];
-  if (matches.length !== 1 || !isValidLoggedSet(matches[0]))
+  // Say which id is wrong: a miscopied id is the usual cause, and "read it
+  // again" alone sends the model round in circles.
+  if (entries.length !== 1)
     throw Error(
-      "Choose one already logged set from current_workout; planned or unknown sets cannot be corrected.",
+      "No exercise with that entryId in the workout in progress. Copy entryId exactly as current_workout returned it.",
+    );
+  if (matches.length !== 1)
+    throw Error(
+      "No set with that setId in this exercise. Copy setId exactly as current_workout returned it.",
+    );
+  if (!isValidLoggedSet(matches[0]))
+    throw Error(
+      "That set is planned, not logged, so it can't be corrected. Log it with log_sets instead.",
     );
   Object.assign(matches[0], action.setChanges);
   // The complete journal schema also validates the resulting reps/result
@@ -284,11 +294,23 @@ export function prepareLogSets(
   };
 }
 
+// A workoutId from current_workout must name the workout in progress.
+function inProgress(next: JournalState, workoutId?: string) {
+  const draft = next.activeWorkout;
+  if (!draft) throw Error("There is no unfinished workout.");
+  if (workoutId && workoutId !== draft.id)
+    throw Error(
+      "That isn't the workout in progress. Read current_workout and use its workoutId, or leave workoutId out.",
+    );
+  return draft;
+}
+
 export function prepareFinishWorkout(
   next: JournalState,
   currentDate: string,
+  workoutId?: string,
 ): PreparedChange {
-  if (!next.activeWorkout) throw Error("There is no unfinished workout.");
+  inProgress(next, workoutId);
   currentDraft(next, currentDate);
   Object.assign(next, finishWorkout(next));
   return {
@@ -300,9 +322,11 @@ export function prepareFinishWorkout(
 
 // Clears an abandoned draft. Only a draft without logged sets can go;
 // anything performed must be finished into history instead.
-export function prepareDiscardWorkout(next: JournalState): PreparedChange {
-  const draft = next.activeWorkout;
-  if (!draft) throw Error("There is no unfinished workout.");
+export function prepareDiscardWorkout(
+  next: JournalState,
+  workoutId?: string,
+): PreparedChange {
+  const draft = inProgress(next, workoutId);
   if (draft.exercises.some((e) => e.sets.some(isValidLoggedSet)))
     throw Error(
       "This unfinished workout has logged sets. Use finish_workout to keep them in History instead.",

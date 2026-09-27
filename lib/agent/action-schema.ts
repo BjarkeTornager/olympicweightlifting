@@ -270,8 +270,19 @@ const singleActionSchema = z.discriminatedUnion("kind", [
       sets: z.array(set).min(1).max(30),
     })
     .strict(),
-  z.object({ kind: z.literal("finish_workout") }).strict(),
-  z.object({ kind: z.literal("discard_workout") }).strict(),
+  // workoutId is optional; when given it must be the workout in progress.
+  z
+    .object({
+      kind: z.literal("finish_workout"),
+      workoutId: z.string().max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("discard_workout"),
+      workoutId: z.string().max(200).optional(),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("start_programme"),

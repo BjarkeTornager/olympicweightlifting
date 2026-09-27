@@ -7,6 +7,7 @@ import { listVideos } from "../video/store";
 import { weeklyReview } from "../weekly-review";
 import { liftingReview } from "../lifting-coach";
 import { liftingGuide } from "./lifting-guide";
+import { mealTypeConflict } from "./knowledge";
 import { liftingKnowledge } from "../lifting-resources";
 import { days, exerciseName, program } from "../domain";
 import { trainingPrograms, ownedProgram } from "../training-programs";
@@ -63,6 +64,8 @@ export type ReadToolContext = {
   currentDate: string;
   timezone: string;
   reads: TurnReads;
+  // The athlete's message, to catch a Danish meal word read as another meal.
+  message?: string;
 };
 
 const readToolNames = [
@@ -277,6 +280,8 @@ export async function runReadTool(
     }
     case "food_journal": {
       const a = specifications.food_journal.schema.parse(args);
+      const conflict = mealTypeConflict(ctx.message ?? "", a.mealType);
+      if (conflict) throw Error(conflict);
       const result = queryFoodJournal(state.nutrition, a, currentDate);
       result.meals.forEach((m) => reads.meals.add(m.id));
       reads.food = true;

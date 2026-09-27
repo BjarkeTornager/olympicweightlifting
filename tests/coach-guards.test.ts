@@ -66,9 +66,11 @@ test("edits to a session, memory or cardio entry need that record read first", a
     { ...ctx, currentDate: date, timezone: "UTC" },
   );
   await guardChange(action({ kind: "save_memory", memory: {} }), ctx);
+  // An id that isn't in the journal is named as wrong rather than unread;
+  // a real, unread activity is covered in wrong-ids.test.ts.
   await assert.rejects(
     guardChange(action({ kind: "delete_cardio", cardioId: "c1" }), ctx),
-    /Read the full original cardio activity/,
+    /No activity with that cardioId/,
   );
   await assert.rejects(
     guardChange(action({ kind: "set_lifting_brief", liftingBrief: null }), {

@@ -32,7 +32,7 @@ import { planRoute } from "../route-plan";
 import { recordedRouteVisual } from "../route-summary";
 import { recordedRoute, routeNotesFor } from "../workout-routes";
 import { emitDisplayedVisual } from "../agui-components";
-import { requestTime, systemPrompt } from "./knowledge";
+import { mealWords, requestTime, systemPrompt } from "./knowledge";
 import { turnTotals, type TurnMetrics } from "./turn-metrics";
 import { imageTiming, localClock } from "./time-context";
 import { specifications, toolDefinitions, toolStep } from "./tools";
@@ -251,7 +251,9 @@ export async function runTurn(
     },
     {
       role: "system",
-      content: requestTime(currentDate, input.timezone, requestClock.time),
+      content:
+        requestTime(currentDate, input.timezone, requestClock.time) +
+        mealWords(input.message),
     },
     {
       role: "user",
@@ -314,6 +316,9 @@ export async function runTurn(
   let preparedProposal: typeof agentProposals.$inferInsert | undefined;
   let directSave = false;
   let changeAnswer: string | undefined;
+  // Set when a change left the message's question unanswered: one more
+  // round, without tools, answers it after the receipt.
+  let answering: string | undefined;
   const availableTools = toolDefinitions.filter(
     (tool) =>
       (tool.function.name !== "log_entry" || hooks.directLogging === true) &&
@@ -330,12 +335,14 @@ export async function runTurn(
   // Today's records are in the "Everything recorded today" message, so they
   // count as read and a simple log takes one model call instead of two. A
   // check-in save merges with the existing one, a cardio correction is a
-  // patch, and new meals or activities only need today's list to avoid a
-  // duplicate. Changing a meal (its ingredient tags), workouts (set ids) and
-  // other dates still need their own read.
+  // patch, and new meals, activities or sessions only need today's list to
+  // avoid a duplicate. Changing a meal (its ingredient tags), the workout in
+  // progress (current_workout, for set ids) and other dates still need their
+  // own read.
   reads.healthDates.add(currentDate);
   reads.cardioRanges.push({ from: currentDate, to: currentDate });
   reads.foodRanges.push({ from: currentDate, to: currentDate });
+  reads.trainingRanges.push({ from: currentDate, to: currentDate });
   for (const activity of snapshot.state.cardio.sessions)
     if (activity.date === currentDate) reads.cardio.add(activity.id);
   const readContext = {
@@ -344,6 +351,7 @@ export async function runTurn(
     currentDate,
     timezone: input.timezone,
     reads,
+    message: input.message,
   };
   const signal = AbortSignal.any([
     AbortSignal.timeout(90000),
@@ -416,7 +424,7 @@ export async function runTurn(
       const roundStarted = Date.now();
       const result = await model(
         messages,
-        availableTools,
+        answering !== undefined ? [] : availableTools,
         signal,
         emit
           ? (delta) => {
@@ -447,6 +455,10 @@ export async function runTurn(
       const { served, ...message } = result;
       metrics.rounds.push({ ...served, ms: Date.now() - roundStarted });
       messages.push(message);
+      if (answering !== undefined) {
+        reply = [answering, result.content.trim()].filter(Boolean).join("\n\n");
+        break;
+      }
       if (!result.tool_calls?.length) {
         if (
           hooks.directLogging &&
@@ -794,6 +806,17 @@ export async function runTurn(
           ? "Saved to your journal. You can check the details, tell me a correction, or undo below."
           : "Ready for your review. Check the details below, then save when they look right. Tell me any corrections before saving.";
         if (changeAnswer) reply += `\n\n${changeAnswer}`;
+        else if (round < 4 && input.message.includes("?")) {
+          // The rules ask for the answer in the change's answer field, but
+          // it is sometimes left out. Ask once more, with no tools.
+          answering = reply;
+          messages.push({
+            role: "system",
+            content:
+              "The change above is done. The athlete's message also asked a question that the change's answer field didn't answer. Answer it now in plain text, in the athlete's language, from the records you have (including this change). Don't repeat the receipt or make another change.",
+          });
+          continue;
+        }
         break;
       }
     }

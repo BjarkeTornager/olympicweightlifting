@@ -40,6 +40,19 @@ struct AccountView: View {
               }
             }
           }
+          NavigationLink {
+            RemindersView()
+          } label: {
+            LabeledContent {
+              Text(Reminders.shared.settings.anyOn ? "On" : "Off")
+            } label: {
+              Label {
+                Text("Reminders")
+              } icon: {
+                IconBadge(symbol: "bell.fill", tint: .orange, size: 28)
+              }
+            }
+          }
           Link(destination: LiftServer.origin) {
             Label {
               Text("Open the Website")

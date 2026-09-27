@@ -22,13 +22,14 @@ struct LiftJournalApp: App {
 }
 
 /// Apple Health wakes the app in the background when new sleep, workouts or
-/// resting heart rate arrive. Its observers must be registered on every
-/// launch, before launching finishes.
+/// resting heart rate arrive, and a reminder's button may launch it. Both
+/// must be set up on every launch, before launching finishes.
 final class AppDelegate: NSObject, UIApplicationDelegate {
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    MainActor.assumeIsolated { Reminders.shared.register() }
     Task { await AppModel.observeHealth() }
     return true
   }

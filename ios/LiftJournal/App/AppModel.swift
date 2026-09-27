@@ -39,6 +39,8 @@ final class AppModel {
   var consentForVoice = false
   /// Counts finished calls, so Coach reloads what the call saved.
   var voiceEnded = 0
+  /// Today's check-in sheet, also opened from the morning reminder.
+  var showingCheckin = false
   var queued = 0
   var refused: [Outbox.Item] = []
 
@@ -89,6 +91,7 @@ final class AppModel {
     }
     open(saved)
     await refresh()
+    if let route = Reminders.shared.takeRoute() { follow(route) }
   }
 
   #if DEBUG
@@ -110,6 +113,7 @@ final class AppModel {
     today = todayCache.load(account: saved.accountID)
     phase = .signedIn
     listenForHealth()
+    Reminders.shared.model = self
   }
 
   private var healthUpdates: Task<Void, Never>?
@@ -208,6 +212,7 @@ final class AppModel {
 
   private func expire(message: String?) async {
     AIConsent.reset()
+    Reminders.shared.reset()
     await Credentials.shared.clear()
     await HealthSync.shared.markConnected(false)
     Storage.removeAll()
@@ -263,6 +268,7 @@ final class AppModel {
       if value.activeWorkout == nil { WorkoutActivityController.end() }
       todayError = nil
       todayCache.save(value, account: account)
+      await Reminders.shared.update(today: value)
     } catch {
       todayError = await handle(error)
     }
@@ -305,10 +311,13 @@ final class AppModel {
   }
 
   func logDrink(ml: Int, kind: Components.Schemas.LogDrinkAction.DrinkPayload.KindPayload = .water) async {
-    let day = JournalDay.string(.now)
-    await save(
-      .logDrink(.init(kind: .logDrink, drink: .init(date: day, ml: ml, kind: kind))),
-      confirmation: "Added \(ml) ml")
+    await save(Self.drink(ml: ml, kind: kind), confirmation: "Added \(ml) ml")
+  }
+
+  nonisolated static func drink(
+    ml: Int, kind: Components.Schemas.LogDrinkAction.DrinkPayload.KindPayload = .water
+  ) -> NativeAction {
+    .logDrink(.init(kind: .logDrink, drink: .init(date: JournalDay.string(.now), ml: ml, kind: kind)))
   }
 
   func removeDrink(id: String) async {
@@ -324,6 +333,25 @@ final class AppModel {
       return
     }
     voiceCall = VoiceCall(app: self)
+  }
+
+  /// Where a reminder leads when tapped.
+  func follow(_ route: Reminders.Route) {
+    switch route {
+    case .checkIn:
+      tab = .today
+      showingCheckin = true
+    case .today:
+      tab = .today
+    case .coach:
+      tab = .coach
+    case .voice:
+      if voiceEnabled {
+        startVoice()
+      } else {
+        tab = .coach
+      }
+    }
   }
 
   func closeVoice() {
@@ -381,6 +409,8 @@ final class AppModel {
       guard await Credentials.shared.current() != nil else { return }
       let client = LiftServer.client(credentials: Credentials.shared)
       _ = try? await HealthSync.shared.sync(client: client)
+      // New sleep may settle the evening reminder.
+      await Reminders.refresh(client: client)
     }
   }
 }

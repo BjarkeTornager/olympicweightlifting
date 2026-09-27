@@ -6,12 +6,12 @@ import SwiftUI
 /// nutrition and training, each card opening a chart of recent days.
 struct TodayView: View {
   @Environment(AppModel.self) private var model
-  @State private var showingCheckin = false
   @State private var healthNeedsAccess = false
   /// The last seven days, for the small charts on each card.
   @State private var week: Components.Schemas.Trends?
 
   var body: some View {
+    @Bindable var model = model
     ScrollView {
       if let today = model.today {
         content(today)
@@ -36,7 +36,7 @@ struct TodayView: View {
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) { logMenu }
     }
-    .sheet(isPresented: $showingCheckin) { CheckinSheet(existing: model.today?.checkin, body_: model.today?.body) }
+    .sheet(isPresented: $model.showingCheckin) { CheckinSheet(existing: model.today?.checkin, body_: model.today?.body) }
     .sensoryFeedback(.success, trigger: model.saves)
     .task(id: model.health.lastSync) {
       healthNeedsAccess = model.health.connected ? await HealthSync.shared.needsAccess() : false
@@ -50,7 +50,7 @@ struct TodayView: View {
     Menu {
       Button("250 ml Water", systemImage: "drop.fill") { Task { await model.logDrink(ml: 250) } }
       Button("500 ml Water", systemImage: "drop.fill") { Task { await model.logDrink(ml: 500) } }
-      Button("Check In", systemImage: "face.smiling") { showingCheckin = true }
+      Button("Check In", systemImage: "face.smiling") { model.showingCheckin = true }
       Divider()
       if model.voiceEnabled {
         Button("Talk to Coach", systemImage: "waveform") { model.startVoice() }
@@ -111,7 +111,7 @@ struct TodayView: View {
             Sparkline(values: series { $0.steps.map(Double.init) }, tint: Category.activity.tint)
           }
         }
-        Button { showingCheckin = true } label: {
+        Button { model.showingCheckin = true } label: {
           FeelTile(checkin: today.checkin)
         }
       }

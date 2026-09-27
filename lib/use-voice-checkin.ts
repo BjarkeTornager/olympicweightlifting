@@ -130,7 +130,10 @@ export function useVoiceCheckin({
 
   // The conversation is kept on the server so Coach can recall it later.
   const persist = useCallback(
-    (s: Session) => {
+    // final: the call has ended, so the server tidies the transcript.
+    (s: Session, final = false) => {
+      // A save still pending when the call ended would undo "final".
+      if (s.closed && !final) return;
       const entries = transcript.current.flatMap((e) =>
         e.role === "save"
           ? []
@@ -145,6 +148,7 @@ export function useVoiceCheckin({
           id: s.id,
           purpose: s.purpose,
           entries: entries.slice(-400),
+          ...(final ? { final: true } : {}),
         }),
       }).catch(() => {});
     },
@@ -179,7 +183,7 @@ export function useVoiceCheckin({
       const s = session.current;
       if (!s || s.closed) return;
       s.closed = true;
-      persist(s);
+      persist(s, true);
       s.timers.forEach(clearTimeout);
       s.stream?.getTracks().forEach((t) => t.stop());
       s.camera?.getTracks().forEach((t) => t.stop());

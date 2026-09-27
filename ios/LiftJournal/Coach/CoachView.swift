@@ -17,7 +17,7 @@ struct CoachView: View {
   var body: some View {
     ScrollView {
       LazyVStack(spacing: 4) {
-        if coach.loaded && coach.turns.isEmpty && coach.asking == nil {
+        if coach.loaded && coach.items.isEmpty && coach.asking == nil {
           ContentUnavailableView {
             Label("Coach", systemImage: "bubble.left.and.text.bubble.right")
           } description: {
@@ -25,13 +25,15 @@ struct CoachView: View {
           }
           .padding(.top, 80)
         }
-        ForEach(Array(coach.turns.enumerated()), id: \.element.id) { index, turn in
-          if index == 0 || !Calendar.current.isDate(
-            Self.date(turn.createdAt), inSameDayAs: Self.date(coach.turns[index - 1].createdAt))
-          {
-            DayStamp(date: Self.date(turn.createdAt))
+        let items = coach.items
+        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+          if index == 0 || !Calendar.current.isDate(item.date, inSameDayAs: items[index - 1].date) {
+            DayStamp(date: item.date)
           }
-          TurnView(turn: turn, coach: coach)
+          switch item {
+          case .turn(let turn): TurnView(turn: turn, coach: coach)
+          case .call(let call): VoiceCallCard(call: call)
+          }
         }
         if let asking = coach.asking {
           VStack(spacing: 6) {
@@ -72,7 +74,14 @@ struct CoachView: View {
     }
     .safeAreaInset(edge: .bottom) { composer }
     .task { if !coach.loaded { await coach.load(app) } }
-    .onChange(of: app.voiceEnded) { _, _ in Task { await coach.load(app) } }
+    .onChange(of: app.voiceEnded) { _, _ in
+      Task {
+        await coach.load(app)
+        // The server tidies the transcript just after the call; show it.
+        try? await Task.sleep(for: .seconds(15))
+        await coach.load(app)
+      }
+    }
     .refreshable { await coach.load(app) }
     .photosPicker(
       isPresented: $showingPhotos, selection: $picked,
@@ -256,6 +265,59 @@ private struct TurnView: View {
       .padding(.leading, 34)
     }
     .padding(.bottom, 12)
+  }
+}
+
+/// A voice call in the thread: when and how long, and what was said, in
+/// the same sides as typed messages. Long calls start folded.
+private struct VoiceCallCard: View {
+  let call: VoiceCallRecord
+  @State private var expanded = false
+  private let folded = 4
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Label {
+        Text("Voice call").font(.subheadline.weight(.semibold))
+          + Text(" · \(duration)").font(.subheadline).foregroundStyle(.secondary)
+      } icon: {
+        Image(systemName: "waveform").foregroundStyle(.tint)
+      }
+      ForEach(Array(shown.enumerated()), id: \.offset) { _, line in
+        HStack {
+          if line.role == "you" { Spacer(minLength: 40) }
+          Text(line.text)
+            .font(.subheadline)
+            .textSelection(.enabled)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .foregroundStyle(line.role == "you" ? Color.white : Color.primary)
+            .background(
+              line.role == "you" ? Color.accentColor : Color(.systemGray5),
+              in: .rect(cornerRadius: 16))
+          if line.role == "coach" { Spacer(minLength: 40) }
+        }
+      }
+      if call.lines.count > folded {
+        Button(expanded ? "Show less" : "Show the whole call (\(call.lines.count) lines)") {
+          withAnimation { expanded.toggle() }
+        }
+        .font(.footnote.weight(.medium))
+      }
+    }
+    .padding(12)
+    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+    .padding(.bottom, 12)
+    .accessibilityElement(children: .contain)
+  }
+
+  private var shown: [Components.Schemas.VoiceCallLine] {
+    expanded ? call.lines : Array(call.lines.prefix(folded))
+  }
+
+  private var duration: String {
+    let seconds = max(0, CoachView.date(call.endedAt).timeIntervalSince(CoachView.date(call.startedAt)))
+    return seconds < 60 ? "under a minute" : Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
   }
 }
 

@@ -411,6 +411,33 @@
         }
       }
     },
+    "/api/v1/voice/calls": {
+      "get": {
+        "operationId": "getVoiceCalls",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceCalls"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/activities/{id}/route": {
       "get": {
         "operationId": "getActivityRoute",
@@ -2753,6 +2780,62 @@
         },
         "required": [
           "date"
+        ]
+      },
+      "VoiceCall": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceCallLine"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "startedAt",
+          "endedAt",
+          "lines"
+        ]
+      },
+      "VoiceCallLine": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "One of: you, coach. Treat others as unknown."
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ]
+      },
+      "VoiceCalls": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceCall"
+            }
+          }
+        },
+        "required": [
+          "calls"
         ]
       },
       "WorkoutDetail": {

@@ -5,6 +5,27 @@ import Observation
 import UIKit
 
 typealias CoachTurn = Components.Schemas.CoachTurn
+typealias VoiceCallRecord = Components.Schemas.VoiceCall
+
+/// A typed message or a voice call, in the order they happened.
+enum ThreadItem: Identifiable {
+  case turn(CoachTurn)
+  case call(VoiceCallRecord)
+
+  var id: String {
+    switch self {
+    case .turn(let turn): "turn-\(turn.id)"
+    case .call(let call): "call-\(call.id)"
+    }
+  }
+
+  var date: Date {
+    switch self {
+    case .turn(let turn): CoachView.date(turn.createdAt)
+    case .call(let call): CoachView.date(call.startedAt)
+    }
+  }
+}
 
 @Observable
 final class CoachModel {
@@ -15,6 +36,8 @@ final class CoachModel {
   }
 
   var turns: [CoachTurn] = []
+  /// Voice calls from the last 30 days, with their transcripts.
+  var calls: [VoiceCallRecord] = []
   var loaded = false
   var draft = ""
   var attachments: [Attachment] = []
@@ -36,11 +59,20 @@ final class CoachModel {
 
   func load(_ app: AppModel) async {
     do {
-      turns = try await app.client.getCoach().value().turns
+      async let history = app.client.getCoach().value().turns
+      // The thread still shows typed messages if calls can't be loaded.
+      async let spoken = try? app.client.getVoiceCalls().value().calls
+      turns = try await history
+      calls = await spoken ?? calls
       loaded = true
     } catch {
       self.error = await app.handle(error)
     }
+  }
+
+  /// Typed turns and voice calls together, oldest first.
+  var items: [ThreadItem] {
+    (turns.map(ThreadItem.turn) + calls.map(ThreadItem.call)).sorted { $0.date < $1.date }
   }
 
   var canSend: Bool {

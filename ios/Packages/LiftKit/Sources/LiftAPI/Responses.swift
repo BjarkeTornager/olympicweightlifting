@@ -121,6 +121,14 @@ extension Operations.GetCoach.Output {
     }
   }
 }
+extension Operations.GetVoiceCalls.Output {
+  public func value() throws -> Components.Schemas.VoiceCalls {
+    switch self {
+    case .ok(let ok): try ok.body.json
+    case .default(let status, let failure): throw APIFailure(status: status, body: try? failure.body.json)
+    }
+  }
+}
 extension Operations.ApplyProposal.Output {
   public func value() throws {
     switch self {

@@ -2,6 +2,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { agentTurns, voiceCalls } from "./db/schema";
 import { displayMessage } from "./coach-tasks";
+import { tidyTranscript } from "./voice-transcript";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -58,6 +59,75 @@ export async function saveVoiceTranscript(
       // A call id belongs to the account that started it.
       where: eq(voiceCalls.userId, userId),
     });
+}
+
+// Tidies a call's transcript when it has none, or the call went on after
+// the last tidy. The tidy text replaces the raw text for Coach's memory and
+// search; the raw lines stay in transcript.
+export async function tidyVoiceCall(
+  userId: string,
+  id: string,
+  tidyWith: typeof tidyTranscript = tidyTranscript,
+) {
+  const db = getDb();
+  const [call] = await db
+    .select()
+    .from(voiceCalls)
+    .where(and(eq(voiceCalls.id, id), eq(voiceCalls.userId, userId)));
+  if (!call || (call.tidiedAt && call.tidiedAt >= call.updatedAt)) return;
+  const tidy = await tidyWith(call.transcript);
+  if (!tidy) return;
+  await db
+    .update(voiceCalls)
+    // Stamped with the version it tidied, so it's current until a new save.
+    .set({
+      tidy,
+      tidiedAt: sql`${voiceCalls.updatedAt}`,
+      content: transcriptContent(tidy),
+    })
+    .where(
+      and(
+        eq(voiceCalls.id, id),
+        eq(voiceCalls.userId, userId),
+        // Not if the call was saved again meanwhile: that needs a new tidy.
+        // PostgreSQL keeps microseconds; the Date read back has milliseconds.
+        sql`date_trunc('milliseconds', ${voiceCalls.updatedAt}) = ${call.updatedAt}`,
+      ),
+    );
+}
+
+export type VoiceCallSummary = {
+  id: string;
+  purpose: string;
+  startedAt: string;
+  endedAt: string;
+  // Tidy lines when current, otherwise what was transcribed live.
+  lines: { role: "you" | "coach"; text: string }[];
+  tidied: boolean;
+};
+
+// The account's recent calls, newest last, for the Coach thread.
+export async function listVoiceCalls(
+  userId: string,
+  { since, limit = 30 }: { since: Date; limit?: number },
+): Promise<VoiceCallSummary[]> {
+  const rows = await getDb()
+    .select()
+    .from(voiceCalls)
+    .where(and(eq(voiceCalls.userId, userId), gte(voiceCalls.startedAt, since)))
+    .orderBy(desc(voiceCalls.startedAt))
+    .limit(limit);
+  return rows.reverse().map((c) => {
+    const tidied = Boolean(c.tidy && c.tidiedAt && c.tidiedAt >= c.updatedAt);
+    return {
+      id: c.id,
+      purpose: c.purpose,
+      startedAt: c.startedAt.toISOString(),
+      endedAt: c.updatedAt.toISOString(),
+      lines: tidied ? c.tidy! : c.transcript,
+      tidied,
+    };
+  });
 }
 
 // Today's conversations and the most recent ones before that, newest last.

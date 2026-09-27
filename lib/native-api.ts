@@ -972,6 +972,25 @@ const coachTurn = z
   })
   .strict()
   .register(nativeResponses, { id: "CoachTurn" });
+// Spoken calls with the voice coach, for the Coach thread (their own
+// endpoint, so builds that decode CoachHistory strictly are unaffected).
+const voiceCallLine = z
+  .object({ role: z.enum(["you", "coach"]), text: z.string() })
+  .strict()
+  .register(nativeResponses, { id: "VoiceCallLine" });
+const voiceCall = z
+  .object({
+    id: z.string(),
+    startedAt: instant,
+    endedAt: instant,
+    lines: z.array(voiceCallLine),
+  })
+  .strict()
+  .register(nativeResponses, { id: "VoiceCall" });
+export const voiceCallsResponse = z
+  .object({ calls: z.array(voiceCall) })
+  .strict()
+  .register(nativeResponses, { id: "VoiceCalls" });
 export const coachHistory = z
   .object({ turns: z.array(coachTurn) })
   .strict()

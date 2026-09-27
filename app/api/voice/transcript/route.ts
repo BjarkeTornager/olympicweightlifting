@@ -5,7 +5,8 @@ import {
   readJson,
   requireAthlete,
 } from "@/lib/agent/http";
-import { saveVoiceTranscript } from "@/lib/conversation-memory";
+import { after } from "next/server";
+import { saveVoiceTranscript, tidyVoiceCall } from "@/lib/conversation-memory";
 import { allowRequest } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
@@ -32,10 +33,14 @@ export async function POST(request: Request) {
           )
           .min(1)
           .max(400),
+        // The call has ended: tidy its transcript once the reply is sent.
+        final: z.boolean().optional(),
       })
       .strict()
       .parse(await readJson(request, 400000));
     await saveVoiceTranscript(user.id, call);
+    if (call.final)
+      after(() => tidyVoiceCall(user.id, call.id).catch(() => {}));
     return Response.json(
       { saved: true },
       { headers: { "Cache-Control": "no-store" } },

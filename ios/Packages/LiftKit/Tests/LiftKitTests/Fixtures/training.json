@@ -246,6 +246,57 @@
       "loggedSets": 0
     }
   ],
+  "bests": [],
+  "weeks": [
+    {
+      "start": "2026-08-03",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-08-10",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-08-17",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-08-24",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-08-31",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-09-07",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-09-14",
+      "sessions": 0,
+      "sets": 0,
+      "tonnageKg": 0
+    },
+    {
+      "start": "2026-09-21",
+      "sessions": 1,
+      "sets": 0,
+      "tonnageKg": 0
+    }
+  ],
   "exercises": [
     {
       "id": "snatch",

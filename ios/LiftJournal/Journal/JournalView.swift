@@ -128,9 +128,9 @@ struct JournalRow: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      IconBadge(symbol: category.symbol, tint: category.tint)
+      IconBadge(symbol: symbol, tint: category.tint, size: 34)
       VStack(alignment: .leading, spacing: 2) {
-        Text(item.title)
+        Text(item.title).font(.body.weight(.medium))
         if !item.detail.isEmpty {
           Text(item.detail).font(.subheadline).foregroundStyle(.secondary)
         }
@@ -143,6 +143,11 @@ struct JournalRow: View {
       if item.fromAppleHealth { AppleHealthMark() }
     }
     .accessibilityElement(children: .combine)
+  }
+
+  /// Cardio shows its kind of activity, as on Today.
+  private var symbol: String {
+    item.kind == "cardio" ? ActivityRow.symbol(item.activity ?? "") : category.symbol
   }
 
   private var category: Category {

@@ -26,8 +26,9 @@ struct WorkoutView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             header(workout)
-            ForEach(workout.exercises, id: \.entryId) { exercise in
-              ExerciseCard(exercise: exercise, busy: train.busySet == exercise.entryId) { weight, reps, made in
+            let current = workout.exercises.first { $0.sets.contains { !$0.logged } }?.entryId
+            ForEach(Array(workout.exercises.enumerated()), id: \.element.entryId) { index, exercise in
+              ExerciseCard(number: index + 1, exercise: exercise, current: exercise.entryId == current, busy: train.busySet == exercise.entryId) { weight, reps, made in
                 Task {
                   await train.log(exercise: exercise, weight: weight, reps: reps, made: made, app)
                   train.startRest()
@@ -45,9 +46,10 @@ struct WorkoutView: View {
             .buttonStyle(.bordered)
             .buttonBorderShape(.roundedRectangle(radius: 14))
           }
-          .padding(.horizontal, 20)
+          .padding(.horizontal, 16)
           .padding(.vertical, 12)
         }
+        .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
           if let ends = train.restEnds {
             RestTimer(until: ends, extend: { train.extendRest(by: 30) }, done: train.stopRest)
@@ -108,7 +110,7 @@ struct WorkoutView: View {
           }
         }
       } else {
-        ContentUnavailableView("No workout in progress", systemImage: "figure.strengthtraining.olympic")
+        ContentUnavailableView("No workout in progress", systemImage: "dumbbell.fill")
       }
     }
     .sensoryFeedback(.success, trigger: app.saves)
@@ -117,19 +119,34 @@ struct WorkoutView: View {
   private func header(_ workout: WorkoutDetail) -> some View {
     let sets = workout.exercises.flatMap(\.sets)
     let logged = sets.filter(\.logged).count
-    return VStack(alignment: .leading, spacing: 8) {
-      Text(JournalView.heading(workout.date)).font(.subheadline).foregroundStyle(.secondary)
-      ProgressView(value: Double(logged), total: Double(max(sets.count, 1))) {
-        Text("\(logged) of \(sets.count) sets logged").font(.subheadline.weight(.medium))
+    let done = workout.exercises.filter { !$0.sets.isEmpty && $0.sets.allSatisfy(\.logged) }.count
+    return HStack(spacing: 16) {
+      ZStack {
+        ProgressRing(progress: Double(logged) / Double(max(sets.count, 1)), tint: Category.training.tint, lineWidth: 8)
+        Text("\(Int((Double(logged) / Double(max(sets.count, 1)) * 100).rounded()))%")
+          .font(.system(.subheadline, design: .rounded, weight: .bold))
+          .monospacedDigit()
+          .contentTransition(.numericText())
       }
-      .tint(.accentColor)
+      .frame(width: 64, height: 64)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(JournalView.heading(workout.date)).font(.caption.weight(.bold)).foregroundStyle(Category.training.tint)
+        Text("\(logged) of \(sets.count) sets logged").font(.headline)
+        Text("\(done) of \(workout.exercises.count) exercises done").font(.subheadline).foregroundStyle(.secondary)
+      }
+      Spacer(minLength: 0)
     }
+    .card()
+    .accessibilityElement(children: .combine)
   }
 }
 
 /// One exercise: its sets, and the next planned set ready to log.
 private struct ExerciseCard: View {
+  let number: Int
   let exercise: Components.Schemas.WorkoutExercise
+  /// The first exercise with sets left, whose next set is highlighted.
+  let current: Bool
   let busy: Bool
   let log: (Double, Int, Bool) -> Void
   let correct: (Components.Schemas.WorkoutSet) -> Void
@@ -139,21 +156,35 @@ private struct ExerciseCard: View {
 
   private var next: Components.Schemas.WorkoutSet? { exercise.sets.first { !$0.logged } }
   private var lastLogged: Components.Schemas.WorkoutSet? { exercise.sets.last(where: \.logged) }
+  private var finished: Bool { !exercise.sets.isEmpty && exercise.sets.allSatisfy(\.logged) }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(exercise.name).font(.headline)
-        if let target = exercise.target {
-          Text(target).font(.subheadline).foregroundStyle(.secondary)
+      HStack(spacing: 12) {
+        Group {
+          if finished {
+            Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(.white)
+          } else {
+            Text("\(number)").font(.system(.caption, design: .rounded, weight: .bold))
+              .foregroundStyle(Category.training.tint)
+          }
+        }
+        .frame(width: 28, height: 28)
+        .background(finished ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Category.training.tint.opacity(0.12)), in: .circle)
+        .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(exercise.name).font(.headline)
+          if let target = exercise.target {
+            Text(target).font(.subheadline).foregroundStyle(.secondary)
+          }
         }
       }
       VStack(spacing: 0) {
         ForEach(Array(exercise.sets.enumerated()), id: \.element.id) { index, set in
-          SetRow(number: index + 1, set: set, isNext: set.id == next?.id)
+          SetRow(number: index + 1, set: set, isNext: current && set.id == next?.id)
             .contentShape(.rect)
             .onTapGesture { if set.logged { correct(set) } }
-          if index < exercise.sets.count - 1 { Divider() }
+          if index < exercise.sets.count - 1 { Divider().padding(.leading, 34) }
         }
       }
       if next != nil || exercise.sets.allSatisfy(\.logged) {
@@ -217,7 +248,7 @@ private struct SetRow: View {
     HStack {
       Text("\(number)")
         .font(.subheadline.weight(.semibold).monospacedDigit())
-        .foregroundStyle(.secondary)
+        .foregroundStyle(isNext ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
         .frame(width: 24, alignment: .leading)
       Text(values)
         .font(.body.monospacedDigit())
@@ -232,13 +263,15 @@ private struct SetRow: View {
       }
     }
     .padding(.vertical, 9)
+    .padding(.horizontal, 10)
+    .background(isNext ? Color.accentColor.opacity(0.08) : .clear, in: .rect(cornerRadius: 10, style: .continuous))
     .accessibilityElement(children: .combine)
   }
 
   private var values: String {
-    let weight = set.weight.map { $0.formatted(.number.precision(.fractionLength(0...1))) + " kg" } ?? "Choose load"
     let reps = set.reps.map { "\($0)" } ?? "–"
-    return "\(weight) × \(reps)"
+    guard let weight = set.weight else { return set.reps == 1 ? "1 rep" : "\(reps) reps" }
+    return "\(weight.formatted(.number.precision(.fractionLength(0...1)))) kg × \(reps)"
   }
 }
 

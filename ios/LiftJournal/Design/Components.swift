@@ -26,37 +26,11 @@ enum Category {
     case .activity: "flame.fill"
     case .water: "drop.fill"
     case .food: "fork.knife"
-    case .training: "figure.strengthtraining.olympic"
+    case .training: "dumbbell.fill"
     case .checkin: "face.smiling"
     case .coach: "waveform"
     case .body: "scalemass.fill"
     }
-  }
-}
-
-/// A summary card in the style of the Health app: the category in its
-/// colour, an optional time on the right, then the content.
-struct SummaryCard<Content: View>: View {
-  let title: String
-  let category: Category
-  var caption: String?
-  @ViewBuilder var content: Content
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(spacing: 6) {
-        Label(title, systemImage: category.symbol)
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(category.tint)
-        Spacer(minLength: 8)
-        if let caption {
-          Text(caption).font(.footnote).foregroundStyle(.secondary)
-        }
-      }
-      content
-    }
-    .padding(.vertical, 4)
-    .accessibilityElement(children: .combine)
   }
 }
 
@@ -162,6 +136,17 @@ enum Format {
 
   static func number(_ value: Double) -> String {
     Int(value.rounded()).formatted()
+  }
+
+  /// The body goal's focus, as the server names it.
+  static func focus(_ value: String?) -> String? {
+    switch value {
+    case "lose_fat": "Losing fat"
+    case "build_muscle": "Building muscle"
+    case "recomposition": "Recomposition"
+    case "maintain": "Maintaining"
+    default: nil
+    }
   }
 }
 

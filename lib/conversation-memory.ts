@@ -2,7 +2,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { agentTurns, voiceCalls } from "./db/schema";
 import { displayMessage } from "./coach-tasks";
-import { tidyTranscript } from "./voice-transcript";
+import { tidyTranscript, withoutLabel } from "./voice-transcript";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -124,7 +124,13 @@ export async function listVoiceCalls(
       purpose: c.purpose,
       startedAt: c.startedAt.toISOString(),
       endedAt: c.updatedAt.toISOString(),
-      lines: tidied ? c.tidy! : c.transcript,
+      // Calls tidied before labels were stripped may still carry them.
+      lines: tidied
+        ? c.tidy!.map((l, i) => ({
+            ...l,
+            text: withoutLabel(l.text, c.transcript[i]?.text ?? ""),
+          }))
+        : c.transcript,
       tidied,
     };
   });

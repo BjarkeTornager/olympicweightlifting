@@ -7,12 +7,14 @@ struct TrainView: View {
   @Environment(AppModel.self) private var app
   @State private var train = TrainModel()
   @State private var editing: ProgrammeEditorTarget?
+  @State private var recentShown = 8
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 28) {
+      VStack(alignment: .leading, spacing: 24) {
         if let training = train.training {
           hero(training)
+          progress(training)
           programmes(training)
           recent(training)
         } else if train.loading {
@@ -23,9 +25,10 @@ struct TrainView: View {
             description: Text(train.error ?? "Pull down to try again."))
         }
       }
-      .padding(.horizontal, 20)
-      .padding(.vertical, 12)
+      .padding(.horizontal, 16)
+      .padding(.bottom, 24)
     }
+    .background(Color(.systemGroupedBackground))
     .navigationTitle("Train")
     .navigationDestination(for: WorkoutRoute.self) { route in
       switch route {
@@ -49,47 +52,112 @@ struct TrainView: View {
     if let workout = training.activeWorkout {
       let logged = workout.exercises.flatMap(\.sets).filter(\.logged).count
       let total = workout.exercises.flatMap(\.sets).count
-      VStack(alignment: .leading, spacing: 14) {
-        Text("IN PROGRESS").font(.caption.weight(.bold)).foregroundStyle(.orange)
-        Text(workout.title).font(.title2.weight(.bold))
-        ProgressView(value: Double(logged), total: Double(max(total, 1))) {
-          Text("\(logged) of \(total) sets").font(.subheadline).foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 18) {
+        HStack(spacing: 16) {
+          ZStack {
+            ProgressRing(progress: Double(logged) / Double(max(total, 1)), tint: .orange, lineWidth: 8)
+            Text("\(logged)/\(total)")
+              .font(.system(.subheadline, design: .rounded, weight: .bold))
+              .monospacedDigit()
+          }
+          .frame(width: 64, height: 64)
+          VStack(alignment: .leading, spacing: 3) {
+            Text("In progress").font(.caption.weight(.bold)).foregroundStyle(.orange)
+            Text(workout.title).font(.title2.weight(.bold))
+            Text("\(logged) of \(total) sets logged").font(.subheadline).foregroundStyle(.secondary)
+          }
         }
-        .tint(.orange)
         NavigationLink(value: WorkoutRoute.active) {
-          Text("Continue Workout")
+          Label("Continue Workout", systemImage: "play.fill")
         }
         .buttonStyle(PrimaryButtonStyle())
       }
-      .card(padding: 20)
+      .card()
     } else if let next = training.next {
       let programme = training.programmes.first { $0.id == next.programmeId }
       let day = programme?.days.first { $0.id == next.dayId }
-      VStack(alignment: .leading, spacing: 14) {
-        Text("NEXT · \(next.programmeName.uppercased())")
-          .font(.caption.weight(.bold)).foregroundStyle(.tint)
-        Text(next.title).font(.title2.weight(.bold))
-        if let day {
-          VStack(alignment: .leading, spacing: 8) {
-            ForEach(day.exercises.prefix(5), id: \.exerciseId) { exercise in
-              HStack {
-                Text(exercise.name)
-                Spacer()
-                Text(exercise.text).foregroundStyle(.secondary).font(.subheadline)
+      VStack(alignment: .leading, spacing: 16) {
+        HStack(spacing: 12) {
+          IconBadge(symbol: "dumbbell.fill", tint: Category.training.tint, size: 44)
+          VStack(alignment: .leading, spacing: 1) {
+            Text("Next · \(next.programmeName)")
+              .font(.caption.weight(.bold)).foregroundStyle(Category.training.tint).lineLimit(1)
+            Text(next.title).font(.title2.weight(.bold))
+          }
+        }
+        SessionDots(position: next.position, count: next.count)
+        if let day, !day.exercises.isEmpty {
+          VStack(spacing: 10) {
+            ForEach(Array(day.exercises.prefix(6).enumerated()), id: \.offset) { index, exercise in
+              HStack(spacing: 12) {
+                Text("\(index + 1)")
+                  .font(.system(.caption, design: .rounded, weight: .bold))
+                  .foregroundStyle(Category.training.tint)
+                  .frame(width: 24, height: 24)
+                  .background(Category.training.tint.opacity(0.12), in: .circle)
+                Text(exercise.name).font(.body.weight(.medium))
+                Spacer(minLength: 8)
+                Text(exercise.text)
+                  .font(.system(.subheadline, design: .rounded))
+                  .foregroundStyle(.secondary)
+                  .monospacedDigit()
               }
             }
-            if day.exercises.count > 5 {
-              Text("+ \(day.exercises.count - 5) more").font(.subheadline).foregroundStyle(.secondary)
+            if day.exercises.count > 6 {
+              Text("+ \(day.exercises.count - 6) more")
+                .font(.subheadline).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 36)
             }
           }
         }
-        Text("Session \(next.position) of \(next.count)").font(.footnote).foregroundStyle(.secondary)
-        Button("Start Workout") { Task { await train.start(next, app) } }
-          .buttonStyle(PrimaryButtonStyle())
-          .disabled(!next.canStart)
+        Button {
+          Task { await train.start(next, app) }
+        } label: {
+          Label("Start Workout", systemImage: "play.fill")
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(!next.canStart)
       }
-      .card(padding: 20)
+      .card()
     }
+  }
+
+  // MARK: Progress
+
+  @ViewBuilder
+  private func progress(_ training: Training) -> some View {
+    let week = training.weeks.last
+    VStack(alignment: .leading, spacing: 12) {
+      SectionHeading("Progress").padding(.horizontal, 4)
+      VStack(alignment: .leading, spacing: 14) {
+        HStack(spacing: 6) {
+          TintedSymbol(symbol: "chart.bar.fill", tint: Category.training.tint)
+          Text("This Week").font(.subheadline.weight(.semibold)).foregroundStyle(Category.training.tint)
+        }
+        HStack {
+          MiniValue(value: "\(week?.sessions ?? 0)", label: week?.sessions == 1 ? "Session" : "Sessions")
+          MiniValue(value: "\(week?.sets ?? 0)", label: "Sets")
+          MiniValue(value: tonnes(week?.tonnageKg ?? 0), unit: "t", label: "Lifted")
+        }
+        Sparkline(values: training.weeks.map { $0.tonnageKg > 0 ? $0.tonnageKg : nil }, tint: Category.training.tint)
+          .frame(height: 56)
+        Text("Kilos lifted each week, last 8 weeks")
+          .font(.caption).foregroundStyle(.secondary)
+      }
+      .card()
+      if !training.bests.isEmpty {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+          ForEach(training.bests, id: \.exerciseId) { best in
+            BestTile(best: best)
+          }
+        }
+      }
+    }
+  }
+
+  private func tonnes(_ kg: Double) -> String {
+    (kg / 1000).formatted(.number.precision(.fractionLength(kg >= 10000 ? 0 : 1)))
   }
 
   // MARK: Programmes
@@ -101,6 +169,7 @@ struct TrainView: View {
           .labelStyle(.titleAndIcon)
           .font(.subheadline.weight(.semibold))
       }
+      .padding(.horizontal, 4)
       ScrollView(.horizontal) {
         HStack(spacing: 14) {
           ForEach(training.programmes, id: \.id) { programme in
@@ -122,23 +191,23 @@ struct TrainView: View {
 
   private func recent(_ training: Training) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      SectionHeading("Recent Sessions")
+      SectionHeading("Recent Sessions").padding(.horizontal, 4)
       if training.recent.isEmpty {
         Text("Finished workouts appear here with every set.")
+          .font(.subheadline)
           .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .card()
       } else {
         VStack(spacing: 0) {
-          ForEach(Array(training.recent.enumerated()), id: \.element.id) { index, session in
+          ForEach(Array(training.recent.prefix(recentShown).enumerated()), id: \.element.id) { index, session in
             NavigationLink(value: WorkoutRoute.session(session.id)) {
               HStack(spacing: 14) {
-                IconBadge(symbol: "figure.strengthtraining.olympic", tint: .blue, size: 36)
+                DateBadge(day: session.date)
                 VStack(alignment: .leading, spacing: 2) {
                   Text(session.title).font(.body.weight(.semibold)).foregroundStyle(.primary)
                   Text(
-                    [
-                      JournalView.heading(session.date),
-                      "\(session.loggedSets) \(session.loggedSets == 1 ? "set" : "sets")", session.topSet,
-                    ]
+                    ["\(session.loggedSets) \(session.loggedSets == 1 ? "set" : "sets")", session.topSet]
                       .compactMap { $0 }.joined(separator: " · ")
                   )
                   .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
@@ -149,12 +218,93 @@ struct TrainView: View {
               .padding(.vertical, 12)
               .contentShape(.rect)
             }
-            .buttonStyle(.plain)
-            if index < training.recent.count - 1 { Divider().padding(.leading, 50) }
+            .buttonStyle(CardButtonStyle())
+            if index < min(recentShown, training.recent.count) - 1 { Divider().padding(.leading, 58) }
+          }
+          if training.recent.count > recentShown {
+            Divider()
+            Button("Show All \(training.recent.count) Sessions") { recentShown = training.recent.count }
+              .font(.subheadline.weight(.semibold))
+              .frame(maxWidth: .infinity)
+              .padding(.top, 12)
           }
         }
+        .card(padding: 16)
       }
     }
+  }
+}
+
+/// Where a session sits in its programme's cycle, as filled dots.
+private struct SessionDots: View {
+  let position: Int
+  let count: Int
+
+  var body: some View {
+    HStack(spacing: 8) {
+      HStack(spacing: 4) {
+        ForEach(1...max(count, 1), id: \.self) { step in
+          Capsule()
+            .fill(step <= position ? AnyShapeStyle(Category.training.tint.gradient) : AnyShapeStyle(Category.training.tint.opacity(0.15)))
+            .frame(width: step == position ? 22 : 12, height: 6)
+        }
+      }
+      Text("Session \(position) of \(count)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Session \(position) of \(count)")
+  }
+}
+
+/// A main lift's heaviest made set.
+private struct BestTile: View {
+  let best: Components.Schemas.PersonalBest
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 6) {
+        TintedSymbol(symbol: "trophy.fill", tint: .yellow)
+        Text(best.name)
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
+      HStack(alignment: .firstTextBaseline, spacing: 3) {
+        Text(best.weight.formatted())
+          .font(.system(.title2, design: .rounded, weight: .bold))
+          .monospacedDigit()
+        Text("kg").font(.system(.footnote, design: .rounded, weight: .semibold)).foregroundStyle(.secondary)
+      }
+      Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .card(padding: 14)
+    .accessibilityElement(children: .combine)
+  }
+
+  private var detail: String {
+    let when = best.date.flatMap { JournalDay.date($0) }.map { $0.formatted(.dateTime.day().month(.abbreviated)) }
+    return [best.reps.map { "× \($0)" }, when ?? "Entered by you"].compactMap { $0 }.joined(separator: " · ")
+  }
+}
+
+/// A session's date as a small calendar leaf.
+private struct DateBadge: View {
+  let day: String
+
+  var body: some View {
+    let date = JournalDay.date(day)
+    VStack(spacing: 0) {
+      Text(date?.formatted(.dateTime.month(.abbreviated)).uppercased() ?? "")
+        .font(.system(size: 9, weight: .bold))
+        .foregroundStyle(Category.training.tint)
+      Text(date?.formatted(.dateTime.day()) ?? "–")
+        .font(.system(.headline, design: .rounded, weight: .bold))
+        .foregroundStyle(Color.primary)
+    }
+    .frame(width: 44, height: 44)
+    .background(Category.training.tint.opacity(0.1), in: .rect(cornerRadius: 11, style: .continuous))
+    .accessibilityHidden(true)
   }
 }
 

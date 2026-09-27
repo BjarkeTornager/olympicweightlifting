@@ -25,6 +25,23 @@ test("a tidy line is kept only when it plausibly is the same speech", () => {
       { role: "coach", text: "Got it, two eggs and oatmeal for breakfast." },
     ],
   );
+  // A speaker label the model added is dropped; one that was said stays.
+  assert.deepEqual(
+    acceptTidy(raw, [
+      "you: Jeg spiste to æg og havregryn til morgenmad.",
+      "Coach: Got it, two eggs and oatmeal for breakfast.",
+    ])!.map((l) => l.text),
+    [
+      "Jeg spiste to æg og havregryn til morgenmad.",
+      "Got it, two eggs and oatmeal for breakfast.",
+    ],
+  );
+  assert.equal(
+    acceptTidy([{ role: "you", text: "coach: log it" }], ["Coach: log it."])![0]
+      .text,
+    "Coach: log it.",
+  );
+  assert.match(tidyInstructions, /without a speaker label/);
   // A different number of lines can't be matched up: nothing is used.
   assert.equal(acceptTidy(raw, ["Only one line."]), null);
   // An empty, invented or truncated line keeps what was transcribed.
@@ -100,8 +117,9 @@ test(
       "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'QA','voice-'||$1||'@example.test',true)",
       [user],
     );
+    // Labelled, as the model sometimes did before labels were stripped.
     const tidyWith = async (lines: Line[]) =>
-      lines.map((l) => ({ ...l, text: `${l.text.trim()}.` }));
+      lines.map((l) => ({ ...l, text: `${l.role}: ${l.text.trim()}.` }));
     const since = new Date(Date.now() - 86400000);
     try {
       await saveVoiceTranscript(user, { id, purpose: "checkin", entries: raw });

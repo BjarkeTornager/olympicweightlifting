@@ -25,10 +25,19 @@ For each line:
 - Correct a word only when it was clearly misheard, judging from the conversation (the coach's replies show what the coach understood), exercise names and ordinary food, drink, sleep and training vocabulary. Keep numbers, units and names exactly as said unless they are clearly misheard.
 - Remove only filler sounds such as "um" and "øh" and words repeated by a stumble.
 - Never add, drop, reorder, merge or summarise content, never answer or comment, and keep the speaker. If unsure, keep the original words.
+- Return only the words spoken, without a speaker label such as "coach:" or "you:".
 
 Exercise names in this app, for spelling (lower-case them mid-sentence as usual): ${exerciseNames}.
 
 Return JSON only: {"lines":["tidied line 1","tidied line 2",...]} with exactly one string per input line, in the same order.`;
+
+// A speaker label the model put in front of a line, such as "coach: ".
+const label = /^\s*(?:you|coach|athlete|speaker)\s*:\s*/i;
+
+// Removes a speaker label from a tidy line unless it was spoken.
+export function withoutLabel(tidy: string, raw: string) {
+  return label.test(raw) ? tidy : tidy.replace(label, "");
+}
 
 // Accepts the model's lines only when they plausibly are the same speech:
 // one per input line, none empty, and no line much shorter or longer than
@@ -36,7 +45,10 @@ Return JSON only: {"lines":["tidied line 1","tidied line 2",...]} with exactly o
 export function acceptTidy(raw: Line[], lines: unknown): Line[] | null {
   if (!Array.isArray(lines) || lines.length !== raw.length) return null;
   return raw.map((line, i) => {
-    const text = typeof lines[i] === "string" ? lines[i].trim() : "";
+    const text =
+      typeof lines[i] === "string"
+        ? withoutLabel(lines[i], line.text).trim()
+        : "";
     const before = line.text.trim().length;
     const ok =
       text.length > 0 &&

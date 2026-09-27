@@ -20,6 +20,12 @@ public struct APIFailure: LocalizedError, Sendable {
     self.status = status
     message = body?.error ?? "The journal did not respond (\(status)). Try again shortly."
   }
+
+  /// A response this build can't read, usually because the server that
+  /// matches it hasn't finished deploying yet.
+  public static func unreadable(_ error: any Error) -> Bool {
+    ((error as? ClientError)?.underlyingError ?? error) is DecodingError
+  }
 }
 
 // One accessor per operation turns the generated output into a value or an

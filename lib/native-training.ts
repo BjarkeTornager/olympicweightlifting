@@ -150,8 +150,8 @@ export const trainingView = z
     recent: z.array(sessionSummary),
     // The main lifts' best made sets, and the last eight weeks' work, for
     // progress at a glance.
-    bests: z.array(personalBest),
-    weeks: z.array(trainingWeek),
+    bests: z.array(personalBest).optional(),
+    weeks: z.array(trainingWeek).optional(),
     exercises: z.array(exerciseOption),
   })
   .strict()

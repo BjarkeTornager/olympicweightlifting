@@ -125,31 +125,37 @@ struct TrainView: View {
 
   // MARK: Progress
 
+  /// Bests and weeks are absent until the server that sends them has deployed.
   @ViewBuilder
   private func progress(_ training: Training) -> some View {
-    let week = training.weeks.last
-    VStack(alignment: .leading, spacing: 12) {
-      SectionHeading("Progress").padding(.horizontal, 4)
-      VStack(alignment: .leading, spacing: 14) {
-        HStack(spacing: 6) {
-          TintedSymbol(symbol: "chart.bar.fill", tint: Category.training.tint)
-          Text("This Week").font(.subheadline.weight(.semibold)).foregroundStyle(Category.training.tint)
+    let weeks = training.weeks ?? []
+    let bests = training.bests ?? []
+    if !weeks.isEmpty || !bests.isEmpty {
+      VStack(alignment: .leading, spacing: 12) {
+        SectionHeading("Progress").padding(.horizontal, 4)
+        if let week = weeks.last {
+          VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+              TintedSymbol(symbol: "chart.bar.fill", tint: Category.training.tint)
+              Text("This Week").font(.subheadline.weight(.semibold)).foregroundStyle(Category.training.tint)
+            }
+            HStack {
+              MiniValue(value: "\(week.sessions)", label: week.sessions == 1 ? "Session" : "Sessions")
+              MiniValue(value: "\(week.sets)", label: "Sets")
+              MiniValue(value: tonnes(week.tonnageKg), unit: "t", label: "Lifted")
+            }
+            Sparkline(values: weeks.map { $0.tonnageKg > 0 ? $0.tonnageKg : nil }, tint: Category.training.tint)
+              .frame(height: 56)
+            Text("Kilos lifted each week, last \(weeks.count) weeks")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+          .card()
         }
-        HStack {
-          MiniValue(value: "\(week?.sessions ?? 0)", label: week?.sessions == 1 ? "Session" : "Sessions")
-          MiniValue(value: "\(week?.sets ?? 0)", label: "Sets")
-          MiniValue(value: tonnes(week?.tonnageKg ?? 0), unit: "t", label: "Lifted")
-        }
-        Sparkline(values: training.weeks.map { $0.tonnageKg > 0 ? $0.tonnageKg : nil }, tint: Category.training.tint)
-          .frame(height: 56)
-        Text("Kilos lifted each week, last 8 weeks")
-          .font(.caption).foregroundStyle(.secondary)
-      }
-      .card()
-      if !training.bests.isEmpty {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-          ForEach(training.bests, id: \.exerciseId) { best in
-            BestTile(best: best)
+        if !bests.isEmpty {
+          LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            ForEach(bests, id: \.exerciseId) { best in
+              BestTile(best: best)
+            }
           }
         }
       }

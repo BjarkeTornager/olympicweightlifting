@@ -43,6 +43,28 @@ struct ContractTests {
     #expect(item.kind == "yoga-class")
   }
 
+  @Test("Train decodes from a server that hasn't deployed its newest fields yet")
+  func trainingFromOlderServer() throws {
+    let url = try #require(Bundle.module.url(forResource: "Fixtures/training", withExtension: "json"))
+    var json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    let current = try fixture("training", as: Components.Schemas.Training.self)
+    #expect(current.weeks?.count == 8)
+    json["bests"] = nil
+    json["weeks"] = nil
+    let older = try JSONDecoder().decode(
+      Components.Schemas.Training.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(older.bests == nil && older.weeks == nil)
+  }
+
+  @Test("A response this build can't read is told apart from other failures")
+  func unreadable() {
+    let decoding = DecodingError.keyNotFound(
+      Components.Schemas.Training.CodingKeys.bests, .init(codingPath: [], debugDescription: ""))
+    #expect(APIFailure.unreadable(decoding))
+    #expect(!APIFailure.unreadable(URLError(.timedOut)))
+    #expect(!APIFailure.unreadable(APIFailure(status: 500, message: "")))
+  }
+
   @Test func journalDays() {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "Europe/Copenhagen")!

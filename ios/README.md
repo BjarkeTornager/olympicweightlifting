@@ -64,7 +64,9 @@ Set these as environment variables in the scheme, or prefix them with `SIMCTL_CH
 ios/scripts/testflight.sh
 ```
 
-The script archives a Release build, sets the build number from the UTC time, signs it automatically for team 9B79882UPS using the Apple Account in Xcode, and uploads it. It appears under App Store Connect › TestFlight after processing and goes to internal testers without review. To reach external testers, add it to the external group; the first build of each version goes through Beta App Review. Builds last 90 days.
+The script archives a Release build, sets the build number from the UTC time, signs it automatically for team 9B79882UPS, and uploads it. It signs in to App Store Connect with an API key when one is set up, and otherwise with the Apple Account in Xcode, whose sign-in expires within the hour and then fails with "exportArchive Failed to Use Accounts".
+
+To set up the key (once): in App Store Connect › Users and Access › Integrations › App Store Connect API › Team Keys, generate a key with the **Admin** role (cloud signing needs it) and download it; Apple offers the download only once. Move it to `~/.appstoreconnect/private_keys/AuthKey_<KEY ID>.p8` with `chmod 600`, and write its Key ID and the Issuer ID shown above the list to `~/.appstoreconnect/lift-journal.env` as `ASC_KEY_ID=…` and `ASC_ISSUER_ID=…`. The IDs aren't secret; the `.p8` file is, and it never goes in the repository. Revoke the key there if the file is ever exposed. It appears under App Store Connect › TestFlight after processing and goes to internal testers without review. To reach external testers, add it to the external group; the first build of each version goes through Beta App Review. Builds last 90 days.
 
 Before the first upload, these one-time steps are needed: the paid developer account in Xcode › Settings › Apple Accounts, at least one registered iPhone, and the app record in App Store Connect. Testers are App Store Connect users in an internal TestFlight group; the owner's everyday Apple Account is invited with the Marketing role.
 

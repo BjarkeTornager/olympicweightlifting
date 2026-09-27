@@ -16,7 +16,7 @@ struct CoachView: View {
 
   var body: some View {
     ScrollView {
-      LazyVStack(spacing: 6) {
+      LazyVStack(spacing: 4) {
         if coach.loaded && coach.turns.isEmpty && coach.asking == nil {
           ContentUnavailableView {
             Label("Coach", systemImage: "bubble.left.and.text.bubble.right")
@@ -34,11 +34,15 @@ struct CoachView: View {
           TurnView(turn: turn, coach: coach)
         }
         if let asking = coach.asking {
-          Bubble(text: asking, mine: true, photos: coach.sendingPhotos)
-          if coach.reply.isEmpty {
-            TypingBubble(step: coach.step)
-          } else {
-            CoachReply(text: coach.reply)
+          VStack(spacing: 6) {
+            SentMessage(
+              text: coach.sendingPreviews.isEmpty || asking != CoachModel.photoOnly ? asking : "",
+              previews: coach.sendingPreviews)
+            if coach.reply.isEmpty {
+              TypingBubble(step: coach.step)
+            } else {
+              CoachMessages(text: coach.reply)
+            }
           }
         }
         if let error = coach.error {
@@ -53,7 +57,10 @@ struct CoachView: View {
       .padding(.vertical, 8)
     }
     .defaultScrollAnchor(.bottom)
-    .scrollDismissesKeyboard(.interactively)
+    // The keyboard covers the tab bar: any scroll or tap on the thread puts
+    // it away, so the rest of the app is always one tap from here.
+    .scrollDismissesKeyboard(.immediately)
+    .simultaneousGesture(TapGesture().onEnded { composing = false })
     .navigationTitle("Coach")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
@@ -89,6 +96,13 @@ struct CoachView: View {
   static func date(_ text: String) -> Date {
     (try? Date(text, strategy: .iso8601.year().month().day().time(includingFractionalSeconds: true)))
       ?? (try? Date(text, strategy: .iso8601)) ?? .now
+  }
+
+  /// Sending puts the keyboard away, as the reply is what comes next.
+  private func send() {
+    guard coach.canSend else { return }
+    composing = false
+    coach.send(app)
   }
 
   // MARK: Composer
@@ -140,6 +154,14 @@ struct CoachView: View {
             .padding(.leading, 14)
             .padding(.vertical, 10)
             .submitLabel(.send)
+            // A multi-line field puts a line break where the Send key is
+            // pressed: treat that as sending, as the key says.
+            .onChange(of: coach.draft) { old, new in
+              if new.hasSuffix("\n"), !old.hasSuffix("\n") {
+                coach.draft = String(new.dropLast())
+                send()
+              }
+            }
           trailingButton
             .padding(.trailing, 4)
             .padding(.bottom, 4)
@@ -160,9 +182,7 @@ struct CoachView: View {
         .frame(width: 32, height: 32)
         .background(Color.secondary.opacity(0.25), in: .circle)
     } else if coach.canSend {
-      Button {
-        coach.send(app)
-      } label: {
+      Button(action: send) {
         Image(systemName: "arrow.up")
           .font(.system(size: 15, weight: .bold))
           .foregroundStyle(.white)
@@ -211,89 +231,31 @@ private struct TurnView: View {
   let coach: CoachModel
 
   var body: some View {
-    VStack(spacing: 8) {
-      Bubble(text: turn.question, mine: true, photos: turn.photoIds.count, voice: turn.fromVoice)
+    VStack(spacing: 6) {
+      SentMessage(
+        text: !turn.photoIds.isEmpty && turn.question == CoachModel.photoOnly ? "" : turn.question,
+        photoIDs: turn.photoIds, voice: turn.fromVoice)
       if let reply = turn.reply, !reply.isEmpty {
-        CoachReply(text: reply)
+        CoachMessages(text: reply)
       } else if turn.status == "failed" {
-        CoachReply(text: "Coach couldn't finish this one. Try asking again.")
+        CoachMessages(text: "Sorry, I couldn't finish that one. Try asking again.")
       }
-      ForEach(turn.visuals ?? [], id: \.id) { visual in
-        CoachVisualView(visual: visual)
-          .padding(.vertical, 4)
-      }
-      ForEach(turn.receipts, id: \.id) { receipt in
-        ReceiptCard(receipt: receipt, busy: coach.busyReceipt == receipt.id) { undo in
-          Task { await coach.resolve(receipt, undo: undo, app: app) }
+      // Charts, maps and saved entries sit in the coach's column.
+      VStack(spacing: 8) {
+        ForEach(turn.visuals ?? [], id: \.id) { visual in
+          CoachVisualView(visual: visual)
+            .padding(12)
+            .background(Color(.systemGray6), in: .rect(cornerRadius: 18))
+        }
+        ForEach(turn.receipts, id: \.id) { receipt in
+          ReceiptCard(receipt: receipt, busy: coach.busyReceipt == receipt.id) { undo in
+            Task { await coach.resolve(receipt, undo: undo, app: app) }
+          }
         }
       }
+      .padding(.leading, 34)
     }
-    .padding(.bottom, 10)
-  }
-}
-
-struct Bubble: View {
-  let text: String
-  let mine: Bool
-  var photos = 0
-  var voice = false
-
-  var body: some View {
-    VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
-      if photos > 0 {
-        Label("\(photos) \(photos == 1 ? "Photo" : "Photos")", systemImage: "photo")
-          .font(.caption).foregroundStyle(.secondary)
-      }
-      Text(CoachReplyFormat.attributed(text))
-        .foregroundStyle(mine ? .white : .primary)
-        .padding(.horizontal, 13)
-        .padding(.vertical, 8)
-        .background(
-          mine ? AnyShapeStyle(Color.accentColor.gradient) : AnyShapeStyle(Color(.secondarySystemFill)),
-          in: .rect(cornerRadius: 18)
-        )
-        .textSelection(.enabled)
-      if voice {
-        Label("Spoken", systemImage: "waveform")
-          .font(.caption2).foregroundStyle(.secondary)
-      }
-    }
-    .frame(maxWidth: 300, alignment: mine ? .trailing : .leading)
-    .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
-  }
-}
-
-/// Coach's reply: full-width rich text rather than a bubble, so lists and
-/// tables have room, as in Apple's and other assistants' chat apps.
-private struct CoachReply: View {
-  let text: String
-
-  var body: some View {
-    CoachText(text: text)
-      .padding(.horizontal, 4)
-      .padding(.vertical, 6)
-  }
-}
-
-/// Coach is working: three dots, and what it is doing.
-private struct TypingBubble: View {
-  let step: String?
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 3) {
-      Image(systemName: "ellipsis")
-        .font(.title3.weight(.bold))
-        .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(.secondarySystemFill), in: .rect(cornerRadius: 18))
-      if let step {
-        Text(step).font(.caption).foregroundStyle(.secondary).padding(.leading, 6)
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .accessibilityLabel("Coach is replying")
+    .padding(.bottom, 12)
   }
 }
 

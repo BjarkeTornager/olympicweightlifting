@@ -39,6 +39,7 @@ import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
 import { guardChange } from "./change-guards";
 import { recentConversations } from "../conversation-memory";
 import { dayForCoach } from "../journal-summary";
+import { withoutEmDashes } from "./coach-style";
 
 export { toolDefinitions };
 type SavedImage = Awaited<ReturnType<typeof readUserImage>>;
@@ -373,7 +374,11 @@ export async function runTurn(
                 });
                 started = true;
               }
-              emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta });
+              emit({
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId,
+                delta: delta.replace(/ ?— ?/g, ", "),
+              });
             }
           : undefined,
         modelOptions,
@@ -737,7 +742,7 @@ export async function runTurn(
     }
     signal.throwIfAborted();
     const response = {
-      reply,
+      reply: withoutEmDashes(reply),
       proposals: proposals.map((p) =>
         directSave ? { ...p, status: "saved" as const, automatic: true } : p,
       ),

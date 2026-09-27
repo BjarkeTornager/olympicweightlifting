@@ -31,7 +31,9 @@ struct RootView: View {
             AccountView(inTab: true)
           }
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
+        // Coach's thread always sits at its newest message, so a tab bar that
+        // shrank on scroll would stay shrunk there: keep it whole in Coach.
+        .tabBarMinimizeBehavior(model.tab == .coach ? .never : .onScrollDown)
         .sheet(isPresented: $model.consentForVoice, onDismiss: {
           if UserDefaults.standard.bool(forKey: AIConsent.key) { model.startVoice() }
         }) {

@@ -25,8 +25,10 @@ final class CoachModel {
   var reply = ""
   var error: String?
   var busyReceipt: String?
-  /// Photos attached to the message being answered.
-  var sendingPhotos = 0
+  /// Photos attached to the message being answered, shown until it's saved.
+  var sendingPreviews: [UIImage] = []
+  /// The text sent with photos and no words.
+  static let photoOnly = "Here's a photo."
   /// Counts sends, for the send haptic.
   var sentCount = 0
 
@@ -48,7 +50,7 @@ final class CoachModel {
   func send(_ app: AppModel) {
     guard canSend, let session = app.session else { return }
     let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-    let message = text.isEmpty ? "Here's a photo." : text
+    let message = text.isEmpty ? Self.photoOnly : text
     let photos = attachments
     // The message leaves the text field at once, as in Messages; it comes
     // back only if it could not be sent.
@@ -57,7 +59,7 @@ final class CoachModel {
     sentCount += 1
     sending = true
     asking = message
-    sendingPhotos = photos.count
+    sendingPreviews = photos.map(\.preview)
     step = photos.isEmpty ? nil : "Uploading photos"
     reply = ""
     error = nil
@@ -91,11 +93,13 @@ final class CoachModel {
         await load(app)
         asking = nil
         reply = ""
+        sendingPreviews = []
         await app.loadToday()
       } catch {
         // Nothing was saved: put the message back so it can be sent again.
         asking = nil
         reply = ""
+        sendingPreviews = []
         if draft.isEmpty { draft = text }
         if attachments.isEmpty { attachments = photos }
         self.error = await app.handle(error) ?? error.localizedDescription

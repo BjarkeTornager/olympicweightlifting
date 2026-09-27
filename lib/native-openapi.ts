@@ -13,6 +13,11 @@ import { nativeRequests, nativeResponses } from "./native-api";
 // rejected extra fields, and timestamps as plain strings. The server can then
 // add a field or an enum value without breaking an older app. Removing or
 // renaming a field still breaks it, and needs MIN_IOS_BUILD raised.
+//
+// The other way round, a new build can reach TestFlight before the server
+// that sends its new fields has deployed. So a field added to a response is
+// optional in its zod schema, even when the server always sends it, and the
+// app treats it as absent until then.
 type Json = { [key: string]: unknown };
 
 const SAFE = 9007199254740991;

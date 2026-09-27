@@ -238,6 +238,9 @@ final class AppModel {
       return failure.message
     }
     if error is CancellationError { return nil }
+    if APIFailure.unreadable(error) {
+      return "Lift Journal is being updated. Try again in a few minutes."
+    }
     if let url = error as? URLError {
       return url.code == .notConnectedToInternet
         ? "You're offline. Changes are kept and sent when you reconnect."

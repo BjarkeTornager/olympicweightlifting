@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { config } from "dotenv";
 import { today } from "../lib/domain";
+import { offsetDate } from "../lib/health";
 import { coachSettings } from "../lib/coaching";
 import { mealSchema, favouriteFromMeal } from "../lib/nutrition";
 import type { ModelMessage } from "../lib/agent/provider";
@@ -20,7 +21,10 @@ test(
     const pool = getPool(),
       a = crypto.randomUUID(),
       b = crypto.randomUUID(),
-      date = today();
+      date = today(),
+      // Today's records count as read; an earlier date still needs reads,
+      // which is what the bundle guards below exercise.
+      past = offsetDate(date, -1);
     await pool.query(
       "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Synthetic','suite-'||$1||'@example.test',true),($2,'Synthetic','suite-'||$2||'@example.test',true)",
       [a, b],
@@ -42,10 +46,10 @@ test(
     const bundle = {
       kind: "record_bundle",
       entries: [
-        { kind: "record_checkin", checkin: { date, sleepHours: 7 } },
+        { kind: "record_checkin", checkin: { date: past, sleepHours: 7 } },
         {
           kind: "record_cardio",
-          cardio: { date, activity: "running", durationSeconds: 1800 },
+          cardio: { date: past, activity: "running", durationSeconds: 1800 },
         },
       ],
     };
@@ -56,10 +60,10 @@ test(
         if (round === 1) return tool("prepare_change", bundle);
         if (round === 2) {
           assert.match(messages.at(-1)!.content, /Read the health overview/);
-          return tool("health_overview", { date });
+          return tool("health_overview", { date: past });
         }
         if (round === 3)
-          return tool("cardio_journal", { from: date, to: date });
+          return tool("cardio_journal", { from: past, to: past });
         return tool("prepare_change", bundle);
       });
       assert.equal(review.proposals[0].entries?.length, 2);
@@ -201,7 +205,7 @@ test(
       round = 0;
       const guarded = await runTurn(b, input(0), async (messages) => {
         round++;
-        if (round === 1) return tool("health_overview", { date });
+        if (round === 1) return tool("health_overview", { date: past });
         if (round === 2) return tool("prepare_change", bundle);
         assert.match(messages.at(-1)!.content, /Read the cardio journal/);
         return { role: "assistant", content: "Nothing saved." };

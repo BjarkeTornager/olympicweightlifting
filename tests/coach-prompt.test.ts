@@ -66,7 +66,16 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // turn and the provider can cache it. The only diff is that one
     // sentence: putting the old date sentence back reproduces the previous
     // hash (8c049ae2…). prompt-cache-database.test.ts covers the order.
-    "d7c6bba3d03871e707b2f8aa19d7914753e8ba9edad9b872cd7efdd7f5572375",
+    // Revised 2026-09-27, deliberate and reviewed: the logging rules say
+    // today's records in the "Everything recorded today" message count as
+    // read (the server now counts them too, one-call-logs-database.test.ts),
+    // so a check-in, a new meal or an activity for today needs no read
+    // first; other dates, meal changes and workouts still do. The check-in
+    // paragraph's old water-total sentence, which contradicted drink
+    // logging, is replaced by a pointer to log_drink, and the drinks rule
+    // says how to correct the day's water total (found by the logging-rules
+    // GEPA run). Health, privacy and evidence text is unchanged.
+    "a0a428ad2f5c5eb7e431be0733e06f2b43e81f0ffc61fe3197175c88a8e7bff8",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

@@ -248,6 +248,16 @@ function current(spec: TurnSpec): TurnSpec {
   return { ...spec, expected: { ...spec.expected, checkin } };
 }
 
+// The benchmark's journal facts predate drink logging; Jev also needs the
+// day's drinks and water total to judge a water change.
+const facts = (state: JournalState) => ({
+  ...journalFacts(state),
+  drinks: (state.health.drinks ?? [])
+    .filter((d) => d.date === TEST_DATE)
+    .map((d) => ({ ml: d.ml, kind: d.kind, name: d.name })),
+  waterTotalMl: hydrationForDay(state, TEST_DATE).totalMl,
+});
+
 type TurnResult = {
   message: string;
   reply: string;
@@ -355,8 +365,8 @@ async function evaluate(
             coach_reply: reply,
             conversation_history: history,
             evidence: {
-              journal_before: journalFacts(before.state as JournalState),
-              journal_after: journalFacts(after.state as JournalState),
+              journal_before: facts(before.state),
+              journal_after: facts(after.state),
               final_receipts: response.proposals,
             },
           },

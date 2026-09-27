@@ -256,6 +256,8 @@ final class AppModel {
       let value = try await client.getToday(query: .init(date: JournalDay.string(.now))).value()
       today = value
       todayUpdated = .now
+      // A workout finished or discarded elsewhere leaves the lock screen too.
+      if value.activeWorkout == nil { WorkoutActivityController.end() }
       todayError = nil
       todayCache.save(value, account: account)
     } catch {

@@ -11,7 +11,6 @@ struct WorkoutView: View {
   @State private var correcting: Correction?
   @State private var adding = false
   @State private var confirmingFinish = false
-  @State private var restUntil: Date?
 
   struct Correction: Identifiable {
     let exercise: Components.Schemas.WorkoutExercise
@@ -31,7 +30,7 @@ struct WorkoutView: View {
               ExerciseCard(exercise: exercise, busy: train.busySet == exercise.entryId) { weight, reps, made in
                 Task {
                   await train.log(exercise: exercise, weight: weight, reps: reps, made: made, app)
-                  restUntil = .now.addingTimeInterval(120)
+                  train.startRest()
                 }
               } correct: { set in
                 correcting = Correction(exercise: exercise, set: set)
@@ -50,7 +49,9 @@ struct WorkoutView: View {
           .padding(.vertical, 12)
         }
         .safeAreaInset(edge: .bottom) {
-          if let restUntil { RestTimer(until: restUntil) { self.restUntil = $0 } }
+          if let ends = train.restEnds {
+            RestTimer(until: ends, extend: { train.extendRest(by: 30) }, done: train.stopRest)
+          }
         }
         .navigationTitle(workout.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -348,7 +349,8 @@ private struct AddExerciseSheet: View {
 /// A countdown between sets, above the tab bar.
 private struct RestTimer: View {
   let until: Date
-  let change: (Date?) -> Void
+  let extend: () -> Void
+  let done: () -> Void
 
   var body: some View {
     TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -363,9 +365,9 @@ private struct RestTimer: View {
             .font(.title3.weight(.semibold).monospacedDigit())
         }
         Spacer()
-        Button("+30 s") { change(until.addingTimeInterval(30)) }
+        Button("+30 s", action: extend)
           .buttonStyle(.bordered)
-        Button("Done", systemImage: "xmark") { change(nil) }
+        Button("Done", systemImage: "xmark", action: done)
           .labelStyle(.iconOnly)
           .buttonStyle(.bordered)
       }

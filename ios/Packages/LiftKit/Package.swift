@@ -1,15 +1,17 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// Shared by the app and, later, its widget extension. LiftAPI is the client
+// Shared by the app and its widget extension. LiftAPI is the client
 // generated from the server's OpenAPI document; LiftStore keeps credentials,
 // the offline queue and the Apple Health reader; LiftVoice runs the audio of
-// a spoken check-in.
+// a spoken check-in; LiftActivity describes the workout Live Activity, and is
+// all the widget extension links.
 let package = Package(
   name: "LiftKit",
   platforms: [.iOS(.v26)],
   products: [
-    .library(name: "LiftKit", targets: ["LiftAPI", "LiftStore", "LiftVoice"])
+    .library(name: "LiftKit", targets: ["LiftAPI", "LiftStore", "LiftVoice", "LiftActivity"]),
+    .library(name: "LiftActivity", targets: ["LiftActivity"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.13.1"),
@@ -30,9 +32,11 @@ let package = Package(
     .target(name: "LiftStore", dependencies: ["LiftAPI"]),
     // Spoken check-in: audio engine and Gemini Live wire format.
     .target(name: "LiftVoice"),
+    // The workout on the lock screen and in the Dynamic Island.
+    .target(name: "LiftActivity"),
     .testTarget(
       name: "LiftKitTests",
-      dependencies: ["LiftAPI", "LiftStore", "LiftVoice"],
+      dependencies: ["LiftAPI", "LiftStore", "LiftVoice", "LiftActivity"],
       resources: [.copy("Fixtures")]
     ),
   ]

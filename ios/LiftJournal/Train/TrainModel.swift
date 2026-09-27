@@ -15,6 +15,10 @@ final class TrainModel {
   var error: String?
   /// The set currently being saved, so its button can show progress.
   var busySet: String?
+  /// The rest in progress, shared with the lock screen's Live Activity.
+  var restStarted: Date?
+  var restEnds: Date?
+  static let defaultRest: TimeInterval = 120
 
   func load(_ app: AppModel) async {
     loading = true
@@ -22,6 +26,14 @@ final class TrainModel {
     do {
       training = try await app.client.getTraining(query: .init(date: JournalDay.string(.now))).value()
       error = nil
+      if let workout = training?.activeWorkout {
+        if restEnds == nil, let rest = WorkoutActivityController.rest(for: workout.id) {
+          (restStarted, restEnds) = rest
+        }
+      } else {
+        clearRest()
+      }
+      syncActivity()
     } catch {
       self.error = await app.handle(error)
     }
@@ -79,6 +91,43 @@ final class TrainModel {
         .init(
           kind: .correctWorkoutSet, workoutId: workout.id, entryId: exercise.entryId, setId: set.id,
           setChanges: .init(weight: weight, reps: reps, result: made ? .success : .miss))), app)
+  }
+
+  // MARK: Rest
+
+  func startRest(_ seconds: TimeInterval = TrainModel.defaultRest) {
+    restStarted = .now
+    restEnds = .now.addingTimeInterval(seconds)
+    syncActivity()
+    scheduleRestAlert()
+  }
+
+  func extendRest(by seconds: TimeInterval) {
+    guard let ends = restEnds else { return }
+    // Extending a rest that is already over starts from now.
+    restEnds = max(ends, .now).addingTimeInterval(seconds)
+    syncActivity()
+    scheduleRestAlert()
+  }
+
+  func stopRest() {
+    clearRest()
+    syncActivity()
+  }
+
+  private func clearRest() {
+    restStarted = nil
+    restEnds = nil
+    WorkoutActivityController.cancelRestAlert()
+  }
+
+  private func syncActivity() {
+    WorkoutActivityController.sync(training?.activeWorkout, restStarted: restStarted, restEnds: restEnds)
+  }
+
+  private func scheduleRestAlert() {
+    guard let restEnds, let workout = training?.activeWorkout else { return }
+    WorkoutActivityController.scheduleRestAlert(at: restEnds, for: workout)
   }
 
   func finish(_ app: AppModel) async {

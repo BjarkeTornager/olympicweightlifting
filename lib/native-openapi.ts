@@ -1,5 +1,6 @@
 import { z } from "zod";
 import "./health-sync";
+import "./native-training";
 import { nativeRequests, nativeResponses } from "./native-api";
 
 // Builds the OpenAPI document for the iPhone app from the zod schemas in
@@ -155,6 +156,27 @@ export function buildOpenApi() {
           operationId: "getTrends",
           parameters: [query("date", true), query("days", false, "integer")],
           responses: ok("Trends"),
+        },
+      },
+      "/api/v1/training": {
+        get: {
+          operationId: "getTraining",
+          parameters: [query("date", true)],
+          responses: ok("Training"),
+        },
+      },
+      "/api/v1/workouts/{id}": {
+        get: {
+          operationId: "getWorkout",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          responses: ok("WorkoutDetail"),
         },
       },
       "/api/v1/journal": {

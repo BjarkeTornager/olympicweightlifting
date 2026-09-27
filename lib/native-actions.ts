@@ -5,7 +5,10 @@ import { actionSchema } from "./agent/action-schema";
 import { prepareAction } from "./agent/actions";
 import { getDb } from "./db";
 import { mutations } from "./db/schema";
+import { program } from "./domain";
+import type { JournalState } from "./model";
 import { actionRequest } from "./native-api";
+import { trainingPrograms } from "./training-programs";
 import {
   nativeClient,
   nativeSupported,
@@ -36,6 +39,54 @@ const saved = async (userId: string, id: string) =>
       .where(and(eq(mutations.userId, userId), eq(mutations.id, id)))
   ).length > 0;
 
+type Prepared = { state: JournalState; title: string; detail: string };
+type NativeActionInput = z.infer<typeof actionRequest>["action"];
+type ProgrammeInput = Extract<
+  NativeActionInput,
+  { kind: "create_training_program" }
+>["trainingProgram"];
+
+// The Coach schema needs an explicit null weight for "choose a load".
+const withLoads = (p: ProgrammeInput) => ({
+  ...p,
+  days: p.days.map((d) => ({
+    ...d,
+    exercises: d.exercises.map((e) => ({ ...e, weight: e.weight ?? null })),
+  })),
+});
+
+// The journal change for an app action. Most are Coach actions and go
+// through the same schema and rules; "use_programme" is the app's own.
+function preparer(
+  raw: NativeActionInput,
+  today: string,
+): (state: JournalState) => Prepared {
+  if (raw.kind === "use_programme") {
+    const id = raw.programmeId;
+    return (state) => {
+      const known =
+        id === program.id || trainingPrograms(state).some((p) => p.id === id);
+      if (!known) throw Error("That programme is not in your journal.");
+      const next = structuredClone(state);
+      next.program.activeProgramId = id;
+      next.updatedAt = new Date().toISOString();
+      return {
+        state: next,
+        title: "Follow this programme",
+        detail: "Train suggests its next session.",
+      };
+    };
+  }
+  const action = actionSchema.parse(
+    raw.kind === "create_training_program"
+      ? { ...raw, trainingProgram: withLoads(raw.trainingProgram) }
+      : raw.kind === "update_training_program"
+        ? { ...raw, programChanges: withLoads(raw.programChanges) }
+        : raw,
+  );
+  return (state) => prepareAction(state, action, today);
+}
+
 // Apply one action the app queued. The request ID is the save's identity: a
 // retry after a lost response, or from the offline queue, is saved once. The
 // action applies to the journal as it is now, so a phone that was offline
@@ -47,8 +98,8 @@ export async function applyNativeAction(
 ) {
   const input = actionRequest.parse(raw);
   const timezone = timeZoneSchema.parse(input.timezone);
-  const action = actionSchema.parse(input.action);
   const today = localClock(now, timezone).date;
+  const prepare = preparer(input.action, today);
   for (let attempt = 0; attempt < 3; attempt++) {
     if (await saved(userId, input.id)) {
       const { revision } = await readJournal(userId);
@@ -61,9 +112,9 @@ export async function applyNativeAction(
       };
     }
     const snapshot = await readJournal(userId);
-    let prepared: ReturnType<typeof prepareAction>;
+    let prepared: Prepared;
     try {
-      prepared = prepareAction(snapshot.state, action, today);
+      prepared = prepare(snapshot.state);
     } catch (error) {
       if (error instanceof z.ZodError) throw error;
       throw new ApiError(

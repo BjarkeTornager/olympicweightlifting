@@ -12,15 +12,23 @@ struct RootView: View {
       case .signedOut:
         SignInView()
       case .signedIn:
+        // Line icons that fill in when chosen, as on Airbnb, drawn for the
+        // app rather than borrowed.
         TabView(selection: $model.tab) {
-          Tab("Today", systemImage: "sun.max", value: AppModel.Tab.today) {
+          Tab("Today", image: icon("today", .today), value: AppModel.Tab.today) {
             NavigationStack { TodayView() }
           }
-          Tab("Coach", systemImage: "bubble.left.and.text.bubble.right", value: AppModel.Tab.coach) {
+          Tab("Train", image: icon("train", .train), value: AppModel.Tab.train) {
+            NavigationStack { TrainView() }
+          }
+          Tab("Coach", image: icon("coach", .coach), value: AppModel.Tab.coach) {
             NavigationStack { AIConsentGate { CoachView() } }
           }
-          Tab("Journal", systemImage: "book.closed", value: AppModel.Tab.journal) {
+          Tab("Journal", image: icon("journal", .journal), value: AppModel.Tab.journal) {
             NavigationStack { JournalView() }
+          }
+          Tab("Profile", image: icon("profile", .profile), value: AppModel.Tab.profile) {
+            AccountView(inTab: true)
           }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
@@ -48,6 +56,10 @@ struct RootView: View {
       }
     }
     .fullScreenCover(isPresented: $model.updateRequired) { UpdateRequiredView() }
+  }
+
+  private func icon(_ name: String, _ tab: AppModel.Tab) -> String {
+    model.tab == tab ? "tab-\(name)-fill" : "tab-\(name)"
   }
 }
 

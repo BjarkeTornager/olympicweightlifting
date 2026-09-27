@@ -13,7 +13,7 @@ typealias NativeAction = Components.Schemas.NativeAction
 @Observable
 final class AppModel {
   enum Phase: Equatable { case launching, signedOut, signedIn }
-  enum Tab: Hashable { case today, coach, journal }
+  enum Tab: Hashable { case today, train, coach, journal, profile }
 
   var phase: Phase = .launching
   var tab: Tab = .today

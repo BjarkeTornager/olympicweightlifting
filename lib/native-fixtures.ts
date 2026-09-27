@@ -1,5 +1,6 @@
 import { createWorkout, days, emptyJournal } from "./domain";
 import { cardioFromWorkout } from "./health-sync";
+import { buildTraining } from "./native-training";
 import { addDrink } from "./hydration";
 import {
   buildCoach,
@@ -97,6 +98,7 @@ export function nativeFixtures() {
     "today.json": buildToday(state, 12, date, imported),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
     "trends.json": buildTrends(state, date, 7),
+    "training.json": buildTraining(state, 12, date),
     "coach.json": buildCoach(
       [
         {

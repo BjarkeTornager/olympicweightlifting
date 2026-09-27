@@ -87,12 +87,67 @@ test("every action the app can send is a valid journal action", () => {
     },
     { kind: "finish_workout" },
     { kind: "discard_workout" },
+    {
+      kind: "start_training_day",
+      trainingProgramId: crypto.randomUUID(),
+      dayId: crypto.randomUUID(),
+      date,
+    },
+    {
+      kind: "correct_workout_set",
+      workoutId: "w",
+      entryId: "e",
+      setId: "s",
+      setChanges: { reps: 3 },
+    },
+    {
+      kind: "create_training_program",
+      trainingProgram: {
+        name: "Block",
+        days: [
+          {
+            name: "Day 1",
+            exercises: [
+              { exerciseId: "snatch", sets: 3, reps: 2, weight: null },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      kind: "update_training_program",
+      trainingProgramId: crypto.randomUUID(),
+      programChanges: {
+        name: "Block",
+        days: [
+          {
+            name: "Day 1",
+            exercises: [{ exerciseId: "snatch", sets: 3, reps: 2, weight: 60 }],
+          },
+        ],
+      },
+    },
+    { kind: "delete_training_program", trainingProgramId: crypto.randomUUID() },
   ];
-  assert.equal(examples.length, nativeAction.options.length);
+  // "use_programme" is the app's own action, not a Coach action.
+  assert.equal(examples.length + 1, nativeAction.options.length);
   for (const action of examples) {
-    actionRequest.parse({ id: crypto.randomUUID(), timezone: tz, action });
+    // The app omits a missing weight; the server adds the null Coach needs.
+    const sent = JSON.parse(
+      JSON.stringify(action).replaceAll(',"weight":null', ""),
+    );
+    actionRequest.parse({
+      id: crypto.randomUUID(),
+      timezone: tz,
+      action: sent,
+    });
     assert.doesNotThrow(() => actionSchema.parse(action), action.kind);
   }
+  actionRequest.parse({
+    id: crypto.randomUUID(),
+    timezone: tz,
+    action: { kind: "use_programme", programmeId: "stability-power-base-v1" },
+  });
 });
 
 test("Today and the journal feed describe the day for the app", () => {

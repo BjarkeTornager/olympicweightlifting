@@ -2,6 +2,12 @@ import { z } from "zod";
 import { cardioSummary, cardioTitle } from "./cardio";
 import { foodDate, totalNutrients } from "./nutrition";
 import { drinkSchema } from "./hydration";
+import {
+  bodyFatSchema,
+  bodyFatTrend,
+  latestBodyFat,
+  weightTrend,
+} from "./body-composition";
 import type { JournalState } from "./model";
 
 const values = {
@@ -73,6 +79,8 @@ export const healthSchema = z
     drinks: z.array(drinkSchema).max(20000).optional(),
     // Optional for the same reason; written only by the Apple Health sync.
     vitals: z.array(vitalsSchema).max(5000).optional(),
+    // Body fat readings, reported or from a smart scale via Apple Health.
+    bodyFat: z.array(bodyFatSchema).max(5000).optional(),
   })
   .superRefine((v, ctx) => {
     if (new Set(v.checkins.map((c) => c.date)).size !== v.checkins.length)
@@ -87,6 +95,15 @@ export const healthSchema = z
       ctx.addIssue({
         code: "custom",
         message: "Only one Apple Health summary per date is allowed",
+      });
+    if (
+      v.bodyFat &&
+      new Set(v.bodyFat.map((b) => `${b.date}:${b.source}`)).size !==
+        v.bodyFat.length
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Only one body fat reading per date and source is allowed",
       });
   });
 export type Checkin = z.infer<typeof checkinSchema>;
@@ -272,7 +289,14 @@ export function dailyHealth(state: JournalState, date: string) {
     latestWeight: weights.at(-1)
       ? { value: weights.at(-1)!.bodyweight, date: weights.at(-1)!.date }
       : null,
+    // Four weeks of weigh-ins and 90 days of body fat, for fat-loss and
+    // muscle-gain coaching; readings are trends, not single verdicts.
+    weightTrend: weightTrend(state, date),
+    bodyFat: {
+      latest: latestBodyFat(state, date),
+      trend: bodyFatTrend(state, offsetDate(date, -90), date),
+    },
     dataLimits:
-      "Journal records include self-reports plus sleep, workouts and daily heart-rate summaries the athlete chose to import from Apple Health, marked with their source. Missing entries do not mean zero intake, sleep or activity. Cardio includes duration, distance and optional heart rate or energy. No clinical interpretation.",
+      "Journal records include self-reports plus sleep, workouts, daily heart-rate summaries and scale body fat readings the athlete chose to import from Apple Health, marked with their source. Body fat varies by method and by day; compare readings from the same method. Missing entries do not mean zero intake, sleep or activity. Cardio includes duration, distance and optional heart rate or energy. No clinical interpretation.",
   };
 }

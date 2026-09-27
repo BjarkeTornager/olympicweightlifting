@@ -22,6 +22,12 @@ import {
   type Checkin,
   type CheckinPatch,
 } from "@/lib/health";
+import {
+  bodyFatMethods,
+  removeBodyFat,
+  saveBodyFat,
+  type BodyFat,
+} from "@/lib/body-composition";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { WhistleIcon } from "./ui/journal-icons";
@@ -78,7 +84,18 @@ function CheckinForm({
       notes: c?.notes ?? "",
     };
   };
+  // Body fat is its own dated reading beside the check-in.
+  const reported = (date: string) =>
+    journal.state!.health.bodyFat?.find(
+      (b) => b.date === date && b.source === "reported",
+    );
   const [draft, setDraft] = useState(() => fields(date)),
+    [bodyFat, setBodyFat] = useState<number | null>(
+      () => reported(date)?.percent ?? null,
+    ),
+    [method, setMethod] = useState<BodyFat["method"]>(
+      () => reported(date)?.method ?? null,
+    ),
     [error, setError] = useState(""),
     [saving, setSaving] = useState(false);
   return (
@@ -90,7 +107,30 @@ function CheckinForm({
         setError("");
         try {
           await journal.update((s) => {
-            saveCheckin(s, draft, today());
+            const values = [
+              draft.sleepHours,
+              draft.energy,
+              draft.soreness,
+              draft.waterMl,
+              draft.bodyweight,
+            ];
+            // A body fat reading alone doesn't need a check-in.
+            const checkin =
+              values.some((v) => v != null) ||
+              Boolean(draft.notes) ||
+              Boolean(existing(draft.date));
+            if (!checkin && bodyFat == null && !reported(draft.date))
+              throw Error(
+                "Enter at least one check-in value, body fat or note",
+              );
+            if (checkin) saveCheckin(s, draft, today());
+            if (bodyFat != null)
+              saveBodyFat(
+                s,
+                { date: draft.date, percent: bodyFat, method },
+                today(),
+              );
+            else if (reported(draft.date)) removeBodyFat(s, draft.date);
           });
           onClose();
         } catch (e) {
@@ -110,7 +150,11 @@ function CheckinForm({
           max={today()}
           value={draft.date}
           onChange={(e) => {
-            if (e.target.value) setDraft(fields(e.target.value));
+            if (e.target.value) {
+              setDraft(fields(e.target.value));
+              setBodyFat(reported(e.target.value)?.percent ?? null);
+              setMethod(reported(e.target.value)?.method ?? null);
+            }
           }}
         />
       </label>
@@ -147,6 +191,55 @@ function CheckinForm({
             </div>
           </label>
         ))}
+      </div>
+      <div className="checkin-number-grid">
+        <label>
+          <span>
+            <Scale size={16} /> Body fat
+          </span>
+          <div className="checkin-number">
+            <input
+              aria-label="Body fat"
+              type="number"
+              min={3}
+              max={70}
+              step={0.1}
+              placeholder="—"
+              value={bodyFat ?? ""}
+              onChange={(e) =>
+                setBodyFat(
+                  e.target.value === "" ? null : Number(e.target.value),
+                )
+              }
+            />
+            <span>%</span>
+          </div>
+        </label>
+        <label>
+          <span>Measured with</span>
+          <select
+            value={method ?? ""}
+            onChange={(e) =>
+              setMethod((e.target.value || null) as BodyFat["method"])
+            }
+          >
+            <option value="">Not sure</option>
+            {bodyFatMethods.map((m) => (
+              <option key={m} value={m}>
+                {
+                  {
+                    scale: "Scale",
+                    dexa: "DEXA scan",
+                    calipers: "Calipers",
+                    tape: "Tape measure",
+                    estimate: "Estimate",
+                    other: "Other",
+                  }[m]
+                }
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {(["energy", "soreness"] as const).map((key) => (
         <fieldset className="feeling-field" key={key}>

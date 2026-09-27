@@ -5,6 +5,7 @@ import { healthSchema } from "./health";
 import { coachingSchema } from "./coaching";
 import { liftingBriefSchema } from "./lifting-brief";
 import { bodyGoalsSchema } from "./body-goals";
+import { bodyTargetsSchema } from "./body-composition";
 import {
   storedCustomProgramSchema,
   isTrainingProgram,
@@ -140,6 +141,8 @@ export const journalSchema = z
         coaching: coachingSchema.optional(),
         lifting: liftingBriefSchema.nullable().optional(),
         body: bodyGoalsSchema.optional(),
+        // Focus and target body fat beside the weight goal.
+        bodyTargets: bodyTargetsSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

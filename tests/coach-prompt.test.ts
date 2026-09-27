@@ -49,7 +49,18 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // it with show_activity_route; it still never infers a route for an
     // entry without one (workout-routes-database.test.ts). Health, privacy
     // and evidence text is unchanged.
-    "d77b9c323c36ae9c2fb5a10779cafad607c4ac7be45617d54c0df7f3a82caf9e",
+    // Revised 2026-09-26, deliberate and reviewed at the owner's request:
+    // Coach is named as weightlifting and gym coach, fat-loss and
+    // muscle-building coach and nutrition guide, and says it is not a
+    // registered dietitian or doctor. New paragraphs cover body fat readings
+    // (record_body_fat, trends over single readings, no judging from photos)
+    // and evidence-based fat loss, muscle gain and recomposition guidance
+    // with explicit limits: no extreme deficits, eating below resting
+    // energy, long fasts, rapid water cuts or unproven supplements, and care
+    // plus professional support for disordered eating
+    // (body-composition.test.ts). Health, privacy and evidence text is
+    // otherwise unchanged.
+    "8c049ae2d5b2de769606deffbb2b4d5122c0f2430fdc236369b11010cd6129bf",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

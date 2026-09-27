@@ -6,7 +6,8 @@ import { uid } from "./domain";
 import { readJournal, writeJournal } from "./server";
 import { cardioActivitySchema } from "./cardio";
 import { foodGroupSchema } from "./nutrition";
-import { bodyGoalsInputSchema } from "./body-goals";
+import { bodyGoalsRequestSchema } from "./body-goals";
+import { bodyFatInputSchema } from "./body-composition";
 import { drinkInputSchema } from "./hydration";
 import type { JournalState } from "./model";
 import { prepareAction, type ActionPreview } from "./agent/actions";
@@ -149,6 +150,10 @@ export const voiceToolArgs = {
   log_meal: mealArgs,
   update_meal: mealArgs.extend({ meal_id: z.string().uuid() }),
   log_drink: drinkInputSchema.extend({ summary: summarySchema }),
+  log_body_fat: bodyFatInputSchema.extend({
+    summary: summarySchema,
+    method: z.preprocess((v) => v || null, bodyFatInputSchema.shape.method),
+  }),
   delete_drink: z.object({
     summary: summarySchema,
     drink_id: z.string().uuid(),
@@ -166,10 +171,23 @@ export const voiceToolArgs = {
     distance_km: z.number().min(0).max(10000).optional(),
   }),
   clear_unfinished_workout: z.object({ summary: summarySchema }),
-  set_goals: bodyGoalsInputSchema.extend({
+  set_goals: bodyGoalsRequestSchema.extend({
     summary: summarySchema,
-    // Models sometimes send an empty string for "no date".
+    // Models sometimes send an empty string for "no date", and an empty
+    // value or zero for an unknown focus or body fat.
     targetDate: z.preprocess((v) => v || null, date.nullable()),
+    focus: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.focus,
+    ),
+    bodyFatPercent: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.bodyFatPercent,
+    ),
+    targetBodyFatPercent: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.targetBodyFatPercent,
+    ),
   }),
   undo_save: z.object({ save_id: z.string().uuid() }),
 };
@@ -243,6 +261,12 @@ export function voiceAction(
       void _summary;
       return { kind: "log_drink", drink };
     }
+    case "log_body_fat": {
+      const { summary: _summary, ...bodyFat } =
+        voiceToolArgs.log_body_fat.parse(raw);
+      void _summary;
+      return { kind: "record_body_fat", bodyFat };
+    }
     case "delete_drink": {
       const a = voiceToolArgs.delete_drink.parse(raw);
       return { kind: "delete_drink", drinkId: a.drink_id };
@@ -280,7 +304,7 @@ export function voiceAction(
       const details = Object.entries(voiceToolArgs.set_goals.parse(raw));
       return {
         kind: "set_body_goals",
-        bodyGoals: bodyGoalsInputSchema.parse(
+        bodyGoals: bodyGoalsRequestSchema.parse(
           Object.fromEntries(details.filter(([key]) => key !== "summary")),
         ),
       };

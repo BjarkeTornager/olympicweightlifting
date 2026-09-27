@@ -37,7 +37,7 @@ Each new build has to be added to the external group. The first build of each ne
 
 **What to Test**
 
-> Log water and a check-in on Today, ask Coach about today's training, connect Apple Health from Account, and check that entries appear in Journal. Please report anything confusing or broken with TestFlight's screenshot feedback.
+> Log water and a check-in on Today, start a session in Train and log a set, ask Coach about today's training, connect Apple Health from Profile, and check that entries appear in Journal. Please report anything confusing or broken with TestFlight's screenshot feedback.
 
 **Review Notes**
 
@@ -46,7 +46,7 @@ Each new build has to be added to the external group. The first build of each ne
 > 2. Tap "App Review sign-in" below the Google button.
 > 3. Enter the password above as the passcode and tap "Sign in for App Review".
 >
-> The review account starts with an empty journal. Coach uses third-party AI and asks for permission before anything is sent. Apple Health access is read-only. Account (toolbar button) › Delete account permanently deletes the account; signing in with the passcode again creates a fresh one.
+> The review account starts with an empty journal. Coach uses third-party AI and asks for permission before anything is sent. Apple Health access is read-only. Profile (last tab) › Delete account permanently deletes the account; signing in with the passcode again creates a fresh one.
 
 ## Risks at Beta App Review
 

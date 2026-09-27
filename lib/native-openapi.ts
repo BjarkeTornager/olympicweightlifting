@@ -203,6 +203,9 @@ export function buildOpenApi() {
       "/api/v1/coach": {
         get: { operationId: "getCoach", responses: ok("CoachHistory") },
       },
+      "/api/v1/voice/calls": {
+        get: { operationId: "getVoiceCalls", responses: ok("VoiceCalls") },
+      },
       "/api/v1/activities/{id}/route": {
         get: {
           operationId: "getActivityRoute",

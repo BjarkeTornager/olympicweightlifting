@@ -352,8 +352,13 @@ export const voiceCalls = pgTable(
     transcript: jsonb("transcript")
       .$type<{ role: "you" | "coach"; text: string }[]>()
       .notNull(),
-    // The transcript as plain text, for search.
+    // The transcript as plain text, for search; the tidied text once there
+    // is one.
     content: text("content").notNull(),
+    // The same lines with punctuation, casing and clear mishearings fixed
+    // (lib/voice-transcript.ts); current while tidiedAt >= updatedAt.
+    tidy: jsonb("tidy").$type<{ role: "you" | "coach"; text: string }[]>(),
+    tidiedAt: timestamp("tidied_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

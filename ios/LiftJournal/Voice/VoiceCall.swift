@@ -125,7 +125,8 @@ final class VoiceCall {
   func stop(failure: String? = nil) {
     guard !closed else { return }
     closed = true
-    persist()
+    persistTask?.cancel()
+    persist(final: true)
     tasks.forEach { $0.cancel() }
     tasks = []
     ending?.cancel()
@@ -520,13 +521,16 @@ final class VoiceCall {
     }
   }
 
-  /// The conversation is kept on the server so Coach can recall it later.
-  private func persist() {
+  /// The conversation is kept on the server so Coach can recall it later
+  /// and the thread can show it. The last save marks the call as ended, so
+  /// the server tidies the transcript (punctuation, clear mishearings).
+  private func persist(final: Bool = false) {
     let entries = lines.filter { $0.role != .save }.suffix(400).map {
       ["role": $0.role == .you ? "you" : "coach", "text": String($0.text.prefix(4000))]
     }
     guard !entries.isEmpty, let session = app.session else { return }
-    let body: [String: Any] = ["id": id.uuidString.lowercased(), "purpose": "checkin", "entries": Array(entries)]
+    var body: [String: Any] = ["id": id.uuidString.lowercased(), "purpose": "checkin", "entries": Array(entries)]
+    if final { body["final"] = true }
     guard let json = try? JSONSerialization.data(withJSONObject: body) else { return }
     Task.detached {
       _ = try? await RawRequest.send(

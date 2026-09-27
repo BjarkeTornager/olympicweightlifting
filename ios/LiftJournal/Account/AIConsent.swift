@@ -50,7 +50,7 @@ struct AIConsentView: View {
           )
           point(
             "hand.raised", "Your choice",
-            "Logging, your journal and Apple Health work without it. You can withdraw permission any time in Account."
+            "Logging, your journal and Apple Health work without it. You can withdraw permission any time in Profile."
           )
         }
         Link("Privacy policy", destination: LiftServer.origin.appending(path: "privacy"))

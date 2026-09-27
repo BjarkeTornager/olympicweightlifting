@@ -14,6 +14,7 @@ import {
   weightTrend,
 } from "./body-composition";
 import { planForState } from "./body-goals";
+import { withoutEmDashes } from "./agent/coach-style";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -1034,7 +1035,7 @@ export function buildCoach(turns: HistoryTurn[], now = new Date()) {
         status: ["running", "done", "failed"].includes(t.status)
           ? t.status
           : "done",
-        reply: t.reply,
+        reply: t.reply && withoutEmDashes(t.reply),
         visuals: (t.visuals ?? []).map((v) => defined(flattenVisual(v))),
         receipts: (t.proposals ?? []).map((p) => ({
           id: p.id,

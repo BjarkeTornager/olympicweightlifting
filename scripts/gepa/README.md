@@ -50,6 +50,30 @@ Truncated judge/reflection responses stop the run explicitly. The first pilot ex
 
 Output includes `manifest.json`, usage/evaluation JSONL files, judge calibration, GEPA search state, selected `candidate.txt`, repeated held-out results and `comparison.json`. Keep raw traces local. Publish only the reviewed prompt and a concise report containing synthetic examples, aggregate metrics, limitations and reproducibility hashes.
 
+## Logging and tool-use rules (workflow harness)
+
+`optimize_workflow.py` with `workflow-runner.ts` is a second, separate experiment. It tunes the paragraphs that decide how Coach saves and corrects records, rather than its tone: which tool to use, set corrections during a workout, workout continuity, record bundles, change plus answer, and check-ins. Everything else in the prompt stays fixed: health, privacy, evidence, "one change per reply" and untrusted content. The runner finds the editable paragraphs by how they start, moves them to one place (where `log_entry`'s paragraph is), and refuses to run if the production prompt no longer matches.
+
+```sh
+uv venv /tmp/lift-gepa-venv
+uv pip install --python /tmp/lift-gepa-venv/bin/python -r scripts/gepa/requirements.txt
+/tmp/lift-gepa-venv/bin/python -u scripts/gepa/optimize_workflow.py --run-dir /tmp/lift-gepa-workflow-1 --baseline-only
+/tmp/lift-gepa-venv/bin/python -u scripts/gepa/optimize_workflow.py --run-dir /tmp/lift-gepa-workflow-2 --max-usd 10
+```
+
+- **Conversations:** the Jev workflow benchmark's 12 scripted scenarios (`scripts/jev/workflow-fixtures.ts`) in English and Danish, plus three held-out single-fact reports (bodyweight, sleep, a walk). They are split by scenario, never by language: 5 train, 4 validation, 6 held-out. Every conversation gets a fresh synthetic account in the `_test` database, deleted afterwards, with the clock fixed to the benchmark date.
+- **Model:** Coach runs on `openai/gpt-5.6-luna`, the tier most turns use, with production prompt caching; Terra and Astra aren't covered. GEPA's reflection uses `openai/gpt-5.6-terra`. All requests keep zero retention and no data collection.
+- **Score:**
+  - A turn scores 0 if the saved journal fails the benchmark's deterministic checks, or if Jev flags a missed request or a wrong change at ≥ 0.85.
+  - Otherwise it scores 1, minus 0.1 for each model round beyond the first (minimum 0.5).
+  - Correctness therefore comes first, then fewer rounds.
+  - Candidates longer than 1.25× the current rules score 0.
+- **Selection:** GEPA sees feedback from train only and selects on validation. Held-out conversations run after the choice is locked, twice each, for the current rules and the candidate, in shuffled order.
+- **Budget:** `--max-usd` is a hard cap of at most $10, counted from OpenRouter's reported cost (a missing cost counts as $0.05). The search stops at 65% of the cap to leave room for the held-out runs. Jev's flags have their own $0.50 cap.
+- **Promotion:** `comparison.json` marks a candidate eligible for review only if it differs from the current rules, passes at least as many held-out conversations and scores a higher mean. Like the style experiment, nothing is promoted automatically. A candidate becomes a normal prompt PR: reviewed diff, updated hash note, full tests.
+
+Run directories must be new `lift-gepa-*` directories outside the repository. They hold synthetic transcripts only.
+
 ## Sources
 
 - [GEPA project and pinned package source](https://github.com/gepa-ai/gepa)

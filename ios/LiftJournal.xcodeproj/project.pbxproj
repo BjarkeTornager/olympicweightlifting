@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3E5F979389B6392A292486E2 /* LiftActivity in Frameworks */ = {isa = PBXBuildFile; productRef = 1556F779A54AD10A8B3B682C /* LiftActivity */; };
+		D0E9276885D19AF74210B354 /* LiftJournalWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 25EB5FC40483053FB012FB3F /* LiftJournalWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		472BD0F498472ADB5F38AF15 /* LiftKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8F113DA23017EDC2265E647A /* LiftKit */; };
 /* End PBXBuildFile section */
 
@@ -18,7 +20,28 @@
 			remoteGlobalIDString = 29C2C3BE80B6DBE906DBBEDC;
 			remoteInfo = LiftJournal;
 		};
+		61368224D58F529940491205 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2310A32DD3D9230E1161CFA0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 19385FA41FDF870B01B8F71C;
+			remoteInfo = LiftJournalWidgets;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8B25FFE9DCE6539C9335D776 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D0E9276885D19AF74210B354 /* LiftJournalWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		6164AB448DEA9B708556B45D /* LiftJournal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LiftJournal.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -29,6 +52,8 @@
 		177CA1801561500395DA42AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		876C8CCF2E3DE3AC879A1E76 /* Info-Debug.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-Debug.plist"; sourceTree = "<group>"; };
 		D15F92B97ACAA038312D67F3 /* LiftJournal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LiftJournal.entitlements; sourceTree = "<group>"; };
+		25EB5FC40483053FB012FB3F /* LiftJournalWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LiftJournalWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD66BAD57C37CEAD61A9721D /* Widgets-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Widgets-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -40,6 +65,11 @@
 		92976FC6A4AC15FA31706989 /* LiftJournalTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = LiftJournalTests;
+			sourceTree = "<group>";
+		};
+		995159C78C0B5E5A62ECFF30 /* LiftJournalWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LiftJournalWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +90,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		095FFF067422096885978E2D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E5F979389B6392A292486E2 /* LiftActivity in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -69,6 +107,7 @@
 				830CAE3097B8C9093B21CBE9 /* Config */,
 				6A1041D500F5437225B9E4FA /* LiftJournal */,
 				92976FC6A4AC15FA31706989 /* LiftJournalTests */,
+				995159C78C0B5E5A62ECFF30 /* LiftJournalWidgets */,
 				B5BEBF429C376B148E7613F7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -82,6 +121,7 @@
 				177CA1801561500395DA42AD /* Info.plist */,
 				876C8CCF2E3DE3AC879A1E76 /* Info-Debug.plist */,
 				D15F92B97ACAA038312D67F3 /* LiftJournal.entitlements */,
+				DD66BAD57C37CEAD61A9721D /* Widgets-Info.plist */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -91,6 +131,7 @@
 			children = (
 				6164AB448DEA9B708556B45D /* LiftJournal.app */,
 				343F412EAF1CE310614592BE /* LiftJournalTests.xctest */,
+				25EB5FC40483053FB012FB3F /* LiftJournalWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -105,10 +146,12 @@
 				4046D31ABD63463EF682E797 /* Sources */,
 				51EB8CF85344ED1C0150BFDB /* Frameworks */,
 				7145FC6325095649CA4ADB41 /* Resources */,
+				8B25FFE9DCE6539C9335D776 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				ED8C1603819C81BAEE9D899A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6A1041D500F5437225B9E4FA /* LiftJournal */,
@@ -142,6 +185,29 @@
 			productReference = 343F412EAF1CE310614592BE /* LiftJournalTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		19385FA41FDF870B01B8F71C /* LiftJournalWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1C1FBEE4F80C748381C5303 /* Build configuration list for PBXNativeTarget "LiftJournalWidgets" */;
+			buildPhases = (
+				81BFE4341F0C8F1684CB363C /* Sources */,
+				095FFF067422096885978E2D /* Frameworks */,
+				03BA5B0719071F62ED7E669A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				995159C78C0B5E5A62ECFF30 /* LiftJournalWidgets */,
+			);
+			name = LiftJournalWidgets;
+			packageProductDependencies = (
+				1556F779A54AD10A8B3B682C /* LiftActivity */,
+			);
+			productName = LiftJournalWidgets;
+			productReference = 25EB5FC40483053FB012FB3F /* LiftJournalWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -158,6 +224,9 @@
 					298A8482E7B1DD1500F251D7 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 29C2C3BE80B6DBE906DBBEDC;
+					};
+					19385FA41FDF870B01B8F71C = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -180,6 +249,7 @@
 			targets = (
 				29C2C3BE80B6DBE906DBBEDC /* LiftJournal */,
 				298A8482E7B1DD1500F251D7 /* LiftJournalTests */,
+				19385FA41FDF870B01B8F71C /* LiftJournalWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -193,6 +263,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		71F615961E2FC147ADA6224F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		03BA5B0719071F62ED7E669A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -216,6 +293,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		81BFE4341F0C8F1684CB363C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -223,6 +307,11 @@
 			isa = PBXTargetDependency;
 			target = 29C2C3BE80B6DBE906DBBEDC /* LiftJournal */;
 			targetProxy = 6EA5E1B3A72DDCB001FBDE4B /* PBXContainerItemProxy */;
+		};
+		ED8C1603819C81BAEE9D899A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 19385FA41FDF870B01B8F71C /* LiftJournalWidgets */;
+			targetProxy = 61368224D58F529940491205 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -254,6 +343,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo of a meal or a workout summary to log it with Coach.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talk to Coach in a spoken check-in. Your voice goes to Google's speech model only during a call.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lift Journal reads your sleep, heart rate, steps, workouts and their routes so they appear in your journal and your Coach can use them.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lift Journal only reads from Apple Health. It does not save data to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -284,6 +374,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo of a meal or a workout summary to log it with Coach.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Talk to Coach in a spoken check-in. Your voice goes to Google's speech model only during a call.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lift Journal reads your sleep, heart rate, steps, workouts and their routes so they appear in your journal and your Coach can use them.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lift Journal only reads from Apple Health. It does not save data to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -327,6 +418,44 @@
 			};
 			name = Release;
 		};
+		B121DE8CBC5B20253532F2D9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Widgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Lift Journal";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LIFT_BUNDLE_ID).widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		6DEE34870606B9BD940B13D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Widgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Lift Journal";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(LIFT_BUNDLE_ID).widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -357,6 +486,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		C1C1FBEE4F80C748381C5303 /* Build configuration list for PBXNativeTarget "LiftJournalWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B121DE8CBC5B20253532F2D9 /* Debug */,
+				6DEE34870606B9BD940B13D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -370,6 +508,10 @@
 		8F113DA23017EDC2265E647A /* LiftKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiftKit;
+		};
+		1556F779A54AD10A8B3B682C /* LiftActivity */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LiftActivity;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

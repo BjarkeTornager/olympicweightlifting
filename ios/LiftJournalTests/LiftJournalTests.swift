@@ -1,4 +1,6 @@
+import Foundation
 import LiftAPI
+import LiftActivity
 import Testing
 import UIKit
 
@@ -21,6 +23,36 @@ struct LiftJournalTests {
   func markdown() {
     let text = CoachReplyFormat.attributed("**Saved.**\nAbout 300 kcal")
     #expect(String(text.characters) == "Saved.\nAbout 300 kcal")
+  }
+
+  @Test("The lock screen shows the next set to do and the session's progress")
+  func workoutActivity() throws {
+    let json = """
+      {"id":"w1","title":"Snatch + Back Squat","date":"2026-09-27","finished":false,"exercises":[
+        {"entryId":"e1","exerciseId":"snatch","name":"Snatch","sets":[
+          {"id":"s1","weight":60,"reps":2,"result":"made","logged":true},
+          {"id":"s2","weight":62.5,"reps":2,"result":"","logged":false}]},
+        {"entryId":"e2","exerciseId":"squat","name":"Back squat","sets":[
+          {"id":"s3","reps":1,"result":"","logged":false}]}]}
+      """
+    var workout = try JSONDecoder().decode(WorkoutDetail.self, from: Data(json.utf8))
+    let ends = Date.now.addingTimeInterval(90)
+    let state = WorkoutActivityController.contentState(workout, restStarted: .now, restEnds: ends)
+    #expect(state.exercise == "Snatch")
+    let load = 62.5.formatted(.number.precision(.fractionLength(0...1)))  // "62,5" in Danish
+    #expect(state.next == "Set 2 of 2 · \(load) kg × 2")
+    #expect(state.loggedSets == 1 && state.totalSets == 3)
+    #expect(state.resting())
+    #expect(!state.resting(at: ends))
+
+    workout.exercises[0].sets[1].logged = true
+    let squat = WorkoutActivityController.contentState(workout, restStarted: nil, restEnds: nil)
+    #expect(squat.next == "Set 1 of 1 · 1 rep")
+    #expect(!squat.resting())
+
+    workout.exercises[1].sets[0].logged = true
+    let done = WorkoutActivityController.contentState(workout, restStarted: nil, restEnds: nil)
+    #expect(done.exercise == "Back squat" && done.next == "All planned sets logged")
   }
 
   @Test("Preview data decodes")

@@ -1,6 +1,7 @@
 import Charts
 import LiftAPI
 import LiftStore
+import LiftTheme
 import MapKit
 import SwiftUI
 
@@ -40,7 +41,7 @@ struct CoachVisualView: View {
     let unit = visual.unit ?? ""
     return Chart(Array(points.enumerated()), id: \.offset) { _, point in
       BarMark(x: .value("Label", point.label), y: .value(unit.isEmpty ? "Value" : unit, point.value))
-        .foregroundStyle(Color.accentColor.gradient)
+        .foregroundStyle(Theme.accent)
         .cornerRadius(4)
         .annotation(position: .top) {
           Text(point.value.formatted(.number.precision(.fractionLength(0...1))))
@@ -50,7 +51,7 @@ struct CoachVisualView: View {
     .chartYAxisLabel(unit)
     .frame(height: 200)
     .padding(12)
-    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+    .background(Theme.fill, in: .rect(cornerRadius: 14))
   }
 
   // MARK: Diagram
@@ -67,7 +68,7 @@ struct CoachVisualView: View {
           .padding(.horizontal, 12)
           .padding(.vertical, 8)
           .frame(maxWidth: .infinity, alignment: .leading)
-          .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 10))
+          .background(Theme.fill, in: .rect(cornerRadius: 10))
         if index < order.count - 1 {
           let label = edges.first { $0.from == node.id && $0.to == order[index + 1].id }?.label
           Label(label ?? "", systemImage: "arrow.down")
@@ -126,7 +127,7 @@ struct PrivateImage: View {
 
   var body: some View {
     ZStack {
-      Color(.secondarySystemBackground)
+      Theme.fill
       if let image {
         Image(uiImage: image).resizable().scaledToFill()
       } else {

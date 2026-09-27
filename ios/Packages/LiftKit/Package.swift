@@ -4,14 +4,15 @@ import PackageDescription
 // Shared by the app and its widget extension. LiftAPI is the client
 // generated from the server's OpenAPI document; LiftStore keeps credentials,
 // the offline queue and the Apple Health reader; LiftVoice runs the audio of
-// a spoken check-in; LiftActivity describes the workout Live Activity, and is
-// all the widget extension links.
+// a spoken check-in; LiftActivity describes the workout Live Activity; and
+// LiftTheme holds the colours. LiftActivity and LiftTheme are all the widget
+// extension links.
 let package = Package(
   name: "LiftKit",
   platforms: [.iOS(.v26)],
   products: [
-    .library(name: "LiftKit", targets: ["LiftAPI", "LiftStore", "LiftVoice", "LiftActivity"]),
-    .library(name: "LiftActivity", targets: ["LiftActivity"]),
+    .library(name: "LiftKit", targets: ["LiftAPI", "LiftStore", "LiftVoice", "LiftActivity", "LiftTheme"]),
+    .library(name: "LiftActivity", targets: ["LiftActivity", "LiftTheme"]),
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.13.1"),
@@ -34,6 +35,8 @@ let package = Package(
     .target(name: "LiftVoice"),
     // The workout on the lock screen and in the Dynamic Island.
     .target(name: "LiftActivity"),
+    // The palette and what each colour means, for the app and the widget.
+    .target(name: "LiftTheme"),
     .testTarget(
       name: "LiftKitTests",
       dependencies: ["LiftAPI", "LiftStore", "LiftVoice", "LiftActivity"],

@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 struct SignInView: View {
@@ -27,7 +28,7 @@ struct SignInView: View {
       } label: {
         Group {
           if model.signingIn {
-            ProgressView()
+            ProgressView().tint(Theme.onAccent)
           } else {
             Text("Continue with Google").fontWeight(.semibold)
           }
@@ -35,6 +36,7 @@ struct SignInView: View {
         .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.glassProminent)
+      .foregroundStyle(Theme.onAccent)
       .controlSize(.large)
       .disabled(model.signingIn)
       Text("For the owner and invited members. Each person's journal is private to their account.")
@@ -44,6 +46,8 @@ struct SignInView: View {
         .font(.footnote)
     }
     .padding(28)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    .background(Theme.background)
   }
 }
 

@@ -1,21 +1,20 @@
+import LiftTheme
 import SwiftUI
 
-/// Colours per kind of record, used the same way everywhere, as the Health
-/// app does for its categories.
+/// Colours per kind of record, used the same way everywhere, and only on
+/// data and its symbols (see Theme).
 enum Category {
   case sleep, heart, activity, water, food, training, checkin, coach, body
 
   var tint: Color {
     switch self {
-    case .sleep: .indigo
-    case .heart: .pink
-    case .activity: .orange
-    case .water: .cyan
-    case .food: .green
-    case .training: .blue
-    case .checkin: .teal
-    case .coach: .purple
-    case .body: .mint
+    case .sleep: Theme.sleep
+    case .heart: Theme.heart
+    case .activity: Theme.activity
+    case .water: Theme.water
+    case .food: Theme.calories
+    case .training, .checkin, .coach: Theme.accent
+    case .body: Theme.body
     }
   }
 
@@ -77,7 +76,7 @@ struct MiniValue: View {
   }
 }
 
-/// A white symbol on a coloured rounded square, as in Settings.
+/// A symbol in its data colour on a soft neutral square.
 struct IconBadge: View {
   let symbol: String
   let tint: Color
@@ -85,10 +84,10 @@ struct IconBadge: View {
 
   var body: some View {
     Image(systemName: symbol)
-      .font(.system(size: size * 0.5, weight: .semibold))
-      .foregroundStyle(.white)
+      .font(.system(size: size * 0.46, weight: .semibold))
+      .foregroundStyle(tint)
       .frame(width: size, height: size)
-      .background(tint.gradient, in: .rect(cornerRadius: size * 0.24))
+      .background(Theme.fill, in: .rect(cornerRadius: size * 0.3, style: .continuous))
       .accessibilityHidden(true)
   }
 }
@@ -98,7 +97,7 @@ struct AppleHealthMark: View {
   var body: some View {
     Image(systemName: "heart.fill")
       .font(.caption2)
-      .foregroundStyle(.pink)
+      .foregroundStyle(Theme.heart)
       .accessibilityLabel("From Apple Health")
   }
 }
@@ -110,10 +109,10 @@ struct Avatar: View {
 
   var body: some View {
     Text(initials)
-      .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
-      .foregroundStyle(.white)
+      .font(.system(size: size * 0.38, weight: .semibold))
+      .foregroundStyle(Theme.onAccent)
       .frame(width: size, height: size)
-      .background(Color.accentColor.gradient, in: .circle)
+      .background(Theme.accent, in: .circle)
   }
 
   private var initials: String {
@@ -150,8 +149,8 @@ enum Format {
   }
 }
 
-/// A white card with rounded corners and a soft shadow, as on Airbnb; in
-/// dark mode an elevated surface without the shadow.
+/// A white card on the warm background, with a faint shadow; in dark mode
+/// an elevated surface without one.
 struct Card: ViewModifier {
   @Environment(\.colorScheme) private var scheme
   var padding: CGFloat = 16
@@ -162,12 +161,8 @@ struct Card: ViewModifier {
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: 20, style: .continuous)
-          .fill(scheme == .dark ? Color(.secondarySystemBackground) : Color(.systemBackground))
-          .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.08), radius: 14, y: 6)
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-          .strokeBorder(Color(.separator).opacity(scheme == .dark ? 0.3 : 0.12))
+          .fill(Theme.surface)
+          .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.04), radius: 10, y: 3)
       )
   }
 }
@@ -197,14 +192,14 @@ extension SectionHeading where Trailing == EmptyView {
   }
 }
 
-/// A full-width primary button in the accent colour, rounded like Airbnb's.
+/// A full-width primary button in the accent colour.
 struct PrimaryButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(.headline)
-      .foregroundStyle(.white)
+      .foregroundStyle(Theme.onAccent)
       .frame(maxWidth: .infinity, minHeight: 50)
-      .background(Color.accentColor.gradient, in: .rect(cornerRadius: 14, style: .continuous))
+      .background(Theme.accent, in: .rect(cornerRadius: 14, style: .continuous))
       .opacity(configuration.isPressed ? 0.85 : 1)
       .scaleEffect(configuration.isPressed ? 0.98 : 1)
       .animation(.easeOut(duration: 0.15), value: configuration.isPressed)

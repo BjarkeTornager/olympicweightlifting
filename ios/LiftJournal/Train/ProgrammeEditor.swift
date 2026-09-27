@@ -67,6 +67,7 @@ struct ProgrammeEditor: View {
           Text("Leave a load empty to choose it when you train.")
         }
       }
+      .themedList()
       .navigationTitle(isNew ? "New Programme" : "Edit Programme")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -116,6 +117,7 @@ private struct DayEditor: View {
           .disabled(day.exercises.count >= 30)
       }
     }
+    .themedList()
     .navigationTitle(day.name.isEmpty ? "Day" : day.name)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { EditButton() }
@@ -181,6 +183,7 @@ struct ExercisePicker: View {
         }
       }
     }
+    .themedList()
     .overlay {
       if groups.isEmpty { ContentUnavailableView.search(text: query) }
     }

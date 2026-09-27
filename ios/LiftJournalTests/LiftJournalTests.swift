@@ -1,6 +1,8 @@
 import Foundation
 import LiftAPI
 import LiftActivity
+import LiftTheme
+import SwiftUI
 import Testing
 import UIKit
 
@@ -8,6 +10,19 @@ import UIKit
 
 @Suite("App")
 struct LiftJournalTests {
+  @Test("The asset catalog's accent colour matches the theme's, as UIKit tints with it")
+  func accentColour() throws {
+    let asset = try #require(UIColor(named: "AccentColor", in: .main, compatibleWith: nil))
+    for style in [UIUserInterfaceStyle.light, .dark] {
+      let traits = UITraitCollection(userInterfaceStyle: style)
+      var a: (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+      var b: (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+      asset.resolvedColor(with: traits).getRed(&a.0, green: &a.1, blue: &a.2, alpha: &a.3)
+      UIColor(Theme.accent).resolvedColor(with: traits).getRed(&b.0, green: &b.1, blue: &b.2, alpha: &b.3)
+      #expect(abs(a.0 - b.0) < 0.005 && abs(a.1 - b.1) < 0.005 && abs(a.2 - b.2) < 0.005, "\(style.rawValue)")
+    }
+  }
+
   @Test("Photos are resized to at most 1280 pixels before upload")
   func photoSize() throws {
     let image = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 3000)).image { context in

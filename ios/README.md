@@ -23,12 +23,15 @@ Programmes, routines, set-by-set training, lifting videos and backups are still 
 | `LiftJournal/` | App target: SwiftUI screens and `@Observable` models, default `MainActor` isolation |
 | `Packages/LiftKit/Sources/LiftAPI` | Client generated at build time by Swift OpenAPI Generator from `openapi.json`, plus the Coach event stream |
 | `Packages/LiftKit/Sources/LiftStore` | Keychain session, the offline change queue (`Outbox`), per-account cache, and the HealthKit reader (`HealthSync`) |
+| `Packages/LiftKit/Sources/LiftTheme` | The colours: one palette for light and dark, and what each colour means. Shared with the widget extension |
 | `Config/` | Build settings (`*.xcconfig`), Info.plist additions and entitlements (HealthKit and background delivery) |
 | `LiftJournal/Preview Content` | Synthetic preview data. It is a development asset and never ships in an archive |
 
 The Xcode project uses folder-synchronised groups: a file added under `LiftJournal/` joins the app target automatically, and no project generator is needed.
 
 **Contract with the server.** The app calls `/api/v1/*`: `config`, `today`, `journal`, `actions`, `health/sync` and `coach`. These views are shaped for the app and described by zod schemas in `lib/native-api.ts`. `npm run openapi` writes `Packages/LiftKit/Sources/LiftAPI/openapi.json` and the JSON fixtures the Swift tests decode, and a server test fails when either is stale. Responses are written to survive change: no closed enums, extra fields allowed, and timestamps as plain strings. The server can therefore add fields and values without breaking an installed build.
+
+**Colours.** Every colour is defined once, in `LiftTheme/Theme.swift`. The `Palette` holds the colours for light and dark mode, and `Theme` names what each one means (`Theme.accent`, `Theme.protein`, `Theme.danger`). Screens only use `Theme`. To restyle the app, change the palette, or point a meaning at another colour. The accent colour must also be set in `LiftJournal/Resources/Assets.xcassets/AccentColor`, because UIKit tints with the asset. An app test fails when the two differ.
 
 **Versioning.** Every request carries `X-Client: ios/<version>/<build>`. The server supports every build until `MIN_IOS_BUILD` is raised on purpose. After that, older builds get HTTP 426 and show "Install the latest build from TestFlight". The website's feature-version headers do not apply to the app.
 

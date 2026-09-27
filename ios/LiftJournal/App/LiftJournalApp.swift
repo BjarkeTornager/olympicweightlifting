@@ -1,4 +1,5 @@
 import LiftStore
+import LiftTheme
 import SwiftUI
 
 @main
@@ -38,7 +39,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 struct PrivacyCover: View {
   var body: some View {
     ZStack {
-      Color(.systemBackground).ignoresSafeArea()
+      Theme.background.ignoresSafeArea()
       Image(systemName: "heart.text.clipboard")
         .font(.system(size: 44))
         .foregroundStyle(.tint)

@@ -1,5 +1,6 @@
 import LiftAPI
 import LiftStore
+import LiftTheme
 import SwiftUI
 
 /// The day at a glance: the day's targets as rings, then recovery, body,
@@ -24,7 +25,7 @@ struct TodayView: View {
         .padding(.top, 80)
       }
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Theme.background)
     .navigationTitle("Today")
     .navigationSubtitle(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
     .navigationDestination(for: Trend.self) { TrendView(trend: $0) }
@@ -156,7 +157,7 @@ private struct HealthPrompt: View {
       HealthView()
     } label: {
       HStack(spacing: 12) {
-        IconBadge(symbol: symbol, tint: .pink, size: 36)
+        IconBadge(symbol: symbol, tint: Theme.heart, size: 36)
         VStack(alignment: .leading, spacing: 2) {
           Text(title).font(.headline).foregroundStyle(Color.primary)
           Text(detail).font(.subheadline).foregroundStyle(.secondary)
@@ -184,14 +185,14 @@ struct DayHero: View {
         TargetRing(
           title: "Energy", value: Format.number(today.nutrition.calories),
           target: today.nutrition.targetCalories.map { "of \(Format.number($0))" } ?? "kcal",
-          progress: progress(today.nutrition.calories, today.nutrition.targetCalories), tint: .green)
+          progress: progress(today.nutrition.calories, today.nutrition.targetCalories), tint: Theme.calories)
         TargetRing(
           title: "Protein", value: "\(Format.number(today.nutrition.protein)) g",
           target: today.nutrition.targetProtein.map { "of \(Format.number($0)) g" } ?? "today",
-          progress: progress(today.nutrition.protein, today.nutrition.targetProtein), tint: .orange)
+          progress: progress(today.nutrition.protein, today.nutrition.targetProtein), tint: Theme.protein)
         TargetRing(
           title: "Water", value: litres(today.hydration.totalMl), target: "of \(litres(today.hydration.targetMl))",
-          progress: Double(today.hydration.totalMl) / Double(max(1, today.hydration.targetMl)), tint: .cyan)
+          progress: Double(today.hydration.totalMl) / Double(max(1, today.hydration.targetMl)), tint: Theme.water)
       }
       Button {
         if model.voiceEnabled { model.startVoice() } else { model.tab = .coach }
@@ -199,11 +200,9 @@ struct DayHero: View {
         HStack(spacing: 12) {
           Image(systemName: model.voiceEnabled ? "waveform" : "text.bubble.fill")
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onAccent)
             .frame(width: 36, height: 36)
-            .background(
-              LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing),
-              in: .circle)
+            .background(Theme.accent, in: .circle)
           VStack(alignment: .leading, spacing: 1) {
             Text(model.voiceEnabled ? "Check in with Coach" : "Write to Coach")
               .font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
@@ -214,7 +213,7 @@ struct DayHero: View {
           Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
         }
         .padding(10)
-        .background(Color.purple.opacity(0.08), in: .rect(cornerRadius: 16, style: .continuous))
+        .background(Theme.fill, in: .rect(cornerRadius: 16, style: .continuous))
       }
       .buttonStyle(CardButtonStyle())
     }
@@ -238,19 +237,16 @@ struct FeelTile: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 6) {
-        TintedSymbol(symbol: Category.checkin.symbol, tint: Category.checkin.tint)
-        Text("How You Feel").font(.subheadline.weight(.semibold)).foregroundStyle(Category.checkin.tint)
-      }
+      CardLabel(title: "How You Feel", symbol: Category.checkin.symbol, tint: Category.checkin.tint)
       if let checkin, checkin.energy != nil || checkin.soreness != nil {
-        scale("Energy", checkin.energy, .yellow)
-        scale("Soreness", checkin.soreness, Category.checkin.tint)
+        scale("Energy", checkin.energy, Theme.feltEnergy)
+        scale("Soreness", checkin.soreness, Theme.soreness)
       } else {
         Text("Tap to check in").font(.subheadline).foregroundStyle(.secondary)
         Spacer(minLength: 0)
         Label("Check in", systemImage: "plus.circle.fill")
           .font(.caption.weight(.semibold))
-          .foregroundStyle(Category.checkin.tint)
+          .foregroundStyle(.tint)
       }
     }
     .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
@@ -269,7 +265,7 @@ struct FeelTile: View {
       HStack(spacing: 4) {
         ForEach(1...5, id: \.self) { step in
           Capsule()
-            .fill(step <= (value ?? 0) ? AnyShapeStyle(tint.gradient) : AnyShapeStyle(tint.opacity(0.18)))
+            .fill(step <= (value ?? 0) ? tint : Theme.track)
             .frame(height: 6)
         }
       }
@@ -292,15 +288,14 @@ struct BodyCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 6) {
-        TintedSymbol(symbol: Category.body.symbol, tint: Category.body.tint)
-        Text("Weight & Body Fat").font(.subheadline.weight(.semibold)).foregroundStyle(Category.body.tint)
+        CardLabel(title: "Weight & Body Fat", symbol: Category.body.symbol, tint: Category.body.tint)
         Spacer()
         if let focus = Format.focus(body_?.focus) {
           Text(focus)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Category.body.tint.opacity(0.15), in: .capsule)
-            .foregroundStyle(Category.body.tint)
+            .background(Theme.fill, in: .capsule)
+            .foregroundStyle(.secondary)
         }
       }
       if let b = body_, b.bodyweight != nil || b.bodyFatPercent != nil {
@@ -358,8 +353,7 @@ struct NutritionCard: View {
       NavigationLink(value: Trend.food) {
         VStack(alignment: .leading, spacing: 12) {
           HStack(spacing: 6) {
-            TintedSymbol(symbol: Category.food.symbol, tint: Category.food.tint)
-            Text("Food").font(.subheadline.weight(.semibold)).foregroundStyle(Category.food.tint)
+            CardLabel(title: "Food", symbol: Category.food.symbol, tint: Category.food.tint)
             Spacer()
             Text("\(Format.number(nutrition.calories)) kcal")
               .font(.system(.subheadline, design: .rounded, weight: .bold)).foregroundStyle(Color.primary)
@@ -373,8 +367,8 @@ struct NutritionCard: View {
           ForEach(nutrition.meals, id: \.id) { meal in
             HStack(spacing: 10) {
               Text(meal._type.capitalized)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(Category.food.tint)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
                 .frame(width: 64, alignment: .leading)
               Text(meal.name).font(.subheadline).foregroundStyle(Color.primary).lineLimit(1)
               Spacer(minLength: 6)
@@ -388,8 +382,7 @@ struct NutritionCard: View {
       Divider()
       NavigationLink(value: Trend.water) {
         HStack(spacing: 6) {
-          TintedSymbol(symbol: Category.water.symbol, tint: Category.water.tint)
-          Text("Drinks").font(.subheadline.weight(.semibold)).foregroundStyle(Category.water.tint)
+          CardLabel(title: "Drinks", symbol: Category.water.symbol, tint: Category.water.tint)
           Spacer()
           let (value, unit) = Format.litres(hydration.totalMl)
           Text("\(value) \(unit)")
@@ -407,8 +400,8 @@ struct NutritionCard: View {
               Label("\(ml) ml", systemImage: "plus")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Category.water.tint.gradient, in: .capsule)
-                .foregroundStyle(.white)
+                .background(Theme.fill, in: .capsule)
+                .foregroundStyle(.tint)
             }
             .buttonStyle(CardButtonStyle())
           }
@@ -416,7 +409,7 @@ struct NutritionCard: View {
             Text("\(drink.name.isEmpty ? drink.kind.capitalized : drink.name) · \(drink.ml) ml")
               .font(.subheadline)
               .padding(.horizontal, 12).padding(.vertical, 7)
-              .background(Category.water.tint.opacity(0.12), in: .capsule)
+              .background(Theme.fill, in: .capsule)
               .contextMenu {
                 Button("Delete", systemImage: "trash", role: .destructive) {
                   Task { await model.removeDrink(id: drink.id) }
@@ -445,12 +438,12 @@ struct TrainingCard: View {
           IconBadge(symbol: Category.training.symbol, tint: Category.training.tint, size: 44)
           VStack(alignment: .leading, spacing: 2) {
             if let active = today.activeWorkout {
-              Text("In progress").font(.caption.weight(.bold)).foregroundStyle(.orange)
+              Text("In progress").font(.caption.weight(.bold)).foregroundStyle(Theme.attention)
               Text(active.title).font(.headline).foregroundStyle(Color.primary)
               Text("\(active.loggedSets) sets across \(active.exercises) exercises")
                 .font(.subheadline).foregroundStyle(.secondary)
             } else if let done = today.strengthToday.first {
-              Text("Done today").font(.caption.weight(.bold)).foregroundStyle(.green)
+              Text("Done today").font(.caption.weight(.bold)).foregroundStyle(Theme.success)
               Text(done.title).font(.headline).foregroundStyle(Color.primary)
               Text("\(done.loggedSets) sets").font(.subheadline).foregroundStyle(.secondary)
             } else if let next = today.nextSession {
@@ -553,7 +546,7 @@ struct QueueCard: View {
         VStack(alignment: .leading, spacing: 4) {
           Label("Not saved", systemImage: "exclamationmark.triangle.fill")
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.orange)
+            .foregroundStyle(Theme.attention)
           Text(item.refusal ?? "").font(.subheadline)
           Button("Dismiss", role: .destructive) { Task { await model.discardRefused(item) } }
             .font(.footnote.weight(.semibold))

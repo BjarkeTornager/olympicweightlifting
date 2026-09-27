@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import PhotosUI
 import SwiftUI
 
@@ -63,6 +64,7 @@ struct CoachView: View {
     // it away, so the rest of the app is always one tap from here.
     .scrollDismissesKeyboard(.immediately)
     .simultaneousGesture(TapGesture().onEnded { composing = false })
+    .background(Theme.background)
     .navigationTitle("Coach")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
@@ -194,9 +196,9 @@ struct CoachView: View {
       Button(action: send) {
         Image(systemName: "arrow.up")
           .font(.system(size: 15, weight: .bold))
-          .foregroundStyle(.white)
+          .foregroundStyle(Theme.onAccent)
           .frame(width: 32, height: 32)
-          .background(Color.accentColor, in: .circle)
+          .background(Theme.accent, in: .circle)
       }
       .accessibilityLabel("Send")
     } else if app.voiceEnabled {
@@ -254,7 +256,7 @@ private struct TurnView: View {
         ForEach(turn.visuals ?? [], id: \.id) { visual in
           CoachVisualView(visual: visual)
             .padding(12)
-            .background(Color(.systemGray6), in: .rect(cornerRadius: 18))
+            .background(Theme.surface, in: .rect(cornerRadius: 18))
         }
         ForEach(turn.receipts, id: \.id) { receipt in
           ReceiptCard(receipt: receipt, busy: coach.busyReceipt == receipt.id) { undo in
@@ -291,9 +293,9 @@ private struct VoiceCallCard: View {
             .textSelection(.enabled)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .foregroundStyle(line.role == "you" ? Color.white : Color.primary)
+            .foregroundStyle(line.role == "you" ? Theme.onAccent : Color.primary)
             .background(
-              line.role == "you" ? Color.accentColor : Color(.systemGray5),
+              line.role == "you" ? Theme.accent : Theme.fill,
               in: .rect(cornerRadius: 16))
           if line.role == "coach" { Spacer(minLength: 40) }
         }
@@ -306,7 +308,7 @@ private struct VoiceCallCard: View {
       }
     }
     .padding(12)
-    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
+    .background(Theme.surface, in: .rect(cornerRadius: 20))
     .padding(.bottom, 12)
     .accessibilityElement(children: .contain)
   }
@@ -346,12 +348,12 @@ private struct ReceiptCard: View {
       } else if receipt.state == "pending" {
         Button("Save") { resolve(false) }
           .buttonStyle(.borderedProminent)
+          .foregroundStyle(Theme.onAccent)
           .controlSize(.small)
       }
     }
     .padding(12)
-    .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
-    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(.separator).opacity(0.4)))
+    .background(Theme.surface, in: .rect(cornerRadius: 16))
     .frame(maxWidth: 320, alignment: .leading)
     .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -367,9 +369,9 @@ private struct ReceiptCard: View {
 
   private var tint: Color {
     switch receipt.state {
-    case "saved": .green
-    case "pending": .accentColor
-    default: .gray
+    case "saved": Theme.success
+    case "pending": Theme.accent
+    default: .secondary
     }
   }
 }

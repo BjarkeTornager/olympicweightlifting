@@ -1,3 +1,4 @@
+import LiftTheme
 import SwiftUI
 
 /// Coach's replies are Markdown. This renders the same subset the website
@@ -213,7 +214,7 @@ struct MarkdownBlocksView: View {
               .font(.system(.footnote, design: .monospaced))
               .padding(12)
           }
-          .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 10))
+          .background(Theme.fill, in: .rect(cornerRadius: 10))
         case .quote(let text):
           HStack(spacing: 10) {
             Capsule().fill(.tertiary).frame(width: 3)
@@ -260,6 +261,6 @@ struct DataTable: View {
       .padding(.vertical, 4)
     }
     .scrollIndicators(.hidden)
-    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+    .background(Theme.fill, in: .rect(cornerRadius: 14))
   }
 }

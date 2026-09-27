@@ -1,5 +1,6 @@
 import LiftAPI
 import LiftStore
+import LiftTheme
 import SwiftUI
 
 struct AccountView: View {
@@ -36,7 +37,7 @@ struct AccountView: View {
               Label {
                 Text("Apple Health")
               } icon: {
-                IconBadge(symbol: "heart.fill", tint: .pink, size: 28)
+                IconBadge(symbol: "heart.fill", tint: Theme.heart, size: 28)
               }
             }
           }
@@ -49,7 +50,7 @@ struct AccountView: View {
               Label {
                 Text("Reminders")
               } icon: {
-                IconBadge(symbol: "bell.fill", tint: .orange, size: 28)
+                IconBadge(symbol: "bell.fill", tint: Theme.attention, size: 28)
               }
             }
           }
@@ -57,14 +58,14 @@ struct AccountView: View {
             Label {
               Text("Open the Website")
             } icon: {
-              IconBadge(symbol: "safari.fill", tint: .blue, size: 28)
+              IconBadge(symbol: "safari.fill", tint: Theme.accent, size: 28)
             }
           }
           Link(destination: LiftServer.origin.appending(path: "privacy")) {
             Label {
               Text("Privacy Policy")
             } icon: {
-              IconBadge(symbol: "hand.raised.fill", tint: .gray, size: 28)
+              IconBadge(symbol: "hand.raised.fill", tint: .secondary, size: 28)
             }
           }
         } footer: {
@@ -106,6 +107,8 @@ struct AccountView: View {
             .frame(maxWidth: .infinity)
         }
       }
+      .themedList()
+      .tint(Theme.accent)
       .navigationTitle(inTab ? "Profile" : "Account")
       .navigationBarTitleDisplayMode(inTab ? .large : .inline)
       .toolbar {
@@ -154,7 +157,7 @@ private struct AthleteCard: View {
     VStack(spacing: 14) {
       Avatar(name: name, size: 76)
         .padding(4)
-        .overlay(Circle().strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 2))
+        .overlay(Circle().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 2))
       VStack(spacing: 2) {
         Text(name).font(.title2.weight(.bold))
         Text(email).font(.subheadline).foregroundStyle(.secondary)
@@ -197,7 +200,7 @@ private struct GoalsSection: View {
     let body = today.body
     Section {
       if let focus = Format.focus(body?.focus) {
-        row("Focus", focus, "target", .mint)
+        row("Focus", focus, "target", Theme.accent)
       }
       if let kg = body?.targetWeightKg {
         row("Weight", "\(kg.formatted()) kg", "scalemass.fill", Category.body.tint)
@@ -206,10 +209,10 @@ private struct GoalsSection: View {
         row("Body fat", "\(percent.formatted()) %", "percent", Category.body.tint)
       }
       if let kcal = today.nutrition.targetCalories {
-        row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", .green)
+        row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)
       }
       if let grams = today.nutrition.targetProtein {
-        row("Protein", "\(Format.number(grams)) g a day", "fork.knife", .orange)
+        row("Protein", "\(Format.number(grams)) g a day", "fork.knife", Theme.protein)
       }
       let (litres, unit) = Format.litres(today.hydration.targetMl)
       row(

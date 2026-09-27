@@ -1,6 +1,7 @@
 import HealthKit
 import HealthKitUI
 import LiftStore
+import LiftTheme
 import SwiftUI
 
 /// Connect Apple Health and see what the last sync brought in.
@@ -16,7 +17,7 @@ struct HealthView: View {
         VStack(alignment: .leading, spacing: 10) {
           Image(systemName: "heart.text.square.fill")
             .font(.system(size: 40))
-            .foregroundStyle(.pink)
+            .foregroundStyle(Theme.heart)
           Text("Apple Health").font(.title2.bold())
           Text(
             "Lift Journal reads your sleep, heart rate and workouts so they appear in your journal without typing them. Nothing is written back to Apple Health."
@@ -59,7 +60,7 @@ struct HealthView: View {
             if model.health.syncing {
               ProgressView()
             } else {
-              Text("Connected").foregroundStyle(.green)
+              Text("Connected").foregroundStyle(Theme.success)
             }
           }
           if let last = model.health.lastSync {
@@ -91,11 +92,10 @@ struct HealthView: View {
             trigger.toggle()
           } label: {
             Label("Connect Apple Health", systemImage: "heart.fill")
-              .foregroundStyle(.white)
+              .foregroundStyle(Theme.onAccent)
               .frame(maxWidth: .infinity)
           }
           .buttonStyle(.borderedProminent)
-          .tint(.pink)
           .listRowBackground(Color.clear)
           if let requestError {
             Text(requestError).foregroundStyle(.red).font(.subheadline)
@@ -107,6 +107,7 @@ struct HealthView: View {
         }
       }
     }
+    .themedList()
     .navigationTitle("Apple Health")
     .navigationBarTitleDisplayMode(.inline)
     .task { needsAccess = await HealthSync.shared.needsAccess() }

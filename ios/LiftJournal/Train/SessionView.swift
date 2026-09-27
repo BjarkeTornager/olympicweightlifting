@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 /// A finished session in full: every exercise with each set as it was done.
@@ -30,7 +31,7 @@ struct SessionView: View {
                   Text(Self.values(set)).monospacedDigit()
                   Spacer()
                   Image(systemName: set.result == "miss" ? "xmark.circle.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(set.result == "miss" ? .red : .green)
+                    .foregroundStyle(set.result == "miss" ? Theme.danger : Theme.accent)
                     .accessibilityLabel(set.result == "miss" ? "Missed" : "Made")
                 }
                 .accessibilityElement(children: .combine)
@@ -43,6 +44,7 @@ struct SessionView: View {
             }
           }
         }
+        .themedList()
         .navigationTitle(workout.title)
       } else if let error {
         ContentUnavailableView("Session unavailable", systemImage: "wifi.slash", description: Text(error))

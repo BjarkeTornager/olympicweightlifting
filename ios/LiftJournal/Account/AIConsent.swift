@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 /// Permission to send journal data to third-party AI (App Review guideline
@@ -64,6 +65,7 @@ struct AIConsentView: View {
             .frame(maxWidth: .infinity, minHeight: 32)
         }
         .buttonStyle(.glassProminent)
+        .foregroundStyle(Theme.onAccent)
         .controlSize(.large)
         if isPresented {
           Button("Not now") { dismiss() }
@@ -72,6 +74,7 @@ struct AIConsentView: View {
       }
       .padding(24)
     }
+    .background(Theme.background)
   }
 
   private func point(_ symbol: String, _ title: String, _ detail: String) -> some View {

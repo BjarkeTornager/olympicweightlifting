@@ -138,7 +138,7 @@ test("the tool is offered only when configured, and its contract warns Coach", (
   assert.match(tool.function.description, /NEVER put the athlete's name/);
   assert.match(tool.function.description, /untrusted/);
 
-  const prompt = systemPrompt("2026-09-07", "Europe/Copenhagen");
+  const prompt = systemPrompt();
   assert.match(prompt, /use search_web/);
   assert.match(prompt, /must never appear in a query/);
   assert.match(prompt, /untrusted reference material/);

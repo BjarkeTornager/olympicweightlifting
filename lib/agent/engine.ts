@@ -32,7 +32,7 @@ import { planRoute } from "../route-plan";
 import { recordedRouteVisual } from "../route-summary";
 import { recordedRoute, routeNotesFor } from "../workout-routes";
 import { emitDisplayedVisual } from "../agui-components";
-import { systemPrompt } from "./knowledge";
+import { requestTime, systemPrompt } from "./knowledge";
 import { turnTotals, type TurnMetrics } from "./turn-metrics";
 import { imageTiming, localClock } from "./time-context";
 import { specifications, toolDefinitions, toolStep } from "./tools";
@@ -229,12 +229,12 @@ export async function runTurn(
   const messages: ModelMessage[] = [
     {
       role: "system",
-      content: systemPrompt(
-        currentDate,
-        input.timezone,
-        requestClock.time,
-        hooks.directLogging === true,
-      ),
+      content: systemPrompt(hooks.directLogging === true),
+      cacheBreakpoint: true,
+    },
+    {
+      role: "system",
+      content: requestTime(currentDate, input.timezone, requestClock.time),
     },
     {
       role: "user",

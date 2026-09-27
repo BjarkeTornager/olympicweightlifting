@@ -6,9 +6,7 @@ import { systemPrompt } from "../lib/agent/knowledge";
 test("Coach writes like a coach texting, without em dashes", () => {
   assert.match(coachStyle, /coach texting the athlete/);
   assert.match(coachStyle, /Never use em dashes/);
-  assert.ok(
-    systemPrompt("2026-09-27", "Europe/Copenhagen").includes(coachStyle),
-  );
+  assert.ok(systemPrompt().includes(coachStyle));
 });
 
 test("em dashes that slip through become commas; ranges keep their en dash", () => {

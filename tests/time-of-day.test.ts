@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { localClock, partOfDay } from "../lib/agent/time-context";
-import { systemPrompt } from "../lib/agent/knowledge";
+import { requestTime } from "../lib/agent/knowledge";
 import { voiceContext, voiceInstruction } from "../lib/voice-checkin";
 import { emptyJournal } from "../lib/domain";
 
@@ -46,7 +46,7 @@ test("both coaches are told it's afternoon at 12:20, not left to guess", () => {
   );
   assert.match(voice, /say "Good afternoon"/);
   assert.doesNotMatch(voice, /end-of-day/);
-  const text = systemPrompt(clock.date, clock.timezone, clock.time);
+  const text = requestTime(clock.date, clock.timezone, clock.time);
   assert.match(
     text,
     /12:20 \(24-hour clock\), the afternoon; if you greet by time of day, say "Good afternoon"/,

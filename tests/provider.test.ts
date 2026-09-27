@@ -339,3 +339,38 @@ test("a reply blocked by the host's content filter is retried once on the fallba
   assert.equal(direct.content, "Three light doubles.");
   assert.deepEqual(models, [FILTER_FALLBACK_MODEL]);
 });
+
+test("OpenAI models are told where the shared prefix ends, so it is cached across turns", () => {
+  const messages = [
+    {
+      role: "system" as const,
+      content: "Fixed instructions",
+      cacheBreakpoint: true,
+    },
+    { role: "system" as const, content: "Today is 2026-09-27." },
+  ];
+  const request = (model: string) =>
+    modelRequest(messages, [], {
+      kind: "openrouter",
+      label: "test",
+      base: "https://example.test",
+      model,
+      key: "test",
+    }).body.messages as { content: unknown }[];
+  assert.deepEqual(request("openai/gpt-5.6-luna")[0].content, [
+    {
+      type: "text",
+      text: "Fixed instructions",
+      prompt_cache_breakpoint: { mode: "explicit" },
+    },
+  ]);
+  assert.equal(
+    request("openai/gpt-5.6-luna")[1].content,
+    "Today is 2026-09-27.",
+  );
+  // Other providers get plain text.
+  assert.equal(
+    request("google/gemini-3.8-flash")[0].content,
+    "Fixed instructions",
+  );
+});

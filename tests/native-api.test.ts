@@ -188,6 +188,7 @@ test("Today and the journal feed describe the day for the app", () => {
     ["cardio", "vitals"],
   );
   assert.match(feed.items[0].detail, /10 km · 148 bpm avg/);
+  assert.equal(feed.items[0].activity, "running");
   assert.equal(feed.nextBefore, undefined);
 });
 
@@ -407,4 +408,54 @@ test("Coach's view of the day includes Apple Health heart rate and workout detai
     /From Apple Health: resting heart rate 52 bpm, HRV 61 ms, 9,120 steps/,
   );
   assert.equal(dailyHealth(state, date).vitals?.restingHeartRate, 52);
+});
+
+test("Train shows each main lift's best made set and eight weeks of work", async () => {
+  const { personalBests, trainingWeeks } =
+    await import("../lib/native-training");
+  const state = emptyJournal();
+  const session = (on: string, sets: [string, number, number, string][]) => {
+    const w = createWorkout(state, undefined, on);
+    w.exercises = sets.map(([exerciseId, weight, reps, result], i) => ({
+      id: `e${on}${i}`,
+      exerciseId,
+      athleteNotes: "",
+      sets: [{ id: `s${on}${i}`, weight, reps, result }],
+    })) as unknown as typeof w.exercises;
+    state.sessions.push(w);
+  };
+  session("2026-09-01", [
+    ["snatch", 70, 2, "success"],
+    ["back_squat", 140, 5, "success"],
+  ]);
+  session("2026-09-15", [
+    ["snatch", 72, 1, "success"],
+    ["snatch", 75, 1, "miss"],
+  ]);
+  session("2026-09-22", [["snatch", 72, 1, "success"]]);
+  state.prs.clean_and_jerk = 100;
+
+  const bests = personalBests(state);
+  assert.deepEqual(
+    bests.map((b) => [b.exerciseId, b.weight, b.date]),
+    [
+      ["snatch", 72, "2026-09-15"],
+      ["clean_and_jerk", 100, undefined],
+      ["back_squat", 140, "2026-09-01"],
+    ],
+    "a missed set isn't a best, a tie keeps the first date, a best entered by hand counts",
+  );
+
+  const weeks = trainingWeeks(state, date);
+  assert.equal(weeks.length, 8);
+  assert.equal(weeks[7].start, "2026-09-21", "weeks start on Monday");
+  assert.deepEqual(
+    weeks.slice(4).map((w) => [w.sessions, w.sets, w.tonnageKg]),
+    [
+      [1, 2, 840],
+      [0, 0, 0],
+      [1, 2, 72],
+      [1, 1, 72],
+    ],
+  );
 });

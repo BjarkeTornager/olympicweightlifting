@@ -18,15 +18,13 @@ struct AccountView: View {
       List {
         if let session = model.session {
           Section {
-            HStack(spacing: 14) {
-              Avatar(name: session.name, size: 56)
-              VStack(alignment: .leading, spacing: 2) {
-                Text(session.name).font(.title3.weight(.semibold))
-                Text(session.email).font(.subheadline).foregroundStyle(.secondary)
-              }
-            }
-            .padding(.vertical, 4)
+            AthleteCard(name: session.name, email: session.email, today: model.today)
+              .listRowInsets(EdgeInsets())
+              .listRowBackground(Color.clear)
           }
+        }
+        if let today = model.today {
+          GoalsSection(today: today)
         }
         Section {
           NavigationLink {
@@ -131,4 +129,96 @@ struct AccountView: View {
       }
     }
   }
+}
+
+/// Who the athlete is, and where they stand this week.
+private struct AthleteCard: View {
+  let name: String
+  let email: String
+  let today: Today?
+
+  var body: some View {
+    VStack(spacing: 14) {
+      Avatar(name: name, size: 76)
+        .padding(4)
+        .overlay(Circle().strokeBorder(Color.accentColor.opacity(0.35), lineWidth: 2))
+      VStack(spacing: 2) {
+        Text(name).font(.title2.weight(.bold))
+        Text(email).font(.subheadline).foregroundStyle(.secondary)
+      }
+      if let today {
+        HStack(spacing: 0) {
+          stat(today.body?.bodyweight.map { $0.formatted() }, "kg", "Weight")
+          Divider().frame(height: 32)
+          stat(today.body?.bodyFatPercent.map { $0.formatted() }, "%", "Body fat")
+          Divider().frame(height: 32)
+          stat("\(today.sessionsThisWeek)", nil, "Sessions this week")
+        }
+        .padding(.top, 4)
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .card(padding: 20)
+  }
+
+  private func stat(_ value: String?, _ unit: String?, _ label: String) -> some View {
+    VStack(spacing: 2) {
+      HStack(alignment: .firstTextBaseline, spacing: 2) {
+        Text(value ?? "–").font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
+        if let unit, value != nil {
+          Text(unit).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        }
+      }
+      Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+    }
+    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+/// The targets Coach and the athlete have agreed on.
+private struct GoalsSection: View {
+  let today: Today
+
+  var body: some View {
+    let body = today.body
+    Section {
+      if let focus = Format.focus(body?.focus) {
+        row("Focus", focus, "target", .mint)
+      }
+      if let kg = body?.targetWeightKg {
+        row("Weight", "\(kg.formatted()) kg", "scalemass.fill", Category.body.tint)
+      }
+      if let percent = body?.targetBodyFatPercent {
+        row("Body fat", "\(percent.formatted()) %", "percent", Category.body.tint)
+      }
+      if let kcal = today.nutrition.targetCalories {
+        row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", .green)
+      }
+      if let grams = today.nutrition.targetProtein {
+        row("Protein", "\(Format.number(grams)) g a day", "fork.knife", .orange)
+      }
+      let (litres, unit) = Format.litres(today.hydration.targetMl)
+      row(
+        "Water", "\(litres) \(unit) a day\(today.hydration.estimatedTarget ? ", estimated" : "")",
+        "drop.fill", Category.water.tint)
+    } header: {
+      Text("Goals")
+    } footer: {
+      Text("Set with Coach. Ask Coach to change any of them.")
+    }
+  }
+
+  private func row(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
+    LabeledContent {
+      Text(value)
+    } label: {
+      Label {
+        Text(title)
+      } icon: {
+        IconBadge(symbol: symbol, tint: tint, size: 28)
+      }
+    }
+  }
+
 }

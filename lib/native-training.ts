@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { days, EXERCISES, exerciseName, program } from "./domain";
+import {
+  days,
+  EXERCISES,
+  exerciseName,
+  PR_DEFINITIONS,
+  program,
+} from "./domain";
 import type { JournalState, Workout } from "./model";
 import { nativeResponses } from "./native-api";
 import { nextTraining } from "./next-training";
@@ -97,6 +103,27 @@ const sessionSummary = z
   })
   .strict()
   .register(nativeResponses, { id: "SessionSummary" });
+const personalBest = z
+  .object({
+    exerciseId: z.string(),
+    name: z.string(),
+    weight: z.number(),
+    reps: int.optional(),
+    // When it was first lifted; absent for a best entered by hand.
+    date: day.optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "PersonalBest" });
+const trainingWeek = z
+  .object({
+    // The Monday the week starts on.
+    start: day,
+    sessions: int,
+    sets: int,
+    tonnageKg: z.number(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "TrainingWeek" });
 const exerciseOption = z
   .object({ id: z.string(), name: z.string(), category: z.string() })
   .strict()
@@ -121,6 +148,10 @@ export const trainingView = z
       .optional(),
     programmes: z.array(programme),
     recent: z.array(sessionSummary),
+    // The main lifts' best made sets, and the last eight weeks' work, for
+    // progress at a glance.
+    bests: z.array(personalBest),
+    weeks: z.array(trainingWeek),
     exercises: z.array(exerciseOption),
   })
   .strict()
@@ -191,6 +222,92 @@ function topSet(w: Workout) {
   return best && best.weight > 0
     ? `${best.name} ${best.weight} kg × ${best.reps}`
     : undefined;
+}
+
+const madeSets = (w: Workout) =>
+  w.exercises.flatMap((e) =>
+    e.sets
+      .filter((s) => isValidLoggedSet(s) && s.result !== "miss")
+      .map((s) => ({
+        exerciseId: e.exerciseId,
+        weight: Number(s.weight) || 0,
+        reps: Number(s.reps) || 0,
+      })),
+  );
+
+// The heaviest made set of each main lift, from the date it was first made,
+// or the best entered by hand when that is heavier.
+export function personalBests(
+  state: JournalState,
+): z.infer<typeof personalBest>[] {
+  const found = new Map<
+    string,
+    { weight: number; reps: number; date: string }
+  >();
+  for (const w of state.sessions)
+    for (const set of madeSets(w)) {
+      const best = found.get(set.exerciseId);
+      if (
+        set.weight > 0 &&
+        (!best ||
+          set.weight > best.weight ||
+          (set.weight === best.weight && w.date < best.date))
+      )
+        found.set(set.exerciseId, { ...set, date: w.date });
+    }
+  return PR_DEFINITIONS.flatMap(({ exerciseId }) => {
+    const lifted = found.get(exerciseId);
+    const entered = state.prs[exerciseId] ?? 0;
+    const name = exerciseName(exerciseId);
+    if (entered > (lifted?.weight ?? 0))
+      return [{ exerciseId, name, weight: entered }];
+    return lifted
+      ? [
+          defined({
+            exerciseId,
+            name,
+            weight: lifted.weight,
+            reps: lifted.reps || undefined,
+            date: lifted.date,
+          }),
+        ]
+      : [];
+  });
+}
+
+const addDays = (date: string, n: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+// Sessions, sets and kilos lifted in each of the last eight weeks, Monday to
+// Sunday, oldest first; the last week is the one holding date.
+export function trainingWeeks(state: JournalState, date: string, count = 8) {
+  const weekday = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const first = addDays(date, -weekday - 7 * (count - 1));
+  const weeks = Array.from({ length: count }, (_, i) => ({
+    start: addDays(first, 7 * i),
+    sessions: 0,
+    sets: 0,
+    tonnageKg: 0,
+  }));
+  for (const w of state.sessions) {
+    const index = Math.floor(
+      (Date.parse(`${w.date}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) /
+        (7 * 86400000),
+    );
+    const week = weeks[index];
+    if (!week || w.date > date) continue;
+    const sets = madeSets(w);
+    week.sessions++;
+    week.sets += w.exercises.reduce(
+      (n, e) => n + e.sets.filter(isValidLoggedSet).length,
+      0,
+    );
+    week.tonnageKg += sets.reduce((n, s) => n + s.weight * s.reps, 0);
+  }
+  return weeks.map((w) => ({ ...w, tonnageKg: Math.round(w.tonnageKg) }));
 }
 
 export function buildTraining(
@@ -291,6 +408,8 @@ export function buildTraining(
             topSet: topSet(s),
           }),
         ),
+      bests: personalBests(state),
+      weeks: trainingWeeks(state, date),
       exercises: EXERCISES.map((e) => ({
         id: e.id,
         name: e.name,

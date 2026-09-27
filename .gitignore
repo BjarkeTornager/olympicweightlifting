@@ -4,7 +4,8 @@ lift-journal-backup-*.json
 screenshots/
 test-results/
 _site/
-node_modules/
+# Also a symlink, as worktrees make.
+node_modules
 .next/
 .env*
 !.env.example

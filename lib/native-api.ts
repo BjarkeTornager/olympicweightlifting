@@ -233,6 +233,8 @@ const journalItem = z
     detail: z.string(),
     fromAppleHealth: z.boolean(),
     hasRoute: z.boolean().optional(),
+    // For cardio, the kind of activity, for its symbol.
+    activity: z.enum(cardioActivities).optional(),
   })
   .strict()
   .register(nativeResponses, { id: "JournalItem" });
@@ -772,6 +774,7 @@ export function buildJournal(
         .join(" · "),
       fromAppleHealth: fromAppleHealth.has(e.id),
       hasRoute: routes.has(e.id),
+      activity: e.activity,
     });
   for (const m of state.nutrition.meals.filter((m) => inRange(m.date))) {
     const total = totalNutrients(m.items);

@@ -1554,6 +1554,10 @@
           },
           "hasRoute": {
             "type": "boolean"
+          },
+          "activity": {
+            "type": "string",
+            "description": "One of: running, cycling, walking, swimming, rowing, hiking, elliptical, other. Treat others as unknown."
           }
         },
         "required": [
@@ -1923,6 +1927,31 @@
           "carbs",
           "fat",
           "meals"
+        ]
+      },
+      "PersonalBest": {
+        "type": "object",
+        "properties": {
+          "exerciseId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "integer"
+          },
+          "date": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exerciseId",
+          "name",
+          "weight"
         ]
       },
       "PlannedExercise": {
@@ -2623,6 +2652,18 @@
               "$ref": "#/components/schemas/SessionSummary"
             }
           },
+          "bests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonalBest"
+            }
+          },
+          "weeks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrainingWeek"
+            }
+          },
           "exercises": {
             "type": "array",
             "items": {
@@ -2634,7 +2675,32 @@
           "revision",
           "programmes",
           "recent",
+          "bests",
+          "weeks",
           "exercises"
+        ]
+      },
+      "TrainingWeek": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string"
+          },
+          "sessions": {
+            "type": "integer"
+          },
+          "sets": {
+            "type": "integer"
+          },
+          "tonnageKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "start",
+          "sessions",
+          "sets",
+          "tonnageKg"
         ]
       },
       "TrendDay": {

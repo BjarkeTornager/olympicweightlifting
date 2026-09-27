@@ -5,6 +5,7 @@ import { activityLoggingPrompt } from "../images";
 import { prepareFoodTags } from "./food-tags";
 import type { ActionPreview, AgentAction } from "./actions";
 import type { TurnReads } from "./read-tools";
+import { mealTypeConflict } from "./knowledge";
 
 type BundleEntry = Extract<
   AgentAction,
@@ -43,6 +44,10 @@ export async function guardChange(
   ctx: ChangeGuardContext,
 ) {
   const { userId, state, reads, viewedImageIds } = ctx;
+  if (action.kind === "record_meal" || action.kind === "update_meal") {
+    const conflict = mealTypeConflict(ctx.message, action.meal.type);
+    if (conflict) throw Error(conflict);
+  }
   if (
     ctx.saving &&
     (action.kind === "record_meal" || action.kind === "repeat_meal")
@@ -104,7 +109,11 @@ export async function guardChange(
     (action.kind === "update_cardio" || action.kind === "delete_cardio") &&
     !reads.cardio.has(action.cardioId)
   )
-    throw Error("Read the full original cardio activity first.");
+    throw Error(
+      state.cardio.sessions.some((s) => s.id === action.cardioId)
+        ? "Read the full original cardio activity first."
+        : "No activity with that cardioId. Copy the id exactly as cardio_journal returned it.",
+    );
   if (action.kind === "record_cardio" || action.kind === "update_cardio") {
     const original =
       action.kind === "update_cardio"

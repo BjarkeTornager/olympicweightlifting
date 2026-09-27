@@ -32,7 +32,12 @@ test(
       [user],
     );
     // Proposes one change, then answers whatever came back.
-    const turn = async (message: string, change: ReturnType<typeof call>) => {
+    const turn = async (
+      message: string,
+      change: ReturnType<typeof call>,
+      read?: ReturnType<typeof call>,
+    ) => {
+      const steps = [...(read ? [read] : []), change];
       const sent: ModelMessage[][] = [];
       const response = await runTurn(
         user,
@@ -44,15 +49,16 @@ test(
         },
         async (messages): Promise<ModelResponse> => {
           sent.push(messages);
-          return sent.length === 1
-            ? { role: "assistant", content: "", tool_calls: [change] }
+          const step = steps[sent.length - 1];
+          return step
+            ? { role: "assistant", content: "", tool_calls: [step] }
             : { role: "assistant", content: "Noted." };
         },
         { directLogging: true },
       );
       const toolError = sent
         .at(-1)
-        ?.find((m) => m.role === "tool")
+        ?.findLast((m) => m.role === "tool")
         ?.content.match(/"error":"([^"]+)"/)?.[1];
       return { response, calls: sent.length, toolError };
     };
@@ -150,6 +156,69 @@ test(
         (await readJournal(user)).state.nutrition.meals[0].name,
         "Morning coffee",
       );
+
+      // Today's sessions count as read: a session needs only the workout
+      // in progress (current_workout), not find_sessions.
+      const sent: string[] = [];
+      await runTurn(
+        user,
+        {
+          id: crypto.randomUUID(),
+          message: "Back squat 5 at 100 kg, still training.",
+          revision: (await readJournal(user)).revision,
+          timezone,
+        },
+        async (messages): Promise<ModelResponse> => {
+          sent.push(messages.at(-1)!.content);
+          if (sent.length === 1)
+            return {
+              role: "assistant",
+              content: "",
+              tool_calls: [call("current_workout")],
+            };
+          return {
+            role: "assistant",
+            content: "",
+            tool_calls: [
+              call("log_entry", {
+                kind: "log_workout_progress",
+                workout: {
+                  title: "Training",
+                  date: today,
+                  category: "open",
+                  exercises: [
+                    {
+                      exerciseId: "back_squat",
+                      sets: [{ weight: 100, reps: 5, result: "success" }],
+                    },
+                  ],
+                },
+                completion: "ongoing",
+              }),
+            ],
+          };
+        },
+        { directLogging: true },
+      );
+      const draft = (await readJournal(user)).state.activeWorkout;
+      assert.equal(sent.length, 2, String(sent.at(-1)));
+      assert.equal(draft?.exercises[0]?.exerciseId, "back_squat");
+
+      // Finishing may name the workout in progress, and only that one.
+      const wrong = await turn(
+        "I'm done.",
+        call("log_entry", { kind: "finish_workout", workoutId: "not-it" }),
+        call("current_workout"),
+      );
+      assert.match(wrong.toolError ?? "", /isn't the workout in progress/);
+      assert.ok((await readJournal(user)).state.activeWorkout);
+      const done = await turn(
+        "I'm done.",
+        call("log_entry", { kind: "finish_workout", workoutId: draft!.id }),
+        call("current_workout"),
+      );
+      assert.equal(done.calls, 2, String(done.toolError));
+      assert.equal((await readJournal(user)).state.activeWorkout, null);
 
       // Another date still needs its own read.
       const late = await turn(

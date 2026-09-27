@@ -145,9 +145,9 @@ function applyAction(
     case "log_sets":
       return prepareLogSets(next, action, currentDate);
     case "finish_workout":
-      return prepareFinishWorkout(next, currentDate);
+      return prepareFinishWorkout(next, currentDate, action.workoutId);
     case "discard_workout":
-      return prepareDiscardWorkout(next);
+      return prepareDiscardWorkout(next, action.workoutId);
     case "start_programme":
       return prepareStartProgramme(next, action);
     case "repeat_session":

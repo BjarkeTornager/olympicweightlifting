@@ -75,7 +75,15 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // logging, is replaced by a pointer to log_drink, and the drinks rule
     // says how to correct the day's water total (found by the logging-rules
     // GEPA run). Health, privacy and evidence text is unchanged.
-    "a0a428ad2f5c5eb7e431be0733e06f2b43e81f0ffc61fe3197175c88a8e7bff8",
+    // Revised 2026-09-27 again, deliberate and reviewed, from failures in
+    // the hard Coach benchmark (scripts/coach-bench): today's sessions count
+    // as read for strength logging too (current_workout is still read);
+    // Danish meal names are spelled out (frokost is lunch); and pounds are
+    // converted and saved rather than asked about; a drink whose volume
+    // isn't given is saved with an estimate (a shake about 300 ml) instead
+    // of blocking the save on a question. Health, privacy and evidence text
+    // is unchanged.
+    "c6faf429b5284ae050071dd9624d91baf0d843bea10fbddaef4c017b7389f8d5",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

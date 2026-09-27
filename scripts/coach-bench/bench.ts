@@ -28,7 +28,8 @@ export type Category =
   | "corrections"
   | "units"
   | "restraint"
-  | "routines";
+  | "routines"
+  | "skills";
 
 export type TurnContext = {
   before: JournalState;
@@ -238,5 +239,7 @@ export function onlyChanged(c: TurnContext, allowed: Domain[] = []): string[] {
 }
 export const pendingReview = (c: TurnContext) =>
   c.proposals.some((p) => !p.status);
+export const used = (c: TurnContext, tool: string) =>
+  c.tools.some((t) => t.name === tool);
 export const mentions = (reply: string, pattern: RegExp) =>
   pattern.test(reply.replace(/ /g, " "));

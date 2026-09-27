@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { searchWeb, webSearchSchema, webSearchEnabled } from "../lib/web-search";
 import { toolDefinitions } from "../lib/agent/engine";
-import { systemPrompt } from "../lib/agent/knowledge";
+import { skillInstructions } from "../lib/agent/knowledge";
 
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -138,7 +138,7 @@ test("the tool is offered only when configured, and its contract warns Coach", (
   assert.match(tool.function.description, /NEVER put the athlete's name/);
   assert.match(tool.function.description, /untrusted/);
 
-  const prompt = systemPrompt();
+  const prompt = skillInstructions(["web"]);
   assert.match(prompt, /use search_web/);
   assert.match(prompt, /must never appear in a query/);
   assert.match(prompt, /untrusted reference material/);

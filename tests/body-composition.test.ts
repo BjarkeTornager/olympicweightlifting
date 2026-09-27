@@ -14,7 +14,7 @@ import {
   weightTrend,
 } from "../lib/body-composition";
 import { prepareAction } from "../lib/agent/actions";
-import { systemPrompt } from "../lib/agent/knowledge";
+import { fullPrompt } from "../lib/agent/knowledge";
 import { applyBodyFatImport } from "../lib/health-sync";
 import { dayForCoach, describeDay } from "../lib/journal-summary";
 import { coachingContext } from "../lib/coaching";
@@ -253,7 +253,7 @@ test("Coach and the voice coach see body fat, weight trend and goals", () => {
   assert.equal(context.bodyComposition?.weightTrend?.kg_per_week, -0.2);
 
   // Coach's instructions name the whole role and the limits.
-  const prompt = systemPrompt();
+  const prompt = fullPrompt();
   assert.match(
     prompt,
     /fat-loss and muscle-building coach and nutrition guide/,

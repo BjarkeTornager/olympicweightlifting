@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { toolDefinitions } from "../lib/agent/engine";
-import { systemPrompt } from "../lib/agent/knowledge";
+import { skillInstructions } from "../lib/agent/knowledge";
 import {
   planRoute,
   routeDirectionSchema,
@@ -69,7 +69,7 @@ test("every heading and park bias Coach may send is explained in the tool text",
 });
 
 test("the Coach prompt teaches the fields the route planner now needs", () => {
-  const prompt = systemPrompt();
+  const prompt = skillInstructions(["routes"]);
   assert.match(prompt, /parkBias/);
   assert.match(prompt, /Pass direction when they name a heading/);
   assert.match(prompt, /variant 1, 2 or 3/);

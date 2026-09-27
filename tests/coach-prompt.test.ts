@@ -1,11 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { systemPrompt } from "../lib/agent/knowledge";
+import {
+  fullPrompt,
+  skillInstructions,
+  systemPrompt,
+} from "../lib/agent/knowledge";
+import { skillList, skillNames, skills } from "../lib/agent/skills";
 import { coachStyle } from "../lib/agent/coach-style";
 
 test("conversational prompt changes preserve the fixed health, privacy, evidence and action policy", () => {
-  const prompt = systemPrompt();
+  // The whole reviewed policy, core and skills; turns get the core plus the
+  // skills they load (see the next test).
+  const prompt = fullPrompt();
   assert.equal(prompt.split(coachStyle).length, 2);
   assert.equal(
     createHash("sha256")
@@ -83,7 +90,12 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // isn't given is saved with an estimate (a shake about 300 ml) instead
     // of blocking the save on a question. Health, privacy and evidence text
     // is unchanged.
-    "c6faf429b5284ae050071dd9624d91baf0d843bea10fbddaef4c017b7389f8d5",
+    // Revised 2026-09-27, deliberate and reviewed, with dynamic skills: the
+    // goals paragraph says a calorie or macro target the athlete states is
+    // set as given (set_diet_targets), not turned into goal questions; with
+    // the goals skill loaded, Coach asked for age instead. Health, privacy
+    // and evidence text is unchanged.
+    "c9529024ec2816643799a9669701266262c60addf75aacf9e031507cd73d4104",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -109,4 +121,32 @@ test("Coach policy separates reported events, previews and advice", () => {
     /If the person says preview, prepare for review or do not save, respect that/,
   );
   assert.match(systemPrompt(false), /This client uses reviewed logging/);
+});
+
+test("the core prompt and the skills together are exactly the reviewed policy", () => {
+  for (const logging of [true, false]) {
+    const full = fullPrompt(logging).split("\n");
+    const core = systemPrompt(logging).split("\n");
+    assert.equal(core.at(-1), skillList);
+    const skillLines = skillNames.flatMap((name) =>
+      skillInstructions([name], logging).split("\n").filter(Boolean),
+    );
+    // Every paragraph is in the core or in exactly one skill, never lost.
+    assert.deepEqual(
+      [...core.slice(0, -1), ...skillLines].sort(),
+      [...full].sort(),
+    );
+    assert.equal(new Set(skillLines).size, skillLines.length);
+  }
+  // Each skill paragraph start matches exactly one paragraph, so an edit to
+  // a paragraph's opening can't silently move it into the core.
+  for (const name of skillNames)
+    for (const start of skills[name].paragraphs)
+      assert.equal(
+        fullPrompt()
+          .split("\n")
+          .filter((line) => line.startsWith(start)).length,
+        1,
+        `${name}: "${start}"`,
+      );
 });

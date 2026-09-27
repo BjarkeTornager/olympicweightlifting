@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { skillNames, skills, skillTools, type SkillName } from "./skills";
 import { webSearchSchema } from "../web-search";
 import { visualToolSchema, galleryIdsSchema } from "../coach-visuals";
 import { foodQuerySchema, foodDate } from "../nutrition";
@@ -215,6 +216,11 @@ export const specifications = {
       " " +
       directReviewPolicy,
   },
+  load_skills: {
+    schema: z.object({ skills: z.array(z.enum(skillNames)).min(1).max(8) }),
+    description:
+      "Load the skills this message needs, from the skills list in your instructions. Returns their instructions; their tools and change fields are available from the next step. Only load what the message needs.",
+  },
   log_entry: {
     schema: loggingToolSchema,
     description:
@@ -237,6 +243,46 @@ export const toolDefinitions: ToolDefinition[] = Object.entries(
     parameters: z.toJSONSchema(s.schema),
   },
 }));
+// Core tools first and skill tools after them, so turns with different
+// skills still share the longest possible cached prefix.
+const ordered = [
+  ...toolDefinitions.filter((t) => !skillTools.has(t.function.name)),
+  ...toolDefinitions.filter((t) => skillTools.has(t.function.name)),
+];
+const withoutFields = new Map<string, ToolDefinition>();
+// The tools offered for a turn with these skills loaded. prepare_change
+// leaves out the fields of skills that aren't loaded; the server still
+// validates every action against the full schema.
+export function toolsFor(
+  loaded: ReadonlySet<SkillName>,
+  include: (name: string) => boolean = () => true,
+): ToolDefinition[] {
+  const missing = skillNames.filter((name) => !loaded.has(name));
+  const fields = missing.flatMap((name) => skills[name].fields);
+  return ordered
+    .filter((t) => {
+      const name = t.function.name;
+      const skill = skillTools.get(name);
+      if (skill && !loaded.has(skill)) return false;
+      if (name === "load_skills" && !missing.length) return false;
+      return include(name);
+    })
+    .map((t) => {
+      if (t.function.name !== "prepare_change" || !fields.length) return t;
+      const key = fields.join(",");
+      if (!withoutFields.has(key)) {
+        const parameters = structuredClone(t.function.parameters) as {
+          properties: Record<string, unknown>;
+        };
+        for (const field of fields) delete parameters.properties[field];
+        withoutFields.set(key, {
+          ...t,
+          function: { ...t.function, parameters },
+        });
+      }
+      return withoutFields.get(key)!;
+    });
+}
 export type ToolName = keyof typeof specifications;
 export type ToolArgs<K extends ToolName> = z.infer<
   (typeof specifications)[K]["schema"]
@@ -260,6 +306,7 @@ export function toolStep(name: string) {
     read_session: "Reading your session",
     current_workout: "Checking your current workout",
     programmes: "Checking your programme",
+    load_skills: "Getting ready",
     training_library: "Reading your saved routines and programs",
     exercises: "Looking up exercises",
     image_library: "Checking your image library",

@@ -20,6 +20,7 @@ import {
   seedMeal,
   sessionSets,
   total,
+  used,
   water,
   workout,
   type Scenario,
@@ -914,6 +915,113 @@ export const scenarios: Scenario[] = [
             ...onlyChanged(c, ["activeWorkout"]),
           ];
         },
+      },
+    ],
+  },
+
+  // ---- Skills: abilities loaded only when a message needs them ------------
+  {
+    id: "plan-route",
+    title: "A route request reaches the route planner",
+    category: "skills",
+    split: "validation",
+    turns: [
+      {
+        en: "Plan a 5 km running route starting from Fælledparken in Copenhagen.",
+        da: "Planlæg en løberute på 5 km fra Fælledparken i København.",
+        expects: "no-change",
+        check: (c) => [
+          ...expect(used(c, "plan_route"), "Route planner not used"),
+          ...onlyChanged(c),
+        ],
+      },
+    ],
+  },
+  {
+    id: "create-routine",
+    title: "A new routine is prepared for review",
+    category: "skills",
+    split: "validation",
+    turns: [
+      {
+        en: "Create a routine called Push day: bench press 3 sets of 8 at 60 kg and overhead press 3 sets of 8 at 40 kg.",
+        da: "Opret en rutine kaldet Push day: bænkpres 3 sæt med 8 på 60 kg og skulderpres 3 sæt med 8 på 40 kg.",
+        expects: "review",
+        check: (c) => [
+          // A question about an ambiguous exercise (for example whether
+          // Danish "skulderpres" means barbell or dumbbells) is fine too.
+          ...expect(
+            pendingReview(c) || c.reply.includes("?"),
+            "No routine offered for review, and no question",
+          ),
+          ...onlyChanged(c),
+        ],
+      },
+    ],
+  },
+  {
+    id: "remember-preference",
+    title: "A preference to remember is prepared for review",
+    category: "skills",
+    split: "heldout",
+    turns: [
+      {
+        en: "Remember that I prefer to train at 6 in the morning.",
+        da: "Husk at jeg foretrækker at træne kl. 6 om morgenen.",
+        expects: "review",
+        check: (c) => [
+          ...expect(pendingReview(c), "No memory offered for review"),
+          ...onlyChanged(c),
+        ],
+      },
+    ],
+  },
+  {
+    id: "calorie-target",
+    title: "A calorie target is prepared for review",
+    category: "skills",
+    split: "heldout",
+    turns: [
+      {
+        en: "Set my daily calorie target to 2400 kcal.",
+        da: "Sæt mit daglige kaloriemål til 2400 kcal.",
+        expects: "review",
+        check: (c) => [
+          ...expect(pendingReview(c), "No target offered for review"),
+          ...onlyChanged(c),
+        ],
+      },
+    ],
+  },
+  {
+    id: "compare-fortnight",
+    title: "A comparison with no signal words is answered from the records",
+    category: "skills",
+    split: "validation",
+    seed: (s) => {
+      s.sessions = [
+        workout(dates.yesterday, { back_squat: [[100, 5]] }),
+        workout("2026-09-15", { back_squat: [[95, 5]] }),
+      ];
+    },
+    turns: [
+      {
+        en: "How did my last seven days of training compare with the seven days before?",
+        da: "Hvordan var mine sidste syv dages træning sammenlignet med de syv dage før?",
+        expects: "no-change",
+        check: (c) => [
+          // Either review tool can answer; the answer must compare both
+          // weeks' recorded squats.
+          ...expect(
+            used(c, "weekly_review") || used(c, "training_summary"),
+            "Neither review tool used",
+          ),
+          ...expect(
+            mentions(c.reply, /\b100\b/) && mentions(c.reply, /\b95\b/),
+            "Doesn't compare both weeks' squats",
+          ),
+          ...onlyChanged(c),
+        ],
       },
     ],
   },

@@ -8,6 +8,8 @@ export type TurnMetrics = {
   // Which tier Jev (or the rules) chose, and how.
   tier?: string;
   route?: string;
+  // Skills the turn loaded (skills.ts), up front or during the turn.
+  skills?: string[];
   routingMs?: number;
   // From the start of the turn to the first streamed word of the reply.
   firstTextMs?: number;

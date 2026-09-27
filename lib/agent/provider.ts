@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { readModelStream, ContentFiltered } from "./model-stream";
+import { readModelStream, ContentFiltered, usageSchema } from "./model-stream";
 import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
 export class ProviderError extends Error {
   constructor(
@@ -70,7 +70,36 @@ export type ModelResponse = ModelMessage & {
   truncated?: boolean;
   // The host's content filter replaced the reply with a refusal.
   filtered?: boolean;
+  // Which model answered and what the call used, for Coach's turn metrics.
+  served?: ModelUsage;
 };
+export type ModelUsage = {
+  model?: string;
+  inputTokens?: number;
+  cachedTokens?: number;
+  cacheWriteTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
+};
+function servedBy(
+  model: string | undefined,
+  usage: z.infer<typeof usageSchema> | undefined,
+): ModelUsage | undefined {
+  if (!model && !usage) return undefined;
+  return {
+    ...(model ? { model } : {}),
+    ...(usage
+      ? {
+          inputTokens: usage.prompt_tokens,
+          cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+          cacheWriteTokens:
+            usage.prompt_tokens_details?.cache_write_tokens ?? 0,
+          outputTokens: usage.completion_tokens,
+          ...(usage.cost != null ? { costUsd: usage.cost } : {}),
+        }
+      : {}),
+  };
+}
 // Azure's content filter, which fronts every zero-retention OpenAI model,
 // blocks ordinary fitness questions ("how many sets when I'm tired?"). A
 // filtered reply is retried once on a model served outside Azure, with the
@@ -195,6 +224,9 @@ export function parseModelResponse(
   }
   const response = z
     .object({
+      // Metrics only: a malformed usage frame never fails the reply.
+      model: z.string().max(200).optional().catch(undefined),
+      usage: usageSchema.optional().catch(undefined),
       choices: z
         .array(
           z.object({
@@ -239,6 +271,9 @@ export function parseModelResponse(
       : {}),
     ...(response.choices[0].finish_reason === "content_filter"
       ? { filtered: true }
+      : {}),
+    ...(servedBy(response.model, response.usage)
+      ? { served: servedBy(response.model, response.usage) }
       : {}),
   };
 }

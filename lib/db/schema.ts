@@ -376,6 +376,9 @@ export const agentTurns = pgTable(
     response:
       jsonb("response").$type<import("../coach-visuals").CoachResponse>(),
     status: text("status").notNull().default("running"),
+    // Timings, token counts and cost of the turn's model calls; no text.
+    metrics:
+      jsonb("metrics").$type<import("../agent/turn-metrics").TurnMetrics>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

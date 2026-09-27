@@ -1,0 +1,1 @@
+ALTER TABLE "agent_turns" ADD COLUMN "started_at" timestamp with time zone;

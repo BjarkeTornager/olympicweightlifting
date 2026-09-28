@@ -49,13 +49,15 @@ struct JournalView: View {
       ForEach(days, id: \.0) { day, entries in
         Section(Self.heading(day)) {
           ForEach(entries, id: \.id) { item in
-            if item.hasRoute == true {
-              NavigationLink {
-                ActivityRouteView(id: item.id, title: item.title)
-              } label: {
-                JournalRow(item: item)
+            NavigationLink {
+              // A workout opens with every set; everything else with what
+              // was recorded for it.
+              if item.kind == "strength" {
+                SessionView(id: item.id)
+              } else {
+                JournalItemView(item: item)
               }
-            } else {
+            } label: {
               JournalRow(item: item)
             }
           }

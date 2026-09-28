@@ -192,6 +192,100 @@ test("Today and the journal feed describe the day for the app", () => {
   assert.match(feed.items[0].detail, /10 km · 148 bpm avg/);
   assert.equal(feed.items[0].activity, "running");
   assert.equal(feed.nextBefore, undefined);
+  // Each item opens to show everything recorded.
+  assert.deepEqual(
+    feed.items[0].details!.lines.map((l) => l.label),
+    [
+      "Duration",
+      "Distance",
+      "Average heart rate",
+      "Maximum heart rate",
+      "Energy",
+    ],
+  );
+  assert.deepEqual(
+    feed.items[1].details!.lines.map((l) => l.label),
+    [
+      "Resting heart rate",
+      "Heart rate variability",
+      "Average heart rate",
+      "Steps",
+      "Active energy",
+    ],
+  );
+});
+
+test("journal items carry their full details: meals item by item, sleep with its night", () => {
+  const state = emptyJournal();
+  state.profile.timezone = tz;
+  state.nutrition.meals.push(
+    mealSchema.parse({
+      id: crypto.randomUUID(),
+      createdAt: now.toISOString(),
+      date,
+      type: "lunch",
+      name: "Chicken and rice",
+      items: [
+        {
+          name: "Chicken breast",
+          portion: "180 g",
+          calories: 297,
+          protein: 56,
+          carbs: 0,
+          fat: 6,
+        },
+        {
+          name: "Rice",
+          portion: "250 g cooked",
+          calories: 325,
+          protein: 6,
+          carbs: 70,
+          fat: 1,
+        },
+      ],
+      source: "text",
+      estimated: true,
+    }),
+  );
+  state.health.checkins.push({
+    date,
+    sleepHours: 7.25,
+    energy: 4,
+    soreness: 2,
+    waterMl: null,
+    bodyweight: null,
+    notes: "Legs heavy",
+    updatedAt: now.toISOString(),
+    sleepImport: {
+      provider: "apple-health",
+      digest: "a".repeat(64),
+      start: "2026-09-25T21:40:00Z",
+      end: "2026-09-26T05:10:00Z",
+      importedAt: now.toISOString(),
+    },
+  });
+  const feed = buildJournal(state, 1, "2026-09-27", 14, new Set());
+  const byKind = (kind: string) => feed.items.find((i) => i.kind === kind)!;
+  const meal = byKind("meal").details!;
+  assert.equal(meal.title, "Lunch: Chicken and rice");
+  assert.deepEqual(meal.lines[1], {
+    label: "Rice",
+    note: "250 g cooked",
+    value: "325 kcal · 6 g protein",
+  });
+  const sleep = byKind("sleep").details!;
+  assert.deepEqual(sleep.lines, [
+    { label: "Asleep", value: "7 h 15 min" },
+    { label: "Night", value: "23:40 to 07:10" },
+  ]);
+  assert.equal(sleep.footnote, "From Apple Health");
+  const checkin = byKind("checkin").details!;
+  assert.deepEqual(
+    checkin.lines.map((l) => l.label),
+    ["Energy", "Soreness"],
+    "sleep has its own item",
+  );
+  assert.equal(checkin.footnote, "Legs heavy");
 });
 
 test("Coach history shows voice turns and each save's state", () => {

@@ -1608,6 +1608,9 @@
           "activity": {
             "type": "string",
             "description": "One of: running, cycling, walking, swimming, rowing, hiking, elliptical, other. Treat others as unknown."
+          },
+          "details": {
+            "$ref": "#/components/schemas/CoachReceiptEntry"
           }
         },
         "required": [

@@ -33,7 +33,13 @@ struct ContractTests {
 
   @Test func coach() throws {
     let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
-    #expect(history.turns.first?.receipts.first?.state == "saved")
+    let receipt = try #require(history.turns.first?.receipts.first)
+    #expect(receipt.state == "saved")
+    // What was saved, item by item, for the receipt to show when opened.
+    let entry = try #require(receipt.entries?.first)
+    #expect(entry.title == "Breakfast: Oats with berries")
+    #expect(entry.lines.map(\.label) == ["Oats", "Berries"])
+    #expect(entry.lines.first?.note == "80 g")
   }
 
   @Test("An unknown enum value from a newer server still decodes")

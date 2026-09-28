@@ -453,6 +453,7 @@ export async function runVoiceTool(
     ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
     ...(prepared.targets ? { targets: prepared.targets } : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
+    ...(prepared.drink ? { drink: prepared.drink } : {}),
     ...(prepared.workoutReview
       ? { workoutReview: prepared.workoutReview }
       : {}),

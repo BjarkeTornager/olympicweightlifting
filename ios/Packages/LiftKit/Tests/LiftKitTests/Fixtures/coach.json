@@ -13,7 +13,27 @@
           "id": "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a13",
           "title": "Log breakfast",
           "detail": "Oats with berries · about 300 kcal",
-          "state": "saved"
+          "state": "saved",
+          "entries": [
+            {
+              "title": "Breakfast: Oats with berries",
+              "summary": "300 kcal · 10 g protein · 57 g carbs · 5 g fat",
+              "date": "2026-09-26",
+              "lines": [
+                {
+                  "label": "Oats",
+                  "note": "80 g",
+                  "value": "250 kcal · 9 g protein"
+                },
+                {
+                  "label": "Berries",
+                  "note": "100 g",
+                  "value": "50 kcal · 1 g protein"
+                }
+              ],
+              "footnote": "Estimated nutrition"
+            }
+          ]
         }
       ],
       "visuals": [

@@ -113,6 +113,14 @@ export function prepareDrink(
   return {
     title: action.kind === "log_drink" ? "Log a drink" : "Remove a drink",
     detail: `${action.kind === "log_drink" ? what : `Removes ${what}`}. ${formatLitres(day.totalMl)} of about ${formatLitres(day.targetMl)} on ${drink.date}.`,
+    drink: {
+      name: drink.name || drink.kind,
+      ml: drink.ml,
+      date: drink.date,
+      ...(action.kind === "delete_drink" ? { removed: true } : {}),
+      dayTotalMl: day.totalMl,
+      dayTargetMl: day.targetMl,
+    },
   };
 }
 

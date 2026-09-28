@@ -308,22 +308,68 @@ final class Reminders: NSObject {
   }
 }
 
+// The completion-handler forms, not the async ones: iOS requires the
+// handler to be called on the main thread, and the compiler's bridge for a
+// nonisolated async method called it from a background thread, which
+// crashed the app whenever a reminder was tapped (28 September).
 extension Reminders: UNUserNotificationCenterDelegate {
   /// Reminders show while the app is open; the rest alert doesn't, as the
   /// workout screen shows the timer.
   nonisolated func userNotificationCenter(
-    _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-  ) async -> UNNotificationPresentationOptions {
-    notification.request.identifier.hasPrefix(Reminders.prefix) ? [.banner, .list, .sound] : []
+    _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    let options: UNNotificationPresentationOptions =
+      notification.request.identifier.hasPrefix(Reminders.prefix) ? [.banner, .list, .sound] : []
+    let done = MainThreadCompletion { completionHandler(options) }
+    done.call()
   }
 
   nonisolated func userNotificationCenter(
-    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
-  ) async {
+    _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
     let request = response.notification.request
-    guard request.identifier.hasPrefix(Reminders.prefix) else { return }
+    let done = MainThreadCompletion(completionHandler)
+    guard request.identifier.hasPrefix(Reminders.prefix) else {
+      done.call()
+      return
+    }
     let kind = request.content.categoryIdentifier
     let action = response.actionIdentifier
-    await respond(kind: kind, action: action)
+    Task { @MainActor in
+      await self.respond(kind: kind, action: action)
+      done.call()
+    }
+  }
+}
+
+/// Calls a notification centre completion handler on the main thread,
+/// wherever it is called from, and only once.
+nonisolated struct MainThreadCompletion: @unchecked Sendable {
+  private let handler: () -> Void
+  private let called = CalledOnce()
+
+  init(_ handler: @escaping () -> Void) { self.handler = handler }
+
+  func call() {
+    guard called.claim() else { return }
+    if Thread.isMainThread {
+      handler()
+    } else {
+      DispatchQueue.main.async(execute: handler)
+    }
+  }
+
+  private final class CalledOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func claim() -> Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      if done { return false }
+      done = true
+      return true
+    }
   }
 }

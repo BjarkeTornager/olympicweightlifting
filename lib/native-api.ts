@@ -223,6 +223,25 @@ export const todayView = z
   .register(nativeResponses, { id: "Today" });
 export type TodayView = z.infer<typeof todayView>;
 
+const receiptLine = z
+  .object({
+    label: z.string(),
+    // A portion or other detail shown under the label.
+    note: z.string().optional(),
+    value: z.string().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "CoachReceiptLine" });
+const receiptEntry = z
+  .object({
+    title: z.string(),
+    summary: z.string().optional(),
+    date: day.optional(),
+    lines: z.array(receiptLine),
+    footnote: z.string().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "CoachReceiptEntry" });
 const journalItem = z
   .object({
     id: z.string(),
@@ -242,6 +261,9 @@ const journalItem = z
     hasRoute: z.boolean().optional(),
     // For cardio, the kind of activity, for its symbol.
     activity: z.enum(cardioActivities).optional(),
+    // Everything recorded, shown when the athlete opens the item: in the
+    // same shape as a Coach receipt's entries. Strength opens the session.
+    details: receiptEntry.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "JournalItem" });
@@ -746,6 +768,36 @@ const kmText = (km: number) =>
   `${km.toLocaleString("en-GB", { maximumFractionDigits: 2 })} km`;
 
 // Everything recorded, newest day first, a fixed number of days per page.
+// A night's sleep: how long, and when, if Apple Health measured it.
+function sleepDetails(
+  c: JournalState["health"]["checkins"][number],
+  timezone = "Europe/Copenhagen",
+): z.infer<typeof receiptEntry> {
+  const time = (iso: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  const night = c.sleepImport;
+  return defined({
+    title: "Sleep",
+    date: c.date,
+    lines: [
+      { label: "Asleep", value: formatSleepDuration(c.sleepHours ?? 0) },
+      ...(night
+        ? [
+            {
+              label: "Night",
+              value: `${time(night.start)} to ${time(night.end)}`,
+            },
+          ]
+        : []),
+    ],
+    footnote: night ? "From Apple Health" : "Reported by you",
+  });
+}
+
 export function buildJournal(
   state: JournalState,
   revision: number,
@@ -782,6 +834,7 @@ export function buildJournal(
       fromAppleHealth: fromAppleHealth.has(e.id),
       hasRoute: routes.has(e.id),
       activity: e.activity,
+      details: receiptEntryView({ title: "", detail: "", cardio: e }),
     });
   for (const m of state.nutrition.meals.filter((m) => inRange(m.date))) {
     const total = totalNutrients(m.items);
@@ -792,6 +845,7 @@ export function buildJournal(
       title: m.name,
       detail: `${Math.round(total.calories)} kcal · ${Math.round(total.protein)} g protein${m.estimated ? " · estimated" : ""}`,
       fromAppleHealth: false,
+      details: receiptEntryView({ title: "", detail: "", meal: m }),
     });
   }
   for (const c of state.health.checkins.filter((c) => inRange(c.date))) {
@@ -803,6 +857,7 @@ export function buildJournal(
         title: "Sleep",
         detail: formatSleepDuration(c.sleepHours),
         fromAppleHealth: Boolean(c.sleepImport),
+        details: sleepDetails(c, state.profile.timezone),
       });
     const reported = [
       c.energy != null ? `energy ${c.energy}/5` : "",
@@ -817,6 +872,12 @@ export function buildJournal(
         title: "Check-in",
         detail: reported.join(" · ") || c.notes.slice(0, 120),
         fromAppleHealth: false,
+        // Sleep has its own item.
+        details: receiptEntryView({
+          title: "",
+          detail: "",
+          checkin: { ...c, sleepHours: null },
+        }),
       });
   }
   for (const v of (state.health.vitals ?? []).filter((v) => inRange(v.date))) {
@@ -835,6 +896,33 @@ export function buildJournal(
         title: "Heart and movement",
         detail: detail.join(" · "),
         fromAppleHealth: true,
+        details: {
+          title: "Heart and movement",
+          date: v.date,
+          lines: [
+            v.restingHeartRate != null && {
+              label: "Resting heart rate",
+              value: `${v.restingHeartRate} bpm`,
+            },
+            v.heartRateVariabilityMs != null && {
+              label: "Heart rate variability",
+              value: `${Math.round(v.heartRateVariabilityMs)} ms`,
+            },
+            v.averageHeartRate != null && {
+              label: "Average heart rate",
+              value: `${v.averageHeartRate} bpm`,
+            },
+            v.steps != null && {
+              label: "Steps",
+              value: v.steps.toLocaleString("en-GB"),
+            },
+            v.activeEnergyKcal != null && {
+              label: "Active energy",
+              value: `${v.activeEnergyKcal.toLocaleString("en-GB")} kcal`,
+            },
+          ].filter((line) => line !== false),
+          footnote: "From Apple Health",
+        },
       });
   }
   for (const b of bodyFatByDate(state, from, offsetDate(before, -1)))
@@ -845,6 +933,18 @@ export function buildJournal(
       title: "Body fat",
       detail: `${b.percent}%${b.method ? ` · ${b.method}` : ""}`,
       fromAppleHealth: b.source === "apple-health",
+      details: defined({
+        title: "Body fat",
+        date: b.date,
+        lines: [
+          { label: "Body fat", value: `${b.percent} %` },
+          ...(b.method
+            ? [{ label: "Measured by", value: capitalised(b.method) }]
+            : []),
+        ],
+        footnote:
+          b.source === "apple-health" ? "From Apple Health" : "Reported by you",
+      }),
     });
   const order = [
     "strength",
@@ -894,25 +994,6 @@ export const undoRequest = z
   .strict()
   .register(nativeRequests, { id: "ProposalRequest" });
 
-const receiptLine = z
-  .object({
-    label: z.string(),
-    // A portion or other detail shown under the label.
-    note: z.string().optional(),
-    value: z.string().optional(),
-  })
-  .strict()
-  .register(nativeResponses, { id: "CoachReceiptLine" });
-const receiptEntry = z
-  .object({
-    title: z.string(),
-    summary: z.string().optional(),
-    date: day.optional(),
-    lines: z.array(receiptLine),
-    footnote: z.string().optional(),
-  })
-  .strict()
-  .register(nativeResponses, { id: "CoachReceiptEntry" });
 const receipt = z
   .object({
     id: z.string(),
@@ -1028,7 +1109,21 @@ export function receiptEntryView(
           label: "Average heart rate",
           value: `${c.averageHeartRate} bpm`,
         },
+        c.maxHeartRate != null && {
+          label: "Maximum heart rate",
+          value: `${c.maxHeartRate} bpm`,
+        },
+        c.elevationGainM != null && {
+          label: "Elevation gain",
+          value: `${Math.round(c.elevationGainM)} m`,
+        },
+        c.caloriesKcal != null && {
+          label: "Energy",
+          value: `${Math.round(c.caloriesKcal)} kcal`,
+        },
+        c.effort != null && { label: "Effort", value: `${c.effort}/10` },
       ].filter((line) => line !== false),
+      footnote: c.notes || undefined,
     });
   }
   if (entry.drink) {

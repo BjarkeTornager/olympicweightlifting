@@ -9,7 +9,33 @@
       "detail": "50 min · 10 km · 148 bpm avg",
       "fromAppleHealth": true,
       "hasRoute": false,
-      "activity": "running"
+      "activity": "running",
+      "details": {
+        "title": "Outdoor Run",
+        "date": "2026-09-26",
+        "lines": [
+          {
+            "label": "Duration",
+            "value": "50 min"
+          },
+          {
+            "label": "Distance",
+            "value": "10 km"
+          },
+          {
+            "label": "Average heart rate",
+            "value": "148 bpm"
+          },
+          {
+            "label": "Maximum heart rate",
+            "value": "171 bpm"
+          },
+          {
+            "label": "Energy",
+            "value": "612 kcal"
+          }
+        ]
+      }
     },
     {
       "id": "5b7f0c43-7a57-4a53-9a4c-2f8cf2f0c001",
@@ -17,7 +43,20 @@
       "kind": "meal",
       "title": "Oats with berries",
       "detail": "300 kcal · 11 g protein · estimated",
-      "fromAppleHealth": false
+      "fromAppleHealth": false,
+      "details": {
+        "title": "Breakfast: Oats with berries",
+        "summary": "300 kcal · 11 g protein · 54 g carbs · 5 g fat",
+        "date": "2026-09-26",
+        "lines": [
+          {
+            "label": "Oats",
+            "note": "80 g",
+            "value": "300 kcal · 11 g protein"
+          }
+        ],
+        "footnote": "Estimated nutrition"
+      }
     },
     {
       "id": "sleep-2026-09-26",
@@ -25,7 +64,22 @@
       "kind": "sleep",
       "title": "Sleep",
       "detail": "7 h 30 min",
-      "fromAppleHealth": true
+      "fromAppleHealth": true,
+      "details": {
+        "title": "Sleep",
+        "date": "2026-09-26",
+        "lines": [
+          {
+            "label": "Asleep",
+            "value": "7 h 30 min"
+          },
+          {
+            "label": "Night",
+            "value": "23:10 to 06:40"
+          }
+        ],
+        "footnote": "From Apple Health"
+      }
     },
     {
       "id": "checkin-2026-09-26",
@@ -33,7 +87,25 @@
       "kind": "checkin",
       "title": "Check-in",
       "detail": "energy 4/5 · soreness 2/5 · 81.4 kg",
-      "fromAppleHealth": false
+      "fromAppleHealth": false,
+      "details": {
+        "title": "Check-in",
+        "date": "2026-09-26",
+        "lines": [
+          {
+            "label": "Energy",
+            "value": "4/5"
+          },
+          {
+            "label": "Soreness",
+            "value": "2/5"
+          },
+          {
+            "label": "Bodyweight",
+            "value": "81.4 kg"
+          }
+        ]
+      }
     },
     {
       "id": "vitals-2026-09-26",
@@ -41,7 +113,34 @@
       "kind": "vitals",
       "title": "Heart and movement",
       "detail": "resting 52 bpm · HRV 61 ms · 9,120 steps",
-      "fromAppleHealth": true
+      "fromAppleHealth": true,
+      "details": {
+        "title": "Heart and movement",
+        "date": "2026-09-26",
+        "lines": [
+          {
+            "label": "Resting heart rate",
+            "value": "52 bpm"
+          },
+          {
+            "label": "Heart rate variability",
+            "value": "61 ms"
+          },
+          {
+            "label": "Average heart rate",
+            "value": "71 bpm"
+          },
+          {
+            "label": "Steps",
+            "value": "9,120"
+          },
+          {
+            "label": "Active energy",
+            "value": "540 kcal"
+          }
+        ],
+        "footnote": "From Apple Health"
+      }
     },
     {
       "id": "7a1c3f8e-2a51-4c1e-9d0b-0c1f7c1e2a11",

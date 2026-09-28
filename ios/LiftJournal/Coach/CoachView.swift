@@ -381,7 +381,7 @@ private struct ReceiptCard: View {
         VStack(alignment: .leading, spacing: 12) {
           ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
             if index > 0 { Divider() }
-            ReceiptEntryView(entry: entry)
+            EntryDetails(entry: entry)
           }
         }
         .padding(12)
@@ -410,51 +410,6 @@ private struct ReceiptCard: View {
     case "pending": Theme.accent
     default: .secondary
     }
-  }
-}
-
-/// One saved or proposed entry: what it is, and each item or set in it.
-private struct ReceiptEntryView: View {
-  let entry: Components.Schemas.CoachReceiptEntry
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      VStack(alignment: .leading, spacing: 1) {
-        Text(entry.title).font(.subheadline.weight(.semibold))
-        let meta = [entry.date.flatMap(day), entry.summary].compactMap { $0 }
-        if !meta.isEmpty {
-          Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(.secondary)
-        }
-      }
-      ForEach(Array(entry.lines.enumerated()), id: \.offset) { _, line in
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          VStack(alignment: .leading, spacing: 0) {
-            Text(line.label).font(.footnote)
-            if let note = line.note {
-              Text(note).font(.caption).foregroundStyle(.secondary)
-            }
-          }
-          Spacer(minLength: 8)
-          if let value = line.value {
-            Text(value)
-              .font(.footnote)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-              .multilineTextAlignment(.trailing)
-          }
-        }
-        .accessibilityElement(children: .combine)
-      }
-      if let footnote = entry.footnote {
-        Text(footnote).font(.caption).foregroundStyle(.secondary)
-      }
-    }
-  }
-
-  /// Today's date goes without saying; another day is named.
-  private func day(_ date: String) -> String? {
-    guard let parsed = JournalDay.date(date), !Calendar.current.isDateInToday(parsed) else { return nil }
-    return JournalView.heading(date)
   }
 }
 

@@ -1,3 +1,4 @@
+import { burnFields, cardioBurn, dayBurn, strengthBurn } from "./energy";
 import type { JournalState } from "./model";
 import { formatLitres, hydrationForDay } from "./hydration";
 import { describeRoute, type RouteNote } from "./route-summary";
@@ -62,6 +63,7 @@ export function journalForVoice(
         date: w.date,
         title: w.title,
         exercises: sets(w),
+        ...burnFields(strengthBurn(state, w)),
       })),
     unfinishedWorkout: state.activeWorkout
       ? {
@@ -108,7 +110,7 @@ export function journalForVoice(
         distance_km: c.distanceKm,
         average_heart_rate: c.averageHeartRate ?? undefined,
         max_heart_rate: c.maxHeartRate ?? undefined,
-        calories_kcal: c.caloriesKcal ?? undefined,
+        ...burnFields(cardioBurn(state, c)),
         elevation_gain_m: c.elevationGainM ?? undefined,
         // Recorded by GPS; the map can be shown with show_activity_route.
         route: routes.get(c.id),
@@ -162,6 +164,7 @@ export function dayForCoach(
   );
   const round = (n: number) => Math.round(n);
   const water = hydrationForDay(state, date);
+  const burned = dayBurn(state, date);
   return {
     date,
     ...day,
@@ -177,6 +180,11 @@ export function dayForCoach(
       fat_g: round(eaten.fat_g),
       complete: state.nutrition.completeDays?.includes(date) ?? false,
     },
+    // Burned in recorded training, measured where a watch recorded it and
+    // estimated by the app otherwise. Context only: food targets stay as set.
+    burnedInTraining: burned.count
+      ? { kcal: burned.kcal, includes_estimates: burned.estimated }
+      : null,
   };
 }
 
@@ -192,7 +200,9 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
               .map((x) => `${x.weight_kg}×${x.reps}${x.made ? "" : " missed"}`)
               .join(", ")}`,
         )
-        .join("; ")})`,
+        .join(
+          "; ",
+        )})${w.calories_kcal != null ? `, ${w.calories_estimated ? "about " : ""}${w.calories_kcal} kcal` : ""}`,
     );
   for (const m of day.meals)
     parts.push(
@@ -215,7 +225,7 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
     );
   for (const a of day.activities)
     parts.push(
-      `Activity: ${a.title ?? a.activity}, ${a.minutes} min${a.distance_km != null ? `, ${a.distance_km} km` : ""}${a.average_heart_rate != null ? `, ${a.average_heart_rate} bpm average` : ""}${a.route && describeRoute(a.route) ? `, ${describeRoute(a.route)}` : ""}`,
+      `Activity: ${a.title ?? a.activity}, ${a.minutes} min${a.distance_km != null ? `, ${a.distance_km} km` : ""}${a.average_heart_rate != null ? `, ${a.average_heart_rate} bpm average` : ""}${a.calories_kcal != null ? `, ${a.calories_estimated ? "about " : ""}${a.calories_kcal} kcal${a.calories_estimated ? " estimated" : ""}` : ""}${a.route && describeRoute(a.route) ? `, ${describeRoute(a.route)}` : ""}`,
     );
   for (const v of day.heart_and_movement) {
     const heart = [

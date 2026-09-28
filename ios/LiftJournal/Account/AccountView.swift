@@ -11,6 +11,7 @@ struct AccountView: View {
   @State private var deleting = false
   @State private var deletionError: String?
   @AppStorage(AIConsent.key) private var aiAllowed = false
+  @AppStorage(Appearance.key) private var appearance: Appearance = .system
   /// Shown as the Profile tab rather than as a sheet: no Done button.
   var inTab = false
 
@@ -26,6 +27,18 @@ struct AccountView: View {
         }
         if let today = model.today {
           GoalsSection(today: today)
+        }
+        Section {
+          Picker("Appearance", selection: $appearance) {
+            ForEach(Appearance.allCases) { Text($0.title).tag($0) }
+          }
+          .pickerStyle(.segmented)
+          .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+          .sensoryFeedback(.selection, trigger: appearance)
+        } header: {
+          Text("Appearance")
+        } footer: {
+          Text("System follows your iPhone's light and dark setting.")
         }
         Section {
           NavigationLink {

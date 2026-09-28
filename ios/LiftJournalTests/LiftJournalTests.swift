@@ -23,6 +23,15 @@ struct LiftJournalTests {
     }
   }
 
+  @Test("Appearance: System follows the iPhone, Light and Dark override it, and the choice is stored by name")
+  func appearance() {
+    #expect(Appearance.system.style == .unspecified)
+    #expect(Appearance.light.style == .light)
+    #expect(Appearance.dark.style == .dark)
+    #expect(Appearance.allCases.map(\.title) == ["System", "Light", "Dark"])
+    #expect(Appearance(rawValue: "dark") == .dark)
+  }
+
   @Test("Photos are resized to at most 1280 pixels before upload")
   func photoSize() throws {
     let image = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 3000)).image { context in

@@ -91,6 +91,25 @@ struct ReminderTests {
     #expect(plan.count == 6)
   }
 
+  @Test("A tapped reminder's completion handler runs on the main thread, once, wherever it's called from")
+  func completionOnMainThread() async {
+    let calls = await withCheckedContinuation { (continuation: CheckedContinuation<[Bool], Never>) in
+      let log = CallLog()
+      let done = MainThreadCompletion {
+        log.append(Thread.isMainThread)
+        continuation.resume(returning: log.values)
+      }
+      // As the compiler's bridge did: from a background thread, twice.
+      DispatchQueue.global().async {
+        log.append(Thread.isMainThread)
+        done.call()
+        done.call()
+      }
+    }
+    // Called from a background thread; the handler ran on the main one.
+    #expect(calls == [false, true])
+  }
+
   @Test("Settings survive a relaunch")
   func settings() throws {
     let defaults = try #require(UserDefaults(suiteName: "reminder-tests"))
@@ -99,5 +118,20 @@ struct ReminderTests {
     settings.catchUp.hour = 21
     settings.save(defaults)
     #expect(ReminderSettings.load(defaults) == settings)
+  }
+}
+
+private final class CallLog: @unchecked Sendable {
+  private let lock = NSLock()
+  private var calls: [Bool] = []
+  func append(_ value: Bool) {
+    lock.lock()
+    calls.append(value)
+    lock.unlock()
+  }
+  var values: [Bool] {
+    lock.lock()
+    defer { lock.unlock() }
+    return calls
   }
 }

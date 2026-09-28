@@ -123,6 +123,58 @@ export const scenarios: Scenario[] = [
     ],
   },
   {
+    id: "voice-late-sleep",
+    title:
+      "Sleep that arrives from Apple Health after the call starts is looked up, not asked for",
+    coach: "voice",
+    type: "regression",
+    // 28 September: the coach asked how long the athlete slept, though 7 h
+    // 17 min had just arrived from Apple Health.
+    seed: (s, date) => {
+      s.health.vitals = [
+        {
+          date,
+          restingHeartRate: 54,
+          heartRateVariabilityMs: 53,
+          averageHeartRate: null,
+          steps: 1200,
+          activeEnergyKcal: null,
+          source: "apple-health",
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+    },
+    afterStart: (s, date) => sleep(s, date, 7.28),
+    athlete: [
+      "Can you update my sleep? I'm feeling a bit tired today.",
+      "No, that's right.",
+      "Nothing else, bye.",
+    ],
+    checks: (t) => [
+      check(
+        "looks up the journal before answering about sleep",
+        "procedure",
+        called(t, "read_journal").some((c) => c.afterTurn <= 1),
+      ),
+      check(
+        "never asks how long the athlete slept",
+        "outcome",
+        !/how (many hours|long|much)[^?]*(sleep|slept)|how did you sleep/i.test(
+          coachText(t),
+        ),
+        coachText(t).slice(0, 300),
+      ),
+      check(
+        "doesn't save a different sleep",
+        "outcome",
+        called(t, "log_sleep").length === 0,
+      ),
+    ],
+    judge: [
+      "Does the coach tell the athlete the sleep already recorded (about 7 hours 17 minutes) instead of asking them for it?",
+    ],
+  },
+  {
     id: "voice-english",
     title:
       "A reply transcribed as Spanish does not switch the coach's language",

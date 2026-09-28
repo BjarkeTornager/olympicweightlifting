@@ -22,8 +22,9 @@ struct VoiceCallView: View {
           .foregroundStyle(call.status == .failed ? .red : .secondary)
           .multilineTextAlignment(.center)
           .padding(.horizontal)
-          .contentTransition(.opacity)
-          .animation(.default, value: call.status)
+          // It changes often (speaking, listening): cross-fading overlapped
+          // the two labels.
+          .contentTransition(.identity)
         transcript
         controls
       }

@@ -2,6 +2,7 @@ import type { JournalState } from "./model";
 import { formatLitres, hydrationForDay } from "./hydration";
 import { describeRoute, type RouteNote } from "./route-summary";
 import { bodyFatByDate } from "./body-composition";
+import { formatSleepDuration } from "./health";
 
 // A compact, complete picture of the journal for a date range, shared by
 // both coaches: every entry with the ids needed to correct it.
@@ -74,6 +75,14 @@ export function journalForVoice(
       .map((c) => ({
         date: c.date,
         sleep_hours: c.sleepHours,
+        // As it should be said ("7 h 17 min"), and whether Apple Health
+        // measured it rather than the athlete reporting it.
+        ...(c.sleepHours != null
+          ? {
+              sleep: formatSleepDuration(c.sleepHours),
+              sleep_from_apple_health: Boolean(c.sleepImport),
+            }
+          : {}),
         energy: c.energy,
         soreness: c.soreness,
         bodyweight: c.bodyweight,
@@ -190,7 +199,10 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
       `${m.meal_type[0].toUpperCase()}${m.meal_type.slice(1)}: ${m.name} (${Math.round(m.items.reduce((t, i) => t + i.calories, 0))} kcal)`,
     );
   for (const c of day.checkins) {
-    if (c.sleep_hours != null) parts.push(`Sleep: ${c.sleep_hours} h`);
+    if (c.sleep != null)
+      parts.push(
+        `Sleep: ${c.sleep}${c.sleep_from_apple_health ? " from Apple Health" : ""}`,
+      );
     if (c.bodyweight != null) parts.push(`Bodyweight: ${c.bodyweight} kg`);
   }
   for (const b of day.body_fat)

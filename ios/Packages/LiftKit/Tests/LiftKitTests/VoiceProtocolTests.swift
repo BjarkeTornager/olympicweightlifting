@@ -33,6 +33,21 @@ struct VoiceProtocolTests {
     #expect(LiveProtocol.events(Data(#"{"goAway":{"timeLeft":"10s"}}"#.utf8)) == [.goAway])
   }
 
+  @Test("Fragments get a space between words but not inside numbers, as on the website")
+  func joiningFragments() {
+    #expect(LiveTranscript.join("hours", "and") == "hours and")
+    #expect(LiveTranscript.join("done.", "Next") == "done. Next")
+    #expect(LiveTranscript.join("Did you ", "train?") == "Did you train?")
+    #expect(LiveTranscript.join("7", ".5") == "7.5")
+    #expect(LiveTranscript.join("7.", "5") == "7.5")
+    #expect(LiveTranscript.join("1,", "500 ml") == "1,500 ml")
+    #expect(LiveTranscript.join("great", "!") == "great!")
+    #expect(LiveTranscript.join("", "Hi") == "Hi")
+    #expect(LiveTranscript.endsSentence("Nice."))
+    #expect(LiveTranscript.endsSentence("Really?\" "))
+    #expect(!LiveTranscript.endsSentence("You have 7 hours and 17 minutes"))
+  }
+
   @Test("A promise without an action is noticed, as on the website")
   func promises() {
     #expect(LiveProtocol.promisesAction("Great. Let me check your sleep."))

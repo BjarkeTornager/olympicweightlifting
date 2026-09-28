@@ -46,6 +46,9 @@ export type Scenario = {
   type: "regression" | "capability";
   purpose?: "checkin" | "goals";
   seed?: (state: JournalState, today: string) => void;
+  // Records that arrive after the call has started (Apple Health syncing
+  // as the athlete opens the app): in the journal, not in the call's context.
+  afterStart?: (state: JournalState, today: string) => void;
   // Earlier conversations to remember, as [athlete, coach] pairs.
   memory?: [string, string][];
   // Scripted athlete turns, or a simulated athlete with a goal.

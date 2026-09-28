@@ -3,7 +3,7 @@
 // The athlete speaks as text; the coach's speech is read from its transcript.
 import { performance } from "node:perf_hooks";
 import { localClock } from "../../lib/agent/time-context";
-import { readJournal } from "../../lib/server";
+import { readJournal, writeJournal } from "../../lib/server";
 import { recentConversations } from "../../lib/conversation-memory";
 import {
   mintVoiceToken,
@@ -49,6 +49,16 @@ export async function runVoice(
     ),
   );
   const token = await mintVoiceToken(setup);
+  if (scenario.afterStart) {
+    const snapshot = await readJournal(userId);
+    const next = structuredClone(snapshot.state);
+    scenario.afterStart(next, clock.date);
+    await writeJournal(userId, {
+      state: next,
+      revision: snapshot.revision,
+      mutationId: crypto.randomUUID(),
+    });
+  }
   const transcript: Turn[] = [];
   const calls: ToolCall[] = [];
   const latencies: number[] = [];

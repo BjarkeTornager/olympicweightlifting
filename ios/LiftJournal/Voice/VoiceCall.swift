@@ -100,6 +100,9 @@ final class VoiceCall {
     audio.onFailure = { [weak self] message in
       Task { @MainActor in self?.stop(failure: message) }
     }
+    // Coach starts the call knowing the day: last night's sleep and new
+    // workouts from Apple Health reach the server first.
+    await app.syncHealthForCall()
     do {
       try audio.start()
       voiceTrace("audio start returned")
@@ -327,6 +330,7 @@ final class VoiceCall {
       audio.interrupt()
       lineClosed = true
     case .heard(let text):
+      guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { break }
       append(.you, text)
       lineClosed = true
       nudge?.cancel()
@@ -359,13 +363,25 @@ final class VoiceCall {
     }
   }
 
+  /// A completed turn starts a new line unless it ended mid-sentence; noise
+  /// that transcribes as nothing adds no line (appendLine on the website).
   private func append(_ role: Line.Role, _ text: String, fresh: Bool = false) {
-    if let last = lines.last, last.role == role, !fresh {
-      lines[lines.count - 1].text += text
-    } else {
+    if let last = lines.last, last.role == role, !fresh || !LiveTranscript.endsSentence(last.text) {
+      lines[lines.count - 1].text = LiveTranscript.join(last.text, text)
+    } else if !text.trimmingCharacters(in: .whitespaces).isEmpty {
       lines.append(Line(id: UUID().uuidString, role: role, text: text.trimmingCharacters(in: .whitespaces)))
     }
     schedulePersist()
+  }
+
+  /// Apple Health delivered sleep or workouts during the call: Coach looks
+  /// them up rather than asking for them.
+  func healthArrived() {
+    guard started, !closed else { return }
+    send(
+      LiveProtocol.text(
+        "(Apple Health just added records for today, such as last night's sleep or a workout. Call read_journal for today and use them; don't ask for them.)"
+      ))
   }
 
   // MARK: Tools

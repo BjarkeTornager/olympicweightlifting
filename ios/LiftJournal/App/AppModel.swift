@@ -131,6 +131,7 @@ final class AppModel {
           + summary.bodyFatUpdated > 0
         {
           await self.loadToday()
+          if summary.nightsImported + summary.workoutsImported > 0 { self.voiceCall?.healthArrived() }
         }
       }
     }
@@ -372,6 +373,26 @@ final class AppModel {
   func disconnectHealth() async {
     await HealthSync.shared.markConnected(false)
     health = HealthState()
+  }
+
+  /// Before a voice call: waits for a sync already running, or syncs if the
+  /// last one was over a minute ago, so the call starts with last night's
+  /// sleep. Waits at most four seconds; a slow sync carries on regardless.
+  func syncHealthForCall() async {
+    guard health.connected else { return }
+    let deadline = ContinuousClock.now + .seconds(4)
+    while health.syncing, ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(150))
+    }
+    guard !health.syncing else { return }
+    if let last = health.lastSync, Date.now.timeIntervalSince(last) < 60 { return }
+    let sync = Task { await syncHealth(force: true) }
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { await sync.value }
+      group.addTask { try? await Task.sleep(for: .seconds(4)) }
+      await group.next()
+      group.cancelAll()
+    }
   }
 
   func syncHealth(force: Bool) async {

@@ -7,6 +7,7 @@ struct LiftJournalApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
   @State private var model = AppModel()
   @Environment(\.scenePhase) private var phase
+  @AppStorage(Appearance.key) private var appearance: Appearance = .system
 
   var body: some Scene {
     WindowGroup {
@@ -18,6 +19,7 @@ struct LiftJournalApp: App {
         }
         // Health data stays out of the app switcher's snapshot.
         .overlay { if phase != .active { PrivacyCover() } }
+        .onChange(of: appearance, initial: true) { _, appearance in appearance.apply() }
     }
   }
 }

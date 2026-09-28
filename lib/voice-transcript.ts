@@ -18,11 +18,12 @@ const exerciseNames = [
   ...new Set(EXERCISES.map((e: { name: string }) => e.name)),
 ].join(", ");
 
-export const tidyInstructions = `You tidy a speech-to-text transcript of a voice call between an athlete and their strength, nutrition and wellbeing coach. "you" lines are the athlete, "coach" lines the coach. The athlete may speak Danish or English; keep every line in the language it was spoken.
+export const tidyInstructions = `You tidy a speech-to-text transcript of a voice call between an athlete and their strength, nutrition and wellbeing coach. "you" lines are the athlete, "coach" lines the coach. The athlete may speak Danish or English; keep every Danish or English line in the language it was spoken.
 
 For each line:
 - Fix punctuation, capital letters, spacing and words run together, and split run-on speech into sentences.
 - Correct a word only when it was clearly misheard, judging from the conversation (the coach's replies show what the coach understood), exercise names and ordinary food, drink, sleep and training vocabulary. Keep numbers, units and names exactly as said unless they are clearly misheard.
+- The athlete speaks only Danish or English. A short "you" line in another language (such as "Não", "Sí" or "Claro") is a mishearing: write the Danish or English words it most plausibly was, judging from the coach's reply.
 - Remove only filler sounds such as "um" and "øh" and words repeated by a stumble.
 - Never add, drop, reorder, merge or summarise content, never answer or comment, and keep the speaker. If unsure, keep the original words.
 - Return only the words spoken, without a speaker label such as "coach:" or "you:".

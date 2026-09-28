@@ -12,6 +12,7 @@ import {
 } from "../lib/voice-checkin";
 import {
   appendLine,
+  joinFragment,
   base64ToFloat32,
   isCreditError,
   liveEvents,
@@ -44,7 +45,7 @@ test("voice context reports only today's records and keeps missing ones unknown"
   const s = emptyJournal();
   let context = voiceContext(s, "2026-09-25");
   assert.equal(context.food, "Nothing recorded");
-  assert.equal(context.sleep, "Not recorded");
+  assert.equal(context.sleep, "Not recorded yet");
   assert.equal(context.training, "Nothing recorded");
   assert.equal(context.unfinishedWorkout, null);
 
@@ -92,6 +93,33 @@ test("voice instructions carry the date, the records and the save rules", () => 
   assert.match(text, /Everything recorded for 2026-09-25 so far, in full/);
   assert.match(text, /"eatenSoFar":\{"calories":0/);
   assert.match(text, /Never end the call while you are checking something/);
+  // Late data is looked up rather than asked for.
+  assert.match(text, /Sleep last night: Not recorded yet/);
+  assert.match(
+    text,
+    /If the athlete says you should already know something, call read_journal/,
+  );
+  assert.doesNotMatch(
+    text,
+    /sends last night's sleep and workouts from Apple Health/,
+  );
+  const withHealth = emptyJournal();
+  withHealth.health.vitals = [
+    {
+      date: "2026-09-24",
+      restingHeartRate: 52,
+      heartRateVariabilityMs: 58,
+      averageHeartRate: null,
+      steps: null,
+      activeEnergyKcal: null,
+      source: "apple-health",
+      updatedAt: new Date().toISOString(),
+    },
+  ];
+  assert.match(
+    voiceInstruction(voiceContext(withHealth, clock.date), clock),
+    /before asking about sleep or training that is missing, call read_journal for today once/,
+  );
   const setup = voiceSetup(text);
   assert.equal(setup.model, "models/gemini-3.8-live-extended-thinking");
   const names = setup.tools[0].functionDeclarations.map((f) => f.name);
@@ -276,14 +304,39 @@ test("transcript fragments join per speaker until a turn closes", () => {
   let lines = appendLine([], "coach", "Did you ");
   lines = appendLine(lines, "coach", "train?");
   lines = appendLine(lines, "you", " Yes");
+  lines = appendLine(lines, "you", " ");
   lines = appendLine(lines, "coach", "Nice.");
   lines = appendLine(lines, "coach", "What did you eat?", true);
   assert.deepEqual(lines, [
     { role: "coach", text: "Did you train?" },
-    { role: "you", text: "Yes" },
+    { role: "you", text: "Yes " },
     { role: "coach", text: "Nice." },
     { role: "coach", text: "What did you eat?" },
   ]);
+  // A word without its space gets one; a reply split mid-sentence stays one line.
+  lines = appendLine([], "coach", "Let's review your sleep for");
+  lines = appendLine(lines, "coach", "last night. You slept 7");
+  lines = appendLine(lines, "coach", ".5 hours and", true);
+  lines = appendLine(lines, "coach", "feel rested?", true);
+  assert.deepEqual(lines, [
+    {
+      role: "coach",
+      text: "Let's review your sleep for last night. You slept 7.5 hours and feel rested?",
+    },
+  ]);
+  // Noise that transcribes as nothing adds no line.
+  assert.deepEqual(appendLine([], "you", "  "), []);
+});
+
+test("fragments get a space between words, but not inside numbers", () => {
+  assert.equal(joinFragment("hours", "and"), "hours and");
+  assert.equal(joinFragment("done.", "Next"), "done. Next");
+  assert.equal(joinFragment("Did you ", "train?"), "Did you train?");
+  assert.equal(joinFragment("7", ".5"), "7.5");
+  assert.equal(joinFragment("7.", "5"), "7.5");
+  assert.equal(joinFragment("1,", "500 ml"), "1,500 ml");
+  assert.equal(joinFragment("great", "!"), "great!");
+  assert.equal(joinFragment("", "Hi"), "Hi");
 });
 
 test("PCM survives the base64 round trip", () => {

@@ -30,7 +30,7 @@ The design follows current practice for evaluating tool-using agents:
 
 `regression` scenarios reproduce failures seen in real use on 26 September 2026 and must pass every trial. `capability` scenarios describe behaviour the coach should reach; a failure there is information, not a broken build.
 
-Add a scenario in `scenarios.ts`: a seed for the journal, scripted athlete turns (or a simulated goal), code checks and optional judge questions. Prefer a code check whenever the answer is in the journal or the action list.
+Add a scenario in `scenarios.ts`: a seed for the journal, optionally records that arrive after the call has started (`afterStart`, as when Apple Health syncs while the athlete opens the app), scripted athlete turns (or a simulated goal), code checks and optional judge questions. Prefer a code check whenever the answer is in the journal or the action list.
 
 ## Limits
 

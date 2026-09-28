@@ -55,7 +55,11 @@ test("a tidy line is kept only when it plausibly is the same speech", () => {
     tidyInstructions,
     /Never add, drop, reorder, merge or summarise/,
   );
-  assert.match(tidyInstructions, /keep every line in the language/);
+  assert.match(
+    tidyInstructions,
+    /keep every Danish or English line in the language/,
+  );
+  assert.match(tidyInstructions, /is a mishearing/);
 });
 
 test("long calls are tidied in chunks, and a failed chunk keeps its raw lines", async () => {

@@ -110,8 +110,24 @@ export type Receipt = {
 };
 export type Entry = Line | Receipt;
 
+// Fragments usually carry their own spaces ("Did you " + "train?"), but a
+// word sometimes arrives without one ("for" + "last night"). A space goes
+// between words, numbers and after punctuation, but not inside a number
+// such as 7.5. The iPhone app joins them the same way (LiveTranscript).
+export function joinFragment(text: string, next: string) {
+  if (!text || /\s$/.test(text) || /^\s/.test(next)) return text + next;
+  if (/\d[.,]$/.test(text) && /^\d/.test(next)) return text + next;
+  return /[\p{L}\p{N}.,!?;:…)]$/u.test(text) && /^[\p{L}\p{N}(]/u.test(next)
+    ? `${text} ${next}`
+    : text + next;
+}
+
+const endsSentence = (text: string) => /[.!?…]["”')\]]*\s*$/.test(text);
+
 // Transcription arrives in fragments. Consecutive fragments from the same
-// speaker extend the current line unless a completed turn closed it.
+// speaker extend the current line. A completed turn or an interruption
+// starts a new line, except in the middle of a sentence: the coach's reply
+// sometimes arrives across two turns.
 export function appendLine(
   lines: Entry[],
   role: Line["role"],
@@ -119,8 +135,13 @@ export function appendLine(
   fresh = false,
 ): Entry[] {
   const last = lines.at(-1);
-  if (last && last.role === role && !fresh)
-    return [...lines.slice(0, -1), { role, text: last.text + text }];
+  if (last && last.role === role && (!fresh || !endsSentence(last.text)))
+    return [
+      ...lines.slice(0, -1),
+      { role, text: joinFragment(last.text, text) },
+    ];
+  // Noise can transcribe as nothing: no empty line for it.
+  if (!text.trim()) return lines;
   return [...lines, { role, text: text.trimStart() }];
 }
 

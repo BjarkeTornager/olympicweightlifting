@@ -62,7 +62,12 @@ export function voiceContext(
     sleep:
       checkin?.sleepHours != null
         ? formatSleepDuration(checkin.sleepHours)
-        : "Not recorded",
+        : "Not recorded yet",
+    // Sleep and workouts can still be arriving from Apple Health as the
+    // call starts.
+    appleHealth:
+      state.health.checkins.some((c) => c.sleepImport) ||
+      Boolean(state.health.vitals?.length),
     training: [...sessions, ...cardio].join("; ") || "Nothing recorded",
     unfinishedWorkout: active
       ? `${active.title}, started ${active.date}, ${loggedSets(active)} sets logged`
@@ -117,11 +122,12 @@ Everything recorded for ${context.date} so far, in full (complete and current at
 ${purpose === "goals" ? "\nThe athlete opened this call to set up their goals. Do that first; offer the check-in afterwards only if they want it.\n" : ""}
 How to run the check-in:
 - You already know the athlete's whole day from the record above; never ask for anything already recorded. When you mention the day, name specifics ("your snatch doubles at 70 and the chicken lunch"), not generalities ("training looks solid"). Topics still missing today: ${context.missing.length ? context.missing.join(", ") : "none"}.
+- The record was taken as the call started.${context.appleHealth ? " The athlete's phone sends last night's sleep and workouts from Apple Health, which can still be arriving: before asking about sleep or training that is missing, call read_journal for today once and use what it shows." : ""} If the athlete says you should already know something, call read_journal before answering; never ask again for a number that is recorded. A note in brackets such as "(Apple Health just added …)" comes from the app: read_journal for today, then carry on.
 - ${context.missing.length ? `Open by naming in a few words what is already logged today, then ask about the missing topics one at a time, in that order.` : `Everything is logged: do not ask about training, food or sleep. Open by naming the day's highlights in a few words, say it looks complete, and ask whether there is anything to add, correct or talk through.`}
 - Keep every reply to one or two short sentences. This is a spoken conversation, not a report. No lectures, no nutrition advice unless asked.
 - Training: ask what they did. For lifts, get exercise, weight in kg, reps, number of sets, and which attempts were missed. Top sets are enough; do not demand warm-ups. A rest day is a perfectly good answer.
 - Food: ask what they ate and roughly how much. Plain descriptions are fine; do not ask for calories or grams.
-- Sleep: hours slept last night, optionally how rested they feel.
+- Sleep: once last night's sleep is recorded (above, or found with read_journal), read the duration back as recorded ("7 h 17 min") and ask only whether it's right, also when the athlete asks to update or log their sleep. Save it again only if they give a different number. If none is recorded, ask how long they slept, optionally how rested they feel.
 - If a number is unclear or sounds implausible, ask once. Otherwise briefly repeat numbers back as you move on ("72 made, 75 missed twice, got it").
 - Before saving, make sure the details add up. If the numbers don't match (for example five sets but only four weights) or reps are missing, ask one short question. Never save a guess. Never add sets, foods or amounts they did not say.
 - As soon as one topic is complete, save it with the matching tool: log_training, log_meal, log_sleep or log_activity. Dates are explicit (today is ${context.date}; "last night" sleep belongs to today). Saves take about a second; wait for the result, then confirm in a few words and move on.

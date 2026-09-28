@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
 import { dailyHealth, formatSleepDuration, offsetDate } from "./health";
-import { drinkKinds, hydrationForDay, hydrationTargetMl } from "./hydration";
+import {
+  drinkKinds,
+  formatLitres,
+  hydrationForDay,
+  hydrationTargetMl,
+} from "./hydration";
 import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
 import { mealTypes, totalNutrients } from "./nutrition";
@@ -15,6 +20,8 @@ import {
 } from "./body-composition";
 import { planForState } from "./body-goals";
 import { withoutEmDashes } from "./agent/coach-style";
+import type { ActionPreview, PreviewEntry } from "./agent/actions";
+import { exerciseName } from "./domain";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -887,6 +894,25 @@ export const undoRequest = z
   .strict()
   .register(nativeRequests, { id: "ProposalRequest" });
 
+const receiptLine = z
+  .object({
+    label: z.string(),
+    // A portion or other detail shown under the label.
+    note: z.string().optional(),
+    value: z.string().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "CoachReceiptLine" });
+const receiptEntry = z
+  .object({
+    title: z.string(),
+    summary: z.string().optional(),
+    date: day.optional(),
+    lines: z.array(receiptLine),
+    footnote: z.string().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "CoachReceiptEntry" });
 const receipt = z
   .object({
     id: z.string(),
@@ -894,9 +920,205 @@ const receipt = z
     detail: z.string(),
     // pending: waits for the athlete to save it; saved; undone; expired.
     state: z.enum(["pending", "saved", "undone", "expired"]),
+    // What was or will be saved, item by item, shown when the athlete opens
+    // the receipt. Optional, as new response fields are.
+    entries: z.array(receiptEntry).optional(),
   })
   .strict()
   .register(nativeResponses, { id: "CoachReceipt" });
+
+// A saved proposal as stored with a Coach turn; older ones hold less.
+type ReceiptSource = Pick<PreviewEntry, "title" | "detail"> &
+  Partial<PreviewEntry>;
+type StoredProposal = ReceiptSource &
+  Pick<ActionPreview, "id" | "expiresAt"> & {
+    status?: string;
+    entries?: ReceiptSource[];
+  };
+
+const capitalised = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+const grams = (value: number) => `${Math.round(value)} g`;
+
+// One saved or proposed entry as the app shows it: the same facts the
+// website's review shows (meal items, sets, check-in values), as text.
+export function receiptEntryView(
+  entry: ReceiptSource,
+): z.infer<typeof receiptEntry> {
+  if (entry.meal) {
+    const meal = entry.meal,
+      total = totalNutrients(meal.items);
+    return defined({
+      title: `${capitalised(meal.type)}: ${meal.name}`,
+      summary: `${Math.round(total.calories)} kcal · ${grams(total.protein)} protein · ${grams(total.carbs)} carbs · ${grams(total.fat)} fat`,
+      date: meal.date,
+      lines: meal.items.map((item) =>
+        defined({
+          label: item.name,
+          note: item.portion || undefined,
+          value: `${Math.round(item.calories)} kcal · ${grams(item.protein)} protein`,
+        }),
+      ),
+      footnote:
+        [
+          meal.estimated ? "Estimated nutrition" : "Nutrition as given",
+          meal.notes,
+        ]
+          .filter(Boolean)
+          .join(" · ") || undefined,
+    });
+  }
+  if (entry.workout) {
+    const workout = entry.workout;
+    return defined({
+      title: workout.title,
+      summary: entry.workoutReview
+        ? entry.workoutReview.status === "ongoing"
+          ? "In progress · continue in Train"
+          : "Completed · in your training history"
+        : undefined,
+      date: workout.date,
+      lines: workout.exercises.map((e) => ({
+        label: exerciseName(e.exerciseId),
+        value:
+          e.sets
+            .filter((s) => s.weight !== "" && s.reps !== "")
+            .map(
+              (s) =>
+                `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}`,
+            )
+            .join(", ") || "No sets yet",
+      })),
+      footnote: workout.athleteNotes || undefined,
+    });
+  }
+  if (entry.checkin) {
+    const c = entry.checkin;
+    return defined({
+      title: "Check-in",
+      date: c.date,
+      lines: [
+        c.sleepHours != null && {
+          label: "Sleep",
+          value: formatSleepDuration(c.sleepHours),
+        },
+        c.energy != null && { label: "Energy", value: `${c.energy}/5` },
+        c.soreness != null && { label: "Soreness", value: `${c.soreness}/5` },
+        c.bodyweight != null && {
+          label: "Bodyweight",
+          value: `${c.bodyweight} kg`,
+        },
+        c.waterMl != null && { label: "Water", value: `${c.waterMl} ml` },
+      ].filter((line) => line !== false),
+      footnote: c.notes || undefined,
+    });
+  }
+  if (entry.cardio) {
+    const c = entry.cardio;
+    return defined({
+      title: cardioTitle(c),
+      date: c.date,
+      lines: [
+        { label: "Duration", value: formatDuration(c.durationSeconds) },
+        c.distanceKm != null && {
+          label: "Distance",
+          value: `${c.distanceKm} km`,
+        },
+        c.averageHeartRate != null && {
+          label: "Average heart rate",
+          value: `${c.averageHeartRate} bpm`,
+        },
+      ].filter((line) => line !== false),
+    });
+  }
+  if (entry.drink) {
+    const d = entry.drink;
+    return {
+      title: d.removed ? "Drink removed" : "Drink",
+      date: d.date,
+      lines: [{ label: capitalised(d.name), value: `${d.ml} ml` }],
+      footnote: `${formatLitres(d.dayTotalMl)} of about ${formatLitres(d.dayTargetMl)} that day`,
+    };
+  }
+  if (entry.targets) {
+    const t = entry.targets;
+    return {
+      title: entry.title,
+      lines: [
+        t.calories != null && {
+          label: "Energy",
+          value: `${Math.round(t.calories)} kcal`,
+        },
+        t.protein != null && { label: "Protein", value: grams(t.protein) },
+        t.carbs != null && { label: "Carbs", value: grams(t.carbs) },
+        t.fat != null && { label: "Fat", value: grams(t.fat) },
+      ].filter((line) => line !== false),
+    };
+  }
+  if (entry.memory)
+    return {
+      title: entry.title,
+      summary: entry.memory.text,
+      lines: [],
+    };
+  if (entry.plan)
+    return defined({
+      title: entry.plan.title,
+      summary: entry.plan.notes || undefined,
+      lines: [{ label: "Follow up", value: entry.plan.followUpDate }],
+    });
+  return { title: entry.title, summary: entry.detail, lines: [] };
+}
+
+const structured = (entry: ReceiptSource) =>
+  Boolean(
+    entry.meal ||
+    entry.workout ||
+    entry.checkin ||
+    entry.cardio ||
+    entry.targets ||
+    entry.memory ||
+    entry.plan ||
+    entry.drink,
+  );
+
+// A short name for an entry in a batch's one-line summary.
+const entryName = (entry: ReceiptSource) =>
+  entry.meal?.name ??
+  entry.workout?.title ??
+  (entry.cardio && cardioTitle(entry.cardio)) ??
+  (entry.drink && `${entry.drink.ml} ml ${entry.drink.name}`) ??
+  (entry.checkin ? "Check-in" : entry.detail.split(". ")[0].replace(/\.$/, ""));
+
+export function receiptView(
+  p: StoredProposal,
+  now: Date,
+): z.infer<typeof receipt> {
+  const state =
+    p.status === "saved" || p.status === "undone"
+      ? p.status
+      : new Date(p.expiresAt) < now
+        ? "expired"
+        : "pending";
+  const batch = p.entries?.length ? p.entries : null;
+  return defined({
+    id: p.id,
+    // A batch reads "Review 3 entries … nothing is saved until you confirm"
+    // while it waits; once decided, it says what it holds.
+    title:
+      batch && state !== "pending"
+        ? `${batch.length} entries ${state === "undone" ? "undone" : "saved"}`
+        : p.title,
+    detail:
+      batch && state !== "pending" ? batch.map(entryName).join(", ") : p.detail,
+    state,
+    entries: batch
+      ? batch.map(receiptEntryView)
+      : structured(p)
+        ? [receiptEntryView(p)]
+        : undefined,
+  });
+}
 // A Coach visual flattened into one shape the app decodes tolerantly: the
 // kind says which fields are present. Unknown kinds are skipped by the app.
 const coachVisual = z
@@ -1006,13 +1228,7 @@ type HistoryTurn = {
   createdAt: string;
   status: string;
   reply?: string;
-  proposals?: {
-    id: string;
-    title: string;
-    detail: string;
-    status?: string;
-    expiresAt: string;
-  }[];
+  proposals?: StoredProposal[];
   visuals?: SavedVisual[];
 };
 
@@ -1059,17 +1275,7 @@ export function buildCoach(turns: HistoryTurn[], now = new Date()) {
           : "done",
         reply: t.reply && withoutEmDashes(t.reply),
         visuals: (t.visuals ?? []).map((v) => defined(flattenVisual(v))),
-        receipts: (t.proposals ?? []).map((p) => ({
-          id: p.id,
-          title: p.title,
-          detail: p.detail,
-          state:
-            p.status === "saved" || p.status === "undone"
-              ? p.status
-              : new Date(p.expiresAt) < now
-                ? "expired"
-                : "pending",
-        })),
+        receipts: (t.proposals ?? []).map((p) => receiptView(p, now)),
       }),
     ),
   });

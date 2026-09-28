@@ -327,34 +327,71 @@ private struct ReceiptCard: View {
   let receipt: Components.Schemas.CoachReceipt
   let busy: Bool
   let resolve: (_ undo: Bool) -> Void
+  /// A receipt waiting to be saved opens by itself, so the athlete can
+  /// check the entries first; a saved one opens on tap.
+  @State private var expanded: Bool?
+
+  private var entries: [Components.Schemas.CoachReceiptEntry] { receipt.entries ?? [] }
+  private var isOpen: Bool { expanded ?? (receipt.state == "pending") }
 
   var body: some View {
-    HStack(alignment: .top, spacing: 10) {
-      IconBadge(symbol: symbol, tint: tint, size: 28)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(receipt.title).font(.subheadline.weight(.semibold))
-        Text(receipt.detail).font(.footnote).foregroundStyle(.secondary).lineLimit(4)
-        if receipt.state == "undone" {
-          Text("Undone").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(alignment: .top, spacing: 10) {
+        IconBadge(symbol: symbol, tint: tint, size: 28)
+        Button {
+          withAnimation(.snappy) { expanded = !isOpen }
+        } label: {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(receipt.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
+            Text(receipt.detail)
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+              .lineLimit(isOpen ? nil : 2)
+            if receipt.state == "undone" {
+              Text("Undone").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+            }
+            if !entries.isEmpty {
+              Label(isOpen ? "Hide details" : "Show details", systemImage: isOpen ? "chevron.up" : "chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .padding(.top, 4)
+            }
+          }
+          .multilineTextAlignment(.leading)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(entries.isEmpty && receipt.detail.count < 90)
+        .accessibilityHint(entries.isEmpty ? "" : isOpen ? "Hides what was saved" : "Shows what was saved")
+        if busy {
+          ProgressView()
+        } else if receipt.state == "saved" {
+          Button("Undo") { resolve(true) }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        } else if receipt.state == "pending" {
+          Button("Save") { resolve(false) }
+            .buttonStyle(.borderedProminent)
+            .foregroundStyle(Theme.onAccent)
+            .controlSize(.small)
         }
       }
-      Spacer(minLength: 0)
-      if busy {
-        ProgressView()
-      } else if receipt.state == "saved" {
-        Button("Undo") { resolve(true) }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-      } else if receipt.state == "pending" {
-        Button("Save") { resolve(false) }
-          .buttonStyle(.borderedProminent)
-          .foregroundStyle(Theme.onAccent)
-          .controlSize(.small)
+      if isOpen, !entries.isEmpty {
+        VStack(alignment: .leading, spacing: 12) {
+          ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+            if index > 0 { Divider() }
+            ReceiptEntryView(entry: entry)
+          }
+        }
+        .padding(12)
+        .background(Theme.fill, in: .rect(cornerRadius: 12, style: .continuous))
+        .transition(.opacity.combined(with: .move(edge: .top)))
       }
     }
     .padding(12)
     .background(Theme.surface, in: .rect(cornerRadius: 16))
-    .frame(maxWidth: 320, alignment: .leading)
+    .frame(maxWidth: 340, alignment: .leading)
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
@@ -373,6 +410,51 @@ private struct ReceiptCard: View {
     case "pending": Theme.accent
     default: .secondary
     }
+  }
+}
+
+/// One saved or proposed entry: what it is, and each item or set in it.
+private struct ReceiptEntryView: View {
+  let entry: Components.Schemas.CoachReceiptEntry
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: 1) {
+        Text(entry.title).font(.subheadline.weight(.semibold))
+        let meta = [entry.date.flatMap(day), entry.summary].compactMap { $0 }
+        if !meta.isEmpty {
+          Text(meta.joined(separator: " · ")).font(.footnote).foregroundStyle(.secondary)
+        }
+      }
+      ForEach(Array(entry.lines.enumerated()), id: \.offset) { _, line in
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          VStack(alignment: .leading, spacing: 0) {
+            Text(line.label).font(.footnote)
+            if let note = line.note {
+              Text(note).font(.caption).foregroundStyle(.secondary)
+            }
+          }
+          Spacer(minLength: 8)
+          if let value = line.value {
+            Text(value)
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+              .multilineTextAlignment(.trailing)
+          }
+        }
+        .accessibilityElement(children: .combine)
+      }
+      if let footnote = entry.footnote {
+        Text(footnote).font(.caption).foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  /// Today's date goes without saying; another day is named.
+  private func day(_ date: String) -> String? {
+    guard let parsed = JournalDay.date(date), !Calendar.current.isDateInToday(parsed) else { return nil }
+    return JournalView.heading(date)
   }
 }
 

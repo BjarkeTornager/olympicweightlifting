@@ -778,6 +778,12 @@
           "state": {
             "type": "string",
             "description": "One of: pending, saved, undone, expired. Treat others as unknown."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoachReceiptEntry"
+            }
           }
         },
         "required": [
@@ -785,6 +791,50 @@
           "title",
           "detail",
           "state"
+        ]
+      },
+      "CoachReceiptEntry": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoachReceiptLine"
+            }
+          },
+          "footnote": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "lines"
+        ]
+      },
+      "CoachReceiptLine": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
         ]
       },
       "CoachTurn": {

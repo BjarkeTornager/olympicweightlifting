@@ -14,6 +14,7 @@ import {
 } from "../lib/health-sync";
 import { addDrink } from "../lib/hydration";
 import { journalSchema } from "../lib/model";
+import { mealSchema } from "../lib/nutrition";
 import {
   actionRequest,
   buildCoach,
@@ -21,6 +22,7 @@ import {
   buildToday,
   buildTrends,
   nativeAction,
+  receiptView,
 } from "../lib/native-api";
 import { nativeClient } from "../lib/native-client";
 import { nativeFixtures } from "../lib/native-fixtures";
@@ -227,6 +229,118 @@ test("Coach history shows voice turns and each save's state", () => {
     view.turns[0].receipts.map((r) => r.state),
     ["saved", "expired"],
   );
+});
+
+test("a receipt opens to show what was saved, item by item", () => {
+  const meal = mealSchema.parse({
+    id: crypto.randomUUID(),
+    createdAt: now.toISOString(),
+    date,
+    type: "breakfast",
+    name: "Oats with banana",
+    items: [
+      {
+        name: "Oats",
+        portion: "60 g",
+        calories: 228,
+        protein: 8.1,
+        carbs: 40,
+        fat: 4,
+      },
+      {
+        name: "Banana",
+        portion: "1 medium",
+        calories: 105,
+        protein: 1.3,
+        carbs: 27,
+        fat: 0.4,
+      },
+    ],
+    source: "photo",
+    estimated: true,
+  });
+  const single = receiptView(
+    {
+      id: "m",
+      title: "Log your meal",
+      detail: "333 kcal",
+      workout: null,
+      meal,
+      status: "saved",
+      expiresAt: now.toISOString(),
+    },
+    now,
+  );
+  assert.equal(single.entries?.length, 1);
+  const entry = single.entries![0];
+  assert.equal(entry.title, "Breakfast: Oats with banana");
+  assert.match(
+    entry.summary!,
+    /^333 kcal · 9 g protein · 67 g carbs · 4 g fat$/,
+  );
+  assert.deepEqual(entry.lines[0], {
+    label: "Oats",
+    note: "60 g",
+    value: "228 kcal · 8 g protein",
+  });
+  assert.equal(entry.footnote, "Estimated nutrition");
+
+  // A saved batch says what it holds rather than asking to review it.
+  const batch = receiptView(
+    {
+      id: "b",
+      title: "Review 2 entries",
+      detail: "Check each entry below. Nothing is saved until you confirm.",
+      workout: null,
+      status: "saved",
+      expiresAt: now.toISOString(),
+      entries: [
+        {
+          title: "Log a drink",
+          detail: "250 ml coconut water. 1.2 L of about 2.5 L on 2026-09-26.",
+          workout: null,
+          drink: {
+            name: "coconut water",
+            ml: 250,
+            date,
+            dayTotalMl: 1200,
+            dayTargetMl: 2500,
+          },
+        },
+        { title: "Log your meal", detail: "", workout: null, meal },
+        // Stored before drinks carried their details: shown as written.
+        { title: "Log a drink", detail: "330 ml cola.", workout: null },
+      ],
+    },
+    now,
+  );
+  assert.equal(batch.title, "3 entries saved");
+  assert.equal(
+    batch.detail,
+    "250 ml coconut water, Oats with banana, 330 ml cola",
+  );
+  assert.deepEqual(
+    batch.entries!.map((e) => e.title),
+    ["Drink", "Breakfast: Oats with banana", "Log a drink"],
+  );
+  assert.deepEqual(batch.entries![0].lines, [
+    { label: "Coconut water", value: "250 ml" },
+  ]);
+  assert.match(batch.entries![0].footnote!, /of about 2.5 L that day/);
+  assert.equal(batch.entries![2].summary, "330 ml cola.");
+
+  // A plain note has nothing more to show.
+  const plain = receiptView(
+    {
+      id: "n",
+      title: "Note",
+      detail: "Hi",
+      workout: null,
+      expiresAt: now.toISOString(),
+    },
+    now,
+  );
+  assert.equal(plain.entries, undefined);
 });
 
 function workout(overrides: Partial<HealthWorkout> = {}): HealthWorkout {

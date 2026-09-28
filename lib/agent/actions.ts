@@ -70,6 +70,15 @@ export type ActionPreview = {
     status: WorkoutStatus;
     sources?: { id: string; title: string; date: string; sets: number }[];
   };
+  // A drink logged or removed, with the day's total after it.
+  drink?: {
+    name: string;
+    ml: number;
+    date: string;
+    removed?: boolean;
+    dayTotalMl: number;
+    dayTargetMl: number;
+  };
   entries?: PreviewEntry[];
   expiresAt: string;
   status?: "saved" | "undone";
@@ -89,6 +98,7 @@ export type PreviewEntry = Pick<
   | "training"
   | "liftingBrief"
   | "workoutReview"
+  | "drink"
 >;
 type PreparedAction = PreviewEntry & {
   state: JournalState;
@@ -214,6 +224,7 @@ export function prepareAction(
         ...(prepared.meal ? { meal: prepared.meal } : {}),
         ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
         ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
+        ...(prepared.drink ? { drink: prepared.drink } : {}),
       });
     }
     return {
@@ -252,6 +263,7 @@ export function prepareAction(
     plan: change.plan,
     liftingBrief: change.liftingBrief,
     training: change.training,
+    drink: change.drink,
     workoutReview,
     action,
   };

@@ -1,6 +1,7 @@
 import { burnFields, cardioBurn, dayBurn, strengthBurn } from "./energy";
 import type { JournalState } from "./model";
 import { formatLitres, hydrationForDay } from "./hydration";
+import { supplementText, supplementsForDay } from "./supplements";
 import { describeRoute, type RouteNote } from "./route-summary";
 import { bodyFatByDate } from "./body-composition";
 import { formatSleepDuration } from "./health";
@@ -99,6 +100,14 @@ export function journalForVoice(
         kind: d.kind,
         name: d.name,
       })),
+    supplements: (state.health.supplements ?? [])
+      .filter((s) => inRange(s.date))
+      .map((s) => ({
+        supplement_id: s.id,
+        date: s.date,
+        name: s.name,
+        amount: s.amount || undefined,
+      })),
     activities: state.cardio.sessions
       .filter((c) => inRange(c.date))
       .map((c) => ({
@@ -173,6 +182,10 @@ export function dayForCoach(
       targetMl: water.targetMl,
       recorded: water.recorded,
     },
+    // Taken on at least two of the last fourteen days but not yet today.
+    usualSupplementsNotYetTaken: supplementsForDay(state, date).usual.map(
+      supplementText,
+    ),
     eatenSoFar: {
       calories: round(eaten.calories),
       protein_g: round(eaten.protein_g),
@@ -222,6 +235,10 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
   if (day.hydration.recorded)
     parts.push(
       `Drinks: ${formatLitres(day.hydration.totalMl)} of about ${formatLitres(day.hydration.targetMl)}`,
+    );
+  if (day.supplements.length)
+    parts.push(
+      `Supplements: ${day.supplements.map((s) => supplementText({ name: s.name, amount: s.amount ?? "" })).join(", ")}`,
     );
   for (const a of day.activities)
     parts.push(

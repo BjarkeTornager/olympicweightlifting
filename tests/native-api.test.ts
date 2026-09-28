@@ -80,6 +80,12 @@ test("every action the app can send is a valid journal action", () => {
     { kind: "log_drink", drink: { date, ml: 250, kind: "water" } },
     { kind: "delete_drink", drinkId: crypto.randomUUID() },
     {
+      kind: "log_supplement",
+      supplement: { date, name: "Vitamin D", amount: "1000 IU" },
+    },
+    { kind: "log_supplement", supplement: { date, name: "Creatine" } },
+    { kind: "delete_supplement", supplementId: crypto.randomUUID() },
+    {
       kind: "record_body_fat",
       bodyFat: { date, percent: 14, method: "scale" },
     },
@@ -137,7 +143,10 @@ test("every action the app can send is a valid journal action", () => {
     { kind: "delete_training_program", trainingProgramId: crypto.randomUUID() },
   ];
   // "use_programme" is the app's own action, not a Coach action.
-  assert.equal(examples.length + 1, nativeAction.options.length);
+  assert.equal(
+    new Set(examples.map((e) => e.kind)).size + 1,
+    nativeAction.options.length,
+  );
   for (const action of examples) {
     // The app omits a missing weight; the server adds the null Coach needs.
     const sent = JSON.parse(

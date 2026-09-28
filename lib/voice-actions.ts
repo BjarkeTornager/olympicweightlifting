@@ -9,6 +9,7 @@ import { foodGroupSchema } from "./nutrition";
 import { bodyGoalsRequestSchema } from "./body-goals";
 import { bodyFatInputSchema } from "./body-composition";
 import { drinkInputSchema } from "./hydration";
+import { supplementInputSchema } from "./supplements";
 import type { JournalState } from "./model";
 import { prepareAction, type ActionPreview } from "./agent/actions";
 import type { AgentAction } from "./agent/action-schema";
@@ -158,6 +159,14 @@ export const voiceToolArgs = {
     summary: summarySchema,
     drink_id: z.string().uuid(),
   }),
+  log_supplement: supplementInputSchema.extend({
+    summary: summarySchema,
+    amount: z.preprocess((v) => v ?? "", supplementInputSchema.shape.amount),
+  }),
+  delete_supplement: z.object({
+    summary: summarySchema,
+    supplement_id: z.string().uuid(),
+  }),
   log_sleep: z.object({
     summary: summarySchema,
     date,
@@ -270,6 +279,16 @@ export function voiceAction(
     case "delete_drink": {
       const a = voiceToolArgs.delete_drink.parse(raw);
       return { kind: "delete_drink", drinkId: a.drink_id };
+    }
+    case "log_supplement": {
+      const { summary: _summary, ...supplement } =
+        voiceToolArgs.log_supplement.parse(raw);
+      void _summary;
+      return { kind: "log_supplement", supplement };
+    }
+    case "delete_supplement": {
+      const a = voiceToolArgs.delete_supplement.parse(raw);
+      return { kind: "delete_supplement", supplementId: a.supplement_id };
     }
     case "log_sleep": {
       const a = voiceToolArgs.log_sleep.parse(raw);
@@ -425,9 +444,11 @@ export async function runVoiceTool(
           ? action.checkin.date
           : "drink" in action
             ? action.drink.date
-            : "cardio" in action
-              ? action.cardio.date
-              : input.today;
+            : "supplement" in action
+              ? action.supplement.date
+              : "cardio" in action
+                ? action.cardio.date
+                : input.today;
   const { summary } = z
     .object({ summary: summarySchema })
     .passthrough()

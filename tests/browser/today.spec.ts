@@ -2,6 +2,7 @@ import { test, expect, browserUser } from "./fixtures";
 import { emptyJournal, createWorkout, days, today } from "../../lib/domain";
 import { offsetDate, saveCheckin } from "../../lib/health";
 import { saveTrainingProgram } from "../../lib/training-programs";
+import { addSupplement } from "../../lib/supplements";
 
 const sequence = days.filter((d) => d.weekday !== null);
 
@@ -151,4 +152,42 @@ test("Today exposes import failures and opens sleep setup without claiming a suc
   await expect(
     page.getByRole("heading", { name: "Test before automating" }),
   ).toBeVisible();
+});
+
+test("supplements are ticked off and added from Today", async ({
+  page,
+  context,
+}) => {
+  let state = emptyJournal(),
+    revision = 0;
+  for (const d of [offsetDate(today(), -2), offsetDate(today(), -1)])
+    addSupplement(state, { date: d, name: "Creatine", amount: "5 g" });
+  await context.route("**/api/journal", (r) => {
+    if (r.request().method() === "PUT") {
+      state = r.request().postDataJSON().state;
+      revision++;
+    }
+    return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
+  });
+  await page.goto("/");
+  const card = page.getByRole("region", { name: "Supplements today" });
+  await card.getByRole("button", { name: "Creatine 5 g" }).click();
+  await expect(card.getByRole("list", { name: "Taken today" })).toContainText(
+    "Creatine 5 g",
+  );
+  await card.getByRole("button", { name: "Add supplement" }).click();
+  await card.getByLabel("Name").fill("Vitamin D");
+  await card.getByLabel("Amount").fill("1000 IU");
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect
+    .poll(() =>
+      (state.health.supplements ?? [])
+        .filter((s) => s.date === today())
+        .map((s) => `${s.name} ${s.amount}`),
+    )
+    .toEqual(["Creatine 5 g", "Vitamin D 1000 IU"]);
+  await card.getByRole("button", { name: "Remove Vitamin D" }).click();
+  await expect(
+    card.getByRole("list", { name: "Taken today" }),
+  ).not.toContainText("Vitamin D");
 });

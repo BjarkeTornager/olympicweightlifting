@@ -71,6 +71,22 @@
     "estimated": false,
     "note": "Active energy from Apple Health"
   },
+  "supplements": {
+    "taken": [
+      {
+        "id": "3f1a4f8e-2a51-4c1e-9d0b-0c1f7c1e2a16",
+        "name": "Vitamin D",
+        "amount": "1000 IU",
+        "at": "2026-09-26T18:00:00.000Z"
+      }
+    ],
+    "usual": [
+      {
+        "name": "Creatine",
+        "amount": "5 g"
+      }
+    ]
+  },
   "nextSession": {
     "programId": "stability-power-base-v1",
     "programName": "Stability & Power Base",

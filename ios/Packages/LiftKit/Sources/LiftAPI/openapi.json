@@ -1133,6 +1133,25 @@
           "trainingProgramId"
         ]
       },
+      "DeleteSupplementAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "delete_supplement"
+            ]
+          },
+          "supplementId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "kind",
+          "supplementId"
+        ]
+      },
       "DiagramEdge": {
         "type": "object",
         "properties": {
@@ -1759,6 +1778,42 @@
           "sets"
         ]
       },
+      "LogSupplementAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "log_supplement"
+            ]
+          },
+          "supplement": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "amount": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "date",
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "supplement"
+        ]
+      },
       "Meal": {
         "type": "object",
         "properties": {
@@ -1803,6 +1858,12 @@
           },
           {
             "$ref": "#/components/schemas/DeleteDrinkAction"
+          },
+          {
+            "$ref": "#/components/schemas/LogSupplementAction"
+          },
+          {
+            "$ref": "#/components/schemas/DeleteSupplementAction"
           },
           {
             "$ref": "#/components/schemas/RecordBodyFatAction"
@@ -1852,6 +1913,8 @@
           "mapping": {
             "log_drink": "#/components/schemas/LogDrinkAction",
             "delete_drink": "#/components/schemas/DeleteDrinkAction",
+            "log_supplement": "#/components/schemas/LogSupplementAction",
+            "delete_supplement": "#/components/schemas/DeleteSupplementAction",
             "record_body_fat": "#/components/schemas/RecordBodyFatAction",
             "delete_body_fat": "#/components/schemas/DeleteBodyFatAction",
             "record_checkin": "#/components/schemas/RecordCheckinAction",
@@ -2601,6 +2664,51 @@
           "date"
         ]
       },
+      "Supplement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "amount",
+          "at"
+        ]
+      },
+      "Supplements": {
+        "type": "object",
+        "properties": {
+          "taken": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Supplement"
+            }
+          },
+          "usual": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsualSupplement"
+            }
+          }
+        },
+        "required": [
+          "taken",
+          "usual"
+        ]
+      },
       "Today": {
         "type": "object",
         "properties": {
@@ -2633,6 +2741,9 @@
           },
           "burned": {
             "$ref": "#/components/schemas/Burned"
+          },
+          "supplements": {
+            "$ref": "#/components/schemas/Supplements"
           },
           "activeWorkout": {
             "$ref": "#/components/schemas/WorkoutSummary"
@@ -2898,6 +3009,21 @@
         "required": [
           "kind",
           "programmeId"
+        ]
+      },
+      "UsualSupplement": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "amount"
         ]
       },
       "Vitals": {

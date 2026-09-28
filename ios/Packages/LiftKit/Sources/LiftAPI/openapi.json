@@ -714,6 +714,30 @@
           "percent"
         ]
       },
+      "Burned": {
+        "type": "object",
+        "properties": {
+          "kcal": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string",
+            "description": "One of: apple-health, training. Treat others as unknown."
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kcal",
+          "source",
+          "estimated",
+          "note"
+        ]
+      },
       "ChartPoint": {
         "type": "object",
         "properties": {
@@ -2606,6 +2630,9 @@
           },
           "hydration": {
             "$ref": "#/components/schemas/Hydration"
+          },
+          "burned": {
+            "$ref": "#/components/schemas/Burned"
           },
           "activeWorkout": {
             "$ref": "#/components/schemas/WorkoutSummary"

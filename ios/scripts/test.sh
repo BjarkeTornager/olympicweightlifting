@@ -9,5 +9,5 @@ ID="$(xcrun simctl list devices available | grep -m1 "    $DEVICE (" | grep -oE 
 DESTINATION="platform=iOS Simulator,id=$ID"
 xcodebuild -project LiftJournal.xcodeproj -scheme LiftJournal -destination "$DESTINATION" \
   -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO test
-(cd Packages/LiftKit && xcodebuild -scheme LiftKit -destination "$DESTINATION" \
+(cd Packages/LiftKit && xcodebuild -scheme LiftKit-Package -destination "$DESTINATION" \
   -skipPackagePluginValidation test)

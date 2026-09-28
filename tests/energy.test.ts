@@ -2,7 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyJournal } from "../lib/domain";
 import { saveCardio } from "../lib/cardio";
-import { burnText, cardioBurn, dayBurn, strengthBurn } from "../lib/energy";
+import {
+  burnText,
+  burnedToday,
+  cardioBurn,
+  dayBurn,
+  strengthBurn,
+} from "../lib/energy";
 import { dayForCoach, describeDay } from "../lib/journal-summary";
 import type { Workout } from "../lib/model";
 
@@ -115,4 +121,28 @@ test("Coach sees each activity's calories and the day's total", () => {
   assert.deepEqual(dayBurn(s, date), { kcal: 328, estimated: true, count: 2 });
   assert.match(describeDay(day), /about 240 kcal estimated/);
   assert.match(describeDay(day), /15 min, 88 kcal/);
+});
+
+test("Today's burned total prefers Apple Health's active energy", () => {
+  const s = journal(80);
+  assert.equal(burnedToday(s, date), null);
+  saveCardio(
+    s,
+    { date, activity: "other", title: "StairMaster", durationSeconds: 1200 },
+    date,
+  );
+  assert.deepEqual(burnedToday(s, date), {
+    kcal: 240,
+    source: "training",
+    estimated: true,
+  });
+  s.health.vitals = [{ date, activeEnergyKcal: 610 } as never];
+  assert.deepEqual(burnedToday(s, date), {
+    kcal: 610,
+    source: "apple-health",
+    estimated: false,
+  });
+  // Yesterday's active energy is not today's.
+  s.health.vitals = [{ date: "2026-09-27", activeEnergyKcal: 610 } as never];
+  assert.equal(burnedToday(s, date)?.source, "training");
 });

@@ -140,6 +140,40 @@ export function dayBurn(state: JournalState, date: string) {
   };
 }
 
+// The day's calories burned for Today. Apple Health's active energy counts
+// all movement, workouts included, so it is used on its own when present;
+// otherwise the training total (measured and estimated) stands in.
+export type DayBurned = {
+  kcal: number;
+  source: "apple-health" | "training";
+  estimated: boolean;
+};
+export function burnedToday(
+  state: JournalState,
+  date: string,
+): DayBurned | null {
+  const active = state.health.vitals?.find(
+    (v) => v.date === date,
+  )?.activeEnergyKcal;
+  if (active != null)
+    return {
+      kcal: Math.round(active),
+      source: "apple-health",
+      estimated: false,
+    };
+  const training = dayBurn(state, date);
+  return training.count
+    ? { kcal: training.kcal, source: "training", estimated: training.estimated }
+    : null;
+}
+
+export const burnedNote = (b: DayBurned) =>
+  b.source === "apple-health"
+    ? "Active energy from Apple Health"
+    : b.estimated
+      ? "From training, includes estimates"
+      : "From training";
+
 // Calories burned as the coaches see them: an estimate is always marked.
 export const burnFields = (
   burn: Burn | null,

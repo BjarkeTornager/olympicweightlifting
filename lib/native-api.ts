@@ -1,4 +1,10 @@
-import { burnText, cardioBurn, strengthBurn } from "./energy";
+import {
+  burnText,
+  burnedNote,
+  burnedToday,
+  cardioBurn,
+  strengthBurn,
+} from "./energy";
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
 import { dailyHealth, formatSleepDuration, offsetDate } from "./health";
@@ -201,6 +207,18 @@ const bodyView = z
   .strict()
   .register(nativeResponses, { id: "Body" });
 
+// Calories burned today: Apple Health's active energy, or the training
+// total when that is missing. Never offsets the food target.
+const burnedView = z
+  .object({
+    kcal: int,
+    source: z.enum(["apple-health", "training"]),
+    estimated: z.boolean(),
+    note: z.string(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "Burned" });
+
 export const todayView = z
   .object({
     date: day,
@@ -213,6 +231,8 @@ export const todayView = z
     body: bodyView.optional(),
     nutrition: nutritionView,
     hydration: hydrationView,
+    // Optional: builds from before calories burned must still decode.
+    burned: burnedView.optional(),
     activeWorkout: workoutView.optional(),
     nextSession: nextSessionView.optional(),
     strengthToday: z.array(workoutView),
@@ -661,6 +681,7 @@ export function buildToday(
     state.health.vitals?.find((v) => v.date === date) ??
     state.health.vitals?.find((v) => v.date === offsetDate(date, -1));
   const checkin = health.checkin;
+  const burned = burnedToday(state, date);
   const next = state.activeWorkout ? null : nextTraining(state, date);
   return todayView.parse(
     defined({
@@ -718,6 +739,7 @@ export function buildToday(
           };
         }),
       }),
+      burned: burned ? { ...burned, note: burnedNote(burned) } : undefined,
       hydration: {
         totalMl: hydration.totalMl,
         targetMl: hydration.targetMl,

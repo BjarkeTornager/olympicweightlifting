@@ -194,6 +194,7 @@ struct DayHero: View {
           title: "Water", value: litres(today.hydration.totalMl), target: "of \(litres(today.hydration.targetMl))",
           progress: Double(today.hydration.totalMl) / Double(max(1, today.hydration.targetMl)), tint: Theme.water)
       }
+      BurnedLine(burned: today.burned)
       Button {
         if model.voiceEnabled { model.startVoice() } else { model.tab = .coach }
       } label: {
@@ -228,6 +229,33 @@ struct DayHero: View {
   private func litres(_ ml: Int) -> String {
     let (value, unit) = Format.litres(ml)
     return "\(value) \(unit)"
+  }
+}
+
+/// Calories burned today: Apple Health's active energy, or the training
+/// total with estimates marked. Shown beside food, never offset against it.
+struct BurnedLine: View {
+  let burned: Components.Schemas.Burned?
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: "flame.fill")
+        .font(.subheadline)
+        .foregroundStyle(Theme.calories)
+      VStack(alignment: .leading, spacing: 1) {
+        Text("Burned").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        Text(burned?.note ?? "From training and Apple Health")
+          .font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+      }
+      Spacer(minLength: 8)
+      if let burned {
+        Text("\(burned.estimated ? "~" : "")\(burned.kcal.formatted()) kcal")
+          .font(.subheadline.weight(.semibold).monospacedDigit())
+      } else {
+        Text("Nothing yet").font(.subheadline).foregroundStyle(.secondary)
+      }
+    }
+    .accessibilityElement(children: .combine)
   }
 }
 

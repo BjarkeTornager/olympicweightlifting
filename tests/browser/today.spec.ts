@@ -69,7 +69,9 @@ test("Today suggests the next recorded programme session and resumes the same dr
   const suggestion = page.getByRole("region", { name: "Suggested session" });
   await expect(suggestion).toContainText(sequence[1].title);
   await expect(
-    page.getByRole("region", { name: "Today's food and sleep" }),
+    page.getByRole("region", {
+      name: "Today's food, sleep and calories burned",
+    }),
   ).toContainText("7 h 30 min");
   expect(revision).toBe(0);
   await suggestion

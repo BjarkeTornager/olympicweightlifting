@@ -65,6 +65,12 @@
       }
     ]
   },
+  "burned": {
+    "kcal": 540,
+    "source": "apple-health",
+    "estimated": false,
+    "note": "Active energy from Apple Health"
+  },
   "nextSession": {
     "programId": "stability-power-base-v1",
     "programName": "Stability & Power Base",

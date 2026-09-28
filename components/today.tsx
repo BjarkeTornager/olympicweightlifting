@@ -10,7 +10,8 @@ import { GoalsCard } from "./goals";
 import { HydrationRow } from "./hydration";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
-import { Plus, ChevronRight, Mic } from "./ui/icons";
+import { Plus, ChevronRight, Flame, Mic } from "./ui/icons";
+import { burnedNote, burnedToday } from "@/lib/energy";
 import { useVoiceEnabled } from "@/lib/use-voice-checkin";
 import { BarbellIcon, BowlIcon, SleepIcon } from "./ui/journal-icons";
 
@@ -30,6 +31,7 @@ export function Today({
   const meals = state.nutrition.meals.filter((m) => m.date === date);
   const sleep = state.health.checkins.find((c) => c.date === date);
   const week = weeklyReview(state, date).current;
+  const burned = burnedToday(state, date);
   const kcal = meals.reduce(
     (total, meal) =>
       total +
@@ -56,7 +58,7 @@ export function Today({
       <NextSession state={state} update={journal.update} go={go} />
       <section
         className="today-records list-card"
-        aria-label="Today's food and sleep"
+        aria-label="Today's food, sleep and calories burned"
       >
         <button className="list-row today-record" onClick={() => go("food")}>
           <BowlIcon size={22} />
@@ -101,6 +103,26 @@ export function Today({
               <small>Not recorded</small>
             ) : (
               formatSleepDuration(sleep.sleepHours)
+            )}
+          </span>
+          <ChevronRight size={17} aria-hidden="true" />
+        </button>
+        <button className="list-row today-record" onClick={() => go("cardio")}>
+          <Flame size={22} />
+          <span>
+            <strong>Burned</strong>
+            <small>
+              {burned ? burnedNote(burned) : "Training and Apple Health"}
+            </small>
+          </span>
+          <span className="today-record-value">
+            {burned ? (
+              <>
+                {burned.estimated ? "~" : ""}
+                {burned.kcal.toLocaleString("en-GB")} <small>kcal</small>
+              </>
+            ) : (
+              <small>Nothing recorded yet</small>
             )}
           </span>
           <ChevronRight size={17} aria-hidden="true" />

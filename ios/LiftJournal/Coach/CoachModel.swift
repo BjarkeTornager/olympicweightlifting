@@ -50,7 +50,9 @@ final class CoachModel {
   var busyReceipt: String?
   /// Photos attached to the message being answered, shown until it's saved.
   var sendingPreviews: [UIImage] = []
-  /// The text sent with photos and no words.
+  /// The text sent with photos and no words. The server recognises it
+  /// (PHOTO_ONLY_MESSAGE in lib/images.ts) and logs a meal photo straight
+  /// away, so keep the two the same.
   static let photoOnly = "Here's a photo."
   /// Counts sends, for the send haptic.
   var sentCount = 0

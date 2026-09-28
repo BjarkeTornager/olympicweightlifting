@@ -62,6 +62,26 @@ export function imageCoachPrompt(category: ImageCategory, count = 1) {
   return "Help me understand this image in the context of my journal. Identify what it shows first; do not assume it is food. Do not save an entry unless I ask.";
 }
 
+// The text the iOS app sends when photos go to Coach without any words.
+export const PHOTO_ONLY_MESSAGE = "Here's a photo.";
+
+// What Coach is asked for a message: a photo sent without words asks for the
+// same thing as in the web composer, by the photos' categories, so a meal
+// photo is logged straight away instead of Coach asking whether to log it.
+// Anything the athlete typed is used as it is.
+export function coachRequest(message: string, categories: ImageCategory[]) {
+  if (
+    !categories.length ||
+    message.trim().replace(/’/g, "'") !== PHOTO_ONLY_MESSAGE
+  )
+    return message;
+  const [first] = categories;
+  return imageCoachPrompt(
+    categories.every((c) => c === first) ? first : "unclassified",
+    categories.length,
+  );
+}
+
 export function activityLoggingPrompt(hasImage = false) {
   return hasImage
     ? "Log my completed activity from this photo or screenshot now. Identify whether I walked, ran, cycled or did another activity. Read the visible duration, date and optional measurements; use today if no activity date is shown and say so. Link this image to the activity. Check for an existing entry first and save with Undo. Do not guess unreadable measurements or log a planned workout, daily step total or unrelated image as a completed session."

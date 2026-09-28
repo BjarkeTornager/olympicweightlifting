@@ -384,3 +384,36 @@ test("background noise does not interrupt the coach, but speaking does", async (
   assert.deepEqual(gate(chunk(0.01), true), [chunk(0.01)]);
   assert.deepEqual(gate(chunk(0.01), false), [chunk(0.01)]);
 });
+
+test("the voice coach is told to talk like a person and say numbers aloud", () => {
+  const clock = localClock("2026-09-25T07:30:00Z", "Europe/Copenhagen");
+  const text = voiceInstruction(
+    voiceContext(emptyJournal(), clock.date),
+    clock,
+    "Bjarke",
+  );
+  assert.match(text, /How to sound like a person, not an assistant/);
+  assert.match(text, /React first, then move on/);
+  assert.match(text, /Say numbers the way people say them out loud/);
+  assert.doesNotMatch(text, /7 h 17 min|got it"\)/);
+});
+
+test("affective dialog is sent only when switched on", () => {
+  const before = process.env.VOICE_AFFECTIVE_DIALOG;
+  try {
+    delete process.env.VOICE_AFFECTIVE_DIALOG;
+    assert.equal(
+      "enableAffectiveDialog" in voiceSetup("x").generationConfig,
+      false,
+    );
+    process.env.VOICE_AFFECTIVE_DIALOG = "1";
+    assert.equal(
+      (voiceSetup("x").generationConfig as { enableAffectiveDialog?: boolean })
+        .enableAffectiveDialog,
+      true,
+    );
+  } finally {
+    if (before === undefined) delete process.env.VOICE_AFFECTIVE_DIALOG;
+    else process.env.VOICE_AFFECTIVE_DIALOG = before;
+  }
+});

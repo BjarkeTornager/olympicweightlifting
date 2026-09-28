@@ -71,6 +71,15 @@ struct ContractTests {
     #expect(!APIFailure.unreadable(APIFailure(status: 500, message: "")))
   }
 
+  @Test("A dropped connection is told apart from Coach or the server refusing")
+  func coachInterruption() {
+    #expect(CoachFailure.isInterruption(URLError(.networkConnectionLost)))
+    #expect(CoachFailure.isInterruption(CoachFailure(message: "", status: 0, interrupted: true)))
+    #expect(!CoachFailure.isInterruption(CoachFailure(message: "Please wait a minute", status: 429)))
+    #expect(!CoachFailure.isInterruption(URLError(.badServerResponse)))
+    #expect(!CoachFailure.isInterruption(CancellationError()))
+  }
+
   @Test func journalDays() {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "Europe/Copenhagen")!

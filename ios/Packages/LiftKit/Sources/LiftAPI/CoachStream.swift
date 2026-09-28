@@ -13,13 +13,35 @@ public enum CoachEvent: Sendable, Equatable {
 public struct CoachFailure: LocalizedError, Sendable {
   public let message: String
   public let status: Int
+  /// The connection ended before the reply, as when the app is suspended:
+  /// Coach may still be working, and the saved turn tells.
+  public var interrupted = false
   public var errorDescription: String? { message }
+
+  public init(message: String, status: Int, interrupted: Bool = false) {
+    self.message = message
+    self.status = status
+    self.interrupted = interrupted
+  }
+
+  /// Whether an error means the connection was lost rather than Coach or
+  /// the server refusing: the turn may still finish on the server.
+  public static func isInterruption(_ error: any Error) -> Bool {
+    if let failure = error as? CoachFailure { return failure.interrupted }
+    guard let url = error as? URLError else { return false }
+    return [
+      .networkConnectionLost, .notConnectedToInternet, .timedOut, .cannotConnectToHost,
+      .dataNotAllowed, .internationalRoamingOff, .callIsActive, .backgroundSessionWasDisconnected,
+    ].contains(url.code)
+  }
 }
 
 /// Runs one Coach turn over the AG-UI event stream at `/api/agent/run`. The
 /// server owns history, tools and the journal; the app sends only the new
 /// message. The durable result (reply and saves) is read afterwards from
-/// `/api/v1/coach`, so an interrupted stream loses nothing.
+/// `/api/v1/coach`, so an interrupted stream loses nothing: the server keeps
+/// working when the app is suspended mid-reply (X-Coach-Background), and
+/// Stop cancels it with `cancel(id:)`.
 public struct CoachStream: Sendable {
   public let token: String
   public let account: String
@@ -47,6 +69,18 @@ public struct CoachStream: Sendable {
     }
   }
 
+  /// Stops a run on the server; it would otherwise carry on in the
+  /// background. Best effort: the run may already have finished.
+  public func cancel(id: UUID) async {
+    var request = URLRequest(url: LiftServer.origin.appending(path: "api/agent/run/cancel"))
+    request.httpMethod = "POST"
+    request.timeoutInterval = 10
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    LiftHeaders.apply(to: &request, token: token, account: account)
+    request.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id.uuidString.lowercased()])
+    _ = try? await LiftServer.session().data(for: request)
+  }
+
   private func stream(
     id: UUID, message: String, revision: Int, photoIDs: [UUID],
     emit: (CoachEvent) -> Void
@@ -71,6 +105,8 @@ public struct CoachStream: Sendable {
     request.timeoutInterval = 180
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+    // Carry on if the connection closes; only cancel(id:) stops the run.
+    request.setValue("1", forHTTPHeaderField: "X-Coach-Background")
     LiftHeaders.apply(to: &request, token: token, account: account)
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -114,7 +150,7 @@ public struct CoachStream: Sendable {
     if !finished {
       throw CoachFailure(
         message: "The connection ended before Coach finished. Refresh to see what was saved.",
-        status: 0)
+        status: 0, interrupted: true)
     }
   }
 }

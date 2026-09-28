@@ -125,7 +125,7 @@ struct TodayView: View {
       .buttonStyle(CardButtonStyle())
 
       SectionHeading("Nutrition").padding(.horizontal, 4).padding(.top, 10)
-      NutritionCard(nutrition: today.nutrition, hydration: today.hydration)
+      NutritionCard(nutrition: today.nutrition, hydration: today.hydration, supplements: today.supplements)
 
       SectionHeading("Training").padding(.horizontal, 4).padding(.top, 10)
       TrainingCard(today: today)
@@ -375,6 +375,8 @@ struct NutritionCard: View {
   @Environment(AppModel.self) private var model
   let nutrition: Components.Schemas.Nutrition
   let hydration: Components.Schemas.Hydration
+  /// Absent from servers older than supplement tracking.
+  var supplements: Components.Schemas.Supplements?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -446,8 +448,87 @@ struct NutritionCard: View {
           }
         }
       }
+      if let supplements {
+        Divider()
+        SupplementsStrip(supplements: supplements)
+      }
     }
     .card()
+  }
+}
+
+/// Vitamins and supplements: usual ones are one tap, anything else is a name
+/// and an optional amount. Long-press a taken one to delete it.
+struct SupplementsStrip: View {
+  @Environment(AppModel.self) private var model
+  let supplements: Components.Schemas.Supplements
+  @State private var adding = false
+  @State private var name = ""
+  @State private var amount = ""
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 6) {
+        CardLabel(title: "Supplements", symbol: "pills.fill", tint: Category.food.tint)
+        Spacer()
+        Text(supplements.taken.isEmpty ? "None yet" : "\(supplements.taken.count) taken")
+          .font(.system(.subheadline, design: .rounded, weight: .bold))
+          .foregroundStyle(supplements.taken.isEmpty ? .secondary : Color.primary)
+      }
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+          ForEach(supplements.usual, id: \.name) { usual in
+            Button {
+              Task { await model.logSupplement(name: usual.name, amount: usual.amount) }
+            } label: {
+              Label(label(usual.name, usual.amount), systemImage: "plus")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Theme.fill, in: .capsule)
+                .foregroundStyle(.tint)
+            }
+            .buttonStyle(CardButtonStyle())
+          }
+          Button {
+            name = ""
+            amount = ""
+            adding = true
+          } label: {
+            Label(supplements.usual.isEmpty ? "Add supplement" : "Other", systemImage: "plus")
+              .font(.subheadline.weight(.semibold))
+              .padding(.horizontal, 12).padding(.vertical, 7)
+              .background(Theme.fill, in: .capsule)
+              .foregroundStyle(.tint)
+          }
+          .buttonStyle(CardButtonStyle())
+          ForEach(supplements.taken.reversed(), id: \.id) { taken in
+            Label(label(taken.name, taken.amount), systemImage: "checkmark")
+              .font(.subheadline)
+              .padding(.horizontal, 12).padding(.vertical, 7)
+              .background(Theme.fill, in: .capsule)
+              .contextMenu {
+                Button("Delete", systemImage: "trash", role: .destructive) {
+                  Task { await model.removeSupplement(id: taken.id) }
+                }
+              }
+          }
+        }
+      }
+    }
+    .alert("Add supplement", isPresented: $adding) {
+      TextField("Name, e.g. Vitamin D", text: $name)
+      TextField("Amount (optional), e.g. 1000 IU", text: $amount)
+      Button("Cancel", role: .cancel) {}
+      Button("Save") {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        Task { await model.logSupplement(name: String(name.prefix(80)), amount: String(amount.prefix(40))) }
+      }
+    }
+  }
+
+  private func label(_ name: String, _ amount: String) -> String {
+    amount.isEmpty ? name : "\(name) \(amount)"
   }
 }
 

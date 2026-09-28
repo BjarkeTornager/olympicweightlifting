@@ -325,6 +325,20 @@ final class AppModel {
     await save(.deleteDrink(.init(kind: .deleteDrink, drinkId: id)), confirmation: "Drink removed")
   }
 
+  func logSupplement(name: String, amount: String) async {
+    let amount = amount.trimmingCharacters(in: .whitespaces)
+    await save(
+      .logSupplement(.init(
+        kind: .logSupplement,
+        supplement: .init(date: JournalDay.string(.now), name: name, amount: amount.isEmpty ? nil : amount))),
+      confirmation: "\(name) logged")
+  }
+
+  func removeSupplement(id: String) async {
+    await save(
+      .deleteSupplement(.init(kind: .deleteSupplement, supplementId: id)), confirmation: "Supplement removed")
+  }
+
   // MARK: Voice
 
   func startVoice() {

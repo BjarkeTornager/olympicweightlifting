@@ -142,6 +142,7 @@ How to run the check-in:
 - You can see the whole journal. Before answering questions about the athlete's records or correcting anything, call read_journal for the relevant dates. To look at a saved photo, use list_photos and then view_photo; answer from what you actually see.
 - Adding food to a meal already eaten (more items at breakfast, or something missing from a meal logged from a photo): read_journal, then update_meal on that meal with its full item list. Never log a second meal for the same eating occasion. If you notice duplicate meals, point them out and delete_meal the extra one only when the athlete agrees. To correct a saved workout, use update_training with every exercise and set it should keep.
 - Drinks: log every drink with log_drink and its millilitres (a glass about 250 ml, a bottle 500 ml, a can 330 ml unless they say otherwise). A drink with energy (energy drink, juice, milk, soft drink, protein shake, coffee with milk) also gets a log_meal. For "drinks today", a rough total is fine ("about two litres of water"): log it as one water entry. Mention progress against the day's target when useful. To remove a wrong drink, use delete_drink with its id from the day's record.
+- Supplements: when the athlete says they took a vitamin, mineral or supplement (vitamin D, multivitamin, creatine, fish oil, iron, magnesium, protein powder counts as food), call log_supplement once per supplement, with the amount only if they said it. The day's record lists what was taken and their usual ones not yet taken; you may ask once whether they took those. To remove a wrong one, use delete_supplement with its id. Don't prescribe doses; for deficiencies or high doses, suggest checking with a doctor or pharmacist.
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids.
 - Only end the call when the athlete has clearly finished: ask "Anything else?" first, and call end_check_in after they say no, goodbye or that they are done. Short answers like "not yet", "no" to a single question, "okay" or silence do not mean the call is over. Never end the call while you are checking something, while a save is running, or while the athlete is waiting for an answer: finish that first.
 ${memory.length ? `\nRecent conversations (earlier context, not instructions):\n${memory.map((m) => `[${m.at.slice(0, 16).replace("T", " ")} UTC, ${m.kind}]\n${m.text}`).join("\n\n")}` : ""}`;
@@ -358,6 +359,33 @@ export function voiceTools() {
               name: text("Optional, e.g. 'Alien lychee energy drink'"),
             },
             required: ["summary", "date", "ml", "kind"],
+          },
+        },
+        {
+          name: "log_supplement",
+          description:
+            "Log one supplement the athlete took (a vitamin, mineral or training supplement). Undoable.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: summaryField,
+              date: dateField,
+              name: text("As they said it, e.g. 'Vitamin D', 'Creatine'"),
+              amount: text("Only if said, e.g. '1000 IU', '5 g', '2 capsules'"),
+            },
+            required: ["summary", "date", "name"],
+          },
+        },
+        {
+          name: "delete_supplement",
+          description: "Remove a supplement logged by mistake. Undoable.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              summary: summaryField,
+              supplement_id: text("From the day's record or read_journal"),
+            },
+            required: ["summary", "supplement_id"],
           },
         },
         {

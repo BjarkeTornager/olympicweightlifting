@@ -1,3 +1,4 @@
+import { supplementsForDay } from "./supplements";
 import {
   burnText,
   burnedNote,
@@ -68,6 +69,28 @@ const drinkView = z
   })
   .strict()
   .register(nativeResponses, { id: "Drink" });
+const supplementView = z
+  .object({
+    id: uuid,
+    name: z.string(),
+    amount: z.string(),
+    at: instant,
+  })
+  .strict()
+  .register(nativeResponses, { id: "Supplement" });
+// Taken today, and usual ones (two of the last fourteen days) still to take.
+const supplementsView = z
+  .object({
+    taken: z.array(supplementView),
+    usual: z.array(
+      z
+        .object({ name: z.string(), amount: z.string() })
+        .strict()
+        .register(nativeResponses, { id: "UsualSupplement" }),
+    ),
+  })
+  .strict()
+  .register(nativeResponses, { id: "Supplements" });
 const mealView = z
   .object({
     id: uuid,
@@ -233,6 +256,8 @@ export const todayView = z
     hydration: hydrationView,
     // Optional: builds from before calories burned must still decode.
     burned: burnedView.optional(),
+    // Optional: builds from before supplements must still decode.
+    supplements: supplementsView.optional(),
     activeWorkout: workoutView.optional(),
     nextSession: nextSessionView.optional(),
     strengthToday: z.array(workoutView),
@@ -386,6 +411,23 @@ const deleteDrink = z
   .object({ kind: z.literal("delete_drink"), drinkId: uuid })
   .strict()
   .register(nativeRequests, { id: "DeleteDrinkAction" });
+const logSupplement = z
+  .object({
+    kind: z.literal("log_supplement"),
+    supplement: z
+      .object({
+        date: day,
+        name: z.string().min(1).max(80),
+        amount: z.string().max(40).optional(),
+      })
+      .strict(),
+  })
+  .strict()
+  .register(nativeRequests, { id: "LogSupplementAction" });
+const deleteSupplement = z
+  .object({ kind: z.literal("delete_supplement"), supplementId: uuid })
+  .strict()
+  .register(nativeRequests, { id: "DeleteSupplementAction" });
 const recordBodyFat = z
   .object({
     kind: z.literal("record_body_fat"),
@@ -563,6 +605,8 @@ export const nativeAction = z
   .discriminatedUnion("kind", [
     logDrink,
     deleteDrink,
+    logSupplement,
+    deleteSupplement,
     recordBodyFat,
     deleteBodyFat,
     recordCheckin,
@@ -682,6 +726,7 @@ export function buildToday(
     state.health.vitals?.find((v) => v.date === offsetDate(date, -1));
   const checkin = health.checkin;
   const burned = burnedToday(state, date);
+  const supplements = supplementsForDay(state, date);
   const next = state.activeWorkout ? null : nextTraining(state, date);
   return todayView.parse(
     defined({
@@ -740,6 +785,15 @@ export function buildToday(
         }),
       }),
       burned: burned ? { ...burned, note: burnedNote(burned) } : undefined,
+      supplements: {
+        taken: supplements.taken.map((s) => ({
+          id: s.id,
+          name: s.name,
+          amount: s.amount,
+          at: s.at,
+        })),
+        usual: supplements.usual,
+      },
       hydration: {
         totalMl: hydration.totalMl,
         targetMl: hydration.targetMl,

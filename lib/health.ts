@@ -2,6 +2,7 @@ import { z } from "zod";
 import { cardioSummary, cardioTitle } from "./cardio";
 import { foodDate, totalNutrients } from "./nutrition";
 import { drinkSchema } from "./hydration";
+import { supplementSchema } from "./supplements";
 import {
   bodyFatSchema,
   bodyFatTrend,
@@ -77,6 +78,8 @@ export const healthSchema = z
     checkins: z.array(checkinSchema).max(5000).default([]),
     // Optional so journals and clients from before drink tracking still parse.
     drinks: z.array(drinkSchema).max(20000).optional(),
+    // Optional so journals and clients from before supplements still parse.
+    supplements: z.array(supplementSchema).max(20000).optional(),
     // Optional for the same reason; written only by the Apple Health sync.
     vitals: z.array(vitalsSchema).max(5000).optional(),
     // Body fat readings, reported or from a smart scale via Apple Health.

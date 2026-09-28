@@ -102,7 +102,15 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // marks estimates, but still never works one out itself, never saves an
     // estimate as an entry's energy, and never lets it change food targets.
     // Health, privacy and evidence text is otherwise unchanged.
-    "2508560549554cdba333806d72de871a6d8972fca64fd0ef35a7aaa6ce255f80",
+    // Revised 2026-09-28 again, deliberate and reviewed at the owner's
+    // request: one added paragraph has Coach log supplements the athlete
+    // took with log_supplement, as said and without invented amounts;
+    // protein powder stays food. It must not prescribe or change doses or
+    // claim a supplement treats a condition, and points to a doctor or
+    // pharmacist for deficiencies, high doses, pregnancy or interactions
+    // (supplements.test.ts). Health, privacy and evidence text is otherwise
+    // unchanged.
+    "18453dc4ad5d6375d382bd572fced832df5c8a700992cdd7bcfc8b4ce2c3af44",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

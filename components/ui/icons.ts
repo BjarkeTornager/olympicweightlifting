@@ -43,6 +43,7 @@ export { PhoneDisconnectIcon as PhoneOff } from "@phosphor-icons/react/dist/ssr/
 export { PauseIcon as Pause } from "@phosphor-icons/react/dist/ssr/Pause";
 export { PersonSimpleRunIcon as PersonSimpleRun } from "@phosphor-icons/react/dist/ssr/PersonSimpleRun";
 export { PlayIcon as Play } from "@phosphor-icons/react/dist/ssr/Play";
+export { PillIcon as Pill } from "@phosphor-icons/react/dist/ssr/Pill";
 export { PlusIcon as Plus } from "@phosphor-icons/react/dist/ssr/Plus";
 export { ArrowsClockwiseIcon as RefreshCw } from "@phosphor-icons/react/dist/ssr/ArrowsClockwise";
 export { ArrowCounterClockwiseIcon as RotateCcw } from "@phosphor-icons/react/dist/ssr/ArrowCounterClockwise";

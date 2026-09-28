@@ -18,6 +18,7 @@ import {
   prepareBodyFat,
   prepareDeleteMeal,
   prepareDrink,
+  prepareSupplement,
   prepareCardio,
   prepareCheckin,
   prepareMeal,
@@ -176,6 +177,9 @@ function applyAction(
     case "log_drink":
     case "delete_drink":
       return prepareDrink(next, action, currentDate);
+    case "log_supplement":
+    case "delete_supplement":
+      return prepareSupplement(next, action, currentDate);
     case "delete_meal":
       return prepareDeleteMeal(next, action);
     case "set_body_goals":

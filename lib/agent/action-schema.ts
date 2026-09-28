@@ -14,6 +14,7 @@ import { mealInputSchema, dietTargetsSchema } from "../nutrition";
 import { bodyGoalsRequestSchema } from "../body-goals";
 import { bodyFatInputSchema } from "../body-composition";
 import { drinkInputSchema } from "../hydration";
+import { supplementInputSchema } from "../supplements";
 const date = workoutSchema.shape.date;
 const exerciseId = trainingExerciseId;
 const set = z
@@ -71,6 +72,12 @@ const recordMealSchema = z
 const logDrinkSchema = z
   .object({ kind: z.literal("log_drink"), drink: drinkInputSchema })
   .strict();
+const logSupplementSchema = z
+  .object({
+    kind: z.literal("log_supplement"),
+    supplement: supplementInputSchema,
+  })
+  .strict();
 const recordBodyFatSchema = z
   .object({ kind: z.literal("record_body_fat"), bodyFat: bodyFatInputSchema })
   .strict();
@@ -108,6 +115,7 @@ const bundleEntrySchema = z.discriminatedUnion("kind", [
   recordCheckinSchema,
   recordMealSchema,
   logDrinkSchema,
+  logSupplementSchema,
   recordBodyFatSchema,
   recordSessionSchema,
   progressSchema,
@@ -235,6 +243,13 @@ const singleActionSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("delete_drink"), drinkId: z.string().uuid() })
     .strict(),
+  logSupplementSchema,
+  z
+    .object({
+      kind: z.literal("delete_supplement"),
+      supplementId: z.string().uuid(),
+    })
+    .strict(),
   recordBodyFatSchema,
   z.object({ kind: z.literal("delete_body_fat"), date }).strict(),
   z
@@ -345,6 +360,8 @@ export const actionToolSchema = z
       "delete_meal",
       "log_drink",
       "delete_drink",
+      "log_supplement",
+      "delete_supplement",
       "record_body_fat",
       "delete_body_fat",
       "record_session",
@@ -457,6 +474,12 @@ export const actionToolSchema = z
         "For log_drink: one drink as reported, ml as a whole number (a glass ≈ 250, a bottle ≈ 500, a can ≈ 330 unless stated). Log each drink separately; the day's total adds up.",
       ),
     drinkId: z.string().uuid().optional(),
+    supplement: supplementInputSchema
+      .optional()
+      .describe(
+        "For log_supplement: one supplement as the athlete named it (vitamin D, multivitamin, creatine, fish oil, iron, magnesium…) with the amount only if they said it ('1000 IU', '5 g', '2 capsules'). Log each supplement separately.",
+      ),
+    supplementId: z.string().uuid().optional(),
     bodyGoals: bodyGoalsRequestSchema
       .optional()
       .describe(
@@ -480,6 +503,7 @@ export type AgentAction = z.infer<typeof actionSchema>;
 export const loggingKinds = [
   "record_meal",
   "log_drink",
+  "log_supplement",
   "repeat_meal",
   "update_meal",
   "record_checkin",
@@ -518,6 +542,7 @@ export const loggingToolSchema = actionToolSchema
     mealId: true,
     checkin: true,
     drink: true,
+    supplement: true,
     bodyFat: true,
   })
   .extend({

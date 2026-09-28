@@ -8,6 +8,7 @@ import { TrackingStatus } from "./tracking-status";
 import { NextSession } from "./next-session";
 import { GoalsCard } from "./goals";
 import { HydrationRow } from "./hydration";
+import { SupplementsRow } from "./supplements";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
 import { Plus, ChevronRight, Flame, Mic } from "./ui/icons";
@@ -129,6 +130,7 @@ export function Today({
         </button>
       </section>
       <HydrationRow journal={journal} />
+      <SupplementsRow journal={journal} />
       <GoalsCard journal={journal} go={go} voiceEnabled={voiceEnabled} />
       <TrackingStatus accountId={journal.identity.id} go={go} />
       <section className="today-week" aria-label="This week at a glance">

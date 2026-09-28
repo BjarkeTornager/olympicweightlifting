@@ -5,8 +5,9 @@ import LiftTheme
 import MapKit
 import SwiftUI
 
-/// A table, chart, diagram, photo gallery or route that Coach attached to a
-/// reply, drawn with native components.
+/// A visual Coach attached to a reply, drawn with native components: tables,
+/// charts, diagrams, photos and routes here, and the kinds it composes from
+/// journal numbers in CoachVisualKinds.swift.
 struct CoachVisualView: View {
   let visual: Components.Schemas.CoachVisual
 
@@ -24,6 +25,18 @@ struct CoachVisualView: View {
         gallery
       case "route_map":
         route
+      case "line_chart":
+        VisualLineChart(visual: visual)
+      case "progress":
+        VisualProgress(visual: visual)
+      case "stats":
+        VisualStats(visual: visual)
+      case "comparison":
+        VisualComparison(visual: visual)
+      case "split":
+        VisualSplit(visual: visual)
+      case "calendar":
+        VisualCalendar(visual: visual)
       default:
         EmptyView()
       }

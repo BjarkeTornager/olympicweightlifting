@@ -46,6 +46,17 @@ struct CoachView: View {
             } else {
               CoachMessages(text: coach.reply)
             }
+            // Visuals appear as Coach makes them, before the reply is done.
+            VStack(spacing: 8) {
+              ForEach(coach.liveVisuals, id: \.id) { visual in
+                CoachVisualView(visual: visual)
+                  .padding(12)
+                  .background(Theme.surface, in: .rect(cornerRadius: 18))
+                  .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+              }
+            }
+            .padding(.leading, 34)
+            .animation(.snappy, value: coach.liveVisuals.count)
           }
         }
         if let error = coach.error {

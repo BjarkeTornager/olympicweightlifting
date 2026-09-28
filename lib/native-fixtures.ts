@@ -2,6 +2,7 @@ import { createWorkout, days, emptyJournal } from "./domain";
 import { cardioFromWorkout } from "./health-sync";
 import { buildTraining } from "./native-training";
 import { addDrink } from "./hydration";
+import type { CoachVisual } from "./coach-visuals";
 import {
   buildCoach,
   buildJournal,
@@ -161,6 +162,87 @@ export function nativeFixtures() {
               },
             },
           ],
+        },
+        {
+          id: "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a20",
+          question: "How is my week going?",
+          photoIds: [],
+          createdAt: now.toISOString(),
+          status: "done",
+          reply: "Steady: bodyweight is drifting down and sleep held up.",
+          // One of each kind the app draws natively.
+          visuals: (
+            [
+              {
+                kind: "line_chart",
+                title: "Bodyweight",
+                unit: "kg",
+                series: [
+                  {
+                    name: "Bodyweight",
+                    points: [
+                      { label: "Sep 21", value: 88.1 },
+                      { label: "Sep 28", value: 87.7 },
+                    ],
+                  },
+                ],
+                target: 85,
+              },
+              {
+                kind: "progress",
+                title: "Today so far",
+                targets: [
+                  { label: "Protein", value: 116, target: 180, unit: "g" },
+                ],
+              },
+              {
+                kind: "stats",
+                title: "This week",
+                stats: [
+                  {
+                    label: "Sleep",
+                    value: "7 h 24",
+                    change: "+18 min",
+                    trend: "up",
+                  },
+                ],
+              },
+              {
+                kind: "comparison",
+                title: "Against last week",
+                beforeLabel: "Last week",
+                afterLabel: "This week",
+                comparisons: [
+                  {
+                    label: "Sleep",
+                    before: 7.1,
+                    after: 7.4,
+                    unit: "h",
+                    higherIsBetter: true,
+                  },
+                ],
+              },
+              {
+                kind: "split",
+                title: "Today's calories",
+                unit: "kcal",
+                parts: [
+                  { label: "Protein", value: 464 },
+                  { label: "Carbs", value: 604 },
+                ],
+              },
+              {
+                kind: "calendar",
+                title: "Training days",
+                days: [{ date: "2026-09-21", level: 3, label: "Snatch" }],
+                legend: "Darker is more training",
+              },
+            ] satisfies CoachVisual[]
+          ).map((content, i) => ({
+            id: `0d4e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a3${i}`,
+            content,
+          })),
+          proposals: [],
         },
       ],
       now,

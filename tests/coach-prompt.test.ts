@@ -95,7 +95,14 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // set as given (set_diet_targets), not turned into goal questions; with
     // the goals skill loaded, Coach asked for age instead. Health, privacy
     // and evidence text is unchanged.
-    "c9529024ec2816643799a9669701266262c60addf75aacf9e031507cd73d4104",
+    // Revised 2026-09-28, deliberate and reviewed, with the native visual
+    // kinds: show_visual is also used unasked when numbers read better as a
+    // visual (progress, trends, splits, comparisons, headline numbers, days),
+    // loading the review skill if needed, and its values aren't repeated in
+    // a Markdown table. Asked for targets, a macro split and training days,
+    // Coach answered with a Markdown table and no visual. Health, privacy
+    // and evidence text is unchanged.
+    "5fe6b637e76530fe19da6652d7579e2ce88ed5f72a8e2499b14b4b6086f2ebfb",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

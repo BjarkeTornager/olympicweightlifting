@@ -896,7 +896,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "One of: table, bar_chart, diagram, photo_gallery, route_map. Treat others as unknown."
+            "description": "One of: table, bar_chart, diagram, photo_gallery, route_map, line_chart, progress, stats, comparison, split, calendar. Treat others as unknown."
           },
           "title": {
             "type": "string"
@@ -975,6 +975,54 @@
             "items": {
               "$ref": "#/components/schemas/RouteStop"
             }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisualSeries"
+            }
+          },
+          "target": {
+            "type": "number"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisualTarget"
+            }
+          },
+          "stats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisualStat"
+            }
+          },
+          "beforeLabel": {
+            "type": "string"
+          },
+          "afterLabel": {
+            "type": "string"
+          },
+          "comparisons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisualComparison"
+            }
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisualPart"
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisualDay"
+            }
+          },
+          "legend": {
+            "type": "string"
           }
         },
         "required": [
@@ -2871,6 +2919,142 @@
         "required": [
           "kind",
           "programmeId"
+        ]
+      },
+      "VisualComparison": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "before": {
+            "type": "number"
+          },
+          "after": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "higherIsBetter": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "label",
+          "before",
+          "after"
+        ]
+      },
+      "VisualDay": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "level"
+        ]
+      },
+      "VisualPart": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "VisualSeries": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name",
+          "points"
+        ]
+      },
+      "VisualStat": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "change": {
+            "type": "string"
+          },
+          "trend": {
+            "type": "string",
+            "description": "One of: up, down, flat. Treat others as unknown."
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "VisualTarget": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "target": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "target",
+          "unit"
         ]
       },
       "Vitals": {

@@ -42,6 +42,29 @@ struct ContractTests {
     #expect(entry.lines.first?.note == "80 g")
   }
 
+  @Test("Every kind of visual Coach draws decodes, with its own fields")
+  func coachVisuals() throws {
+    let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
+    let visuals = try #require(history.turns.dropFirst().first?.visuals)
+    #expect(visuals.map(\.kind) == ["line_chart", "progress", "stats", "comparison", "split", "calendar"])
+    #expect(visuals[0].series?.first?.points.last?.value == 87.7 && visuals[0].target == 85)
+    #expect(visuals[1].targets?.first?.target == 180)
+    #expect(visuals[2].stats?.first?.trend == "up")
+    #expect(visuals[3].afterLabel == "This week" && visuals[3].comparisons?.first?.higherIsBetter == true)
+    #expect(visuals[4].parts?.map(\.value) == [464, 604])
+    #expect(visuals[5].days?.first?.level == 3 && visuals[5].legend == "Darker is more training")
+  }
+
+  @Test("A visual streamed mid-reply reads as the saved one will")
+  func streamedVisual() throws {
+    let event = #"""
+      {"type":"CUSTOM","name":"coach.visual","value":{"id":"v1","content":{"kind":"progress","title":"Today","targets":[{"label":"Water","value":1.5,"target":3,"unit":"L"}]}}}
+      """#
+    let visual = try #require(CoachStream.visual(fromCustom: event))
+    #expect(visual.id == "v1" && visual.kind == "progress" && visual.targets?.first?.unit == "L")
+    #expect(CoachStream.visual(fromCustom: #"{"type":"CUSTOM","name":"other","value":{}}"#) == nil)
+  }
+
   @Test("An unknown enum value from a newer server still decodes")
   func tolerant() throws {
     let json = #"{"id":"a","date":"2026-09-26","kind":"yoga-class","title":"Yoga","detail":"","fromAppleHealth":false,"somethingNew":1}"#

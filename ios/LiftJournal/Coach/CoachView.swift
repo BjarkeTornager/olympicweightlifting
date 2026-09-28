@@ -250,6 +250,9 @@ private struct TurnView: View {
         CoachMessages(text: reply)
       } else if turn.status == "failed" {
         CoachMessages(text: "Sorry, I couldn't finish that one. Try asking again.")
+      } else if turn.status == "running" {
+        // Still being answered, as after the app was closed mid-reply.
+        TypingBubble(step: "Still working")
       }
       // Charts, maps and saved entries sit in the coach's column.
       VStack(spacing: 8) {

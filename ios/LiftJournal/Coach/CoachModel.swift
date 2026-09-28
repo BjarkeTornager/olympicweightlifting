@@ -56,6 +56,9 @@ final class CoachModel {
   var sentCount = 0
 
   private var task: Task<Void, Never>?
+  private var refreshing: Task<Void, Never>?
+  /// The message being answered, by its run id, until its saved turn arrives.
+  private var pending: (id: UUID, stream: CoachStream)?
 
   func load(_ app: AppModel) async {
     do {
@@ -65,14 +68,32 @@ final class CoachModel {
       turns = try await history
       calls = await spoken ?? calls
       loaded = true
+      refreshWhileAnswering(app)
     } catch {
       self.error = await app.handle(error)
     }
   }
 
-  /// Typed turns and voice calls together, oldest first.
+  /// A reply still being written on the server, as when the app was closed
+  /// mid-reply, is picked up by itself, for three minutes after it was sent.
+  private func refreshWhileAnswering(_ app: AppModel) {
+    guard pending == nil, refreshing == nil,
+      turns.contains(where: { $0.status == "running" && CoachView.date($0.createdAt) > .now - 180 })
+    else { return }
+    refreshing = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(3))
+      guard let self, !Task.isCancelled else { return }
+      self.refreshing = nil
+      await self.load(app)
+    }
+  }
+
+  /// Typed turns and voice calls together, oldest first. The message being
+  /// answered shows on its own until it's done, not also as a saved turn.
   var items: [ThreadItem] {
-    (turns.map(ThreadItem.turn) + calls.map(ThreadItem.call)).sorted { $0.date < $1.date }
+    let answering = asking == nil ? nil : pending?.id.uuidString.lowercased()
+    return (turns.filter { $0.id != answering }.map(ThreadItem.turn) + calls.map(ThreadItem.call))
+      .sorted { $0.date < $1.date }
   }
 
   var canSend: Bool {
@@ -95,10 +116,18 @@ final class CoachModel {
     step = photos.isEmpty ? nil : "Uploading photos"
     reply = ""
     error = nil
+    let runID = UUID()
+    let stream = CoachStream(token: session.token, account: session.accountID)
+    pending = (runID, stream)
     task = Task {
+      // A little time to finish if the athlete switches app mid-reply; the
+      // server carries on regardless, and the reply is read when they're back.
+      let background = BackgroundTime("Coach reply")
       defer {
         sending = false
         step = nil
+        pending = nil
+        background.end()
       }
       do {
         var ids: [UUID] = []
@@ -112,15 +141,20 @@ final class CoachModel {
           ).value()
           ids.append(id)
         }
-        let stream = CoachStream(token: session.token, account: session.accountID)
-        for try await event in stream.run(
-          id: UUID(), message: message, revision: app.today?.revision ?? 0, photoIDs: ids)
-        {
-          switch event {
-          case .step(let text): step = text
-          case .reply(let text): reply = text
-          case .finished: step = nil
+        do {
+          for try await event in stream.run(
+            id: runID, message: message, revision: app.today?.revision ?? 0, photoIDs: ids)
+          {
+            switch event {
+            case .step(let text): step = text
+            case .reply(let text): reply = text
+            case .finished: step = nil
+            }
           }
+        } catch where CoachFailure.isInterruption(error) && !Task.isCancelled {
+          // The connection dropped, usually because the app was in the
+          // background: Coach is still working on the server.
+          try await follow(runID, app: app)
         }
         await load(app)
         asking = nil
@@ -134,13 +168,53 @@ final class CoachModel {
         sendingPreviews = []
         if draft.isEmpty { draft = text }
         if attachments.isEmpty { attachments = photos }
-        self.error = await app.handle(error) ?? error.localizedDescription
+        if !(error is CancellationError) {
+          self.error = await app.handle(error) ?? error.localizedDescription
+        }
         await load(app)
       }
     }
   }
 
+  /// Waits for a turn whose stream was cut off to finish on the server, for
+  /// up to three minutes. Throws if it failed, or never reached the server;
+  /// past the wait, the turn stays in the thread to refresh later.
+  private func follow(_ id: UUID, app: AppModel) async throws {
+    step = "Still working"
+    let key = id.uuidString.lowercased()
+    let deadline = ContinuousClock.now + .seconds(180)
+    var missing = 0
+    while ContinuousClock.now < deadline {
+      try Task.checkCancellation()
+      if let history = try? await app.client.getCoach().value() {
+        guard let turn = history.turns.first(where: { $0.id == key }) else {
+          // Never received: the message is put back to send again.
+          missing += 1
+          if missing >= 3 {
+            throw CoachFailure(message: "Coach didn't get that message. It's back in the box to send again.", status: 0)
+          }
+          try await Task.sleep(for: .seconds(2))
+          continue
+        }
+        switch turn.status {
+        case "done": return
+        case "failed":
+          throw CoachFailure(message: "Coach could not finish that one. Your message is kept.", status: 0)
+        default:
+          if let saved = turn.reply, !saved.isEmpty { reply = saved }
+        }
+      }
+      try await Task.sleep(for: .seconds(2))
+    }
+    // Not put back to send again: it may still arrive, and would be doubled.
+    error = "Coach is taking longer than usual. Pull down in a minute to see the reply."
+  }
+
+  /// Stop: the server would otherwise finish the reply in the background.
   func cancel() {
+    if let pending {
+      Task { await pending.stream.cancel(id: pending.id) }
+    }
     task?.cancel()
   }
 
@@ -173,5 +247,23 @@ final class CoachModel {
       image.draw(in: CGRect(origin: .zero, size: size))
     }
     return resized.jpegData(compressionQuality: 0.82)
+  }
+}
+
+/// Extra time iOS allows to finish work after the app leaves the screen
+/// (about 30 seconds). It must be handed back before it runs out, or iOS
+/// ends the app: when it runs out, it is.
+@MainActor
+final class BackgroundTime {
+  private var id: UIBackgroundTaskIdentifier = .invalid
+
+  init(_ name: String) {
+    id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in self?.end() }
+  }
+
+  func end() {
+    guard id != .invalid else { return }
+    UIApplication.shared.endBackgroundTask(id)
+    id = .invalid
   }
 }

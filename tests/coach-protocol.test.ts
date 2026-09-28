@@ -375,8 +375,12 @@ test("AG-UI renders a planned route as a plan_route / route_map component", asyn
       ],
     },
   };
-  const events: { type: string; name?: string; toolCallName?: string; activityType?: string }[] =
-    [];
+  const events: {
+    type: string;
+    name?: string;
+    toolCallName?: string;
+    activityType?: string;
+  }[] = [];
   const visuals: SavedVisual[] = [];
   emitDisplayedVisual((event) => {
     events.push(event as (typeof events)[number]);
@@ -575,4 +579,64 @@ test("visual schemas reject dangling edges, duplicate IDs, bad table widths, exe
     }).success,
     true,
   );
+});
+
+test("in background mode a run outlives its connection and stops only when cancelled", async () => {
+  const { cancelRun } = await import("../lib/agent/stream");
+  const response = (reply: string): CoachResponse => ({ reply, proposals: [] });
+  const start = (background: boolean) => {
+    const connection = new AbortController();
+    const request = new Request("http://localhost/api/agent/run", {
+      method: "POST",
+      signal: connection.signal,
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let seen!: AbortSignal;
+    const done = new Promise<string>((resolve) => {
+      const res = coachStream(
+        request,
+        "coach",
+        "run",
+        async (_emit, signal) => {
+          seen = signal;
+          await gate;
+          resolve(signal.aborted ? "aborted" : "finished");
+          return response("Saved.");
+        },
+        background ? { background: { key: "user:run" } } : {},
+      );
+      // The app reads a little, then switches away: the connection closes.
+      void res
+        .body!.getReader()
+        .read()
+        .then(() => connection.abort());
+    });
+    return { connection, release, done, signal: () => seen };
+  };
+
+  // The iPhone app's mode: closing the connection doesn't stop the run.
+  const bg = start(true);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(bg.connection.signal.aborted, true);
+  assert.equal(bg.signal().aborted, false);
+  bg.release();
+  assert.equal(await bg.done, "finished");
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(cancelRun("user:run"), false, "a finished run is forgotten");
+
+  // Stop from another request cancels it.
+  const stopped = start(true);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(cancelRun("user:run"), true);
+  assert.equal(stopped.signal().aborted, true);
+  stopped.release();
+  assert.equal(await stopped.done, "aborted");
+
+  // The website's mode is unchanged: the run follows its connection.
+  const web = start(false);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(web.signal().aborted, true);
+  web.release();
+  await web.done;
 });

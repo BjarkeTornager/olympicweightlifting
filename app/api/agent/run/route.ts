@@ -29,14 +29,23 @@ export async function POST(request: Request) {
         "Please wait a minute before sending another message.",
         429,
       );
-    return coachStream(request, threadId, input.id, (emit, signal) =>
-      runTurn(user.id, input, undefined, {
-        emit,
-        signal,
-        directLogging: request.headers.get("x-coach-logging-version") === "1",
-        liftingBriefReview:
-          request.headers.get("x-lifting-coach-version") === "1",
-      }),
+    return coachStream(
+      request,
+      threadId,
+      input.id,
+      (emit, signal) =>
+        runTurn(user.id, input, undefined, {
+          emit,
+          signal,
+          directLogging: request.headers.get("x-coach-logging-version") === "1",
+          liftingBriefReview:
+            request.headers.get("x-lifting-coach-version") === "1",
+        }),
+      // The iPhone app keeps Coach working when the athlete switches app,
+      // and reads the saved reply when it's back.
+      request.headers.get("x-coach-background") === "1"
+        ? { background: { key: `${user.id}:${input.id}` } }
+        : {},
     );
   } catch (error) {
     return apiFailure(error);

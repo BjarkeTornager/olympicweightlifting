@@ -1,3 +1,4 @@
+import { bodyweightKg } from "./energy";
 import { z } from "zod";
 import { foodDate } from "./nutrition";
 import type { JournalState } from "./model";
@@ -56,13 +57,7 @@ export function removeDrink(state: JournalState, id: string) {
 // of training done that day. A guide for planning, not a medical target.
 export function hydrationTargetMl(state: JournalState, date: string) {
   const body = state.profile.body;
-  const weight =
-    body?.weightKg ||
-    state.profile.bodyweight ||
-    [...state.health.checkins]
-      .filter((c) => c.date <= date && c.bodyweight != null)
-      .sort((a, b) => b.date.localeCompare(a.date))[0]?.bodyweight ||
-    null;
+  const weight = bodyweightKg(state, date);
   const trained =
     state.sessions.some((s) => s.date === date) ||
     state.activeWorkout?.date === date;

@@ -95,7 +95,14 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // set as given (set_diet_targets), not turned into goal questions; with
     // the goals skill loaded, Coach asked for age instead. Health, privacy
     // and evidence text is unchanged.
-    "c9529024ec2816643799a9669701266262c60addf75aacf9e031507cd73d4104",
+    // Revised 2026-09-28, deliberate and reviewed at the owner's request:
+    // calories burned are shown on activities and timed workouts, measured
+    // by a watch or estimated by the app in code (lib/energy.ts, MET or
+    // heart-rate formulas, energy.test.ts). Coach quotes those figures and
+    // marks estimates, but still never works one out itself, never saves an
+    // estimate as an entry's energy, and never lets it change food targets.
+    // Health, privacy and evidence text is otherwise unchanged.
+    "2508560549554cdba333806d72de871a6d8972fca64fd0ef35a7aaa6ce255f80",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

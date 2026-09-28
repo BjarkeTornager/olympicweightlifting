@@ -1,3 +1,4 @@
+import { burnText, cardioBurn, strengthBurn } from "./energy";
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
 import { dailyHealth, formatSleepDuration, offsetDate } from "./health";
@@ -815,7 +816,12 @@ export function buildJournal(
       date: s.date,
       kind: "strength",
       title: s.title,
-      detail: `${s.exercises.length} exercises · ${loggedSets(s)} sets`,
+      detail: [
+        `${s.exercises.length} exercises · ${loggedSets(s)} sets`,
+        burnText(strengthBurn(state, s)),
+      ]
+        .filter(Boolean)
+        .join(" · "),
       fromAppleHealth: false,
     });
   for (const e of state.cardio.sessions.filter((e) => inRange(e.date)))
@@ -828,6 +834,7 @@ export function buildJournal(
         formatDuration(e.durationSeconds),
         e.distanceKm != null ? kmText(e.distanceKm) : "",
         e.averageHeartRate != null ? `${e.averageHeartRate} bpm avg` : "",
+        burnText(cardioBurn(state, e)),
       ]
         .filter(Boolean)
         .join(" · "),

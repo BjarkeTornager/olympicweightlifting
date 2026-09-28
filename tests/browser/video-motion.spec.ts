@@ -171,9 +171,12 @@ for (const width of [390, 1280]) {
       v.scrollIntoView({ block: "center", behavior: "instant" }),
     );
     for (let pass = 0; pass < 3; pass++) {
+      // At 1280px the overlay canvas is large enough that each readback
+      // makes loaded CI runners drop frames at half speed (13–15 samples
+      // on 28 September); quarter speed keeps enough of them.
       await d
         .getByLabel("Playback speed")
-        .selectOption(pass === 1 ? "0.25" : "0.5");
+        .selectOption(width === 1280 || pass === 1 ? "0.25" : "0.5");
       await d.getByLabel("Video position").fill("0.101");
       await video.evaluate((v) =>
         v.scrollIntoView({ block: "center", behavior: "instant" }),

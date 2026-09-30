@@ -1,5 +1,5 @@
 import { MIN_IOS_BUILD } from "@/lib/native-client";
-import { voiceConfigured } from "@/lib/voice-checkin";
+import { voiceProviders } from "@/lib/voice-elevenlabs";
 import { nativeConfig } from "@/lib/native-api";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,8 @@ export async function GET() {
   return Response.json(
     nativeConfig.parse({
       minimumBuild: MIN_IOS_BUILD,
-      voice: voiceConfigured(),
+      voice: voiceProviders().length > 0,
+      voiceProviders: voiceProviders(),
       serverTime: new Date().toISOString(),
     }),
     { headers: { "Cache-Control": "no-store" } },

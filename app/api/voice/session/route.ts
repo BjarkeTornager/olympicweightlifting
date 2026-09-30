@@ -23,6 +23,15 @@ import {
   voiceInstruction,
   voiceSetup,
 } from "@/lib/voice-checkin";
+import {
+  ELEVENLABS_CALL_MINUTES,
+  ELEVENLABS_CREDIT_MESSAGE,
+  ELEVENLABS_TTS_MODEL,
+  ElevenLabsError,
+  elevenLabsSignedUrl,
+  elevenLabsStart,
+  voiceProviders,
+} from "@/lib/voice-elevenlabs";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +39,11 @@ export async function GET(request: Request) {
   try {
     await requireAthlete(request);
     return Response.json(
-      { enabled: voiceConfigured(), model: VOICE_MODEL },
+      {
+        enabled: voiceConfigured(),
+        model: VOICE_MODEL,
+        providers: voiceProviders(),
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {
@@ -56,19 +69,11 @@ export async function POST(request: Request) {
         "Tap Reload update, or close and reopen the app, to use the latest voice coach.",
         426,
       );
-    if (!voiceConfigured())
-      throw new ApiError(
-        "Voice check-in is not set up yet. You can keep logging with Coach.",
-        503,
-      );
-    if (!(await allowRequest(user.id, "voice", 6)))
-      throw new ApiError(
-        "Please wait a minute before starting another call.",
-        429,
-      );
-    const { timezone, purpose, resumeHandle } = z
+    const { timezone, purpose, resumeHandle, provider } = z
       .object({
         purpose: z.enum(["checkin", "goals"]).default("checkin"),
+        // Chosen in the iPhone app's Profile; the website uses Google.
+        provider: z.enum(["google", "elevenlabs"]).default("google"),
         // Continues an interrupted call; Google validates the handle.
         resumeHandle: z.string().min(1).max(2000).optional(),
         timezone: z
@@ -85,22 +90,57 @@ export async function POST(request: Request) {
       })
       .strict()
       .parse(raw);
+    if (!voiceProviders().includes(provider))
+      throw new ApiError(
+        provider === "elevenlabs"
+          ? "ElevenLabs voice is not set up. Switch to Google in Profile."
+          : "Voice check-in is not set up yet. You can keep logging with Coach.",
+        503,
+      );
+    if (!(await allowRequest(user.id, "voice", 6)))
+      throw new ApiError(
+        "Please wait a minute before starting another call.",
+        429,
+      );
     const clock = localClock(new Date(), timezone);
     const { state } = await readJournal(user.id);
-    const setup = voiceSetup(
-      voiceInstruction(
-        voiceContext(
-          state,
-          clock.date,
-          await routeNotesFor(user.id, state, clock.date, clock.date),
-        ),
-        clock,
-        state.profile.name || user.name?.split(" ")[0],
-        purpose,
-        await recentConversations(user.id, { limit: 10 }),
+    const instruction = voiceInstruction(
+      voiceContext(
+        state,
+        clock.date,
+        await routeNotesFor(user.id, state, clock.date, clock.date),
       ),
-      resumeHandle,
+      clock,
+      state.profile.name || user.name?.split(" ")[0],
+      purpose,
+      await recentConversations(user.id, { limit: 10 }),
+      provider === "google",
     );
+    if (provider === "elevenlabs") {
+      let url: string;
+      try {
+        url = await elevenLabsSignedUrl();
+      } catch (error) {
+        logFailure("voice_elevenlabs_failed", error);
+        throw new ApiError(
+          error instanceof ElevenLabsError && error.credit
+            ? ELEVENLABS_CREDIT_MESSAGE
+            : "ElevenLabs voice is unavailable right now. Switch to Google in Profile, or keep logging with Coach.",
+          503,
+        );
+      }
+      return Response.json(
+        {
+          provider,
+          url,
+          start: elevenLabsStart(instruction),
+          model: ELEVENLABS_TTS_MODEL,
+          maxMinutes: ELEVENLABS_CALL_MINUTES,
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const setup = voiceSetup(instruction, resumeHandle);
     let token: string;
     try {
       token = await mintVoiceToken(setup);
@@ -115,6 +155,7 @@ export async function POST(request: Request) {
     }
     return Response.json(
       {
+        provider,
         url: `${VOICE_SOCKET_URL}?access_token=${encodeURIComponent(token)}`,
         setup,
         maxMinutes: VOICE_SESSION_MINUTES,

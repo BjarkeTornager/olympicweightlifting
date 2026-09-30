@@ -12,6 +12,7 @@ struct AccountView: View {
   @State private var deletionError: String?
   @AppStorage(AIConsent.key) private var aiAllowed = false
   @AppStorage(Appearance.key) private var appearance: Appearance = .system
+  @AppStorage(VoiceProvider.key) private var voiceProvider: VoiceProvider = .google
   /// Shown as the Profile tab rather than as a sheet: no Done button.
   var inTab = false
 
@@ -39,6 +40,20 @@ struct AccountView: View {
           Text("Appearance")
         } footer: {
           Text("System follows your iPhone's light and dark setting.")
+        }
+        if model.voiceProviders.count > 1 {
+          Section {
+            Picker("Voice", selection: $voiceProvider) {
+              ForEach(model.voiceProviders) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+            .sensoryFeedback(.selection, trigger: voiceProvider)
+          } header: {
+            Text("Voice check-in")
+          } footer: {
+            Text(voiceProvider.detail)
+          }
         }
         Section {
           NavigationLink {

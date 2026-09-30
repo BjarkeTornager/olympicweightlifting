@@ -1941,6 +1941,13 @@
           "voice": {
             "type": "boolean"
           },
+          "voiceProviders": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "One of: google, elevenlabs. Treat others as unknown."
+            }
+          },
           "serverTime": {
             "type": "string"
           }

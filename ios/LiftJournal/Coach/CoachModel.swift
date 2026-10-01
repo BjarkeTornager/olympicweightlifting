@@ -46,6 +46,9 @@ final class CoachModel {
   var asking: String?
   var step: String?
   var reply = ""
+  /// Visuals Coach has made for the message being answered, shown as they
+  /// arrive, until the saved turn replaces them.
+  var liveVisuals: [Components.Schemas.CoachVisual] = []
   var error: String?
   var busyReceipt: String?
   /// Photos attached to the message being answered, shown until it's saved.
@@ -115,6 +118,7 @@ final class CoachModel {
     sendingPreviews = photos.map(\.preview)
     step = photos.isEmpty ? nil : "Uploading photos"
     reply = ""
+    liveVisuals = []
     error = nil
     let runID = UUID()
     let stream = CoachStream(token: session.token, account: session.accountID)
@@ -148,6 +152,8 @@ final class CoachModel {
             switch event {
             case .step(let text): step = text
             case .reply(let text): reply = text
+            case .visual(let visual):
+              if !liveVisuals.contains(where: { $0.id == visual.id }) { liveVisuals.append(visual) }
             case .finished: step = nil
             }
           }
@@ -159,12 +165,14 @@ final class CoachModel {
         await load(app)
         asking = nil
         reply = ""
+        liveVisuals = []
         sendingPreviews = []
         await app.loadToday()
       } catch {
         // Nothing was saved: put the message back so it can be sent again.
         asking = nil
         reply = ""
+        liveVisuals = []
         sendingPreviews = []
         if draft.isEmpty { draft = text }
         if attachments.isEmpty { attachments = photos }

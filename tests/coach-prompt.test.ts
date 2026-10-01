@@ -110,7 +110,14 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // pharmacist for deficiencies, high doses, pregnancy or interactions
     // (supplements.test.ts). Health, privacy and evidence text is otherwise
     // unchanged.
-    "18453dc4ad5d6375d382bd572fced832df5c8a700992cdd7bcfc8b4ce2c3af44",
+    // Revised 2026-09-28, deliberate and reviewed, with the native visual
+    // kinds: show_visual is also used unasked when numbers read better as a
+    // visual (progress, trends, splits, comparisons, headline numbers, days),
+    // loading the review skill if needed, and its values aren't repeated in
+    // a Markdown table. Asked for targets, a macro split and training days,
+    // Coach answered with a Markdown table and no visual. Health, privacy
+    // and evidence text is unchanged.
+    "3443af19188e8d1074c2a835f11b5fc9fcca59b05cc7f3c64c78735780af4e6c",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

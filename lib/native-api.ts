@@ -1310,6 +1310,12 @@ const coachVisual = z
       "diagram",
       "photo_gallery",
       "route_map",
+      "line_chart",
+      "progress",
+      "stats",
+      "comparison",
+      "split",
+      "calendar",
     ]),
     title: z.string(),
     caption: z.string().optional(),
@@ -1359,6 +1365,90 @@ const coachVisual = z
           .register(nativeResponses, { id: "RouteStop" }),
       )
       .optional(),
+    // line_chart: up to three lines over the same labels, and a target line.
+    series: z
+      .array(
+        z
+          .object({
+            name: z.string(),
+            points: z.array(
+              z.object({ label: z.string(), value: z.number() }).strict(),
+            ),
+          })
+          .strict()
+          .register(nativeResponses, { id: "VisualSeries" }),
+      )
+      .optional(),
+    target: z.number().optional(),
+    // progress: amounts against their targets.
+    targets: z
+      .array(
+        z
+          .object({
+            label: z.string(),
+            value: z.number(),
+            target: z.number(),
+            unit: z.string(),
+          })
+          .strict()
+          .register(nativeResponses, { id: "VisualTarget" }),
+      )
+      .optional(),
+    // stats: headline numbers.
+    stats: z
+      .array(
+        z
+          .object({
+            label: z.string(),
+            value: z.string(),
+            unit: z.string().optional(),
+            change: z.string().optional(),
+            trend: z.enum(["up", "down", "flat"]).optional(),
+          })
+          .strict()
+          .register(nativeResponses, { id: "VisualStat" }),
+      )
+      .optional(),
+    // comparison: one period against another.
+    beforeLabel: z.string().optional(),
+    afterLabel: z.string().optional(),
+    comparisons: z
+      .array(
+        z
+          .object({
+            label: z.string(),
+            before: z.number(),
+            after: z.number(),
+            unit: z.string().optional(),
+            higherIsBetter: z.boolean().optional(),
+          })
+          .strict()
+          .register(nativeResponses, { id: "VisualComparison" }),
+      )
+      .optional(),
+    // split: parts of a whole, in unit.
+    parts: z
+      .array(
+        z
+          .object({ label: z.string(), value: z.number() })
+          .strict()
+          .register(nativeResponses, { id: "VisualPart" }),
+      )
+      .optional(),
+    // calendar: days with a level from 0 to 3.
+    days: z
+      .array(
+        z
+          .object({
+            date: day,
+            level: int,
+            label: z.string().optional(),
+          })
+          .strict()
+          .register(nativeResponses, { id: "VisualDay" }),
+      )
+      .optional(),
+    legend: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "CoachVisual" });
@@ -1435,6 +1525,10 @@ export function flattenVisual({ id, content }: SavedVisual) {
         path: content.path.map(([lat, lng]) => [lat, lng]),
         stops: content.stops,
       };
+    // The newer kinds use the same field names in the app as in Coach's
+    // tool, so they pass through as they are.
+    default:
+      return { id, ...content };
   }
 }
 

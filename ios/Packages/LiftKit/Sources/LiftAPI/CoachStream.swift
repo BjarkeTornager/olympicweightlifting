@@ -6,6 +6,9 @@ public enum CoachEvent: Sendable, Equatable {
   case step(String)
   /// The reply so far.
   case reply(String)
+  /// A chart, table or other visual Coach just made, shown before the reply
+  /// is finished.
+  case visual(Components.Schemas.CoachVisual)
   /// The turn is complete and saved on the server.
   case finished
 }
@@ -137,6 +140,8 @@ public struct CoachStream: Sendable {
       case "TEXT_MESSAGE_CONTENT":
         reply += event.delta ?? ""
         emit(.reply(reply))
+      case "CUSTOM":
+        if let visual = Self.visual(fromCustom: payload) { emit(.visual(visual)) }
       case "RUN_ERROR":
         throw CoachFailure(
           message: event.message ?? "Coach could not finish. Your message is kept.", status: 0)
@@ -152,6 +157,24 @@ public struct CoachStream: Sendable {
         message: "The connection ended before Coach finished. Refresh to see what was saved.",
         status: 0, interrupted: true)
     }
+  }
+}
+
+extension CoachStream {
+  /// A `coach.visual` event's visual, in the shape `/api/v1/coach` returns:
+  /// the server sends `{id, content}`, and the app's type has the content's
+  /// fields beside the id. Nil for other events, or a visual this build
+  /// can't read.
+  static func visual(fromCustom payload: String) -> Components.Schemas.CoachVisual? {
+    guard let event = try? JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any],
+      event["name"] as? String == "coach.visual",
+      let value = event["value"] as? [String: Any],
+      let id = value["id"] as? String,
+      var flat = value["content"] as? [String: Any]
+    else { return nil }
+    flat["id"] = id
+    guard let data = try? JSONSerialization.data(withJSONObject: flat) else { return nil }
+    return try? JSONDecoder().decode(Components.Schemas.CoachVisual.self, from: data)
   }
 }
 

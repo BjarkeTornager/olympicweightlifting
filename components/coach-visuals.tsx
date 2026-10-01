@@ -7,7 +7,18 @@ import {
   Table2,
   Images,
   MapTrifold,
+  TrendingUp,
+  CalendarDays,
+  SquaresFour,
 } from "@/components/ui/icons";
+import {
+  Calendar,
+  Comparison,
+  LineChart,
+  Progress,
+  Split,
+  Stats,
+} from "./coach-visual-kinds";
 import { CoachPhotoGallery } from "./coach-photo-gallery";
 import { CoachRouteMap, CoachRouteSummary } from "./coach-route-map";
 import {
@@ -179,7 +190,7 @@ export const CoachVisuals = memo(function CoachVisuals({
         if (!parsed.success) return null;
         const visual = saved.content;
         const Icon =
-          visual.kind === "table"
+          visual.kind === "table" || visual.kind === "comparison"
             ? Table2
             : visual.kind === "diagram"
               ? GitBranch
@@ -187,7 +198,13 @@ export const CoachVisuals = memo(function CoachVisuals({
                 ? Images
                 : visual.kind === "route_map"
                   ? MapTrifold
-                  : BarChart3;
+                  : visual.kind === "line_chart"
+                    ? TrendingUp
+                    : visual.kind === "calendar"
+                      ? CalendarDays
+                      : visual.kind === "stats"
+                        ? SquaresFour
+                        : BarChart3;
         return (
           <figure
             className={`coach-visual coach-visual-${visual.kind}`}
@@ -196,7 +213,7 @@ export const CoachVisuals = memo(function CoachVisuals({
             <figcaption>
               <span className="coach-visual-label">
                 <Icon size={15} aria-hidden="true" />
-                {visual.kind === "table"
+                {visual.kind === "table" || visual.kind === "comparison"
                   ? "Comparison"
                   : visual.kind === "diagram"
                     ? "Step by step"
@@ -206,7 +223,15 @@ export const CoachVisuals = memo(function CoachVisuals({
                         ? visual.recorded
                           ? "Recorded route"
                           : "Suggested route"
-                        : "At a glance"}
+                        : visual.kind === "line_chart"
+                          ? "Trend"
+                          : visual.kind === "progress"
+                            ? "Progress"
+                            : visual.kind === "split"
+                              ? "Breakdown"
+                              : visual.kind === "calendar"
+                                ? "Calendar"
+                                : "At a glance"}
               </span>
               <h3>{visual.title}</h3>
               {visual.caption && <p>{visual.caption}</p>}
@@ -269,6 +294,12 @@ export const CoachVisuals = memo(function CoachVisuals({
               </ol>
             )}
             {visual.kind === "diagram" && <Diagram visual={visual} />}
+            {visual.kind === "line_chart" && <LineChart visual={visual} />}
+            {visual.kind === "progress" && <Progress visual={visual} />}
+            {visual.kind === "stats" && <Stats visual={visual} />}
+            {visual.kind === "comparison" && <Comparison visual={visual} />}
+            {visual.kind === "split" && <Split visual={visual} />}
+            {visual.kind === "calendar" && <Calendar visual={visual} />}
             {visual.kind === "photo_gallery" && (
               <CoachPhotoGallery
                 imageIds={visual.imageIds}

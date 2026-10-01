@@ -24,12 +24,12 @@ public enum ElevenLabsProtocol {
       return text.trimmingCharacters(in: .whitespaces).isEmpty ? [] : [.heard(text)]
     case "agent_response":
       // The whole reply at once, as it starts playing.
-      let text = message.agentResponseEvent?.agentResponse ?? ""
+      let text = spoken(message.agentResponseEvent?.agentResponse ?? "")
       return text.isEmpty ? [] : [.said(text), .turnComplete]
     case "agent_response_correction":
       // Cut off: what was actually said before the athlete spoke.
       guard let text = message.agentResponseCorrectionEvent?.correctedAgentResponse else { return [] }
-      return [.corrected(text)]
+      return [.corrected(spoken(text))]
     case "interruption":
       return [.interrupted]
     case "client_tool_call":
@@ -43,6 +43,16 @@ public enum ElevenLabsProtocol {
     default:
       return []
     }
+  }
+
+  /// The reply as heard: v4 voices take acting cues such as "[happy]" or
+  /// "[laughs]" that shape the voice but aren't spoken, so the transcript
+  /// leaves them out.
+  public static func spoken(_ text: String) -> String {
+    text.replacing(/\[[A-Za-z][A-Za-z ]{0,30}\]/, with: "")
+      .replacing(/\ {2,}/, with: " ")
+      .replacing(/\ ([,.!?])/, with: { "\($0.output.1)" })
+      .trimmingCharacters(in: .whitespaces)
   }
 
   // MARK: Messages the app sends

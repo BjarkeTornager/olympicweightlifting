@@ -33,6 +33,22 @@ struct ElevenLabsProtocolTests {
     #expect(events("not json").isEmpty)
   }
 
+  @Test("Acting cues shape the voice but stay out of the transcript")
+  func actingCues() {
+    #expect(
+      events(#"{"type":"agent_response","agent_response_event":{"agent_response":"[happy] Seven and a half hours, logged!"}}"#)
+        == [.said("Seven and a half hours, logged!"), .turnComplete])
+    #expect(
+      ElevenLabsProtocol.spoken("Alright, [happy] sounds good! [excited] Keep up the great work [laughs] .")
+        == "Alright, sounds good! Keep up the great work.")
+    #expect(ElevenLabsProtocol.spoken("70 kg [x2], then 72") == "70 kg [x2], then 72")
+    #expect(events(#"{"type":"agent_response","agent_response_event":{"agent_response":"[sighs]"}}"#).isEmpty)
+    #expect(
+      events(
+        #"{"type":"agent_response_correction","agent_response_correction_event":{"corrected_agent_response":"[happy] Seven and"}}"#
+      ) == [.corrected("Seven and")])
+  }
+
   @Test("Tool arguments reach the server with their own names")
   func toolCall() {
     let received = events(

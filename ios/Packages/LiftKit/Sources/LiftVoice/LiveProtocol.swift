@@ -18,6 +18,7 @@ public struct FunctionCall: Sendable, Equatable {
 
 /// What a Gemini Live server message means for the call. Mirrors
 /// `liveEvents` in lib/voice-live.ts, so both apps treat the stream alike.
+/// ElevenLabs' messages become the same events (ElevenLabsProtocol).
 public enum LiveEvent: Sendable, Equatable {
   case ready
   case audio(Data)
@@ -29,6 +30,12 @@ public enum LiveEvent: Sendable, Equatable {
   case cancelled([String])
   case goAway
   case resumeHandle(String)
+  /// ElevenLabs only: answer with a pong to keep the call open.
+  case ping(Int)
+  /// ElevenLabs only: the coach was cut off; this is what it actually said.
+  case corrected(String)
+  /// ElevenLabs only: the call can't go on, with the reason.
+  case failed(String)
 }
 
 public enum LiveProtocol {

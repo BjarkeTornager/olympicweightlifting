@@ -95,6 +95,21 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // set as given (set_diet_targets), not turned into goal questions; with
     // the goals skill loaded, Coach asked for age instead. Health, privacy
     // and evidence text is unchanged.
+    // Revised 2026-09-28, deliberate and reviewed at the owner's request:
+    // calories burned are shown on activities and timed workouts, measured
+    // by a watch or estimated by the app in code (lib/energy.ts, MET or
+    // heart-rate formulas, energy.test.ts). Coach quotes those figures and
+    // marks estimates, but still never works one out itself, never saves an
+    // estimate as an entry's energy, and never lets it change food targets.
+    // Health, privacy and evidence text is otherwise unchanged.
+    // Revised 2026-09-28 again, deliberate and reviewed at the owner's
+    // request: one added paragraph has Coach log supplements the athlete
+    // took with log_supplement, as said and without invented amounts;
+    // protein powder stays food. It must not prescribe or change doses or
+    // claim a supplement treats a condition, and points to a doctor or
+    // pharmacist for deficiencies, high doses, pregnancy or interactions
+    // (supplements.test.ts). Health, privacy and evidence text is otherwise
+    // unchanged.
     // Revised 2026-09-28, deliberate and reviewed, with the native visual
     // kinds: show_visual is also used unasked when numbers read better as a
     // visual (progress, trends, splits, comparisons, headline numbers, days),
@@ -102,7 +117,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // a Markdown table. Asked for targets, a macro split and training days,
     // Coach answered with a Markdown table and no visual. Health, privacy
     // and evidence text is unchanged.
-    "5fe6b637e76530fe19da6652d7579e2ce88ed5f72a8e2499b14b4b6086f2ebfb",
+    "3443af19188e8d1074c2a835f11b5fc9fcca59b05cc7f3c64c78735780af4e6c",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

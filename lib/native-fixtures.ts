@@ -3,6 +3,7 @@ import { cardioFromWorkout } from "./health-sync";
 import { buildTraining } from "./native-training";
 import { addDrink } from "./hydration";
 import type { CoachVisual } from "./coach-visuals";
+import { addSupplement } from "./supplements";
 import {
   buildCoach,
   buildJournal,
@@ -24,6 +25,11 @@ export function nativeFixtures() {
     "1d9e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a14";
   addDrink(state, { date, ml: 250, kind: "coffee" }, now).id =
     "2e0f3f8e-2a51-4c1e-9d0b-0c1f7c1e2a15";
+  // Creatine daily, so it is a usual one; vitamin D already taken today.
+  for (const d of ["2026-09-24", "2026-09-25"])
+    addSupplement(state, { date: d, name: "Creatine", amount: "5 g" }, now);
+  addSupplement(state, { date, name: "Vitamin D", amount: "1000 IU" }, now).id =
+    "3f1a4f8e-2a51-4c1e-9d0b-0c1f7c1e2a16";
   state.health.checkins.push({
     date,
     sleepHours: 7.5,

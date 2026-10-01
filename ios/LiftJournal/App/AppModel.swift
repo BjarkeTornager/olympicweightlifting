@@ -33,6 +33,8 @@ final class AppModel {
   var saves = 0
   /// Whether the server offers the spoken check-in.
   var voiceEnabled = false
+  /// The voices this server can run; more than one shows a choice in Profile.
+  var voiceProviders: [VoiceProvider] = []
   /// The spoken check-in on screen, if any.
   var voiceCall: VoiceCall?
   /// Voice streams audio to Google, so the first call asks for AI permission.
@@ -73,6 +75,8 @@ final class AppModel {
   func start() async {
     if let config = try? await client.getConfig().value() {
       voiceEnabled = config.voice
+      // A server from before the choice only has Google.
+      voiceProviders = config.voiceProviders?.compactMap(VoiceProvider.init) ?? (config.voice ? [.google] : [])
       if let build = Int(LiftServer.clientHeader.split(separator: "/").last ?? ""),
         build < config.minimumBuild
       {
@@ -323,6 +327,20 @@ final class AppModel {
 
   func removeDrink(id: String) async {
     await save(.deleteDrink(.init(kind: .deleteDrink, drinkId: id)), confirmation: "Drink removed")
+  }
+
+  func logSupplement(name: String, amount: String) async {
+    let amount = amount.trimmingCharacters(in: .whitespaces)
+    await save(
+      .logSupplement(.init(
+        kind: .logSupplement,
+        supplement: .init(date: JournalDay.string(.now), name: name, amount: amount.isEmpty ? nil : amount))),
+      confirmation: "\(name) logged")
+  }
+
+  func removeSupplement(id: String) async {
+    await save(
+      .deleteSupplement(.init(kind: .deleteSupplement, supplementId: id)), confirmation: "Supplement removed")
   }
 
   // MARK: Voice

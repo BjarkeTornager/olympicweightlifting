@@ -113,6 +113,7 @@ export async function writeJournal(
       state.nutrition.favourites ??= previous.nutrition.favourites;
       // An app from before drink tracking omits drinks; that is not deletion.
       state.health.drinks ??= previous.health.drinks;
+      state.health.supplements ??= previous.health.supplements;
       // Apple Health summaries come only from the iPhone sync.
       state.health.vitals ??= previous.health.vitals;
       state.health.bodyFat ??= previous.health.bodyFat;

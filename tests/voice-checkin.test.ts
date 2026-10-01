@@ -134,6 +134,8 @@ test("voice instructions carry the date, the records and the save rules", () => 
     "list_photos",
     "view_photo",
     "log_drink",
+    "log_supplement",
+    "delete_supplement",
     "log_body_fat",
     "delete_drink",
     "log_sleep",

@@ -17,6 +17,7 @@ import { trainingSummary, workoutTotals } from "../training";
 import type { JournalState, Workout } from "../model";
 import { queryFoodJournal } from "../nutrition";
 import { cardioSummary } from "../cardio";
+import { burnFields, cardioBurn } from "../energy";
 import { routeNotesFor } from "../workout-routes";
 import { dailyHealth } from "../health";
 import { listFoodPhotos } from "../food-photos";
@@ -165,7 +166,12 @@ export async function runReadTool(
       return {
         ...summary,
         // A GPS route Apple Health recorded: place names, never coordinates.
-        entries: entries.map((e) => ({ ...e, route: routes.get(e.id) })),
+        // Calories burned: measured, or the app's marked estimate.
+        entries: entries.map((e) => ({
+          ...e,
+          ...burnFields(cardioBurn(state, e)),
+          route: routes.get(e.id),
+        })),
         nextOffset: nextOffset(offset, summary.sessions),
       };
     }

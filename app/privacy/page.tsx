@@ -271,6 +271,21 @@ export default function PrivacyPage() {
           </a>
           .
         </p>
+        <p>
+          In the iPhone app you can choose ElevenLabs for voice check-ins
+          instead (Profile › Voice check-in). Your microphone audio then streams
+          directly to ElevenLabs’ ElevenAgents over a single-use signed link;
+          ElevenLabs transcribes it, has Google’s Gemini model write the replies
+          and speaks them in its own voice. Lift Journal’s ElevenLabs agent is
+          set not to record audio and to schedule each conversation for
+          deletion; the transcript is stored in your account as above. Photos
+          you take during such a call are saved to your journal but not sent to
+          ElevenLabs. See{" "}
+          <a href="https://elevenlabs.io/privacy-policy" className="underline">
+            ElevenLabs’ privacy policy
+          </a>
+          .
+        </p>
       </section>
       <section className="space-y-3">
         <h2>Food journal and private images</h2>

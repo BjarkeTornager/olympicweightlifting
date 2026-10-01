@@ -4,6 +4,12 @@ import {
   hydrationForDay,
   removeDrink,
 } from "../hydration";
+import {
+  addSupplement,
+  removeSupplement,
+  supplementText,
+  supplementsForDay,
+} from "../supplements";
 import { applyGoals, describePlan, splitGoals } from "../body-goals";
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
 import { offsetDate } from "../health";
@@ -228,5 +234,29 @@ export function prepareCheckin(
         ? "Log your sleep"
         : "Save your daily check-in",
     detail: `Updates your check-in for ${checkin.date}. Values you haven’t changed are kept. This records how you feel without changing your workout or diet targets.`,
+  };
+}
+
+export function prepareSupplement(
+  next: JournalState,
+  action: ActionOf<"log_supplement" | "delete_supplement">,
+  currentDate: string,
+): PreparedChange {
+  const supplement =
+    action.kind === "log_supplement"
+      ? (() => {
+          if (action.supplement.date > currentDate)
+            throw Error("Supplements cannot be dated in the future.");
+          return addSupplement(next, action.supplement);
+        })()
+      : removeSupplement(next, action.supplementId);
+  const taken = supplementsForDay(next, supplement.date).taken;
+  const what = supplementText(supplement);
+  return {
+    title:
+      action.kind === "log_supplement"
+        ? "Log a supplement"
+        : "Remove a supplement",
+    detail: `${action.kind === "log_supplement" ? what : `Removes ${what}`}. Taken on ${supplement.date}: ${taken.map(supplementText).join(", ") || "nothing"}.`,
   };
 }

@@ -8,10 +8,11 @@ import UIKit
 import os
 
 /// One spoken conversation with Coach, the same check-in as the website's.
-/// Audio goes straight between this iPhone and Google's Live API with a
-/// single-use token from the server; every save and read goes through the
-/// server's voice actions, so both apps behave alike. The call survives
-/// Google's connection limits, network drops and a locked screen.
+/// Audio goes straight between this iPhone and the voice chosen in Profile,
+/// Google's Live API or an ElevenLabs agent, with a single-use link from the
+/// server; every save and read goes through the server's voice actions, so
+/// both apps and both voices behave alike. The call survives connection
+/// limits, network drops and a locked screen.
 @Observable
 final class VoiceCall {
   enum Status: Equatable { case idle, connecting, listening, speaking, reconnecting, ended, failed }
@@ -36,6 +37,8 @@ final class VoiceCall {
   var cameraRequested = false
 
   var inCall: Bool { [.connecting, .listening, .speaking, .reconnecting].contains(status) }
+  /// Fixed when the call starts, so a change in Profile applies to the next.
+  private(set) var provider: VoiceProvider = .google
   var saved: Int { lines.filter { $0.state == .saved }.count }
 
   private let app: AppModel
@@ -64,7 +67,8 @@ final class VoiceCall {
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
     "update_meal": "Meal updated", "delete_meal": "Meal deleted", "log_sleep": "Sleep",
-    "log_drink": "Drink", "delete_drink": "Drink removed", "log_body_fat": "Body fat", "log_activity": "Activity",
+    "log_drink": "Drink", "delete_drink": "Drink removed",
+    "log_supplement": "Supplement", "delete_supplement": "Supplement removed", "log_body_fat": "Body fat", "log_activity": "Activity",
     "clear_unfinished_workout": "Unfinished workout", "set_goals": "Goals", "undo_save": "Undo",
   ]
   /// Server tools that only read; they leave no receipt in the conversation.
@@ -82,6 +86,7 @@ final class VoiceCall {
     error = nil
     lines = []
     status = .connecting
+    provider = VoiceProvider.current(offered: app.voiceProviders)
     let allowed = await AVAudioApplication.requestRecordPermission()
     voiceTrace("microphone permission: \(allowed)")
     guard allowed else {
@@ -112,10 +117,9 @@ final class VoiceCall {
       tasks.append(
         Task { [weak self] in
           try? await Task.sleep(for: .seconds((Self.maxMinutes - 2) * 60))
-          self?.send(
-            LiveProtocol.text(
-              "(Two minutes left in this call: finish the current topic, then say goodbye and call end_check_in.)"
-            ))
+          self?.note(
+            "(Two minutes left in this call: finish the current topic, then say goodbye and call end_check_in.)",
+            answer: false)
           try? await Task.sleep(for: .seconds(120))
           await self?.endWhenIdle(limit: .seconds(90))
         })
@@ -150,6 +154,8 @@ final class VoiceCall {
     guard let session = app.session else { throw VoiceError("Sign in again to talk to Coach.") }
     var body: [String: Any] = ["timezone": TimeZone.current.identifier, "purpose": "checkin"]
     if resume, let handle { body["resumeHandle"] = handle }
+    // Only sent for ElevenLabs, which only a server that knows it offers.
+    if provider == .elevenlabs { body["provider"] = provider.rawValue }
     let response = try await RawRequest.send(
       "api/voice/session", body: body, token: session.token, account: session.accountID,
       headers: ["X-Voice-Client": Self.clientVersion], timeout: 15)
@@ -158,8 +164,13 @@ final class VoiceCall {
     if response.status == 401 {
       _ = await app.handle(APIFailure(status: 401, message: "Sign in again."))
     }
+    // Gemini takes the setup first; ElevenLabs this call's instructions.
+    let first: [String: Any]? =
+      provider == .elevenlabs
+      ? response.json?["start"] as? [String: Any]
+      : response.json?["setup"].map { ["setup": $0] }
     guard response.status == 200, let json = response.json,
-      let raw = json["url"] as? String, let url = URL(string: raw), let setup = json["setup"]
+      let raw = json["url"] as? String, let url = URL(string: raw), let first
     else { throw VoiceError(response.error ?? "Voice could not start.") }
     guard !closed else { return }
 
@@ -169,10 +180,10 @@ final class VoiceCall {
     socket = task
     task.resume()
     voiceTrace("socket opening to \(url.host() ?? "?")")
-    try await task.send(.string(Self.encode(["setup": setup])))
-    voiceTrace("setup sent")
+    try await task.send(.string(Self.encode(first)))
+    voiceTrace("setup sent (\(provider.rawValue))")
     listen(on: task, previous: previous)
-    // Wait for Google's setupComplete, or give up after 20 seconds.
+    // Wait until the voice is ready, or give up after 20 seconds.
     let timeout = Task { [weak self] in
       try? await Task.sleep(for: .seconds(20))
       guard !Task.isCancelled else { return }
@@ -212,7 +223,7 @@ final class VoiceCall {
           guard let self, !self.closed else { return }
           self.received += 1
           if self.received <= 3 || self.received % 50 == 0 {
-            voiceTrace("message \(self.received) from Google")
+            voiceTrace("message \(self.received) from \(self.provider.title)")
           }
           let data: Data
           switch message {
@@ -220,7 +231,9 @@ final class VoiceCall {
           case .data(let bytes): data = bytes
           @unknown default: continue
           }
-          for event in LiveProtocol.events(data) {
+          let events =
+            self.provider == .elevenlabs ? ElevenLabsProtocol.events(data) : LiveProtocol.events(data)
+          for event in events {
             if case .ready = event {
               self.ready(task: task, previous: previous)
               self.connected(.success(()))
@@ -238,7 +251,7 @@ final class VoiceCall {
     if !started {
       started = true
       // Let the coach speak first.
-      send(LiveProtocol.text("(The athlete started the call.)"))
+      note("(The athlete started the call.)", answer: true)
       UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
   }
@@ -259,14 +272,14 @@ final class VoiceCall {
           // the last few lines to carry on from.
           let recent = lines.filter { $0.role != .save }.suffix(8)
             .map { "\($0.role == .you ? "Athlete" : "Coach"): \($0.text)" }.joined(separator: "\n")
-          send(LiveProtocol.text("(The call reconnected. Continue where you left off; the last lines were:\n\(recent))"))
+          note("(The call reconnected. Continue where you left off; the last lines were:\n\(recent))", answer: true)
         }
         report("reconnected", ["resumed": resumed ? 1 : 0])
         return
       } catch {
         if closed { return }
-        if LiveProtocol.isCreditError(error.localizedDescription) {
-          stop(failure: LiveProtocol.creditMessage)
+        if let credit = creditFailure(error.localizedDescription) {
+          stop(failure: credit)
           return
         }
         try? await Task.sleep(for: .seconds(wait))
@@ -285,6 +298,16 @@ final class VoiceCall {
     String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
   }
 
+  /// A note in brackets from the app to the coach. Gemini takes every note
+  /// as something to respond to; ElevenLabs replies only when asked to, and
+  /// otherwise keeps the note for its next turn.
+  private func note(_ text: String, answer: Bool) {
+    switch provider {
+    case .google: send(LiveProtocol.text(text))
+    case .elevenlabs: send(answer ? ElevenLabsProtocol.userMessage(text) : ElevenLabsProtocol.context(text))
+    }
+  }
+
   // MARK: Audio
 
   private var received = 0
@@ -296,7 +319,7 @@ final class VoiceCall {
     sentChunks += 1
     if sentChunks == 1 || sentChunks % 100 == 0 { voiceTrace("sent \(sentChunks) microphone chunks") }
     for pcm in gate.pass(chunk, coachSpeaking: audio.coachSpeaking, coachLevel: audio.coachLevel) {
-      send(LiveProtocol.audio(pcm))
+      send(provider == .elevenlabs ? ElevenLabsProtocol.audio(pcm) : LiveProtocol.audio(pcm))
     }
   }
 
@@ -349,7 +372,7 @@ final class VoiceCall {
         nudge = Task { [weak self] in
           try? await Task.sleep(for: .milliseconds(2500))
           guard let self, !Task.isCancelled, self.pending == 0 else { return }
-          self.send(LiveProtocol.text(LiveProtocol.waitingNudge))
+          self.note(LiveProtocol.waitingNudge, answer: true)
         }
       }
     case .toolCall(let calls):
@@ -360,6 +383,20 @@ final class VoiceCall {
     case .goAway:
       report("go_away")
       Task { await recover() }
+    case .ping(let id):
+      send(ElevenLabsProtocol.pong(id))
+    case .corrected(let text):
+      // Cut off mid-reply: keep only what the athlete actually heard.
+      if let index = lines.lastIndex(where: { $0.role == .coach }) {
+        lines[index].text = text.trimmingCharacters(in: .whitespaces)
+        schedulePersist()
+      }
+    case .failed(let reason):
+      if waiting != nil {
+        connected(.failure(VoiceError(reason)))
+      } else {
+        stop(failure: creditFailure(reason) ?? reason)
+      }
     }
   }
 
@@ -378,10 +415,9 @@ final class VoiceCall {
   /// them up rather than asking for them.
   func healthArrived() {
     guard started, !closed else { return }
-    send(
-      LiveProtocol.text(
-        "(Apple Health just added records for today, such as last night's sleep or a workout. Call read_journal for today and use them; don't ask for them.)"
-      ))
+    note(
+      "(Apple Health just added records for today, such as last night's sleep or a workout. Call read_journal for today and use them; don't ask for them.)",
+      answer: false)
   }
 
   // MARK: Tools
@@ -466,14 +502,17 @@ final class VoiceCall {
   }
 
   private func respond(_ call: FunctionCall, _ response: [String: Any]) {
-    send(LiveProtocol.toolResponse(call, response))
+    send(
+      provider == .elevenlabs
+        ? ElevenLabsProtocol.toolResult(call, response) : LiveProtocol.toolResponse(call, response))
   }
 
   /// The athlete took a photo with the camera the coach opened.
   func photoTaken(_ image: UIImage) async {
     cameraRequested = false
     guard let jpeg = CoachModel.jpeg(image) else { return }
-    send(LiveProtocol.image(Self.small(image) ?? jpeg))
+    // ElevenLabs' coach can't be sent images; it asks about the plate.
+    if provider == .google { send(LiveProtocol.image(Self.small(image) ?? jpeg)) }
     let id = UUID().uuidString.lowercased()
     do {
       try await app.client.uploadImage(
@@ -483,7 +522,14 @@ final class VoiceCall {
             autoTag: false, purpose: .mealPhoto, image: jpeg.base64EncodedString()))
       ).value()
       photos.append(id)
-      send(LiveProtocol.text("(The athlete took a food photo, photo id \(id). It is the image just sent.)"))
+      switch provider {
+      case .google:
+        note("(The athlete took a food photo, photo id \(id). It is the image just sent.)", answer: true)
+      case .elevenlabs:
+        note(
+          "(The athlete took a food photo, photo id \(id). You can't see it: ask what's on the plate and roughly how much, then log_meal with this id in photo_ids.)",
+          answer: true)
+      }
     } catch {
       self.error = "The photo could not be saved: \(error.localizedDescription)"
     }
@@ -568,7 +614,15 @@ final class VoiceCall {
 
   private func failureMessage(_ error: any Error) -> String {
     let message = error.localizedDescription
-    return LiveProtocol.isCreditError(message) ? LiveProtocol.creditMessage : message
+    return creditFailure(message) ?? message
+  }
+
+  /// The chosen voice's own message when its credit has run out.
+  private func creditFailure(_ message: String) -> String? {
+    switch provider {
+    case .google: LiveProtocol.isCreditError(message) ? LiveProtocol.creditMessage : nil
+    case .elevenlabs: ElevenLabsProtocol.isCreditError(message) ? ElevenLabsProtocol.creditMessage : nil
+    }
   }
 }
 

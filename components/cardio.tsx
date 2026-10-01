@@ -15,6 +15,7 @@ import {
   type CardioActivity,
 } from "@/lib/cardio";
 import type { JournalState } from "@/lib/model";
+import { burnText, cardioBurn, type Burn } from "@/lib/energy";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -24,9 +25,12 @@ import { FoodPhotoImage } from "./food-photo";
 export function CardioDetails({
   entry,
   accountId,
+  burn,
 }: {
   entry: CardioEntry;
   accountId?: string;
+  // Calories burned, measured or estimated, when the journal is at hand.
+  burn?: Burn | null;
 }) {
   const rate = cardioRate(entry);
   const values = [
@@ -53,10 +57,12 @@ export function CardioDetails({
       "Elevation gain",
       entry.elevationGainM == null ? null : `${entry.elevationGainM} m`,
     ],
-    [
-      "Reported activity energy",
-      entry.caloriesKcal == null ? null : `${entry.caloriesKcal} kcal`,
-    ],
+    burn?.estimated
+      ? ["Calories burned", burnText(burn)]
+      : [
+          "Calories burned",
+          entry.caloriesKcal == null ? null : `${entry.caloriesKcal} kcal`,
+        ],
   ].filter(([, value]) => value != null);
   return (
     <div className="cardio-details">
@@ -360,8 +366,9 @@ export function ActivityForm({
             />
           </label>
           <p className="fine-print">
-            Enter measured or reported values. Activity energy stays separate
-            from food intake; the app does not estimate calories burned.
+            Enter measured or reported values. Without measured calories, the
+            app estimates them from the activity, your bodyweight and the
+            duration. Calories burned stay separate from food intake.
           </p>
         </div>
       </details>
@@ -606,7 +613,11 @@ export function CardioView({
                     {cardioRate(entry) ?? "Details"}
                   </span>
                 </summary>
-                <CardioDetails entry={entry} accountId={journal.identity?.id} />
+                <CardioDetails
+                  entry={entry}
+                  accountId={journal.identity?.id}
+                  burn={cardioBurn(state, entry)}
+                />
                 <div className="button-row">
                   <Button variant="secondary" onClick={() => setEditing(entry)}>
                     Edit activity

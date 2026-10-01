@@ -207,6 +207,42 @@ test("the coach asks only about missing topics and keeps to English", () => {
   );
 });
 
+test("Profile's language and voice reach the coach", () => {
+  const s = emptyJournal();
+  const clock = localClock(
+    new Date("2026-09-25T09:00:00Z"),
+    "Europe/Copenhagen",
+  );
+  const context = voiceContext(s, clock.date);
+  const danish = voiceInstruction(
+    context,
+    clock,
+    "Bjarke",
+    "checkin",
+    [],
+    true,
+    "da",
+  );
+  assert.match(danish, /1\. Speak Danish \(dansk\) only, in every reply/);
+  assert.doesNotMatch(danish, /Speak English only/);
+  const setup = voiceSetup(danish, undefined, {
+    voice: "Achird",
+    language: "da",
+  });
+  assert.equal(setup.generationConfig.speechConfig.languageCode, "da-DK");
+  assert.equal(
+    setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig
+      .voiceName,
+    "Achird",
+  );
+  // The website sends neither and keeps the defaults.
+  assert.equal(
+    voiceSetup("x").generationConfig.speechConfig.voiceConfig
+      .prebuiltVoiceConfig.voiceName,
+    "Orus",
+  );
+});
+
 test("voice tokens are single use, short lived and lock the configuration", async () => {
   process.env.GEMINI_API_KEY = "test-key";
   let sent: { url: string; init: RequestInit } | null = null;

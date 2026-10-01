@@ -35,6 +35,12 @@ final class AppModel {
   var voiceEnabled = false
   /// The voices this server can run; more than one shows a choice in Profile.
   var voiceProviders: [VoiceProvider] = []
+  /// The voices each provider offers and the languages the coach speaks,
+  /// loaded from the server for Profile. Empty on a server from before the
+  /// choice, which then gets neither in the call request.
+  var voiceOptions: [VoiceProvider: [VoiceOption]] = [:]
+  var voiceDefaults: [VoiceProvider: String] = [:]
+  var voiceLanguages: [VoiceLanguageOption] = []
   /// The spoken check-in on screen, if any.
   var voiceCall: VoiceCall?
   /// Voice streams audio to Google, so the first call asks for AI permission.
@@ -344,6 +350,35 @@ final class AppModel {
   }
 
   // MARK: Voice
+
+  /// The voices and languages Profile offers, from the server.
+  func loadVoiceOptions() async {
+    guard let session, voiceEnabled else { return }
+    guard
+      let response = try? await RawRequest.send(
+        "api/voice/session", method: "GET", token: session.token, account: session.accountID),
+      response.status == 200, let json = response.json
+    else { return }
+    let languages = (json["languages"] as? [[String: Any]] ?? []).compactMap { item -> VoiceLanguageOption? in
+      guard let id = item["id"] as? String, let name = item["name"] as? String else { return nil }
+      return VoiceLanguageOption(id: id, name: name)
+    }
+    var options: [VoiceProvider: [VoiceOption]] = [:]
+    for (key, value) in json["voices"] as? [String: Any] ?? [:] {
+      guard let provider = VoiceProvider(rawValue: key), let list = value as? [[String: Any]] else { continue }
+      options[provider] = list.compactMap { item -> VoiceOption? in
+        guard let id = item["id"] as? String, let name = item["name"] as? String else { return nil }
+        return VoiceOption(id: id, name: name, detail: item["detail"] as? String ?? "")
+      }
+    }
+    var defaults: [VoiceProvider: String] = [:]
+    for (key, value) in json["defaultVoices"] as? [String: Any] ?? [:] {
+      if let provider = VoiceProvider(rawValue: key), let id = value as? String { defaults[provider] = id }
+    }
+    voiceLanguages = languages
+    voiceOptions = options
+    voiceDefaults = defaults
+  }
 
   func startVoice() {
     guard voiceCall == nil || voiceCall?.inCall == false else { return }

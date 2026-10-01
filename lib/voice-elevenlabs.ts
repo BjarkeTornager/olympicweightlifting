@@ -1,4 +1,9 @@
 import { voiceConfigured, voiceTools } from "./voice-checkin";
+import {
+  DEFAULT_ELEVENLABS_VOICE,
+  voiceLanguages,
+  type VoiceLanguage,
+} from "./voice-options";
 
 // Spoken check-ins through ElevenLabs' ElevenAgents, the alternative to
 // Gemini Live the athlete can choose in the iPhone app. The same instructions
@@ -10,9 +15,8 @@ import { voiceConfigured, voiceTools } from "./voice-checkin";
 const API = process.env.ELEVENLABS_API_BASE || "https://api.elevenlabs.io";
 export const ELEVENLABS_TTS_MODEL = "eleven_v4_turbo";
 export const ELEVENLABS_LLM = process.env.ELEVENLABS_LLM || "gemini-3.8-flash";
-// Eric, ElevenLabs' default conversational voice: calm, clear and warm.
-export const ELEVENLABS_VOICE_ID =
-  process.env.ELEVENLABS_VOICE_ID || "cjVigY5qzO86Huf0OWal";
+// The default voice; the athlete can pick another in Profile.
+export const ELEVENLABS_VOICE_ID = DEFAULT_ELEVENLABS_VOICE;
 export const ELEVENLABS_AGENT_NAME = "Lift Journal Coach";
 // As long as the iPhone keeps a Gemini call going across reconnects.
 export const ELEVENLABS_CALL_MINUTES = 30;
@@ -129,6 +133,13 @@ export function elevenLabsAgent() {
           "client_error",
         ],
       },
+      // Danish is chosen per call in Profile. A call may only switch to a
+      // language the agent lists here; the call's override sets it.
+      language_presets: Object.fromEntries(
+        voiceLanguages
+          .filter((language) => language !== "en")
+          .map((language) => [language, { overrides: {} }]),
+      ),
       agent: {
         // The coach opens from the day's records once the app says the call
         // started, as with Gemini.
@@ -147,8 +158,13 @@ export function elevenLabsAgent() {
     platform_settings: {
       // Only a signed link from this server starts a call.
       auth: { enable_auth: true },
+      // Each call sets its instructions, and the voice and language chosen
+      // in Profile.
       overrides: {
-        conversation_config_override: { agent: { prompt: { prompt: true } } },
+        conversation_config_override: {
+          agent: { prompt: { prompt: true }, language: true },
+          tts: { voice_id: true },
+        },
       },
       // No recordings; transcripts are kept here, not at ElevenLabs.
       privacy: { record_voice: false, retention_days: 0, delete_audio: true },
@@ -266,12 +282,19 @@ export async function elevenLabsSignedUrl(fetcher: Fetcher = fetch) {
   }
 }
 
-/** What the phone sends first on the socket: this call's instructions. */
-export function elevenLabsStart(instruction: string) {
+/** What the phone sends first on the socket: this call's instructions, and
+ * the voice and language chosen in Profile. */
+export function elevenLabsStart(
+  instruction: string,
+  options: { voice?: string; language?: VoiceLanguage } = {},
+) {
+  const voice = options.voice ?? ELEVENLABS_VOICE_ID;
+  const language = options.language ?? "en";
   return {
     type: "conversation_initiation_client_data",
     conversation_config_override: {
-      agent: { prompt: { prompt: instruction } },
+      agent: { prompt: { prompt: instruction }, language },
+      tts: { voice_id: voice },
     },
   };
 }

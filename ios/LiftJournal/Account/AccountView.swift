@@ -13,8 +13,37 @@ struct AccountView: View {
   @AppStorage(AIConsent.key) private var aiAllowed = false
   @AppStorage(Appearance.key) private var appearance: Appearance = .system
   @AppStorage(VoiceProvider.key) private var voiceProvider: VoiceProvider = .google
+  @AppStorage(VoiceChoice.languageKey) private var voiceLanguage = VoiceChoice.defaultLanguage
+  @AppStorage(VoiceChoice.voiceKey(.google)) private var googleVoice = ""
+  @AppStorage(VoiceChoice.voiceKey(.elevenlabs)) private var elevenLabsVoice = ""
   /// Shown as the Profile tab rather than as a sheet: no Done button.
   var inTab = false
+
+  /// The provider calls use: the choice if this server offers it.
+  private var activeProvider: VoiceProvider {
+    model.voiceProviders.contains(voiceProvider) ? voiceProvider : model.voiceProviders.first ?? .google
+  }
+
+  /// The chosen voice for the provider in use; nothing chosen, or a voice the
+  /// server no longer offers, shows the server's default.
+  private func voiceSelection(_ voices: [VoiceOption]) -> Binding<String> {
+    let provider = activeProvider
+    return Binding {
+      let stored = provider == .google ? googleVoice : elevenLabsVoice
+      if voices.contains(where: { $0.id == stored }) { return stored }
+      return model.voiceDefaults[provider] ?? voices.first?.id ?? ""
+    } set: { id in
+      if provider == .google { googleVoice = id } else { elevenLabsVoice = id }
+    }
+  }
+
+  private var voiceFooter: String {
+    var text = activeProvider.detail
+    if voiceLanguage == "da" && activeProvider == .elevenlabs {
+      text += " Its voices speak Danish with an accent unless a native Danish voice is listed."
+    }
+    return text
+  }
 
   var body: some View {
     NavigationStack {
@@ -41,19 +70,42 @@ struct AccountView: View {
         } footer: {
           Text("System follows your iPhone's light and dark setting.")
         }
-        if model.voiceProviders.count > 1 {
+        if !model.voiceProviders.isEmpty {
           Section {
-            Picker("Voice", selection: $voiceProvider) {
-              ForEach(model.voiceProviders) { Text($0.title).tag($0) }
+            if model.voiceProviders.count > 1 {
+              Picker("Provider", selection: $voiceProvider) {
+                ForEach(model.voiceProviders) { Text($0.title).tag($0) }
+              }
+              .pickerStyle(.segmented)
+              .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+              .sensoryFeedback(.selection, trigger: voiceProvider)
             }
-            .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-            .sensoryFeedback(.selection, trigger: voiceProvider)
+            if !model.voiceLanguages.isEmpty {
+              Picker("Language", selection: $voiceLanguage) {
+                ForEach(model.voiceLanguages) { Text($0.name).tag($0.id) }
+              }
+              .sensoryFeedback(.selection, trigger: voiceLanguage)
+            }
+            if let voices = model.voiceOptions[activeProvider], !voices.isEmpty {
+              Picker("Voice", selection: voiceSelection(voices)) {
+                ForEach(voices) { voice in
+                  VStack(alignment: .leading, spacing: 2) {
+                    Text(voice.name)
+                    if !voice.detail.isEmpty {
+                      Text(voice.detail).font(.footnote).foregroundStyle(.secondary)
+                    }
+                  }
+                  .tag(voice.id)
+                }
+              }
+              .pickerStyle(.navigationLink)
+            }
           } header: {
             Text("Voice check-in")
           } footer: {
-            Text(voiceProvider.detail)
+            Text(voiceFooter)
           }
+          .task { await model.loadVoiceOptions() }
         }
         Section {
           NavigationLink {

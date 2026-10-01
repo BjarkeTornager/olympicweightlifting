@@ -11,14 +11,15 @@ import { drinkKinds, hydrationForDay } from "./hydration";
 import { nextTraining } from "./next-training";
 import { formatSleepDuration } from "./health";
 import { localClock, partOfDay } from "./agent/time-context";
+import { DEFAULT_GOOGLE_VOICE, type VoiceLanguage } from "./voice-options";
 
 // Spoken daily check-in over the Gemini Live API. The phone talks to Google
 // directly with a single-use token; the API key, instructions and tools are
 // fixed here on the server. Saving goes through Coach, never through Gemini.
 export const VOICE_MODEL =
   process.env.VOICE_MODEL || "gemini-3.8-live-extended-thinking";
-// A prebuilt Gemini voice chosen to sound like a coach at the platform.
-export const VOICE_NAME = process.env.VOICE_NAME || "Orus";
+// The default prebuilt Gemini voice; the athlete can pick another in Profile.
+export const VOICE_NAME = DEFAULT_GOOGLE_VOICE;
 export const VOICE_SESSION_MINUTES = 10;
 export const VOICE_SOCKET_URL =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
@@ -96,6 +97,12 @@ export function voiceContext(
 
 export type VoicePurpose = "checkin" | "goals";
 
+function languageRule(language: VoiceLanguage) {
+  return language === "da"
+    ? `Speak Danish (dansk) only, in every reply, as a Danish coach would: natural everyday Danish, not a translation of English. Say numbers, weights and times the Danish way ("halvfjerds kilo", "syv timer og sytten minutter"). Exercise names that Danish lifters say in English (snatch, clean and jerk, squat) stay in English. Speech recognition often mishears short or unclear Danish as English, Norwegian or another language; that is a transcription error, not the athlete switching language. If you did not understand, say so in Danish and ask them to repeat. Use another language only if the athlete explicitly asks for it by name ("tal engelsk"), and then keep to it. Tool arguments (summaries, meal and item names) may be in Danish.`
+    : `Speak English only, in every reply. Speech recognition often mishears short or unclear English as Spanish, Danish or another language; that is a transcription error, not the athlete switching language. If you did not understand, say so in English and ask them to repeat. Use another language only if the athlete explicitly asks for it by name ("speak Danish"), and then keep to it.`;
+}
+
 export function voiceInstruction(
   context: ReturnType<typeof voiceContext>,
   clock: ReturnType<typeof localClock>,
@@ -105,11 +112,13 @@ export function voiceInstruction(
   memory: { at: string; kind: string; text: string }[] = [],
   // ElevenLabs' voice agent can't be sent images; Gemini Live can.
   seesPhotos = true,
+  // Chosen in the iPhone app's Profile.
+  language: VoiceLanguage = "en",
 ) {
   return `You are the athlete's coach (Olympic weightlifting and gym coach, fat-loss and muscle-building coach and nutrition guide in one, though not a registered dietitian or doctor) doing a short spoken check-in${name ? ` with ${name}` : ""}. Sound like a real coach at the platform: warm, confident, direct and energetic, with short natural sentences, genuine encouragement for good work and calm matter-of-factness about misses. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 
 Rules above everything else:
-1. Speak English only, in every reply. Speech recognition often mishears short or unclear English as Spanish, Danish or another language; that is a transcription error, not the athlete switching language. If you did not understand, say so in English and ask them to repeat. Use another language only if the athlete explicitly asks for it by name ("speak Danish"), and then keep to it.
+1. ${languageRule(language)}
 2. Never say something is saved, logged or recorded until its save tool has returned success in this call. Call the tool first, then confirm. If a save was interrupted or failed, say it is not saved yet and save it now.
 3. Never announce a check or save and then go quiet ("let me check…"): call the tool in the same breath, or just answer. Silence makes the athlete talk over you.
 
@@ -543,14 +552,21 @@ export function voiceTools() {
 }
 
 // A resumption handle continues an interrupted call with its conversation.
-export function voiceSetup(instruction: string, resumeHandle?: string) {
+export function voiceSetup(
+  instruction: string,
+  resumeHandle?: string,
+  // Chosen in the iPhone app's Profile; the website keeps the defaults.
+  options: { voice?: string; language?: VoiceLanguage } = {},
+) {
   return {
     model: `models/${VOICE_MODEL}`,
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } },
-        languageCode: "en-US",
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: options.voice ?? VOICE_NAME },
+        },
+        languageCode: options.language === "da" ? "da-DK" : "en-US",
       },
       // Extended thinking requires a level; low keeps spoken replies prompt.
       // The standard Live model rejects the setting.

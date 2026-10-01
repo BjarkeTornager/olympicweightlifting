@@ -35,3 +35,38 @@ enum VoiceProvider: String, CaseIterable, Identifiable {
     return offered.contains(chosen) ? chosen : offered.first ?? .google
   }
 }
+
+/// A voice the server offers for a provider, as listed by GET
+/// api/voice/session.
+struct VoiceOption: Identifiable, Hashable {
+  let id: String
+  let name: String
+  let detail: String
+}
+
+/// A language the coach can speak in, as listed by the server.
+struct VoiceLanguageOption: Identifiable, Hashable {
+  let id: String
+  let name: String
+}
+
+/// The voice and language chosen in Profile, kept on this iPhone like the
+/// provider. Nothing chosen means the server's default.
+enum VoiceChoice {
+  static let languageKey = "voiceLanguage"
+
+  static func voiceKey(_ provider: VoiceProvider) -> String { "voiceName.\(provider.rawValue)" }
+
+  /// Danish if the iPhone's first language is Danish, otherwise English.
+  static var defaultLanguage: String {
+    Locale.preferredLanguages.first?.hasPrefix("da") == true ? "da" : "en"
+  }
+
+  static var language: String {
+    UserDefaults.standard.string(forKey: languageKey) ?? defaultLanguage
+  }
+
+  static func voice(for provider: VoiceProvider) -> String? {
+    UserDefaults.standard.string(forKey: voiceKey(provider))
+  }
+}

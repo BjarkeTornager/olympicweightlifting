@@ -156,6 +156,17 @@ final class VoiceCall {
     if resume, let handle { body["resumeHandle"] = handle }
     // Only sent for ElevenLabs, which only a server that knows it offers.
     if provider == .elevenlabs { body["provider"] = provider.rawValue }
+    // The language and voice chosen in Profile, only to a server that lists
+    // them; an older server would refuse the call.
+    if app.voiceLanguages.isEmpty { await app.loadVoiceOptions() }
+    if app.voiceLanguages.contains(where: { $0.id == VoiceChoice.language }) {
+      body["language"] = VoiceChoice.language
+    }
+    if let voice = VoiceChoice.voice(for: provider),
+      app.voiceOptions[provider]?.contains(where: { $0.id == voice }) == true
+    {
+      body["voice"] = voice
+    }
     let response = try await RawRequest.send(
       "api/voice/session", body: body, token: session.token, account: session.accountID,
       headers: ["X-Voice-Client": Self.clientVersion], timeout: 15)

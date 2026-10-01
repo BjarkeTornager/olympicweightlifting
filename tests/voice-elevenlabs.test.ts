@@ -101,12 +101,33 @@ test("the agent speaks v4 Turbo, keeps nothing and starts only from a signed lin
   );
   assert.equal(platform.privacy.record_voice, false);
   assert.equal(platform.privacy.retention_days, 0);
+  // Each call may set its voice and language, and Danish is offered.
+  assert.equal(
+    platform.overrides.conversation_config_override.agent.language,
+    true,
+  );
+  assert.equal(
+    platform.overrides.conversation_config_override.tts.voice_id,
+    true,
+  );
+  assert.deepEqual(Object.keys(config.language_presets), ["da"]);
   assert.deepEqual(elevenLabsStart("Today's records"), {
     type: "conversation_initiation_client_data",
     conversation_config_override: {
-      agent: { prompt: { prompt: "Today's records" } },
+      agent: { prompt: { prompt: "Today's records" }, language: "en" },
+      tts: { voice_id: "cjVigY5qzO86Huf0OWal" },
     },
   });
+  assert.deepEqual(
+    elevenLabsStart("Dagens noter", {
+      voice: "nPczCjzI2devNBz1zQrb",
+      language: "da",
+    }).conversation_config_override,
+    {
+      agent: { prompt: { prompt: "Dagens noter" }, language: "da" },
+      tts: { voice_id: "nPczCjzI2devNBz1zQrb" },
+    },
+  );
 });
 
 function fakeElevenLabs(routes: Record<string, (body?: unknown) => Response>) {

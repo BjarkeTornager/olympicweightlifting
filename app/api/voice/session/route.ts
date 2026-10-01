@@ -32,6 +32,11 @@ import {
   elevenLabsStart,
   voiceProviders,
 } from "@/lib/voice-elevenlabs";
+import {
+  resolveVoice,
+  voiceLanguageSchema,
+  voiceOptions,
+} from "@/lib/voice-options";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +48,8 @@ export async function GET(request: Request) {
         enabled: voiceConfigured(),
         model: VOICE_MODEL,
         providers: voiceProviders(),
+        // The voices and languages Profile can offer.
+        ...voiceOptions(),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -69,11 +76,15 @@ export async function POST(request: Request) {
         "Tap Reload update, or close and reopen the app, to use the latest voice coach.",
         426,
       );
-    const { timezone, purpose, resumeHandle, provider } = z
+    const { timezone, purpose, resumeHandle, provider, language, voice } = z
       .object({
         purpose: z.enum(["checkin", "goals"]).default("checkin"),
         // Chosen in the iPhone app's Profile; the website uses Google.
         provider: z.enum(["google", "elevenlabs"]).default("google"),
+        // Also chosen in Profile. An unknown voice falls back to the default,
+        // so a voice removed from the list never stops a call.
+        language: voiceLanguageSchema.default("en"),
+        voice: z.string().trim().max(100).optional(),
         // Continues an interrupted call; Google validates the handle.
         resumeHandle: z.string().min(1).max(2000).optional(),
         timezone: z
@@ -115,7 +126,9 @@ export async function POST(request: Request) {
       purpose,
       await recentConversations(user.id, { limit: 10 }),
       provider === "google",
+      language,
     );
+    const chosen = { language, voice: resolveVoice(provider, voice) };
     if (provider === "elevenlabs") {
       let url: string;
       try {
@@ -133,14 +146,14 @@ export async function POST(request: Request) {
         {
           provider,
           url,
-          start: elevenLabsStart(instruction),
+          start: elevenLabsStart(instruction, chosen),
           model: ELEVENLABS_TTS_MODEL,
           maxMinutes: ELEVENLABS_CALL_MINUTES,
         },
         { headers: { "Cache-Control": "no-store" } },
       );
     }
-    const setup = voiceSetup(instruction, resumeHandle);
+    const setup = voiceSetup(instruction, resumeHandle, chosen);
     let token: string;
     try {
       token = await mintVoiceToken(setup);

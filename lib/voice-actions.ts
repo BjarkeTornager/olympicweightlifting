@@ -3,7 +3,12 @@ import { z } from "zod";
 import { getDb } from "./db";
 import { agentProposals, agentTurns } from "./db/schema";
 import { uid } from "./domain";
-import { readJournal, writeJournal } from "./server";
+import {
+  MutationConflict,
+  readJournal,
+  RevisionConflict,
+  writeJournal,
+} from "./server";
 import { cardioActivitySchema } from "./cardio";
 import { foodGroupSchema } from "./nutrition";
 import { bodyGoalsRequestSchema } from "./body-goals";
@@ -418,16 +423,67 @@ export async function runVoiceTool(
     return { ok: true, title: "Undone", detail: "That save was undone." };
   }
   const db = getDb();
-  const [existing] = await db
-    .select()
-    .from(agentTurns)
-    .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
-  if (existing?.response) {
-    const saved = existing.response.proposals?.[0];
-    return saved
-      ? { ok: true, saveId: saved.id, title: saved.title, detail: saved.detail }
-      : { ok: false, error: existing.response.reply };
+  const { summary } = z
+    .object({ summary: summarySchema })
+    .passthrough()
+    .parse(input.args);
+  // Tool calls from one reply run at the same time, so two saves can read the
+  // same journal revision. The one that loses prepares again against the
+  // newer journal instead of reporting a failure.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const [existing] = await db
+      .select()
+      .from(agentTurns)
+      .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+    if (existing?.response) {
+      const saved = existing.response.proposals?.[0];
+      return saved
+        ? {
+            ok: true,
+            saveId: saved.id,
+            title: saved.title,
+            detail: saved.detail,
+          }
+        : { ok: false, error: existing.response.reply };
+    }
+    try {
+      return await saveVoiceAction(
+        userId,
+        { ...input, name: input.name },
+        summary,
+      );
+    } catch (error) {
+      if (error instanceof RevisionConflict) continue;
+      // The same call id was saved concurrently: the next pass returns it.
+      if (error instanceof MutationConflict || uniqueViolation(error)) continue;
+      throw error;
+    }
   }
+  throw new ApiError(
+    "Your journal is busy saving other changes. Try this save again.",
+    409,
+  );
+}
+
+function uniqueViolation(error: unknown) {
+  const code =
+    (error as { code?: string; cause?: { code?: string } } | null)?.code ??
+    (error as { cause?: { code?: string } } | null)?.cause?.code;
+  return code === "23505";
+}
+
+async function saveVoiceAction(
+  userId: string,
+  input: {
+    id: string;
+    name: Exclude<VoiceToolName, "undo_save" | ReadTool>;
+    args: unknown;
+    today: string;
+    seenPhotoIds: string[];
+  },
+  summary: string,
+): Promise<VoiceResult> {
+  const db = getDb();
   const snapshot = await readJournal(userId);
   const action = voiceAction(
     input.name,
@@ -449,10 +505,6 @@ export async function runVoiceTool(
               : "cardio" in action
                 ? action.cardio.date
                 : input.today;
-  const { summary } = z
-    .object({ summary: summarySchema })
-    .passthrough()
-    .parse(input.args);
   await guardChange(action, {
     userId,
     state: snapshot.state,

@@ -47,7 +47,7 @@ struct AIConsentView: View {
           )
           point(
             "server.rack", "Who receives it",
-            "Coach requests go through OpenRouter to the model provider shown in Coach, limited to providers that don't retain your data. TypeSafe may see your latest message to pick the model. Voice check-ins stream your voice to Google's Gemini API."
+            "Coach requests go through OpenRouter to the model provider shown in Coach, limited to providers that don't retain your data. TypeSafe may see your latest message to pick the model. Voice check-ins stream your voice to Google's Gemini API, or to ElevenLabs if you choose it in Profile."
           )
           point(
             "hand.raised", "Your choice",

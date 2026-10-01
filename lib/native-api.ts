@@ -54,6 +54,8 @@ export const nativeConfig = z
   .object({
     minimumBuild: int,
     voice: z.boolean(),
+    // Which voices the app may offer; absent from servers before 30 Sept.
+    voiceProviders: z.array(z.enum(["google", "elevenlabs"])).optional(),
     serverTime: instant,
   })
   .strict()

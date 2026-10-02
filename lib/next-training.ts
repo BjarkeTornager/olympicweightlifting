@@ -45,6 +45,11 @@ export function nextTraining(state: JournalState, date = today()) {
     notes: day.notes,
     exercises: day.exercises.length,
     custom: Boolean(selected),
+    // Whether the person follows this plan: a programme they made or chose,
+    // or the built-in one they've trained with. A new journal follows none,
+    // so Today, the app and the voice coach don't lead with a lifting
+    // session; Train still suggests it.
+    following: Boolean(selected) || Boolean(previous),
     canStart: day.exercises.length > 0,
     previousDate: previous?.date,
     position: index + 1,

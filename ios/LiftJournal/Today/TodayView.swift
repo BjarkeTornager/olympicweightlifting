@@ -560,7 +560,10 @@ struct TrainingCard: View {
               Text(next.title).font(.headline).foregroundStyle(Color.primary)
               Text("Session \(next.position) of \(next.count)").font(.subheadline).foregroundStyle(.secondary)
             } else {
-              Text("No strength session planned").font(.subheadline).foregroundStyle(.secondary)
+              // No programme followed: an invitation for any kind of movement.
+              Text("Movement").font(.headline).foregroundStyle(Color.primary)
+              Text(today.activities.isEmpty ? "Nothing recorded yet. Start a workout" : "Start a workout")
+                .font(.subheadline).foregroundStyle(.secondary)
             }
           }
           Spacer(minLength: 0)

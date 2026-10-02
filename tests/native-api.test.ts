@@ -676,3 +676,21 @@ test("Train shows each main lift's best made set and eight weeks of work", async
     ],
   );
 });
+
+test("Today suggests a programme session only to someone who follows one", () => {
+  const date = "2026-09-20";
+  const state = emptyJournal();
+  assert.equal(buildToday(state, 1, date, new Set()).nextSession, undefined);
+  // The first day of the built-in plan, trained and logged.
+  const first = days.find((d) => d.weekday !== null)!;
+  const session = createWorkout(state, first, "2026-09-15");
+  session.exercises[0].sets[0] = {
+    ...session.exercises[0].sets[0],
+    weight: 40,
+    reps: 3,
+    logged: true,
+    result: "success",
+  };
+  state.sessions.push(session);
+  assert.equal(buildToday(state, 2, date, new Set()).nextSession?.position, 2);
+});

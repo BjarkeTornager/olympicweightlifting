@@ -6,6 +6,7 @@ import { weeklyReview } from "@/lib/weekly-review";
 import type { JournalController } from "./journal";
 import { TrackingStatus } from "./tracking-status";
 import { NextSession } from "./next-session";
+import { nextTraining } from "@/lib/next-training";
 import { GoalsCard } from "./goals";
 import { HydrationRow } from "./hydration";
 import { SupplementsRow } from "./supplements";
@@ -56,7 +57,9 @@ export function Today({
           </Button>
         )}
       </div>
-      <NextSession state={state} update={journal.update} go={go} />
+      {(state.activeWorkout || nextTraining(state, date).following) && (
+        <NextSession state={state} update={journal.update} go={go} />
+      )}
       <section
         className="today-records list-card"
         aria-label="Today's food, sleep and calories burned"

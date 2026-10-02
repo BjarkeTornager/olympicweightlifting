@@ -87,17 +87,6 @@
       }
     ]
   },
-  "nextSession": {
-    "programId": "stability-power-base-v1",
-    "programName": "Stability & Power Base",
-    "dayId": "monday",
-    "title": "Snatch + Back Squat",
-    "position": 1,
-    "count": 4,
-    "exercises": 5,
-    "canStart": true,
-    "custom": false
-  },
   "strengthToday": [],
   "activities": [
     {

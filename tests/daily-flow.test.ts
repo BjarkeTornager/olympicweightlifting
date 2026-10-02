@@ -14,6 +14,8 @@ const sequence = days.filter((d) => d.weekday !== null);
 test("next training follows recorded sessions, ignores future/empty/other programmes and preserves ongoing work", () => {
   const s = emptyJournal();
   assert.equal(nextTraining(s, "2026-09-20").dayId, sequence[0].id);
+  // A new journal follows no programme until it trains one or picks one.
+  assert.equal(nextTraining(s, "2026-09-20").following, false);
   const session = createWorkout(s, sequence[0], "2026-09-15");
   session.exercises[0].sets[0] = {
     ...session.exercises[0].sets[0],
@@ -24,6 +26,7 @@ test("next training follows recorded sessions, ignores future/empty/other progra
   };
   s.sessions.push(session);
   assert.equal(nextTraining(s, "2026-09-20").dayId, sequence[1].id);
+  assert.equal(nextTraining(s, "2026-09-20").following, true);
   s.sessions.push(createWorkout(s, sequence[2], "2026-09-19"));
   s.sessions.push({
     ...session,

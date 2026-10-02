@@ -55,3 +55,11 @@ The coach used to wait for each save before speaking ("Call the tool first, then
   - all existing voice tests
 - **LiftKit:** the conversation id from the metadata, and the shape of the photo message.
 - **Simulator** against a local server with the real keys: picking Puck played `Puck.da.m4a` (4.6 s), fetched from the server.
+
+## Update: a line for everyone (2 October, later)
+
+With the [health-for-everyone positioning](product-principles.md), the sample line became "Morning! Nice job on yesterday's walk. How did you sleep last night?" (Danish: "Godmorgen! Flot klaret med gåturen i går. Hvordan har du sovet i nat?").
+
+The 18 Google samples were re-recorded. The ElevenLabs account ran out of credit partway, so its 16 samples keep the earlier line until it's topped up; then run `npx tsx scripts/voice-samples.ts elevenlabs/<id>`.
+
+Recording through the agent costs conversation minutes, about 8–10 for a full set plus tests. With a key that has Text to Speech access, recording could use the cheaper TTS API instead.

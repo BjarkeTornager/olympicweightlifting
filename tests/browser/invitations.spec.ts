@@ -46,10 +46,36 @@ test("Owner can invite a Google account and revoke or restore access on mobile",
     }
     return r.fulfill({ json: { invitations } });
   });
+  await context.route("**/api/owner/usage", (r) => {
+    expect(r.request().headers()["x-journal-account"]).toBe(browserUser.id);
+    return r.fulfill({
+      json: {
+        generatedAt: new Date().toISOString(),
+        people: { total: 3, active7: 2, active28: 3 },
+        weeks: [
+          { start: "2026-09-28", active: 2, fullDays: 1.5, anyDays: 3 },
+          { start: "2026-09-21", active: 3, fullDays: 2, anyDays: 4.3 },
+        ],
+        retention: [{ week: "2026-08-03", joined: 2, week4: 1 }],
+        features: [
+          {
+            feature: "coach.message",
+            people: 3,
+            uses: 41,
+            last: "2026-10-02",
+          },
+        ],
+      },
+    });
+  });
   await page.goto("/#data");
   await expect(
     page.getByText("Only you have access. No invitations yet."),
   ).toBeVisible();
+  // The owner's usage totals sit beside invitations.
+  const usage = page.getByRole("region", { name: "Usage" });
+  await expect(usage.getByText("coach.message")).toBeVisible();
+  await expect(usage.getByText("1 (50%)")).toBeVisible();
   await page.getByLabel("Google account email").fill(email);
   await page.getByRole("button", { name: "Grant access" }).click();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
@@ -67,6 +93,7 @@ test("Owner can invite a Google account and revoke or restore access on mobile",
   ).toBe(true);
   const accessibility = await new AxeBuilder({ page })
     .include(".invitation-panel")
+    .include(".usage-panel")
     .analyze();
   expect(accessibility.violations).toEqual([]);
   await page.screenshot({
@@ -93,5 +120,8 @@ test("Invited accounts cannot see invitation management", async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Invitations", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Usage", exact: true }),
   ).toHaveCount(0);
 });

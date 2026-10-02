@@ -829,7 +829,8 @@ export function buildToday(
       activeWorkout: state.activeWorkout
         ? workoutSummary(state.activeWorkout)
         : undefined,
-      nextSession: next
+      // Only for someone who follows a programme; Train suggests one otherwise.
+      nextSession: next?.following
         ? {
             programId: next.programId,
             programName: next.programName,

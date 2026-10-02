@@ -77,7 +77,7 @@ export function voiceContext(
     unfinishedWorkout: active
       ? `${active.title}, started ${active.date}, ${loggedSets(active)} sets logged`
       : null,
-    nextPlanned: next.canStart ? next.title : null,
+    nextPlanned: next.canStart && next.following ? next.title : null,
     // Every entry of the day in full, so nothing has to be asked twice.
     day: dayForCoach(state, date, routes),
     // Decided here rather than left to the model, which asked about topics

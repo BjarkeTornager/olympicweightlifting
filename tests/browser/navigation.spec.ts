@@ -19,9 +19,10 @@ test("four main destinations keep all journal areas accessible on phone and desk
   await expect(
     page.getByRole("button", { name: "Log something", exact: true }),
   ).toBeInViewport();
+  // A new journal follows no programme, so Today doesn't lead with one.
   await expect(
     page.getByRole("button", { name: "Start workout", exact: false }),
-  ).toBeInViewport();
+  ).toHaveCount(0);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(

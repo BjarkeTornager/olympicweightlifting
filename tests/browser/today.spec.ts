@@ -154,6 +154,30 @@ test("Today exposes import failures and opens sleep setup without claiming a suc
   ).toBeVisible();
 });
 
+test("Today says the iPhone app syncs Apple Health instead of offering the Shortcut", async ({
+  page,
+  context,
+}) => {
+  await context.route("**/api/tracking/status", (r) =>
+    r.fulfill({
+      json: {
+        notices: [],
+        sleep: { connected: false },
+        app: { lastDate: "2026-10-01" },
+      },
+    }),
+  );
+  await page.goto("/");
+  await expect(
+    page.getByText(
+      "Apple Health · from the iPhone app, last imported 2026-10-01",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Connect sleep from Apple Health" }),
+  ).toHaveCount(0);
+});
+
 test("supplements are ticked off and added from Today", async ({
   page,
   context,

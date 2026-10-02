@@ -10,6 +10,8 @@ type Status = {
     lastSyncAt?: string | null;
     lastDate?: string | null;
   };
+  // The iPhone app's Apple Health sync, once it has run.
+  app?: { lastDate: string };
 };
 export function TrackingStatus({
   accountId,
@@ -61,13 +63,21 @@ export function TrackingStatus({
           </Button>
         </div>
       ))}
-      <button className="text-link" onClick={() => go("data/sleep")}>
-        {status.sleep.connected
-          ? status.sleep.lastDate
-            ? `Apple Health · last imported ${status.sleep.lastDate}`
-            : "Apple Health · waiting for the first import"
-          : "Connect sleep from Apple Health"}
-      </button>
+      {status.app && !status.sleep.connected ? (
+        // The app already brings sleep, so the Shortcut isn't offered.
+        <p className="fine-print">
+          Apple Health · from the iPhone app, last imported{" "}
+          {status.app.lastDate}
+        </p>
+      ) : (
+        <button className="text-link" onClick={() => go("data/sleep")}>
+          {status.sleep.connected
+            ? status.sleep.lastDate
+              ? `Apple Health · last imported ${status.sleep.lastDate}`
+              : "Apple Health · waiting for the first import"
+            : "Connect sleep from Apple Health"}
+        </button>
+      )}
     </div>
   );
 }

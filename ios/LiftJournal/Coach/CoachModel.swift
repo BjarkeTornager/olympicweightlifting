@@ -134,17 +134,7 @@ final class CoachModel {
         background.end()
       }
       do {
-        var ids: [UUID] = []
-        for photo in photos {
-          let id = UUID()
-          try await app.client.uploadImage(
-            body: .json(
-              .init(
-                id: id.uuidString.lowercased(), label: "Coach photo", date: JournalDay.string(.now),
-                autoTag: true, image: photo.jpeg.base64EncodedString()))
-          ).value()
-          ids.append(id)
-        }
+        let ids = try await Self.upload(photos.map(\.jpeg), client: app.client)
         do {
           for try await event in stream.run(
             id: runID, message: message, revision: app.today?.revision ?? 0, photoIDs: ids,
@@ -217,6 +207,29 @@ final class CoachModel {
     }
     // Not put back to send again: it may still arrive, and would be doubled.
     error = "Coach is taking longer than usual. Pull down in a minute to see the reply."
+  }
+
+  /// Uploads the photos side by side rather than one after another, each
+  /// retried if the connection drops: the server keeps one image per ID, so
+  /// sending it again is safe. The server answers once each is saved and
+  /// sorts it into the image library afterwards.
+  private static func upload(_ photos: [Data], client: Client) async throws -> [UUID] {
+    let ids = photos.map { _ in UUID() }
+    let date = JournalDay.string(.now)
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for (jpeg, id) in zip(photos, ids) {
+        group.addTask {
+          let upload = Components.Schemas.ImageUpload(
+            id: id.uuidString.lowercased(), label: "Coach photo", date: date, autoTag: true,
+            tagInBackground: true, image: jpeg.base64EncodedString())
+          try await Retry.droppedConnections {
+            try await client.uploadImage(body: .json(upload)).value()
+          }
+        }
+      }
+      try await group.waitForAll()
+    }
+    return ids
   }
 
   /// Stop: the server would otherwise finish the reply in the background.

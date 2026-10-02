@@ -214,6 +214,88 @@ test(
           );
         },
       );
+      for (const sorted of [true, false])
+        await t.test(
+          sorted
+            ? "a meal photo sent without words is logged straight away and the message stays as sent"
+            : "a meal photo still being sorted after upload is waited for, then logged",
+          async () => {
+            const a = await user();
+            const { PHOTO_ONLY_MESSAGE, imageCoachPrompt } =
+              await import("../lib/images");
+            const pixels = (
+              await sharp({
+                create: {
+                  width: 24,
+                  height: 24,
+                  channels: 3,
+                  background: "#c9a86b",
+                },
+              })
+                .jpeg()
+                .toBuffer()
+            ).toString("base64");
+            const saved = await saveUserImage(a, {
+              id: crypto.randomUUID(),
+              label: "Coach photo",
+              date,
+              image: pixels,
+            });
+            if (sorted)
+              await patchUserImage(a, saved.id, {
+                version: saved.version,
+                category: "food",
+                tags: [],
+              });
+            else {
+              // As an iPhone Coach photo is until it's sorted after upload;
+              // the sorting finishes just after Coach starts.
+              await pool.query(
+                `UPDATE food_photos SET classification = jsonb_set(classification, '{status}', '"pending"') WHERE id=$1`,
+                [saved.id],
+              );
+              setTimeout(() => {
+                void pool.query(
+                  `UPDATE food_photos SET category='food', classification = jsonb_set(classification, '{status}', '"ready"'), version = version + 1 WHERE id=$1`,
+                  [saved.id],
+                );
+              }, 600);
+            }
+            const asked: string[] = [];
+            const rounds = [reads(), [call("log_entry", food([saved.id]))]];
+            let round = 0;
+            const request = {
+              ...input(PHOTO_ONLY_MESSAGE),
+              photoIds: [saved.id],
+            };
+            const result = await runTurn(
+              a,
+              request,
+              async (messages): Promise<ModelMessage> => {
+                asked.push(String(messages.at(-1)?.content ?? ""));
+                return {
+                  role: "assistant",
+                  content: "No entry saved.",
+                  tool_calls: rounds[round++] ?? [],
+                };
+              },
+              hooks,
+            );
+            // Coach is asked to log the photo, not whether to.
+            assert.ok(asked[0].startsWith(imageCoachPrompt("food")));
+            assert.equal(result.proposals[0].status, "saved");
+            assert.deepEqual(result.proposals[0].meal!.photoIds, [saved.id]);
+            // The thread still shows the photo on its own.
+            const turn = (await history(a)).find((r) => r.id === request.id);
+            assert.equal(turn?.question, PHOTO_ONLY_MESSAGE);
+            // Resending the same message is recognised as the same turn.
+            assert.deepEqual(
+              await runTurn(a, request, sequence(), hooks),
+              result,
+            );
+          },
+        );
+
       await t.test(
         "uncertain tray portions do not block three reported eggs; a correction updates the saved meal",
         async () => {

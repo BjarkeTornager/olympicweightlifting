@@ -26,6 +26,10 @@ public struct APIFailure: LocalizedError, Sendable {
   public static func unreadable(_ error: any Error) -> Bool {
     ((error as? ClientError)?.underlyingError ?? error) is DecodingError
   }
+
+  /// A failure inside the generated client, with no usable response. Its
+  /// description is developer text, never for the athlete.
+  public static func client(_ error: any Error) -> Bool { error is ClientError }
 }
 
 // One accessor per operation turns the generated output into a value or an

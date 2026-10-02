@@ -258,11 +258,18 @@ final class AppModel {
     if APIFailure.unreadable(error) {
       return "Lift Journal is being updated. Try again in a few minutes."
     }
-    if let url = error as? URLError {
-      return url.code == .notConnectedToInternet
-        ? "You're offline. Changes are kept and sent when you reconnect."
-        : "The journal could not be reached. Try again shortly."
+    // The generated client wraps connection failures; never show its text.
+    if let url = Retry.urlError(error) {
+      switch url.code {
+      case .notConnectedToInternet:
+        return "You're offline. Changes are kept and sent when you reconnect."
+      case .networkConnectionLost, .timedOut:
+        return "The connection dropped. Try again when the signal is steadier."
+      default:
+        return "The journal could not be reached. Try again shortly."
+      }
     }
+    if APIFailure.client(error) { return "The journal could not be reached. Try again shortly." }
     return error.localizedDescription
   }
 

@@ -1610,6 +1610,8 @@ export const imageUpload = z
     label: z.string().max(160),
     date: day,
     autoTag: z.boolean(),
+    // Answer once saved and tag the image afterwards (Coach photos).
+    tagInBackground: z.boolean().optional(),
     purpose: z.enum(["meal-photo"]).optional(),
     // Base64 JPEG, at most about 2 MB once decoded.
     image: z.string(),

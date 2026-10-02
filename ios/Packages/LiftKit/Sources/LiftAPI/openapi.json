@@ -1651,6 +1651,9 @@
           "autoTag": {
             "type": "boolean"
           },
+          "tagInBackground": {
+            "type": "boolean"
+          },
           "purpose": {
             "type": "string",
             "enum": [

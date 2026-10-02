@@ -15,6 +15,7 @@ import {
 } from "./images";
 import { classifyImage } from "./image-classifier";
 import { callModel } from "./agent/provider";
+import { logFailure } from "./error-log";
 
 export const imageUploadSchema = z
   .object({
@@ -23,6 +24,10 @@ export const imageUploadSchema = z
     date: foodDate,
     // Older clients did not disclose automatic provider processing.
     autoTag: z.boolean().default(false),
+    // Answer once the image is saved and tag it afterwards. Coach photos ask
+    // for this: the upload then takes a second, not a model call, which
+    // matters on mobile data and before Coach can start.
+    tagInBackground: z.boolean().optional(),
     purpose: z.enum(["lifting-video-frames", "meal-photo"]).optional(),
     image: z
       .string()
@@ -195,8 +200,14 @@ export async function saveUserImage(
     return { fresh: true, photo };
   });
   // Persist bytes before the provider call; never hold database locks during inference.
-  if (saved.fresh && input.autoTag)
-    return tagUserImage(userId, input.id, saved.photo.version, model);
+  if (saved.fresh && input.autoTag) {
+    if (!input.tagInBackground)
+      return tagUserImage(userId, input.id, saved.photo.version, model);
+    // The image is saved, pending tagging; a failure leaves it pending.
+    void tagUserImage(userId, input.id, saved.photo.version, model).catch(
+      (error) => logFailure("image_tag_failed", error, {}, "warn"),
+    );
+  }
   return saved.photo;
 }
 export async function deleteUserImage(userId: string, id: string) {

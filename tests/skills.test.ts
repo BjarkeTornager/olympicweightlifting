@@ -17,6 +17,15 @@ test("clear signals in English and Danish load the skills a message needs", () =
     ["Samme frokost som i går.", []],
     ["I did a clean and jerk at 90 kg", []],
     ["Prepare a preview of my check-in", []],
+    ["Can you give me a high-protein recipe with chicken?", ["recipes"]],
+    ["Any dinner ideas with what's in my fridge?", ["recipes"]],
+    ["What can I cook tonight?", ["recipes"]],
+    ["Lav en madplan til mig", ["recipes"]],
+    ["Har du en opskrift på grød?", ["recipes"]],
+    ["Hvad skal jeg spise til aftensmad?", ["recipes"]],
+    ["Hvad skal jeg lave til mad i aften?", ["recipes"]],
+    // "Lave" alone is to do, not to cook: a training question.
+    ["Hvad skal jeg lave i dag?", []],
   ];
   for (const [message, expected] of cases)
     assert.deepEqual([...skillsFor(message)].sort(), expected.sort(), message);
@@ -56,6 +65,15 @@ test("a turn is offered the core tools, then only its skills' tools and fields",
   assert.ok(
     routes.includes("plan_route") && routes.includes("show_activity_route"),
   );
+  // show_visual comes with either skill that draws visuals, once.
+  assert.ok(!core.includes("show_visual"));
+  for (const skill of ["review", "recipes"] as const)
+    assert.ok(names(new Set([skill])).includes("show_visual"), skill);
+  assert.equal(
+    names(new Set(["review", "recipes"])).filter((n) => n === "show_visual")
+      .length,
+    1,
+  );
   // Skill tools come after every core tool, for the longest shared prefix.
   assert.deepEqual(routes.slice(0, core.length), core);
   const all = names(
@@ -68,6 +86,7 @@ test("a turn is offered the core tools, then only its skills' tools and fields",
       "review",
       "goals",
       "memory",
+      "recipes",
     ]),
   );
   assert.ok(!all.includes("load_skills"));

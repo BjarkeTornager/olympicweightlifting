@@ -133,7 +133,18 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // request ("we should never use em dashes"): the two em dashes in the
     // route-planning paragraph become semicolons, so the base prompt models
     // the no-em-dash rule coachStyle already states. Wording is unchanged.
-    "aef4e3f58d4f863d603cbb7c2d67f558f454e4eb0454afa44b631356e1d7db7a",
+    // Revised 2026-10-03, deliberate and reviewed: one added paragraph, the
+    // new recipes skill's (loaded only for recipes and meal ideas). Coach
+    // shows a recipe or meal idea as a show_visual recipe card fitted to
+    // the request and, when relevant, the athlete's targets and known food
+    // preferences: every ingredient with its amount, short steps, and
+    // estimated kcal and protein per serving (carbs and fat when useful),
+    // then a sentence or two without repeating the card. A suggested recipe
+    // is not a meal eaten and is logged only when the athlete says they ate
+    // it. Removing that one paragraph reproduces the previous hash
+    // (aef4e3f5…); coach-visual-kinds.test.ts and skills.test.ts cover the
+    // card and the skill. Health, privacy and evidence text is unchanged.
+    "f44bfc1121288961670762d6af1999b269c49452cd333be271381c8430c0d0b0",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

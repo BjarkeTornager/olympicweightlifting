@@ -588,9 +588,11 @@ export async function runTurn(
             throw Error("This tool is not available.");
           const key = name as keyof typeof specifications,
             args = specifications[key].schema.parse(call.function.arguments);
-          // Calling a skill's tool loads the skill for the rest of the turn.
-          const owner = skillTools.get(name);
-          if (owner) loaded.add(owner);
+          // Calling a skill's tool loads the skill for the rest of the turn
+          // (the first that offers it, unless one already is).
+          const owners = skillTools.get(name);
+          if (owners && !owners.some((skill) => loaded.has(skill)))
+            loaded.add(owners[0]);
           if (key === "load_skills") {
             const { skills: wanted } =
               specifications.load_skills.schema.parse(args);

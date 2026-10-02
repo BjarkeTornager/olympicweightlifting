@@ -4,8 +4,8 @@ import LiftTheme
 import SwiftUI
 
 // The visuals Coach composes from journal numbers, drawn natively: trends,
-// targets, headline numbers, comparisons, splits and calendars. The website
-// draws the same kinds (components/coach-visual-kinds.tsx).
+// targets, headline numbers, comparisons, splits and calendars, and recipe
+// cards. The website draws the same kinds (components/coach-visual-kinds.tsx).
 
 typealias Visual = Components.Schemas.CoachVisual
 
@@ -382,6 +382,106 @@ struct VisualCalendar: View {
     case .none: .secondary
     case .some(let level) where level >= 2: Theme.onAccent
     default: .primary
+    }
+  }
+}
+
+/// A recipe or meal idea: servings and time, every ingredient with its
+/// amount, numbered steps (none for a quick idea) and the estimated
+/// nutrition per serving.
+struct VisualRecipe: View {
+  let visual: Visual
+
+  struct Nutrient: Equatable {
+    let label: String
+    let value: String
+  }
+
+  var body: some View {
+    let steps = visual.steps ?? []
+    let nutrition = Self.nutrition(visual.nutrition)
+    VStack(alignment: .leading, spacing: 16) {
+      Text(Self.meta(servings: visual.servings ?? 1, minutes: visual.minutes))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 8) {
+        CardLabel(title: "Ingredients")
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+          ForEach(Array((visual.ingredients ?? []).enumerated()), id: \.offset) { _, ingredient in
+            GridRow {
+              Text(ingredient.amount ?? "")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(maxWidth: 110, alignment: .leading)
+              Text(ingredient.item)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+          }
+        }
+        .font(.subheadline)
+      }
+      if !steps.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          CardLabel(title: "Method")
+          ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+              Text("\(index + 1)")
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(Theme.accent)
+                .frame(minWidth: 16, alignment: .trailing)
+              Text(step)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+          }
+        }
+      }
+      if !nutrition.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          CardLabel(title: "Estimate per serving")
+          HStack(spacing: 8) {
+            ForEach(nutrition, id: \.label) { item in
+              VStack(alignment: .leading, spacing: 2) {
+                Text(item.label).font(.caption).foregroundStyle(.secondary)
+                Text(item.value)
+                  .font(.subheadline.weight(.semibold))
+                  .monospacedDigit()
+                  .lineLimit(1)
+                  .minimumScaleFactor(0.7)
+              }
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 10)
+              .padding(.vertical, 8)
+              .background(Theme.fill, in: .rect(cornerRadius: 10, style: .continuous))
+            }
+          }
+        }
+        .accessibilityElement(children: .combine)
+      }
+    }
+  }
+
+  /// The line under the title, such as "2 servings · 1 h 15 min", as on the
+  /// website.
+  static func meta(servings: Int, minutes: Int?) -> String {
+    var parts = ["\(servings) \(servings == 1 ? "serving" : "servings")"]
+    if let minutes {
+      parts.append(
+        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : ""))
+    }
+    return parts.joined(separator: " · ")
+  }
+
+  /// The nutrition values Coach gave, in a fixed order.
+  static func nutrition(_ nutrition: Components.Schemas.RecipeNutrition?) -> [Nutrient] {
+    guard let nutrition else { return [] }
+    return [
+      ("Calories", nutrition.kcal, "kcal"), ("Protein", nutrition.protein, "g"),
+      ("Carbs", nutrition.carbs, "g"), ("Fat", nutrition.fat, "g"),
+    ].compactMap { label, value, unit in
+      value.map { Nutrient(label: label, value: "\(formatted($0)) \(unit)") }
     }
   }
 }

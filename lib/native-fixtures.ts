@@ -252,6 +252,45 @@ export function nativeFixtures() {
           })),
           proposals: [],
         },
+        {
+          id: "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a21",
+          question:
+            "Can you give me a high-protein dinner with salmon for two?",
+          photoIds: [],
+          createdAt: now.toISOString(),
+          status: "done",
+          reply:
+            "A salmon rice bowl: about 25 minutes, with roughly 37 g of protein each.",
+          visuals: [
+            {
+              id: "0d4e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a40",
+              content: {
+                kind: "recipe",
+                title: "Salmon rice bowl",
+                caption: "Fits today's protein target.",
+                servings: 2,
+                minutes: 25,
+                ingredients: [
+                  { item: "Salmon fillet", amount: "250 g" },
+                  { item: "Jasmine rice", amount: "150 g" },
+                  { item: "Edamame beans", amount: "100 g" },
+                  { item: "Cucumber", amount: "1/2" },
+                  { item: "Soy sauce", amount: "2 tbsp" },
+                  { item: "Sesame seeds", amount: "1 tbsp" },
+                  { item: "Spring onion" },
+                ],
+                steps: [
+                  "Cook the rice as the packet says.",
+                  "Roast the salmon at 200 °C for 12 to 15 minutes.",
+                  "Boil the edamame for 3 minutes and slice the cucumber.",
+                  "Flake the salmon over the rice and top with the vegetables, sliced spring onion, soy sauce and sesame seeds.",
+                ],
+                nutrition: { kcal: 625, protein: 37, carbs: 66, fat: 21 },
+              } satisfies CoachVisual,
+            },
+          ],
+          proposals: [],
+        },
       ],
       now,
     ),

@@ -7,7 +7,7 @@ import SwiftUI
 
 /// A visual Coach attached to a reply, drawn with native components: tables,
 /// charts, diagrams, photos and routes here, and the kinds it composes from
-/// journal numbers in CoachVisualKinds.swift.
+/// journal numbers, and recipes, in CoachVisualKinds.swift.
 struct CoachVisualView: View {
   let visual: Components.Schemas.CoachVisual
 
@@ -37,6 +37,8 @@ struct CoachVisualView: View {
         VisualSplit(visual: visual)
       case "calendar":
         VisualCalendar(visual: visual)
+      case "recipe":
+        VisualRecipe(visual: visual)
       default:
         EmptyView()
       }

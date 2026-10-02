@@ -55,6 +55,19 @@ struct ContractTests {
     #expect(visuals[5].days?.first?.level == 3 && visuals[5].legend == "Darker is more training")
   }
 
+  @Test("A recipe card decodes with its ingredients, steps and nutrition")
+  func coachRecipe() throws {
+    let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
+    let recipe = try #require(history.turns.last?.visuals?.first)
+    #expect(recipe.kind == "recipe" && recipe.servings == 2 && recipe.minutes == 25)
+    #expect(recipe.ingredients?.first?.item == "Salmon fillet" && recipe.ingredients?.first?.amount == "250 g")
+    // An ingredient may come without an amount.
+    #expect(recipe.ingredients?.last?.item == "Spring onion" && recipe.ingredients?.last?.amount == nil)
+    #expect(recipe.steps?.count == 4)
+    #expect(recipe.nutrition?.kcal == 625 && recipe.nutrition?.protein == 37 && recipe.nutrition?.fat == 21)
+    #expect(recipe.pictureId == nil)
+  }
+
   @Test("A visual streamed mid-reply reads as the saved one will")
   func streamedVisual() throws {
     let event = #"""

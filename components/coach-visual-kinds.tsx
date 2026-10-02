@@ -1,9 +1,14 @@
 "use client";
-import { calendarDays, type CoachVisual } from "@/lib/coach-visuals";
+import {
+  calendarDays,
+  recipeMeta,
+  type CoachVisual,
+} from "@/lib/coach-visuals";
 
 // The visual kinds Coach composes from journal numbers: trends, targets,
-// headline numbers, comparisons, splits and calendars. Drawn from validated
-// data only; the iPhone app draws the same kinds natively.
+// headline numbers, comparisons, splits and calendars, and recipe cards.
+// Drawn from validated data only; the iPhone app draws the same kinds
+// natively.
 type Kind<K extends CoachVisual["kind"]> = Extract<CoachVisual, { kind: K }>;
 
 const number = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
@@ -240,6 +245,59 @@ export function Calendar({ visual }: { visual: Kind<"calendar"> }) {
       </ol>
       {visual.legend && (
         <p className="coach-calendar-legend">{visual.legend}</p>
+      )}
+    </div>
+  );
+}
+
+const nutrients = [
+  { key: "kcal", label: "Calories", unit: "kcal" },
+  { key: "protein", label: "Protein", unit: "g" },
+  { key: "carbs", label: "Carbs", unit: "g" },
+  { key: "fat", label: "Fat", unit: "g" },
+] as const;
+
+export function RecipeCard({ visual }: { visual: Kind<"recipe"> }) {
+  const nutrition = nutrients.flatMap((n) => {
+    const value = visual.nutrition?.[n.key];
+    return value === undefined ? [] : [{ ...n, value }];
+  });
+  return (
+    <div className="coach-recipe">
+      <p className="coach-recipe-meta">{recipeMeta(visual)}</p>
+      <div>
+        <h4>Ingredients</h4>
+        <ul className="coach-recipe-ingredients">
+          {visual.ingredients.map((ingredient, i) => (
+            <li key={i}>
+              <span>{ingredient.amount}</span>
+              {ingredient.item}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {visual.steps?.length ? (
+        <div>
+          <h4>Method</h4>
+          <ol className="coach-recipe-steps">
+            {visual.steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+      {nutrition.length > 0 && (
+        <div>
+          <h4>Estimate per serving</h4>
+          <dl className="coach-recipe-nutrition">
+            {nutrition.map((n) => (
+              <div key={n.key}>
+                <dt>{n.label}</dt>
+                <dd>{withUnit(n.value, n.unit)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       )}
     </div>
   );

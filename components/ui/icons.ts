@@ -12,6 +12,7 @@ export { BookOpenIcon as BookOpen } from "@phosphor-icons/react/dist/ssr/BookOpe
 export { CalendarDotsIcon as CalendarDays } from "@phosphor-icons/react/dist/ssr/CalendarDots";
 export { CameraIcon as Camera } from "@phosphor-icons/react/dist/ssr/Camera";
 export { CheckIcon as Check } from "@phosphor-icons/react/dist/ssr/Check";
+export { ChefHatIcon as ChefHat } from "@phosphor-icons/react/dist/ssr/ChefHat";
 export { CaretDownIcon as ChevronDown } from "@phosphor-icons/react/dist/ssr/CaretDown";
 export { CaretRightIcon as ChevronRight } from "@phosphor-icons/react/dist/ssr/CaretRight";
 export { CloudIcon as Cloud } from "@phosphor-icons/react/dist/ssr/Cloud";

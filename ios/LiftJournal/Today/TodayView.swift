@@ -38,7 +38,9 @@ struct TodayView: View {
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) { logMenu }
     }
-    .sheet(isPresented: $model.showingCheckin) { CheckinSheet(existing: model.today?.checkin, body_: model.today?.body) }
+    .sheet(isPresented: $model.showingCheckin) {
+      CheckinSheet(existing: model.today?.checkin, body_: model.today?.body, sleep: model.today?.sleep)
+    }
     .sensoryFeedback(.success, trigger: model.saves)
     .task(id: model.health.lastSync) {
       healthNeedsAccess = model.health.connected ? await HealthSync.shared.needsAccess() : false
@@ -91,13 +93,18 @@ struct TodayView: View {
 
       SectionHeading("Recovery").padding(.horizontal, 4).padding(.top, 10)
       LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-        NavigationLink(value: Trend.sleep) {
-          MetricTile(
-            title: "Sleep", category: .sleep, value: today.sleep.hours.map(Format.hours), note: sleepNote(today),
-            empty: "Nothing recorded last night"
-          ) {
-            Sparkline(values: series { $0.sleepHours }, tint: Category.sleep.tint)
-          }
+        let sleepTile = MetricTile(
+          title: "Sleep", category: .sleep, value: today.sleep.hours.map(Format.hours), note: sleepNote(today),
+          empty: "Tap to add last night"
+        ) {
+          Sparkline(values: series { $0.sleepHours }, tint: Category.sleep.tint)
+        }
+        // With nothing recorded, the tile adds last night's sleep in the
+        // check-in rather than opening an empty chart.
+        if today.sleep.hours == nil {
+          Button { model.showingCheckin = true } label: { sleepTile }
+        } else {
+          NavigationLink(value: Trend.sleep) { sleepTile }
         }
         NavigationLink(value: Trend.heart) {
           MetricTile(

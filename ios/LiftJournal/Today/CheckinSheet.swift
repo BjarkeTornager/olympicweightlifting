@@ -1,15 +1,18 @@
 import LiftAPI
 import SwiftUI
 
-/// Energy, soreness, bodyweight and body fat for today. Only what the
-/// athlete changes is sent, so a check-in never clears values recorded
-/// elsewhere. Body fat is its own dated reading beside the check-in.
+/// Last night's sleep, energy, soreness, bodyweight and body fat for today.
+/// Only what the athlete changes is sent, so a check-in never clears values
+/// recorded elsewhere. Body fat is its own dated reading beside the check-in.
+/// Sleep from Apple Health is shown, not edited here.
 struct CheckinSheet: View {
   @Environment(AppModel.self) private var model
   @Environment(\.dismiss) private var dismiss
   let existing: Components.Schemas.Checkin?
   var body_: Components.Schemas.Body?
+  var sleep: Components.Schemas.Sleep?
 
+  @State private var sleepHours: Double?
   @State private var energy: Int?
   @State private var soreness: Int?
   @State private var bodyweight: Double?
@@ -22,6 +25,23 @@ struct CheckinSheet: View {
   var body: some View {
     NavigationStack {
       Form {
+        Section {
+          if sleep?.fromAppleHealth == true, let hours = sleep?.hours {
+            LabeledContent("From Apple Health", value: Format.hours(hours))
+          } else if let hours = sleepHours {
+            Stepper(value: Binding(get: { hours }, set: { sleepHours = $0 }), in: 0...16, step: 0.25) {
+              Text(Format.hours(hours)).monospacedDigit()
+            }
+          } else {
+            Button("Add hours slept") { sleepHours = 7.5 }
+          }
+        } header: {
+          Text("Sleep last night")
+        } footer: {
+          if sleep?.fromAppleHealth != true {
+            Text("Connect Apple Health in Profile and it fills in by itself.")
+          }
+        }
         Section {
           ScalePicker(value: $energy)
         } header: {
@@ -81,6 +101,7 @@ struct CheckinSheet: View {
         }
       }
       .onAppear {
+        if sleep?.fromAppleHealth != true { sleepHours = sleep?.hours }
         energy = existing?.energy
         soreness = existing?.soreness
         bodyweight = existing?.bodyweight
@@ -97,8 +118,12 @@ struct CheckinSheet: View {
   private var weightValid: Bool { bodyweight.map { (20...500).contains($0) } ?? true }
   private var bodyFatValid: Bool { bodyFat.map { (3...70).contains($0) } ?? true }
 
+  private var sleepChanged: Bool {
+    sleep?.fromAppleHealth != true && sleepHours != nil && sleepHours != sleep?.hours
+  }
+
   private var checkinChanged: Bool {
-    energy != existing?.energy || soreness != existing?.soreness
+    sleepChanged || energy != existing?.energy || soreness != existing?.soreness
       || (bodyweight != nil && bodyweight != existing?.bodyweight) || notes != (existing?.notes ?? "")
   }
 
@@ -115,6 +140,7 @@ struct CheckinSheet: View {
     saving = true
     defer { saving = false }
     var checkin = Components.Schemas.RecordCheckinAction.CheckinPayload(date: JournalDay.string(.now))
+    if sleepChanged { checkin.sleepHours = sleepHours }
     if energy != existing?.energy { checkin.energy = energy }
     if soreness != existing?.soreness { checkin.soreness = soreness }
     if let bodyweight, bodyweight != existing?.bodyweight { checkin.bodyweight = bodyweight }

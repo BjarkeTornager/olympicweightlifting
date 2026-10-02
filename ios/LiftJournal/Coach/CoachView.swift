@@ -87,6 +87,22 @@ struct CoachView: View {
     }
     .safeAreaInset(edge: .bottom) { composer }
     .task { if !coach.loaded { await coach.load(app) } }
+    // Today's first steps open Coach for a meal photo or a goals message.
+    .onChange(of: app.coachIntent, initial: true) { _, intent in
+      guard let intent else { return }
+      app.coachIntent = nil
+      switch intent {
+      case .mealPhoto:
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+          showingCamera = true
+        } else {
+          showingPhotos = true
+        }
+      case .message(let text):
+        if coach.draft.isEmpty { coach.draft = text }
+        composing = true
+      }
+    }
     .onChange(of: app.voiceEnded) { _, _ in
       Task {
         await coach.load(app)

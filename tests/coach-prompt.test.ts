@@ -124,7 +124,12 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // and Olympic weightlifting expertise for those who lift, and meets
     // people where they are; the site description lists the areas in that
     // order. Health, privacy, evidence and action policy text is unchanged.
-    "0ba5efa82af9e582b62e80e65e147245b3346f1ec2da1950f62c9a888aaf1834",
+    // Revised 2026-10-02 again, deliberate and reviewed: goal setup asks for
+    // the missing details in at most two short messages (body facts, then the
+    // goal, activity, training days and experience) instead of one question
+    // at a time, for the iPhone's first steps. Checked live: two replies to a
+    // reviewed set_body_goals card. Nothing else changed.
+    "b1e6999d95c9c81a55a71a253fb1b1ae7116c1e388bdb380b201e20a85ee7114",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

@@ -129,7 +129,11 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // goal, activity, training days and experience) instead of one question
     // at a time, for the iPhone's first steps. Checked live: two replies to a
     // reviewed set_body_goals card. Nothing else changed.
-    "b1e6999d95c9c81a55a71a253fb1b1ae7116c1e388bdb380b201e20a85ee7114",
+    // Revised 2026-10-02 a third time, deliberate and reviewed at the owner's
+    // request ("we should never use em dashes"): the two em dashes in the
+    // route-planning paragraph become semicolons, so the base prompt models
+    // the no-em-dash rule coachStyle already states. Wording is unchanged.
+    "aef4e3f58d4f863d603cbb7c2d67f558f454e4eb0454afa44b631356e1d7db7a",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

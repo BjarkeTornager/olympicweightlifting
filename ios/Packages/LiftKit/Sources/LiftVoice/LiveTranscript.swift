@@ -19,6 +19,15 @@ public enum LiveTranscript {
     return wordEnd && wordStart ? text + " " + next : text + next
   }
 
+  /// Coach's words keep no em dashes, as on the server: an em dash, or a
+  /// spaced en dash used as one, becomes a comma. An en dash in a range such
+  /// as 3–5 stays.
+  public static func withoutEmDashes(_ text: String) -> String {
+    text.replacing(/\s*—\s*/, with: ", ")
+      .replacing(" – ", with: ", ")
+      .replacing(/, ([,.;:!?])/, with: { "\($0.output.1)" })
+  }
+
   /// Whether a line ends a sentence. A completed turn starts a new line only
   /// then: the coach's reply sometimes arrives across two turns.
   public static func endsSentence(_ text: String) -> Bool {

@@ -3,6 +3,7 @@ import { getDb } from "./db";
 import { agentTurns, voiceCalls } from "./db/schema";
 import { displayMessage } from "./coach-tasks";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
+import { withoutEmDashes } from "./agent/coach-style";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -43,19 +44,21 @@ export async function saveVoiceTranscript(
     entries: { role: "you" | "coach"; text: string }[];
   },
 ) {
-  const content = transcriptContent(call.entries);
+  // Coach's lines keep no em dashes, as in typed replies.
+  const entries = call.entries.map(coachLine);
+  const content = transcriptContent(entries);
   await getDb()
     .insert(voiceCalls)
     .values({
       id: call.id,
       userId,
       purpose: call.purpose,
-      transcript: call.entries,
+      transcript: entries,
       content,
     })
     .onConflictDoUpdate({
       target: voiceCalls.id,
-      set: { transcript: call.entries, content, updatedAt: new Date() },
+      set: { transcript: entries, content, updatedAt: new Date() },
       // A call id belongs to the account that started it.
       where: eq(voiceCalls.userId, userId),
     });
@@ -106,6 +109,9 @@ export type VoiceCallSummary = {
   tidied: boolean;
 };
 
+const coachLine = <T extends { role: string; text: string }>(line: T): T =>
+  line.role === "coach" ? { ...line, text: withoutEmDashes(line.text) } : line;
+
 // The account's recent calls, newest last, for the Coach thread.
 export async function listVoiceCalls(
   userId: string,
@@ -125,12 +131,13 @@ export async function listVoiceCalls(
       startedAt: c.startedAt.toISOString(),
       endedAt: c.updatedAt.toISOString(),
       // Calls tidied before labels were stripped may still carry them.
-      lines: tidied
+      lines: (tidied
         ? c.tidy!.map((l, i) => ({
             ...l,
             text: withoutLabel(l.text, c.transcript[i]?.text ?? ""),
           }))
-        : c.transcript,
+        : c.transcript
+      ).map(coachLine),
       tidied,
     };
   });

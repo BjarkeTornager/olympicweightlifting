@@ -89,6 +89,9 @@ test("voice instructions carry the date, the records and the save rules", () => 
   assert.match(text, /with Bjarke/);
   assert.match(text, /Food: Nothing recorded/);
   assert.match(text, /Never add sets, foods or amounts they did not say/);
+  // No em dashes, said or written, and none in the instructions themselves.
+  assert.match(text, /Never use em dashes/);
+  assert.ok(!text.includes("—"), "the voice instructions use no em dashes");
   // The whole day is in context from the start.
   assert.match(text, /Everything recorded for 2026-09-25 so far, in full/);
   assert.match(text, /"eatenSoFar":\{"calories":0/);

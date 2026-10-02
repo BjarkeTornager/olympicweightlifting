@@ -21,6 +21,7 @@ import {
   canReviewIdentification,
 } from "./identification";
 import { reviewMessages, reviewWithRecovery } from "./review";
+import { withoutEmDashes } from "../agent/coach-style";
 import type { VideoRefinementCheckpoint } from "./checkpoint";
 
 // Splits a clip into attempts, then refines and reviews each attempt in turn,
@@ -246,16 +247,32 @@ export function summarizeAttempts(initial: VideoAnalysis, input: VideoUpload) {
     },
   };
   return {
-    analysis,
-    feedback: attempts
-      .map((a) =>
-        [
-          identificationSummary(a.identification, input.lift),
-          a.coaching ? coachingText(a.coaching) : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      )
-      .join("\n\n---\n\n"),
+    analysis: analysis.coaching
+      ? { ...analysis, coaching: deepWithoutEmDashes(analysis.coaching) }
+      : analysis,
+    feedback: withoutEmDashes(
+      attempts
+        .map((a) =>
+          [
+            identificationSummary(a.identification, input.lift),
+            a.coaching ? coachingText(a.coaching) : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        )
+        .join("\n\n---\n\n"),
+    ),
   };
+}
+
+// Coach's words keep no em dashes, as in typed replies. Only plain data
+// (strings, numbers, arrays, objects) is expected here.
+function deepWithoutEmDashes<T>(value: T): T {
+  if (typeof value === "string") return withoutEmDashes(value) as T;
+  if (Array.isArray(value)) return value.map(deepWithoutEmDashes) as T;
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, deepWithoutEmDashes(v)]),
+    ) as T;
+  return value;
 }

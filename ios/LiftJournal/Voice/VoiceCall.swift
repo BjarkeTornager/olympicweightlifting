@@ -411,10 +411,13 @@ final class VoiceCall {
   /// A completed turn starts a new line unless it ended mid-sentence; noise
   /// that transcribes as nothing adds no line (appendLine on the website).
   private func append(_ role: Line.Role, _ text: String, fresh: Bool = false) {
+    // Coach's words keep no em dashes; the whole line is cleaned, as a dash
+    // and its spaces can arrive in separate fragments.
+    let clean = { (line: String) in role == .coach ? LiveTranscript.withoutEmDashes(line) : line }
     if let last = lines.last, last.role == role, !fresh || !LiveTranscript.endsSentence(last.text) {
-      lines[lines.count - 1].text = LiveTranscript.join(last.text, text)
+      lines[lines.count - 1].text = clean(LiveTranscript.join(last.text, text))
     } else if !text.trimmingCharacters(in: .whitespaces).isEmpty {
-      lines.append(Line(id: UUID().uuidString, role: role, text: text.trimmingCharacters(in: .whitespaces)))
+      lines.append(Line(id: UUID().uuidString, role: role, text: clean(text.trimmingCharacters(in: .whitespaces))))
     }
     schedulePersist()
   }

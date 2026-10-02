@@ -35,6 +35,11 @@ struct VoiceProtocolTests {
 
   @Test("Fragments get a space between words but not inside numbers, as on the website")
   func joiningFragments() {
+    #expect(LiveTranscript.withoutEmDashes("Nice work — that's a best.") == "Nice work, that's a best.")
+    #expect(LiveTranscript.withoutEmDashes("Good night—really.") == "Good night, really.")
+    #expect(LiveTranscript.withoutEmDashes("Sleep was short – try earlier.") == "Sleep was short, try earlier.")
+    #expect(LiveTranscript.withoutEmDashes("Aim for 3–5 litres.") == "Aim for 3–5 litres.")
+    #expect(LiveTranscript.withoutEmDashes("Done —.") == "Done.")
     #expect(LiveTranscript.join("hours", "and") == "hours and")
     #expect(LiveTranscript.join("done.", "Next") == "done. Next")
     #expect(LiveTranscript.join("Did you ", "train?") == "Did you train?")

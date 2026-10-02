@@ -110,6 +110,41 @@ test(
         notices: [],
         sleep: { connected: false },
       });
+      // Once the iPhone app has synced Apple Health, the status says so, so
+      // the website doesn't offer the sleep Shortcut as if nothing were there.
+      const synced = await readJournal(b.id);
+      synced.state.health.vitals = [
+        {
+          date: "2026-09-30",
+          restingHeartRate: 54,
+          heartRateVariabilityMs: null,
+          averageHeartRate: null,
+          steps: 6400,
+          activeEnergyKcal: null,
+          source: "apple-health",
+          updatedAt: "2026-09-30T21:00:00.000Z",
+        },
+        {
+          date: "2026-10-01",
+          restingHeartRate: 55,
+          heartRateVariabilityMs: null,
+          averageHeartRate: null,
+          steps: 7100,
+          activeEnergyKcal: null,
+          source: "apple-health",
+          updatedAt: "2026-10-01T21:00:00.000Z",
+        },
+      ];
+      await writeJournal(b.id, {
+        state: synced.state,
+        revision: synced.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      assert.deepEqual(await (await tracking.GET(req(b))).json(), {
+        notices: [],
+        sleep: { connected: false },
+        app: { lastDate: "2026-10-01" },
+      });
       assert.equal(
         (await connection.POST(req(a, "POST", {}, "https://evil.test"))).status,
         403,
@@ -200,9 +235,11 @@ test(
       assert.equal(failedStatus.notices[0].code, "sleep_failed");
       assert.equal(failedStatus.sleep.connected, true);
       assert.ok(!JSON.stringify(failedStatus).includes(token));
+      // The other account is unaffected: still only its own app sync.
       assert.deepEqual(await (await tracking.GET(req(b))).json(), {
         notices: [],
         sleep: { connected: false },
+        app: { lastDate: "2026-10-01" },
       });
       const replacement = (await (await connection.POST(req(a, "POST"))).json())
         .token;

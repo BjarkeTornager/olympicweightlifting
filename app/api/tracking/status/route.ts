@@ -8,9 +8,17 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const user = await requireAthlete(request);
-    const [health, reminder, budget] = await Promise.all([
+    const [health, app, reminder, budget] = await Promise.all([
       getPool().query(
         "SELECT last_result,last_sync_at,last_date::text AS last_date FROM health_connections WHERE user_id=$1",
+        [user.id],
+      ),
+      // The iPhone app's Apple Health sync writes a daily summary; the
+      // Shortcut only imports sleep. Dates only leave the database.
+      getPool().query<{ last_date: string | null }>(
+        `SELECT max(v->>'date') AS last_date FROM journals j,
+           jsonb_array_elements(coalesce(j.state->'health'->'vitals', '[]'::jsonb)) v
+         WHERE j.user_id=$1`,
         [user.id],
       ),
       getPool().query(
@@ -33,6 +41,10 @@ export async function GET(request: Request) {
             lastDate: health.rows[0].last_date,
           }
         : { connected: false },
+      // Present once the iPhone app has synced Apple Health.
+      ...(app.rows[0]?.last_date
+        ? { app: { lastDate: app.rows[0].last_date } }
+        : {}),
     });
   } catch (error) {
     return trackingFailure(error);

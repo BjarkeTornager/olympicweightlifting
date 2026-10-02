@@ -54,6 +54,9 @@ struct VoiceProtocolTests {
     #expect(LiveProtocol.promisesAction("One moment, I'll look that up"))
     #expect(!LiveProtocol.promisesAction("Let me check your sleep. You slept 7 hours."))
     #expect(!LiveProtocol.promisesAction("How was training?"))
+    #expect(LiveProtocol.promisesAction("Super. Lad mig lige tjekke din søvn."))
+    #expect(LiveProtocol.promisesAction("Et øjeblik, jeg gemmer det"))
+    #expect(!LiveProtocol.promisesAction("Hvordan gik træningen?"))
   }
 
   @Test("Background noise is silenced while the coach speaks; real speech gets through whole")

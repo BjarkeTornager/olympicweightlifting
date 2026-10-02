@@ -331,6 +331,48 @@ test(
       );
 
       await t.test(
+        "saves from one reply run together and both land",
+        async () => {
+          const a = await user();
+          const meal = (meal_type: string, name: string) => ({
+            summary: `${name} for ${meal_type}`,
+            date: today,
+            meal_type,
+            name,
+            items: [
+              {
+                name,
+                portion: "1 serving",
+                calories: 400,
+                protein_g: 20,
+                carbs_g: 50,
+                fat_g: 12,
+              },
+            ],
+          });
+          // The app runs a reply's tool calls at the same time, so they read
+          // the same journal revision; the slower ones must prepare again
+          // rather than fail.
+          const results = await Promise.all([
+            run(a, "log_meal", meal("lunch", "Rye bread with brie")),
+            run(a, "log_meal", meal("dinner", "Banana")),
+            run(a, "log_sleep", {
+              summary: "Slept 7 hours",
+              date: today,
+              hours: 7,
+            }),
+          ]);
+          results.forEach((r) => assert.equal(r.ok, true, JSON.stringify(r)));
+          const { state } = await readJournal(a);
+          assert.deepEqual(state.nutrition.meals.map((m) => m.type).sort(), [
+            "dinner",
+            "lunch",
+          ]);
+          assert.equal((await history(a)).length, 3);
+        },
+      );
+
+      await t.test(
         "a repeated call id returns the same save, not a second one",
         async () => {
           const a = await user();

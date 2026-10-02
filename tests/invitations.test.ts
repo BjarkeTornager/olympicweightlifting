@@ -29,6 +29,7 @@ test(
     const invites = await import("../app/api/invitations/route");
     const { GET: session } = await import("../app/api/session/route");
     const { GET: journal } = await import("../app/api/journal/route");
+    const { GET: usage } = await import("../app/api/owner/usage/route");
     const { GET: rawAuth } = await import("../app/api/auth/[...all]/route");
     const auth = getAuth();
     const password = `test-only-${crypto.randomUUID()}`;
@@ -176,6 +177,12 @@ test(
         "Invitees cannot use the owner's account header",
       );
       assert.equal((await journal(req(invitedCookie, invitedId))).status, 200);
+      // Usage totals are the owner's alone.
+      assert.equal((await usage(req(invitedCookie, invitedId))).status, 403);
+      const report = await usage(req(ownerCookie, ownerId));
+      assert.equal(report.status, 200);
+      assert.equal(report.headers.get("cache-control"), "no-store");
+      assert.ok((await report.json()).people.total >= 2);
       const listing = await invites.GET(req(ownerCookie, ownerId));
       assert.equal(listing.headers.get("cache-control"), "no-store");
       assert.ok(
@@ -366,7 +373,7 @@ test(
       ]);
       await getPool().query(
         "DELETE FROM request_limits WHERE key=ANY($1::text[])",
-        [[`invitations:${ownerId}`]],
+        [[`invitations:${ownerId}`, `owner-usage:${ownerId}`]],
       );
       await getPool().end();
     }

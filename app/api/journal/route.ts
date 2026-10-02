@@ -13,6 +13,7 @@ import {
   allowRequest,
 } from "@/lib/server";
 import { planProgramDay } from "@/js/progression.js";
+import { countUse } from "@/lib/feature-use";
 import { days, program, today } from "@/lib/domain";
 export const dynamic = "force-dynamic";
 const schema = z.object({
@@ -108,25 +109,23 @@ export async function PUT(request: Request) {
     }
     const raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     const input = schema.parse(raw);
+    const saved = await writeJournal(user.id, {
+      ...input,
+      preserveMissingFoodTags: true,
+      preserveMissingCoachData: true,
+      preserveMissingActivityPhotos:
+        request.headers.get("x-activity-photos-version") !== "1",
+      state: {
+        ...input.state,
+        // Preserve omission until the transaction can retain this additive
+        // field for an older client. A schema default must not mean deletion.
+        cardio: raw.state.cardio === undefined ? undefined : input.state.cardio,
+      },
+    });
+    void countUse(user.id, "web.journal_save");
     return Response.json({
       accountId: user.id,
-      ...foodSnapshotForClient(
-        request,
-        await writeJournal(user.id, {
-          ...input,
-          preserveMissingFoodTags: true,
-          preserveMissingCoachData: true,
-          preserveMissingActivityPhotos:
-            request.headers.get("x-activity-photos-version") !== "1",
-          state: {
-            ...input.state,
-            // Preserve omission until the transaction can retain this additive
-            // field for an older client. A schema default must not mean deletion.
-            cardio:
-              raw.state.cardio === undefined ? undefined : input.state.cardio,
-          },
-        }),
-      ),
+      ...foodSnapshotForClient(request, saved),
     });
   } catch (error) {
     if (error instanceof RevisionConflict)

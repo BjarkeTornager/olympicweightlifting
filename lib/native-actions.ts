@@ -21,6 +21,7 @@ import {
   RevisionConflict,
   writeJournal,
 } from "./server";
+import { countUse } from "./feature-use";
 
 // Every /api/v1 route is for the installed app only, and an unsupported build
 // gets a 426 it can show as "update in TestFlight".
@@ -128,6 +129,7 @@ export async function applyNativeAction(
         revision: snapshot.revision,
         mutationId: input.id,
       });
+      void countUse(userId, `app.${input.action.kind}`);
       return {
         id: input.id,
         status: "saved" as const,

@@ -3,6 +3,7 @@ import { listVideos, saveVideo } from "@/lib/video/store";
 import { MAX_VIDEO_BYTES, videoUploadSchema } from "@/lib/video/types";
 import { allowRequest } from "@/lib/server";
 import { bodyConfigurationForAccount } from "@/lib/video/body-server";
+import { countUse } from "@/lib/feature-use";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -64,10 +65,9 @@ export async function POST(request: Request) {
       await reader.cancel();
       throw error;
     }
-    return Response.json(
-      await saveVideo(user.id, metadata, Buffer.concat(chunks)),
-      { status: 202, headers },
-    );
+    const saved = await saveVideo(user.id, metadata, Buffer.concat(chunks));
+    void countUse(user.id, "video.upload");
+    return Response.json(saved, { status: 202, headers });
   } catch (error) {
     return apiFailure(error);
   }

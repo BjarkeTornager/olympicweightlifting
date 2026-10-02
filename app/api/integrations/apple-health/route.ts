@@ -5,6 +5,7 @@ import { ApiError, requireAthlete } from "@/lib/agent/http";
 import { allowRequest } from "@/lib/server";
 import { createHealthConnection } from "@/lib/apple-health-store";
 import { trackingResponse, trackingFailure } from "@/lib/tracking-http";
+import { countUse } from "@/lib/feature-use";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
@@ -31,7 +32,9 @@ export async function POST(request: Request) {
         "Please wait a minute before creating another key.",
         429,
       );
-    return trackingResponse({ token: await createHealthConnection(user.id) });
+    const token = await createHealthConnection(user.id);
+    void countUse(user.id, "health.shortcut_connect");
+    return trackingResponse({ token });
   } catch (error) {
     return trackingFailure(error);
   }

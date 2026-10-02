@@ -34,6 +34,7 @@ import {
 } from "@/lib/voice-elevenlabs";
 import { voiceFor } from "@/lib/voice-options";
 import { coachLanguageSchema } from "@/lib/coach-language";
+import { countUse } from "@/lib/feature-use";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +122,12 @@ export async function POST(request: Request) {
       await recentConversations(user.id, { limit: 10 }),
       { savedPhotos: provider === "google", language },
     );
+    // A resumed Google call is the same conversation, so it isn't counted again.
+    if (!resumeHandle) {
+      void countUse(user.id, `voice.call.${provider}`);
+      void countUse(user.id, `voice.purpose.${purpose}`);
+      void countUse(user.id, `voice.language.${language ?? "en"}`);
+    }
     if (provider === "elevenlabs") {
       let url: string;
       try {

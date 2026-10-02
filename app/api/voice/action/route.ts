@@ -15,6 +15,7 @@ import {
   voiceToolArgs,
   type VoiceToolName,
 } from "@/lib/voice-actions";
+import { countUse } from "@/lib/feature-use";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,9 @@ export async function POST(request: Request) {
       .parse(await readJson(request, 32000));
     const today = localClock(new Date(), input.timezone).date;
     try {
-      return Response.json(await runVoiceTool(user.id, { ...input, today }), {
+      const result = await runVoiceTool(user.id, { ...input, today });
+      if (result.ok) void countUse(user.id, `voice.tool.${input.name}`);
+      return Response.json(result, {
         headers: { "Cache-Control": "no-store" },
       });
     } catch (error) {

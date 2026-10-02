@@ -6,6 +6,7 @@ import { visualSchema, type SavedVisual } from "../coach-visuals";
 import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
+import { countUse } from "../feature-use";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
 import { MAX_EXECUTED_TOOLS } from "./limits";
@@ -247,6 +248,10 @@ export async function runTurn(
         .returning({ id: agentTurns.id });
   if (!inserted.length)
     throw new ApiError("That request is already being processed.", 409);
+  if (!existing[0]) {
+    void countUse(userId, "coach.message");
+    if (photoIds.length) void countUse(userId, "coach.photo");
+  }
   const todayRoutes = await routeNotesFor(
     userId,
     snapshot.state,
@@ -550,6 +555,8 @@ export async function runTurn(
         signal.throwIfAborted();
         emit?.({ type: EventType.STEP_STARTED, stepName });
         let output: unknown;
+        // Change kinds for the usage counts; never their content.
+        let changeKinds: string[] = [];
         try {
           if (
             !Object.hasOwn(specifications, name) ||
@@ -740,6 +747,10 @@ export async function runTurn(
             const { answer, reviewRequested, ...actionArgs } =
               actionToolSchema.parse(args);
             const requested = actionSchema.parse(actionArgs);
+            changeKinds =
+              requested.kind === "record_bundle"
+                ? requested.entries.map((entry) => entry.kind)
+                : [requested.kind];
             const saving = key === "log_entry";
             if (
               !saving &&
@@ -821,11 +832,17 @@ export async function runTurn(
         } catch (e) {
           output = { error: toolError(name, e) };
         }
-        hooks.onToolCall?.(
-          name,
-          call.function.arguments,
-          !(output && typeof output === "object" && "error" in output),
+        const succeeded = !(
+          output &&
+          typeof output === "object" &&
+          "error" in output
         );
+        hooks.onToolCall?.(name, call.function.arguments, succeeded);
+        if (succeeded && Object.hasOwn(specifications, name)) {
+          void countUse(userId, `coach.tool.${name}`);
+          for (const kind of changeKinds)
+            void countUse(userId, `coach.change.${kind}`);
+        }
         signal.throwIfAborted();
         emit?.({ type: EventType.STEP_FINISHED, stepName });
         const encoded = JSON.stringify(output);

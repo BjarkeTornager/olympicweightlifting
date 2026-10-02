@@ -8,6 +8,7 @@ import {
   requireAthlete,
 } from "@/lib/agent/http";
 import { allowRequest } from "@/lib/server";
+import { countUse } from "@/lib/feature-use";
 
 export const dynamic = "force-dynamic";
 const response = (data: unknown) =>
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
         [crypto.randomUUID(), email, owner.id],
       );
       await client.query("COMMIT");
+      void countUse(owner.id, "invitation.send");
       return response({ id: rows[0].id });
     } catch (error) {
       await client.query("ROLLBACK");

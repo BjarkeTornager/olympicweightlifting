@@ -1,6 +1,7 @@
 "use client";
 import { TrackingSettings } from "../tracking-settings";
 import { Invitations } from "../invitations";
+import { UsageReport } from "../usage-report";
 import { privateFetch } from "@/lib/private-fetch";
 import { useEffect, useState } from "react";
 import {
@@ -56,6 +57,7 @@ export function SettingsView({
       <div className="settings-grid">
         <TrackingSettings journal={journal} initiallyOpen={trackingOpen} />
         {journal.auth.canInvite && <Invitations accountId={identity.id} />}
+        {journal.auth.canInvite && <UsageReport accountId={identity.id} />}
         <section className="panel">
           <h2>Your account</h2>
           <p>

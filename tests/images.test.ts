@@ -4,7 +4,11 @@ import {
   classifyImage,
   resolveImageClassification,
 } from "../lib/image-classifier";
-import { imageCoachPrompt } from "../lib/images";
+import {
+  coachRequest,
+  imageCoachPrompt,
+  PHOTO_ONLY_MESSAGE,
+} from "../lib/images";
 
 test("ambiguous categories stay out of Food and tag output is bounded", () => {
   for (const confidence of ["medium", "low"])
@@ -87,4 +91,43 @@ test("classifier sends only the image, limits tools, and rejects malformed model
     })),
     /could not be determined/,
   );
+});
+
+test("a photo sent without words asks Coach what the web composer asks", () => {
+  // The iPhone app's placeholder with a meal photo logs the meal straight away.
+  assert.equal(
+    coachRequest(PHOTO_ONLY_MESSAGE, ["food"]),
+    imageCoachPrompt("food"),
+  );
+  assert.match(
+    coachRequest("Here’s a photo.", ["food"]),
+    /^Log the food I ate/,
+  );
+  assert.equal(
+    coachRequest(PHOTO_ONLY_MESSAGE, ["food", "food"]),
+    imageCoachPrompt("food", 2),
+  );
+  assert.equal(
+    coachRequest(PHOTO_ONLY_MESSAGE, ["activity"]),
+    imageCoachPrompt("activity"),
+  );
+  // Sleep, uncertain and mixed photos still don't save without being asked.
+  assert.equal(
+    coachRequest(PHOTO_ONLY_MESSAGE, ["sleep"]),
+    imageCoachPrompt("sleep"),
+  );
+  assert.equal(
+    coachRequest(PHOTO_ONLY_MESSAGE, ["unclassified"]),
+    imageCoachPrompt("unclassified"),
+  );
+  assert.equal(
+    coachRequest(PHOTO_ONLY_MESSAGE, ["food", "sleep"]),
+    imageCoachPrompt("unclassified", 2),
+  );
+  // Words the athlete typed are never replaced, and no photo means no change.
+  assert.equal(
+    coachRequest("Is this a good snack?", ["food"]),
+    "Is this a good snack?",
+  );
+  assert.equal(coachRequest(PHOTO_ONLY_MESSAGE, []), PHOTO_ONLY_MESSAGE);
 });

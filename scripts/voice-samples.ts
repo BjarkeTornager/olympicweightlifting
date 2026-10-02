@@ -30,11 +30,11 @@ import type { VoiceProvider } from "../lib/voice-elevenlabs";
 
 const lines: Record<CoachLanguage, string> = {
   // No numbers: transcripts write them as digits, which the check can't match.
-  en: "Morning! Great work on the squats yesterday. How did you sleep last night?",
-  da: "Godmorgen! Flot arbejde med squats i går. Hvordan har du sovet i nat?",
+  en: "Morning! Nice job on yesterday's walk. How did you sleep last night?",
+  da: "Godmorgen! Flot klaret med gåturen i går. Hvordan har du sovet i nat?",
 };
 const instruction = (line: string) =>
-  `You are recording a short voice sample for a fitness app. Your only task: when asked, say exactly the following words once, warmly and confidently like a coach at the platform, with nothing before or after them and without calling any tool:\n"${line}"`;
+  `You are recording a short voice sample for a health app. Your only task: when asked, say exactly the following words once, warmly and confidently like a personal health coach, with nothing before or after them and without calling any tool:\n"${line}"`;
 const start = "(Record the sample now.)";
 const manifestPath = "lib/voice-samples.json";
 

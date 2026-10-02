@@ -33,11 +33,13 @@ Each new build has to be added to the external group. The first build of each ne
 
 **Beta App Description**
 
-> Lift Journal is a private training journal for weightlifters. Log workouts and sets, meals, water, sleep and daily check-ins; import sleep, heart rate and workouts from Apple Health; and ask Coach, an AI assistant, about your training. The beta is invitation-only: sign in with the Google account you were invited with.
+> Lift Journal is a private health journal you can talk to. Tell Coach how you slept, what you ate and how you moved, by voice, chat or photo, and it keeps the record and tells you what it means. Sleep, workouts and activity come in from Apple Health automatically. The beta is invitation-only: sign in with the Google account you were invited with.
+
+(Updated 2 October 2026 for the health-for-everyone positioning, see [product principles](product-principles.md). The text in App Store Connect is changed there by hand.)
 
 **What to Test**
 
-> Log water and a check-in on Today, start a session in Train and log a set, ask Coach about today's training, connect Apple Health from Profile, and check that entries appear in Journal. Please report anything confusing or broken with TestFlight's screenshot feedback.
+> Connect Apple Health from Profile, do a voice check-in from Today (say how you slept and what you ate), take a photo of a meal for Coach, and check that everything appears in Journal. Please report anything confusing or broken with TestFlight's screenshot feedback.
 
 **Review Notes**
 

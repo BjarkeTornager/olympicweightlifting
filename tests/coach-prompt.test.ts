@@ -117,7 +117,14 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // a Markdown table. Asked for targets, a macro split and training days,
     // Coach answered with a Markdown table and no visual. Health, privacy
     // and evidence text is unchanged.
-    "3443af19188e8d1074c2a835f11b5fc9fcca59b05cc7f3c64c78735780af4e6c",
+    // Revised 2026-10-02, deliberate and reviewed at the owner's request:
+    // Lift Journal is a health app for everyone. Coach's persona leads with
+    // sleep, food and drink, movement and training and habits, stays the
+    // fat-loss and muscle-building coach and nutrition guide, keeps strength
+    // and Olympic weightlifting expertise for those who lift, and meets
+    // people where they are; the site description lists the areas in that
+    // order. Health, privacy, evidence and action policy text is unchanged.
+    "0ba5efa82af9e582b62e80e65e147245b3346f1ec2da1950f62c9a888aaf1834",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

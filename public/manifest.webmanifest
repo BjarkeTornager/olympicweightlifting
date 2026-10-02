@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Lift Journal",
   "short_name": "Lift Journal",
-  "description": "A local-first Olympic weightlifting program and training log.",
+  "description": "A private health journal you can talk to: sleep, food, movement and training, with a Coach that knows your day.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

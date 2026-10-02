@@ -104,8 +104,9 @@ function Landing({
             <em>Your private space.</em>
           </h1>
           <p className="lead">
-            Bring your training, nutrition and recovery together with a coach
-            that knows your journal.
+            A private health journal you can talk to. Tell Coach how you
+            slept, what you ate and how you moved, and it keeps the record and
+            tells you what it means.
           </p>
           <div className="landing-signin">
             {phase === "checking" ? (

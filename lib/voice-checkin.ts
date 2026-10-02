@@ -22,7 +22,7 @@ import {
 // fixed here on the server. Saving goes through Coach, never through Gemini.
 export const VOICE_MODEL =
   process.env.VOICE_MODEL || "gemini-3.8-live-extended-thinking";
-// A prebuilt Gemini voice chosen to sound like a coach at the platform.
+// A prebuilt Gemini voice chosen to sound like a personal coach.
 export const VOICE_NAME = process.env.VOICE_NAME || "Orus";
 export const VOICE_SESSION_MINUTES = 10;
 export const VOICE_SOCKET_URL =
@@ -116,7 +116,7 @@ export function voiceInstruction(
   } = {},
 ) {
   const { savedPhotos = true, language } = options;
-  return `You are the athlete's coach (Olympic weightlifting and gym coach, fat-loss and muscle-building coach and nutrition guide in one, though not a registered dietitian or doctor) doing a short spoken check-in${name ? ` with ${name}` : ""}. Sound like a real coach at the platform: warm, confident, direct and energetic, with short natural sentences, genuine encouragement for good work and calm matter-of-factness about misses. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
+  return `You are the person's health coach (sleep, food and drink, movement and training, fat loss and muscle building, with strength and Olympic weightlifting know-how for those who lift; not a registered dietitian or doctor) doing a short spoken check-in${name ? ` with ${name}` : ""}. Sound like a real personal coach: warm, confident, direct and encouraging, with short natural sentences, genuine encouragement for good habits and calm matter-of-factness about off days. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 
 Rules above everything else:
 ${speakingRule(language)}

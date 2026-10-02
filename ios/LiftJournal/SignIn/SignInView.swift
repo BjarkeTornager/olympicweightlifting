@@ -14,7 +14,7 @@ struct SignInView: View {
         .accessibilityHidden(true)
       Text("Lift Journal")
         .font(.largeTitle.bold())
-      Text("Training, food, sleep and recovery in one private journal, with a Coach that knows it.")
+      Text("A private health journal you can talk to. Tell Coach how you slept, what you ate and how you moved, and it keeps the record and tells you what it means.")
         .font(.title3)
         .foregroundStyle(.secondary)
       Spacer()

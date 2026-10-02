@@ -1320,6 +1320,25 @@
           "kind"
         ]
       },
+      "FirstSteps": {
+        "type": "object",
+        "properties": {
+          "appleHealth": {
+            "type": "boolean"
+          },
+          "meal": {
+            "type": "boolean"
+          },
+          "goals": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "appleHealth",
+          "meal",
+          "goals"
+        ]
+      },
       "HealthDay": {
         "type": "object",
         "properties": {
@@ -2832,6 +2851,9 @@
             "items": {
               "$ref": "#/components/schemas/Priority"
             }
+          },
+          "firstSteps": {
+            "$ref": "#/components/schemas/FirstSteps"
           }
         },
         "required": [

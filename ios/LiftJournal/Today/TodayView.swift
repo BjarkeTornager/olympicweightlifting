@@ -8,6 +8,7 @@ import SwiftUI
 struct TodayView: View {
   @Environment(AppModel.self) private var model
   @State private var healthNeedsAccess = false
+  @AppStorage(FirstStepsCard.hiddenKey) private var firstStepsHidden = false
   /// The last seven days, for the small charts on each card.
   @State private var week: Components.Schemas.Trends?
 
@@ -73,7 +74,12 @@ struct TodayView: View {
         QueueCard()
       }
       DayHero(today: today)
-      if model.health.available && !model.health.connected {
+      let firstSteps = firstStepsHidden ? nil : today.firstSteps
+      if let firstSteps {
+        FirstStepsCard(steps: firstSteps) { firstStepsHidden = true }
+      }
+      // The first steps include connecting Apple Health.
+      if model.health.available && !model.health.connected && firstSteps == nil {
         HealthPrompt(
           symbol: "heart.fill", title: "Connect Apple Health",
           detail: "Sleep, heart rate and workouts, without typing")
@@ -168,6 +174,96 @@ private struct HealthPrompt: View {
       .card()
     }
     .buttonStyle(CardButtonStyle())
+  }
+}
+
+/// A new journal's three steps to a full day: Apple Health brings sleep and
+/// movement, a meal brings food, and goals give the rings their targets.
+/// The server sends them for two weeks, until all are done; they can be hidden.
+struct FirstStepsCard: View {
+  static let hiddenKey = "firstStepsHidden"
+  @Environment(AppModel.self) private var model
+  let steps: Components.Schemas.FirstSteps
+  let hide: () -> Void
+
+  var body: some View {
+    let health = steps.appleHealth || model.health.connected
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Get started").font(.headline)
+          Text("Three steps, and your days fill in.").font(.subheadline).foregroundStyle(.secondary)
+        }
+        Spacer(minLength: 0)
+        Button("Hide Get started", systemImage: "xmark", action: hide)
+          .labelStyle(.iconOnly)
+          .font(.footnote.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(width: 32, height: 32)
+          .contentShape(.rect)
+      }
+      NavigationLink {
+        HealthView()
+      } label: {
+        StepRow(
+          done: health, symbol: "heart.fill", tint: Theme.heart, title: "Connect Apple Health",
+          detail: "Sleep, steps and workouts arrive by themselves")
+      }
+      .allowsHitTesting(!health)
+      Button {
+        model.openCoach(.mealPhoto)
+      } label: {
+        StepRow(
+          done: steps.meal, symbol: "fork.knife", tint: Category.food.tint, title: "Log your first meal",
+          detail: "Take a photo and Coach works out the rest")
+      }
+      .allowsHitTesting(!steps.meal)
+      Button {
+        model.openCoach(.message("Help me set my goals"))
+      } label: {
+        StepRow(
+          done: steps.goals, symbol: "target", tint: Theme.accent, title: "Set your goals",
+          detail: "Coach turns your weight and goal into daily targets")
+      }
+      .allowsHitTesting(!steps.goals)
+    }
+    .buttonStyle(.plain)
+    .card()
+  }
+}
+
+/// One first step: its icon until done, then a check mark.
+private struct StepRow: View {
+  let done: Bool
+  let symbol: String
+  let tint: Color
+  let title: String
+  let detail: String
+
+  var body: some View {
+    HStack(spacing: 12) {
+      if done {
+        Image(systemName: "checkmark.circle.fill")
+          .font(.title2)
+          .foregroundStyle(Theme.success)
+          .frame(width: 36, height: 36)
+      } else {
+        IconBadge(symbol: symbol, tint: tint, size: 36)
+      }
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(done ? .secondary : .primary)
+        if !done {
+          Text(detail).font(.footnote).foregroundStyle(.secondary)
+        }
+      }
+      Spacer(minLength: 0)
+      if !done {
+        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+      }
+    }
+    .contentShape(.rect)
+    .accessibilityElement(children: .combine)
+    .accessibilityValue(done ? "Done" : "")
   }
 }
 

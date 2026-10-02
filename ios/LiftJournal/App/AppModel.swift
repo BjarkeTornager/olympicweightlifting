@@ -45,6 +45,9 @@ final class AppModel {
   var voiceEnded = 0
   /// Today's check-in sheet, also opened from the morning reminder.
   var showingCheckin = false
+  /// What Coach should do when it next appears: open the camera for a meal,
+  /// or start a message the athlete can edit before sending.
+  var coachIntent: CoachIntent?
   var queued = 0
   var refused: [Outbox.Item] = []
 
@@ -221,6 +224,7 @@ final class AppModel {
   private func expire(message: String?) async {
     AIConsent.reset()
     Reminders.shared.reset()
+    UserDefaults.standard.removeObject(forKey: FirstStepsCard.hiddenKey)
     await Credentials.shared.clear()
     await HealthSync.shared.markConnected(false)
     Storage.removeAll()
@@ -344,6 +348,18 @@ final class AppModel {
   func removeSupplement(id: String) async {
     await save(
       .deleteSupplement(.init(kind: .deleteSupplement, supplementId: id)), confirmation: "Supplement removed")
+  }
+
+  enum CoachIntent: Equatable {
+    case mealPhoto
+    case message(String)
+  }
+
+  /// Switches to Coach, which carries out the intent once it's on screen
+  /// (after the AI permission, if that hasn't been given yet).
+  func openCoach(_ intent: CoachIntent) {
+    coachIntent = intent
+    tab = .coach
   }
 
   // MARK: Voice

@@ -262,6 +262,17 @@ const burnedView = z
   .strict()
   .register(nativeResponses, { id: "Burned" });
 
+// A new person's steps to a full day: Apple Health brings sleep and
+// movement, a meal brings food, and goals give the rings their targets.
+const firstStepsView = z
+  .object({
+    appleHealth: z.boolean(),
+    meal: z.boolean(),
+    goals: z.boolean(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "FirstSteps" });
+
 export const todayView = z
   .object({
     date: day,
@@ -284,6 +295,8 @@ export const todayView = z
     activities: z.array(activityView),
     sessionsThisWeek: int,
     priorities: z.array(priorityView),
+    // Only in a journal's first two weeks, until all three are done.
+    firstSteps: firstStepsView.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Today" });
@@ -731,6 +744,22 @@ function bodyForToday(state: JournalState, date: string) {
   return Object.keys(body).length ? body : undefined;
 }
 
+// What a new journal has done of its first steps, for its first two weeks;
+// undefined once they're all done or the journal is older.
+export function firstSteps(state: JournalState, date: string) {
+  if (offsetDate(state.createdAt.slice(0, 10), 13) < date) return undefined;
+  const steps = {
+    // Anything that only the Apple Health sync writes.
+    appleHealth:
+      state.health.checkins.some((c) => c.sleepImport) ||
+      Boolean(state.health.vitals?.length) ||
+      Boolean(state.health.bodyFat?.some((b) => b.source === "apple-health")),
+    meal: state.nutrition.meals.length > 0,
+    goals: state.nutrition.targets.calories != null,
+  };
+  return Object.values(steps).every(Boolean) ? undefined : steps;
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
@@ -858,6 +887,7 @@ export function buildToday(
         reason: p.reason,
         action: p.action,
       })),
+      firstSteps: firstSteps(state, date),
     }),
   );
 }

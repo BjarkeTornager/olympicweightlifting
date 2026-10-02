@@ -120,5 +120,10 @@
       "reason": "300 kcal and 11 g protein across 1 logged meal. These are recorded totals, not your full daily intake.",
       "action": "Review food"
     }
-  ]
+  ],
+  "firstSteps": {
+    "appleHealth": true,
+    "meal": true,
+    "goals": false
+  }
 }

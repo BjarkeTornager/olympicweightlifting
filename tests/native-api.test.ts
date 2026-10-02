@@ -694,3 +694,59 @@ test("Today suggests a programme session only to someone who follows one", () =>
   state.sessions.push(session);
   assert.equal(buildToday(state, 2, date, new Set()).nextSession?.position, 2);
 });
+
+test("A new journal's first steps show until all are done, for two weeks", () => {
+  const state = emptyJournal();
+  state.createdAt = "2026-10-01T09:00:00.000Z";
+  const date = "2026-10-02";
+  assert.deepEqual(buildToday(state, 1, date, new Set()).firstSteps, {
+    appleHealth: false,
+    meal: false,
+    goals: false,
+  });
+  state.health.vitals = [
+    {
+      date,
+      restingHeartRate: null,
+      heartRateVariabilityMs: null,
+      averageHeartRate: null,
+      steps: 4200,
+      activeEnergyKcal: null,
+      source: "apple-health",
+      updatedAt: `${date}T08:00:00.000Z`,
+    },
+  ];
+  state.nutrition.meals.push(
+    mealSchema.parse({
+      id: crypto.randomUUID(),
+      date,
+      type: "breakfast",
+      name: "Porridge",
+      items: [
+        {
+          name: "Oats",
+          portion: "60 g",
+          calories: 230,
+          protein: 8,
+          carbs: 40,
+          fat: 4,
+        },
+      ],
+      source: "photo",
+      estimated: true,
+      createdAt: `${date}T07:00:00.000Z`,
+    }),
+  );
+  assert.deepEqual(buildToday(state, 2, date, new Set()).firstSteps, {
+    appleHealth: true,
+    meal: true,
+    goals: false,
+  });
+  // Older journals don't get them.
+  assert.equal(
+    buildToday(state, 2, "2026-10-15", new Set()).firstSteps,
+    undefined,
+  );
+  state.nutrition.targets.calories = 2200;
+  assert.equal(buildToday(state, 3, date, new Set()).firstSteps, undefined);
+});

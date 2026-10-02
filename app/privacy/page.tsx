@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 26 September 2026.</p>
+        <p className="lead">Last updated 2 October 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -354,6 +354,21 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section className="space-y-3">
+        <h2>How we measure use</h2>
+        <p>
+          To decide which features to keep, simplify or remove, Lift Journal
+          counts how often each feature is used: for each account and day, a
+          feature name such as &ldquo;Coach message&rdquo; or &ldquo;voice
+          call&rdquo; and a number. The counts never include what you said,
+          wrote, ate, photographed or recorded. The owner sees only totals and
+          averages across everyone, such as how many people used a feature or
+          how many days a week people record sleep, food and movement, worked
+          out from your journal&apos;s dates inside the database. Nothing is
+          shared with an analytics service, and the counts are deleted with your
+          account.
+        </p>
+      </section>
+      <section className="space-y-3">
         <h2>Cookies and other services</h2>
         <p>
           We use cookies needed for sign-in and browser storage needed to save
@@ -369,10 +384,10 @@ export default function PrivacyPage() {
           from Settings. In the iPhone app, Account › Delete account permanently
           deletes your account straight away: your journal, photos, videos,
           voice transcripts, Coach conversations, Apple Health imports,
-          reminders, sessions and invitation. Signing in again then needs a new
-          invitation. To request an export, correction or deletion another way,
-          contact the person who invited you to Lift Journal. We will verify the
-          account before acting on a request.
+          reminders, usage counts, sessions and invitation. Signing in again
+          then needs a new invitation. To request an export, correction or
+          deletion another way, contact the person who invited you to Lift
+          Journal. We will verify the account before acting on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

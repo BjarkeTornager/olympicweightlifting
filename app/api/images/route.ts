@@ -7,6 +7,7 @@ import {
 import { listUserImages, saveUserImage } from "@/lib/user-images";
 import { imageCategorySchema } from "@/lib/images";
 import { allowRequest } from "@/lib/server";
+import { countUse } from "@/lib/feature-use";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
@@ -30,10 +31,12 @@ export async function POST(request: Request) {
         "Please wait a minute before uploading more images.",
         429,
       );
-    return Response.json(
-      await saveUserImage(user.id, await readJson(request, 2900000)),
-      { headers },
+    const saved = await saveUserImage(
+      user.id,
+      await readJson(request, 2900000),
     );
+    void countUse(user.id, "image.upload");
+    return Response.json(saved, { headers });
   } catch (error) {
     return apiFailure(error);
   }

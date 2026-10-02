@@ -10,6 +10,7 @@ import { logFailure } from "@/lib/error-log";
 import { allowRequest } from "@/lib/server";
 import { readUserImage } from "@/lib/user-images";
 import { elevenLabsConfigured, elevenLabsPhoto } from "@/lib/voice-elevenlabs";
+import { countUse } from "@/lib/feature-use";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       .toBuffer();
     try {
       const fileId = await elevenLabsPhoto(conversationId, small);
+      void countUse(user.id, "voice.photo.elevenlabs");
       return Response.json(
         { fileId },
         { headers: { "Cache-Control": "no-store" } },

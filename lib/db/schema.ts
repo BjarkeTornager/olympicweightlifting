@@ -369,6 +369,25 @@ export const voiceCalls = pgTable(
   (t) => [index("voice_calls_user_date_idx").on(t.userId, t.startedAt)],
 );
 
+// How often each feature is used: a count per account, feature and day,
+// with no content, so the owner can see what's used before polishing or
+// cutting it (docs/product-principles.md, lib/feature-use.ts).
+export const featureUse = pgTable(
+  "feature_use",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    feature: text("feature").notNull(),
+    day: date("day").notNull(),
+    count: integer("count").notNull().default(1),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.feature, t.day] }),
+    index("feature_use_day_idx").on(t.day),
+  ],
+);
+
 export const agentTurns = pgTable(
   "agent_turns",
   {

@@ -2926,6 +2926,9 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .invitation-panel { grid-column: 1 / -1; }
 .invitation-panel > p { max-width: 65ch; }
 .invitation-panel .form-stack { max-width: 32rem; margin-top: 1.5rem; }
+.usage-panel { grid-column: 1 / -1; }
+.usage-panel > p { max-width: 65ch; margin-bottom: 0.75rem; }
+.usage-panel h3 { margin: 1.5rem 0 0.5rem; }
 .invitation-list { list-style: none; padding: 0; margin: 1.5rem 0 0; }
 .invitation-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--line, var(--line-strong)); padding: 1rem 0; }
 .invitation-list li > div:first-child { min-width: 0; display: grid; gap: .35rem; }

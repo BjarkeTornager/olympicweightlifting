@@ -9,6 +9,7 @@ import {
 } from "@/lib/reminders";
 import { reminderConfiguration } from "@/lib/reminder-worker";
 import { trackingResponse, trackingFailure } from "@/lib/tracking-http";
+import { countUse } from "@/lib/feature-use";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
@@ -78,6 +79,7 @@ export async function PUT(request: Request) {
     } finally {
       client.release();
     }
+    void countUse(user.id, "reminders.web_push");
     return trackingResponse({ enabled: true });
   } catch (error) {
     return trackingFailure(error);

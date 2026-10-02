@@ -1,6 +1,7 @@
 import { mealLoggingPolicy } from "./meal-logging";
 import { coachStyle } from "./coach-style";
 import { partOfDay } from "./time-context";
+import { replyLanguage, type CoachLanguage } from "../coach-language";
 import { isSkillParagraph, skillList, type SkillName } from "./skills";
 
 export const workoutCorrectionPolicy =
@@ -59,8 +60,10 @@ export function requestTime(
   currentDate: string,
   timezone: string,
   currentTime?: string,
+  language?: CoachLanguage,
 ) {
-  return `Today in the athlete's timezone (${timezone}) is ${currentDate}.${currentTime ? ` The local request time is ${currentTime} (24-hour clock), the ${partOfDay(currentTime).name}; if you greet by time of day, say "${partOfDay(currentTime).greeting}".` : ""}`;
+  const part = currentTime && partOfDay(currentTime, language);
+  return `Today in the athlete's timezone (${timezone}) is ${currentDate}.${part ? ` The local request time is ${currentTime} (24-hour clock), the ${part.name}; if you greet by time of day, say "${part.greeting}".` : ""}${replyLanguage(language)}`;
 }
 
 // Danish meal words the models misread (frokost is lunch in Danish but

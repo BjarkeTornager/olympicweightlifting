@@ -35,6 +35,8 @@ final class AppModel {
   var voiceEnabled = false
   /// The voices this server can run; more than one shows a choice in Profile.
   var voiceProviders: [VoiceProvider] = []
+  /// The voices to choose from in Profile, per provider.
+  var voiceOptions: [Components.Schemas.VoiceOption] = []
   /// The spoken check-in on screen, if any.
   var voiceCall: VoiceCall?
   /// Voice streams audio to Google, so the first call asks for AI permission.
@@ -77,6 +79,7 @@ final class AppModel {
       voiceEnabled = config.voice
       // A server from before the choice only has Google.
       voiceProviders = config.voiceProviders?.compactMap(VoiceProvider.init) ?? (config.voice ? [.google] : [])
+      voiceOptions = config.voiceOptions ?? []
       if let build = Int(LiftServer.clientHeader.split(separator: "/").last ?? ""),
         build < config.minimumBuild
       {

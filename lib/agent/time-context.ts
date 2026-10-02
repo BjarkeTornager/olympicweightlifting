@@ -1,3 +1,4 @@
+import { greeting, type CoachLanguage } from "../coach-language";
 /** Local clock context for inference; timestamps are not confirmed eating times. */
 export function localClock(at: Date | string, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -19,15 +20,17 @@ export function localClock(at: Date | string, timezone: string) {
 
 // The part of the day in words, and how to greet in it. Models greet from a
 // clock time unreliably ("good morning" at 12:20), so they are told this.
-export function partOfDay(time: string) {
+export function partOfDay(time: string, language?: CoachLanguage) {
   const hour = Number(time.slice(0, 2));
-  return hour >= 5 && hour < 12
-    ? { name: "morning", greeting: "Good morning" }
-    : hour >= 12 && hour < 18
-      ? { name: "afternoon", greeting: "Good afternoon" }
-      : hour >= 18 && hour < 23
-        ? { name: "evening", greeting: "Good evening" }
-        : { name: "night", greeting: "Hi" };
+  const name =
+    hour >= 5 && hour < 12
+      ? "morning"
+      : hour >= 12 && hour < 18
+        ? "afternoon"
+        : hour >= 18 && hour < 23
+          ? "evening"
+          : "night";
+  return { name, greeting: greeting(name, language) };
 }
 
 export function imageTiming(

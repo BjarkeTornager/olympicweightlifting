@@ -1,4 +1,5 @@
 import { voiceConfigured, voiceTools } from "./voice-checkin";
+import type { CoachLanguage } from "./coach-language";
 
 // Spoken check-ins through ElevenLabs' ElevenAgents, the alternative to
 // Gemini Live the athlete can choose in the iPhone app. The same instructions
@@ -148,7 +149,10 @@ export function elevenLabsAgent() {
       // Only a signed link from this server starts a call.
       auth: { enable_auth: true },
       overrides: {
-        conversation_config_override: { agent: { prompt: { prompt: true } } },
+        conversation_config_override: {
+          agent: { prompt: { prompt: true }, language: true },
+          tts: { voice_id: true },
+        },
       },
       // No recordings; transcripts are kept here, not at ElevenLabs.
       privacy: { record_voice: false, retention_days: 0, delete_audio: true },
@@ -266,12 +270,20 @@ export async function elevenLabsSignedUrl(fetcher: Fetcher = fetch) {
   }
 }
 
-/** What the phone sends first on the socket: this call's instructions. */
-export function elevenLabsStart(instruction: string) {
+/** What the phone sends first on the socket: this call's instructions,
+ * language and voice. */
+export function elevenLabsStart(
+  instruction: string,
+  options: { voice?: string; language?: CoachLanguage } = {},
+) {
   return {
     type: "conversation_initiation_client_data",
     conversation_config_override: {
-      agent: { prompt: { prompt: instruction } },
+      agent: {
+        prompt: { prompt: instruction },
+        language: options.language ?? "en",
+      },
+      tts: { voice_id: options.voice ?? ELEVENLABS_VOICE_ID },
     },
   };
 }

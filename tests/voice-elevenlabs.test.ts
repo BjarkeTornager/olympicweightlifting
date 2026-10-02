@@ -101,10 +101,12 @@ test("the agent speaks v4 Turbo, keeps nothing and starts only from a signed lin
   );
   assert.equal(platform.privacy.record_voice, false);
   assert.equal(platform.privacy.retention_days, 0);
+  // Without a choice, English and the default voice.
   assert.deepEqual(elevenLabsStart("Today's records"), {
     type: "conversation_initiation_client_data",
     conversation_config_override: {
-      agent: { prompt: { prompt: "Today's records" } },
+      agent: { prompt: { prompt: "Today's records" }, language: "en" },
+      tts: { voice_id: "cjVigY5qzO86Huf0OWal" },
     },
   });
 });
@@ -213,7 +215,9 @@ test("the ElevenLabs coach is told it can't see photos", () => {
   );
   const context = voiceContext(state, clock.date);
   const gemini = voiceInstruction(context, clock, "Sam");
-  const eleven = voiceInstruction(context, clock, "Sam", "checkin", [], false);
+  const eleven = voiceInstruction(context, clock, "Sam", "checkin", [], {
+    seesPhotos: false,
+  });
   assert.match(gemini, /view_photo/);
   assert.doesNotMatch(eleven, /view_photo|list_photos/);
   assert.match(eleven, /You can't see the photo/);

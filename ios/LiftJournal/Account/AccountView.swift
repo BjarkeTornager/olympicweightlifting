@@ -13,6 +13,10 @@ struct AccountView: View {
   @AppStorage(AIConsent.key) private var aiAllowed = false
   @AppStorage(Appearance.key) private var appearance: Appearance = .system
   @AppStorage(VoiceProvider.key) private var voiceProvider: VoiceProvider = .google
+  @AppStorage(CoachLanguage.key) private var language: CoachLanguage = CoachLanguage.deviceDefault
+  // Watched so the voice row updates after picking one.
+  @AppStorage(VoiceProvider.google.voiceKey) private var googleVoice = ""
+  @AppStorage(VoiceProvider.elevenlabs.voiceKey) private var elevenLabsVoice = ""
   /// Shown as the Profile tab rather than as a sheet: no Done button.
   var inTab = false
 
@@ -41,18 +45,39 @@ struct AccountView: View {
         } footer: {
           Text("System follows your iPhone's light and dark setting.")
         }
-        if model.voiceProviders.count > 1 {
+        Section {
+          Picker("Language", selection: $language) {
+            ForEach(CoachLanguage.allCases) { Text($0.title).tag($0) }
+          }
+          .pickerStyle(.segmented)
+          .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+          .sensoryFeedback(.selection, trigger: language)
+        } header: {
+          Text("Coach's language")
+        } footer: {
+          Text("Coach writes and speaks in this language, in chat and in voice check-ins.")
+        }
+        if model.voiceEnabled {
           Section {
-            Picker("Voice", selection: $voiceProvider) {
-              ForEach(model.voiceProviders) { Text($0.title).tag($0) }
+            if model.voiceProviders.count > 1 {
+              Picker("Provider", selection: $voiceProvider) {
+                ForEach(model.voiceProviders) { Text($0.title).tag($0) }
+              }
+              .pickerStyle(.segmented)
+              .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+              .sensoryFeedback(.selection, trigger: voiceProvider)
             }
-            .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-            .sensoryFeedback(.selection, trigger: voiceProvider)
+            if model.voiceOptions.contains(where: { $0.provider == callProvider.rawValue }) {
+              NavigationLink {
+                VoicePicker(provider: callProvider, options: model.voiceOptions)
+              } label: {
+                LabeledContent("Voice", value: voiceName)
+              }
+            }
           } header: {
             Text("Voice check-in")
           } footer: {
-            Text(voiceProvider.detail)
+            if model.voiceProviders.count > 1 { Text(callProvider.detail) }
           }
         }
         Section {
@@ -176,6 +201,19 @@ struct AccountView: View {
 }
 
 /// Who the athlete is, and where they stand this week.
+extension AccountView {
+  /// The provider the next call uses: the one picked, if offered.
+  fileprivate var callProvider: VoiceProvider {
+    model.voiceProviders.contains(voiceProvider) ? voiceProvider : model.voiceProviders.first ?? .google
+  }
+
+  fileprivate var voiceName: String {
+    // Read so a new pick shows when coming back from the list.
+    _ = (googleVoice, elevenLabsVoice)
+    return callProvider.voiceName(in: model.voiceOptions) ?? "Default"
+  }
+}
+
 private struct AthleteCard: View {
   let name: String
   let email: String

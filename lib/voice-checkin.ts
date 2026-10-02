@@ -11,6 +11,11 @@ import { drinkKinds, hydrationForDay } from "./hydration";
 import { nextTraining } from "./next-training";
 import { formatSleepDuration } from "./health";
 import { localClock, partOfDay } from "./agent/time-context";
+import {
+  speakingRule,
+  speechLanguageCode,
+  type CoachLanguage,
+} from "./coach-language";
 
 // Spoken daily check-in over the Gemini Live API. The phone talks to Google
 // directly with a single-use token; the API key, instructions and tools are
@@ -103,17 +108,21 @@ export function voiceInstruction(
   purpose: VoicePurpose = "checkin",
   // Recent conversations, oldest first; untrusted context, not instructions.
   memory: { at: string; kind: string; text: string }[] = [],
-  // ElevenLabs' voice agent can't be sent images; Gemini Live can.
-  seesPhotos = true,
+  options: {
+    // ElevenLabs' voice agent can't be sent images; Gemini Live can.
+    seesPhotos?: boolean;
+    language?: CoachLanguage;
+  } = {},
 ) {
+  const { seesPhotos = true, language } = options;
   return `You are the athlete's coach (Olympic weightlifting and gym coach, fat-loss and muscle-building coach and nutrition guide in one, though not a registered dietitian or doctor) doing a short spoken check-in${name ? ` with ${name}` : ""}. Sound like a real coach at the platform: warm, confident, direct and energetic, with short natural sentences, genuine encouragement for good work and calm matter-of-factness about misses. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 
 Rules above everything else:
-1. Speak English only, in every reply. Speech recognition often mishears short or unclear English as Spanish, Danish or another language; that is a transcription error, not the athlete switching language. If you did not understand, say so in English and ask them to repeat. Use another language only if the athlete explicitly asks for it by name ("speak Danish"), and then keep to it.
+${speakingRule(language)}
 2. Never say something is saved, logged or recorded until its save tool has returned success in this call. Call the tool first, then confirm. If a save was interrupted or failed, say it is not saved yet and save it now.
 3. Never announce a check or save and then go quiet ("let me check…"): call the tool in the same breath, or just answer. Silence makes the athlete talk over you.
 
-It is ${clock.time} on ${clock.date} (${clock.timezone}), the ${partOfDay(clock.time).name} for the athlete: if you greet by time of day, say "${partOfDay(clock.time).greeting}", never another part of the day. The day isn't over yet unless it's evening: ask about what's done so far, and don't treat anything not yet logged as skipped.
+It is ${clock.time} on ${clock.date} (${clock.timezone}), the ${partOfDay(clock.time).name} for the athlete: if you greet by time of day, say "${partOfDay(clock.time, language).greeting}", never another part of the day. The day isn't over yet unless it's evening: ask about what's done so far, and don't treat anything not yet logged as skipped.
 Already recorded for ${context.date}:
 - Food: ${context.food}
 - Sleep last night: ${context.sleep}
@@ -543,14 +552,20 @@ export function voiceTools() {
 }
 
 // A resumption handle continues an interrupted call with its conversation.
-export function voiceSetup(instruction: string, resumeHandle?: string) {
+export function voiceSetup(
+  instruction: string,
+  resumeHandle?: string,
+  options: { voice?: string; language?: CoachLanguage } = {},
+) {
   return {
     model: `models/${VOICE_MODEL}`,
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } },
-        languageCode: "en-US",
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: options.voice ?? VOICE_NAME },
+        },
+        languageCode: speechLanguageCode(options.language),
       },
       // Extended thinking requires a level; low keeps spoken replies prompt.
       // The standard Live model rejects the setting.

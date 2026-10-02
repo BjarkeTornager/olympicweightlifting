@@ -1,5 +1,6 @@
 import { MIN_IOS_BUILD } from "@/lib/native-client";
 import { voiceProviders } from "@/lib/voice-elevenlabs";
+import { voiceOptions } from "@/lib/voice-options";
 import { nativeConfig } from "@/lib/native-api";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export async function GET() {
       minimumBuild: MIN_IOS_BUILD,
       voice: voiceProviders().length > 0,
       voiceProviders: voiceProviders(),
+      voiceOptions: voiceOptions(),
       serverTime: new Date().toISOString(),
     }),
     { headers: { "Cache-Control": "no-store" } },

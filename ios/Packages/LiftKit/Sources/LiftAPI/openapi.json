@@ -1996,6 +1996,12 @@
               "description": "One of: google, elevenlabs. Treat others as unknown."
             }
           },
+          "voiceOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceOption"
+            }
+          },
           "serverTime": {
             "type": "string"
           }
@@ -3297,6 +3303,34 @@
         },
         "required": [
           "calls"
+        ]
+      },
+      "VoiceOption": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "One of: google, elevenlabs. Treat others as unknown."
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "id",
+          "name",
+          "detail",
+          "isDefault"
         ]
       },
       "WorkoutDetail": {

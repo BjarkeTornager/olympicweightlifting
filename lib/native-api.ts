@@ -50,12 +50,25 @@ export const errorBody = z
   .object({ error: z.string() })
   .register(nativeResponses, { id: "ErrorBody" });
 
+const voiceOption = z
+  .object({
+    provider: z.enum(["google", "elevenlabs"]),
+    id: z.string(),
+    name: z.string(),
+    detail: z.string(),
+    isDefault: z.boolean(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "VoiceOption" });
+
 export const nativeConfig = z
   .object({
     minimumBuild: int,
     voice: z.boolean(),
     // Which voices the app may offer; absent from servers before 30 Sept.
     voiceProviders: z.array(z.enum(["google", "elevenlabs"])).optional(),
+    // The voices to pick from in Profile; absent before 2 October.
+    voiceOptions: z.array(voiceOption).optional(),
     serverTime: instant,
   })
   .strict()

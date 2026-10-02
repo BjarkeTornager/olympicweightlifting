@@ -41,6 +41,7 @@ import {
 import { skillsFor, skillTools } from "./skills";
 import { turnTotals, type TurnMetrics } from "./turn-metrics";
 import { imageTiming, localClock } from "./time-context";
+import type { CoachLanguage } from "../coach-language";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
 import { guardChange } from "./change-guards";
@@ -132,6 +133,7 @@ export async function runTurn(
     timezone: string;
     photoIds?: string[];
     submittedAt?: string;
+    language?: CoachLanguage;
   },
   model: (
     messages: ModelMessage[],
@@ -260,8 +262,12 @@ export async function runTurn(
     {
       role: "system",
       content:
-        requestTime(currentDate, input.timezone, requestClock.time) +
-        mealWords(input.message),
+        requestTime(
+          currentDate,
+          input.timezone,
+          requestClock.time,
+          input.language,
+        ) + mealWords(input.message),
     },
     ...(loaded.size
       ? [

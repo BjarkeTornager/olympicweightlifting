@@ -278,9 +278,10 @@ export default function PrivacyPage() {
           ElevenLabs transcribes it, has Google’s Gemini model write the replies
           and speaks them in its own voice. Lift Journal’s ElevenLabs agent is
           set not to record audio and to schedule each conversation for
-          deletion; the transcript is stored in your account as above. Photos
-          you take during such a call are saved to your journal but not sent to
-          ElevenLabs. See{" "}
+          deletion; the transcript is stored in your account as above. A photo
+          you take with the camera during such a call is saved to your journal
+          and a smaller copy is sent to that ElevenLabs conversation so the
+          coach can see it; your other photos are not sent. See{" "}
           <a href="https://elevenlabs.io/privacy-policy" className="underline">
             ElevenLabs’ privacy policy
           </a>

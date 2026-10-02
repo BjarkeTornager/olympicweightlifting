@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       state.profile.name || user.name?.split(" ")[0],
       purpose,
       await recentConversations(user.id, { limit: 10 }),
-      { seesPhotos: provider === "google", language },
+      { savedPhotos: provider === "google", language },
     );
     if (provider === "elevenlabs") {
       let url: string;

@@ -34,9 +34,19 @@ export function voiceProviders(): VoiceProvider[] {
   ];
 }
 
-// Tools that need Gemini's image input: the ElevenLabs coach can't be sent
-// a photo mid-call, so it asks what's on the plate instead.
+// Browsing saved photos needs Gemini's image input. The ElevenLabs coach sees
+// a photo taken in the call (elevenLabsPhoto), not the library.
 const photoTools = new Set(["list_photos", "view_photo"]);
+// Tools that read or control the call: the coach needn't speak first.
+const quietTools = new Set([
+  "read_journal",
+  "recall_conversations",
+  "list_photos",
+  "view_photo",
+  "open_camera",
+  "take_photo",
+  "end_check_in",
+]);
 
 type GeminiSchema = {
   type: string;
@@ -92,6 +102,8 @@ export function elevenLabsTools() {
       expects_response: true,
       // The phone retries a save for up to about 20 seconds.
       response_timeout_secs: 30,
+      // A save runs while the coach acknowledges it, not in silence.
+      pre_tool_speech: quietTools.has(tool.name) ? "auto" : "force",
       ...("parameters" in tool && {
         parameters: elevenLabsSchema(
           tool.parameters as GeminiSchema,
@@ -118,6 +130,8 @@ export function elevenLabsAgent() {
       },
       conversation: {
         max_duration_seconds: ELEVENLABS_CALL_MINUTES * 60,
+        // Photos taken in the call reach the coach as images.
+        file_input: { enabled: true, max_files_per_conversation: 10 },
         client_events: [
           "conversation_initiation_metadata",
           "ping",
@@ -268,6 +282,38 @@ export async function elevenLabsSignedUrl(fetcher: Fetcher = fetch) {
       throw error;
     }
   }
+}
+
+/** Hands a photo taken in the call to its ElevenLabs conversation; the
+ * phone then sends the returned id with a message, and the coach sees it. */
+export async function elevenLabsPhoto(
+  conversationId: string,
+  jpeg: Uint8Array,
+  fetcher: Fetcher = fetch,
+) {
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }),
+    "photo.jpg",
+  );
+  const response = await fetcher(
+    `${API}/v1/convai/conversations/${encodeURIComponent(conversationId)}/files`,
+    {
+      method: "POST",
+      headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY! },
+      body: form,
+      signal: AbortSignal.timeout(20000),
+    },
+  );
+  if (!response.ok)
+    throw new ElevenLabsError(
+      response.status,
+      (await response.text().catch(() => "")).slice(0, 300),
+    );
+  const { file_id } = (await response.json()) as { file_id?: string };
+  if (!file_id) throw new ElevenLabsError(502, "No file id in the response.");
+  return file_id;
 }
 
 /** What the phone sends first on the socket: this call's instructions,

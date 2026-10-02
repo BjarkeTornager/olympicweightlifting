@@ -36,6 +36,8 @@ public enum LiveEvent: Sendable, Equatable {
   case corrected(String)
   /// ElevenLabs only: the call can't go on, with the reason.
   case failed(String)
+  /// ElevenLabs only: the conversation's id, to hand it a photo.
+  case conversation(String)
 }
 
 public enum LiveProtocol {

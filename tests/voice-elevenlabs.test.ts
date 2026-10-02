@@ -11,6 +11,7 @@ import {
   elevenLabsAgent,
   elevenLabsAgentId,
   ElevenLabsError,
+  elevenLabsPhoto,
   elevenLabsSignedUrl,
   elevenLabsStart,
   elevenLabsTools,
@@ -116,7 +117,8 @@ function fakeElevenLabs(routes: Record<string, (body?: unknown) => Response>) {
   const fetcher = (async (url: string | URL, init?: RequestInit) => {
     const { pathname, search } = new URL(url);
     const method = init?.method ?? "GET";
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    const body =
+      typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
     calls.push({ method, path: pathname + search, body });
     assert.equal(
       (init?.headers as Record<string, string>)["xi-api-key"],
@@ -207,7 +209,7 @@ test("a failed sync is retried on the next call, and running out of credit is to
   assert.ok(new ElevenLabsError(402, "").credit);
 });
 
-test("the ElevenLabs coach is told it can't see photos", () => {
+test("the ElevenLabs coach sees photos taken in the call, but can't open saved ones", () => {
   const state = emptyJournal();
   const clock = localClock(
     new Date("2026-09-30T07:00:00Z"),
@@ -216,10 +218,50 @@ test("the ElevenLabs coach is told it can't see photos", () => {
   const context = voiceContext(state, clock.date);
   const gemini = voiceInstruction(context, clock, "Sam");
   const eleven = voiceInstruction(context, clock, "Sam", "checkin", [], {
-    seesPhotos: false,
+    savedPhotos: false,
   });
   assert.match(gemini, /view_photo/);
   assert.doesNotMatch(eleven, /view_photo|list_photos/);
-  assert.match(eleven, /You can't see the photo/);
-  assert.match(eleven, /open_camera/);
+  for (const text of [gemini, eleven]) {
+    assert.match(text, /open_camera/);
+    assert.match(text, /When the photo arrives, name what you see/);
+  }
+  assert.match(eleven, /can't open saved photos/);
+  assert.deepEqual(
+    elevenLabsAgent().conversation_config.conversation.file_input,
+    { enabled: true, max_files_per_conversation: 10 },
+  );
+});
+
+test("a photo taken in the call is handed to its ElevenLabs conversation", async () => {
+  const { fetcher, calls } = fakeElevenLabs({
+    "POST /v1/convai/conversations/conv_123/files": () =>
+      json({ file_id: "file_9" }),
+  });
+  assert.equal(
+    await elevenLabsPhoto(
+      "conv_123",
+      new Uint8Array([0xff, 0xd8, 0xff]),
+      fetcher,
+    ),
+    "file_9",
+  );
+  assert.equal(calls[0].method, "POST");
+  const failing = fakeElevenLabs({});
+  await assert.rejects(
+    elevenLabsPhoto("conv_404", new Uint8Array([1]), failing.fetcher),
+    ElevenLabsError,
+  );
+});
+
+test("saves are spoken over, reads and call controls aren't", () => {
+  const tools = elevenLabsTools();
+  const speech = Object.fromEntries(
+    tools.map((t) => [t.name, t.pre_tool_speech]),
+  );
+  assert.equal(speech.log_sleep, "force");
+  assert.equal(speech.log_meal, "force");
+  assert.equal(speech.undo_save, "force");
+  assert.equal(speech.read_journal, "auto");
+  assert.equal(speech.end_check_in, "auto");
 });

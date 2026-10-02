@@ -57,6 +57,11 @@ const voiceOption = z
     name: z.string(),
     detail: z.string(),
     isDefault: z.boolean(),
+    // A short sample per language, played when picking; absent before 3 Oct.
+    samples: z
+      .object({ en: z.string().optional(), da: z.string().optional() })
+      .strict()
+      .optional(),
   })
   .strict()
   .register(nativeResponses, { id: "VoiceOption" });

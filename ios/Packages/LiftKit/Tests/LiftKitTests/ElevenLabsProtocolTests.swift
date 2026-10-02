@@ -12,7 +12,7 @@ struct ElevenLabsProtocolTests {
     #expect(
       events(
         #"{"type":"conversation_initiation_metadata","conversation_initiation_metadata_event":{"conversation_id":"c","agent_output_audio_format":"pcm_24000","user_input_audio_format":"pcm_16000"}}"#
-      ) == [.ready])
+      ) == [.conversation("c"), .ready])
     let pcm = Data([0x01, 0x00, 0xFF, 0x7F])
     #expect(
       events(#"{"type":"audio","audio_event":{"audio_base_64":"\#(pcm.base64EncodedString())","event_id":3}}"#)
@@ -103,6 +103,18 @@ struct ElevenLabsProtocolTests {
     #expect(failed["is_error"] as? Bool == true)
     let plain = ElevenLabsProtocol.toolResult(call, ["result": "The camera is open."])
     #expect(plain["result"] as? String == "The camera is open.")
+  }
+
+  @Test("A photo goes to the coach as a message with the file the server handed over")
+  func photo() throws {
+    let message = ElevenLabsProtocol.photo("(The athlete took a food photo.)", fileID: "file_9")
+    #expect(message["type"] as? String == "multimodal_message")
+    let text = try #require(message["text"] as? [String: Any])
+    #expect(text["type"] as? String == "user_message")
+    #expect(text["text"] as? String == "(The athlete took a food photo.)")
+    let files = try #require(message["files"] as? [[String: Any]])
+    #expect(files.first?["type"] as? String == "file_input")
+    #expect(files.first?["file_id"] as? String == "file_9")
   }
 
   @Test("Audio and notes go out in ElevenLabs' shapes")

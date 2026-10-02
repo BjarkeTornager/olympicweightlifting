@@ -35,7 +35,7 @@ Without the key, nothing changes: the app offers Google only.
 
 ## Limits
 
-- **Photos:** the ElevenLabs coach can't be sent photos mid-call. `list_photos` and `view_photo` are left out. A photo taken with the call's camera is still saved and linked to the meal, and the coach asks what's on the plate.
+- **Photos (updated 2 October):** a photo taken with the call's camera now reaches the ElevenLabs coach. `/api/voice/photo` uploads a 1024 px copy to the conversation, and the phone sends it as a `multimodal_message`. Saved photos still can't be opened. The original note follows. The ElevenLabs coach can't be sent photos mid-call. `list_photos` and `view_photo` are left out. A photo taken with the call's camera is still saved and linked to the meal, and the coach asks what's on the plate.
 - **Session resumption:** ElevenLabs has none. After a dropped connection, the call reconnects with a fresh link and the last few lines, as Gemini does without a resumption handle.
 - **Cost:** about $0.08 a minute beyond the plan's included minutes, plus Gemini 3.8 Flash tokens. Gemini Live's list price is about $0.023 a minute.
 

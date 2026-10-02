@@ -99,11 +99,15 @@ public enum LiveProtocol {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     // The last sentence: everything after the final ". ", "? " or "! ".
     let last = trimmed.matches(of: /[.?!]\s+/).last.map { String(trimmed[$0.range.upperBound...]) } ?? trimmed
-    return last.firstMatch(of: promise) != nil
+    return last.firstMatch(of: promise) != nil || last.firstMatch(of: danishPromise) != nil
   }
 
   nonisolated(unsafe) private static let promise =
     /(?i)\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add)/
+
+  /// The same promise in Danish, for a coach speaking Danish.
+  nonisolated(unsafe) private static let danishPromise =
+    /(?i)\b(lad mig|jeg skal lige|jeg vil|jeg skal|et øjeblik|et sekund|to sekunder)\b[^.?!]{0,40}\b(tjekke|tjekker|kigge|kigger|se|finde|gemme|gemmer|logge|logger|registrere|opdatere|hente|regne|rette|tilføje)/
 
   public static let waitingNudge =
     "(The athlete is waiting: do what you just said now, then answer.)"

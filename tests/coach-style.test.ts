@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { coachStyle, withoutEmDashes } from "../lib/agent/coach-style";
-import { systemPrompt } from "../lib/agent/knowledge";
+import { fullPrompt, systemPrompt } from "../lib/agent/knowledge";
 
 test("Coach writes like a coach texting, without em dashes", () => {
   assert.match(coachStyle, /coach texting the athlete/);
@@ -21,4 +21,11 @@ test("em dashes that slip through become commas; ranges keep their en dash", () 
     "Great session, well done",
   );
   assert.equal(withoutEmDashes("No dashes here."), "No dashes here.");
+});
+
+test("Coach's base instructions forbid em dashes and use none themselves", () => {
+  assert.match(coachStyle, /Never use em dashes/);
+  // Models copy the punctuation they're given.
+  assert.ok(!fullPrompt().includes("—"), "the base prompt has no em dashes");
+  assert.ok(!systemPrompt().includes("—"));
 });

@@ -101,7 +101,7 @@ export function startTrainingDay(
     workout.coachNotes = [
       program.notes,
       day.notes,
-      "Planned activity — full instructions are in Train → Your programs:",
+      "Planned activity. Full instructions are in Train → Your programs:",
       ...(day.cardio ?? []).map((c) =>
         plannedCardioText({ ...c, notes: undefined }),
       ),

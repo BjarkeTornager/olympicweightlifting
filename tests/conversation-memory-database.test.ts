@@ -115,6 +115,26 @@ test(
       assert.deepEqual(await searchConversations(b, "knee"), []);
       assert.deepEqual(await recentConversations(b), []);
       assert.deepEqual(await searchConversations(a, "  !! "), []);
+
+      // Coach's spoken lines keep no em dashes, saved or listed; the
+      // athlete's own words are kept as said.
+      const { listVoiceCalls } = await import("../lib/conversation-memory");
+      const dashed = crypto.randomUUID();
+      await saveVoiceTranscript(a, {
+        id: dashed,
+        purpose: "checkin",
+        entries: [
+          { role: "coach", text: "Nice work — that's a best." },
+          { role: "you", text: "Thanks — it felt good." },
+        ],
+      });
+      const listed = (await listVoiceCalls(a, { since: ago(1) })).find(
+        (c) => c.id === dashed,
+      )!;
+      assert.deepEqual(
+        listed.lines.map((l) => l.text),
+        ["Nice work, that's a best.", "Thanks — it felt good."],
+      );
     } finally {
       await pool.query("DELETE FROM users WHERE id = ANY($1)", [accounts]);
     }

@@ -13,8 +13,11 @@ public enum ElevenLabsProtocol {
     guard let message = try? JSONDecoder().decode(Message.self, from: data) else { return [] }
     switch message.type {
     case "conversation_initiation_metadata":
-      let format = message.conversationInitiationMetadataEvent?.agentOutputAudioFormat
-      guard let format, format != outputFormat else { return [.ready] }
+      let metadata = message.conversationInitiationMetadataEvent
+      let conversation = metadata?.conversationId.map { [LiveEvent.conversation($0)] } ?? []
+      guard let format = metadata?.agentOutputAudioFormat, format != outputFormat else {
+        return conversation + [.ready]
+      }
       return [.failed("The ElevenLabs voice sends audio this app can't play (\(format)).")]
     case "audio":
       guard let base64 = message.audioEvent?.audioBase64, let audio = Data(base64Encoded: base64) else { return [] }
@@ -67,6 +70,16 @@ public enum ElevenLabsProtocol {
     ["type": "user_message", "text": text]
   }
 
+  /// A photo handed to the conversation (by the server, which returns its
+  /// file id), with a note the coach answers.
+  public static func photo(_ text: String, fileID: String) -> [String: Any] {
+    [
+      "type": "multimodal_message",
+      "text": ["type": "user_message", "text": text],
+      "files": [["type": "file_input", "file_id": fileID]],
+    ]
+  }
+
   /// Something the coach should know without replying to it now.
   public static func context(_ text: String) -> [String: Any] {
     ["type": "contextual_update", "text": text]
@@ -98,7 +111,10 @@ public enum ElevenLabsProtocol {
 private struct Message: Decodable {
   struct Metadata: Decodable {
     let agentOutputAudioFormat: String?
-    enum CodingKeys: String, CodingKey { case agentOutputAudioFormat = "agent_output_audio_format" }
+    let conversationId: String?
+    enum CodingKeys: String, CodingKey {
+      case agentOutputAudioFormat = "agent_output_audio_format", conversationId = "conversation_id"
+    }
   }
   struct Audio: Decodable {
     let audioBase64: String?

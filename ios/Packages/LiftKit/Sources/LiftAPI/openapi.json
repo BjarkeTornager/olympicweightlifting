@@ -3323,6 +3323,17 @@
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "samples": {
+            "type": "object",
+            "properties": {
+              "en": {
+                "type": "string"
+              },
+              "da": {
+                "type": "string"
+              }
+            }
           }
         },
         "required": [

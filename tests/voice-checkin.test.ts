@@ -198,7 +198,12 @@ test("the coach asks only about missing topics and keeps to English", () => {
   // Only exercises actually done appear in the day.
   assert.ok(context.day.workouts[0].exercises.every((e) => e.sets.length));
   assert.match(text, /1\. Speak English only, in every reply/);
-  assert.match(text, /Never say something is saved/);
+  // Acknowledged straight away, saved while speaking, never claimed early.
+  assert.match(text, /Don't make the athlete wait in silence for a save/);
+  assert.match(
+    text,
+    /Never claim it is saved, logged or recorded before the tool has returned success/,
+  );
   assert.match(text, /Never announce a check or save and then go quiet/);
   assert.match(text, /Short answers like "not yet"/);
   assert.equal(

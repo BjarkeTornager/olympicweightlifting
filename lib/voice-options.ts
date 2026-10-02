@@ -1,6 +1,9 @@
 import { VOICE_NAME } from "./voice-checkin";
 import { ELEVENLABS_VOICE_ID, voiceProviders } from "./voice-elevenlabs";
 import type { VoiceProvider } from "./voice-elevenlabs";
+import type { CoachLanguage } from "./coach-language";
+// Recorded by scripts/voice-samples.ts through the same setups a call uses.
+import recorded from "./voice-samples.json";
 
 // The voices the athlete can pick from in the iPhone app, per provider:
 // coach-like ones from Google's prebuilt voices and ElevenLabs' premade
@@ -86,6 +89,19 @@ export function voiceFor(provider: VoiceProvider, requested?: string) {
     : defaults[provider]();
 }
 
+/** Where a voice's samples are served, per language, for those recorded. */
+export function voiceSamples(provider: VoiceProvider, id: string) {
+  const languages = (recorded as Record<string, CoachLanguage[]>)[
+    `${provider}/${id}`
+  ];
+  return Object.fromEntries(
+    (languages ?? []).map((language) => [
+      language,
+      `/voice-samples/${provider}/${id}.${language}.m4a`,
+    ]),
+  ) as Partial<Record<CoachLanguage, string>>;
+}
+
 /** What the app shows, for the voices this server can run. */
 export function voiceOptions() {
   return voiceProviders().flatMap((provider) =>
@@ -93,6 +109,7 @@ export function voiceOptions() {
       provider,
       ...voice,
       isDefault: voice.id === defaults[provider](),
+      samples: voiceSamples(provider, voice.id),
     })),
   );
 }

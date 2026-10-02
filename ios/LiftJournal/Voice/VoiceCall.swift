@@ -39,6 +39,8 @@ final class VoiceCall {
   var inCall: Bool { [.connecting, .listening, .speaking, .reconnecting].contains(status) }
   /// Fixed when the call starts, so a change in Profile applies to the next.
   private(set) var provider: VoiceProvider = .google
+  /// ElevenLabs' id for this conversation, to hand it photos.
+  private var conversationID: String?
   var saved: Int { lines.filter { $0.state == .saved }.count }
 
   private let app: AppModel
@@ -395,6 +397,8 @@ final class VoiceCall {
         lines[index].text = text.trimmingCharacters(in: .whitespaces)
         schedulePersist()
       }
+    case .conversation(let id):
+      conversationID = id
     case .failed(let reason):
       if waiting != nil {
         connected(.failure(VoiceError(reason)))
@@ -530,13 +534,32 @@ final class VoiceCall {
       case .google:
         note("(The athlete took a food photo, photo id \(id). It is the image just sent.)", answer: true)
       case .elevenlabs:
-        note(
-          "(The athlete took a food photo, photo id \(id). You can't see it: ask what's on the plate and roughly how much, then log_meal with this id in photo_ids.)",
-          answer: true)
+        // ElevenLabs gets the photo from the server, then sees it with the note.
+        if let file = await showToElevenLabs(id) {
+          send(ElevenLabsProtocol.photo("(The athlete took a food photo, photo id \(id). It is the attached image.)", fileID: file))
+        } else {
+          note(
+            "(The athlete took a food photo, photo id \(id), but it couldn't be shown to you: ask what's on the plate and roughly how much, then log_meal with this id in photo_ids.)",
+            answer: true)
+        }
       }
     } catch {
       self.error = "The photo could not be saved: \(error.localizedDescription)"
     }
+  }
+
+  /// Hands a photo just taken to the ElevenLabs conversation; nil if that
+  /// failed, and the coach asks about the plate instead.
+  private func showToElevenLabs(_ photoID: String) async -> String? {
+    guard let conversationID, let session = app.session else { return nil }
+    let response = try? await RawRequest.send(
+      "api/voice/photo", body: ["conversationId": conversationID, "photoId": photoID],
+      token: session.token, account: session.accountID, timeout: 25)
+    guard let response, response.status == 200 else {
+      report("photo_failed", ["status": response?.status ?? 0])
+      return nil
+    }
+    return response.json?["fileId"] as? String
   }
 
   private func showSavedPhoto(_ id: String) async throws {

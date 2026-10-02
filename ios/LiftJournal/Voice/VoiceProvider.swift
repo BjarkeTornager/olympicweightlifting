@@ -25,7 +25,7 @@ enum VoiceProvider: String, CaseIterable, Identifiable {
     case .google:
       "Gemini Live listens and speaks in one model: the quickest replies, and it can look at food photos you take in the call."
     case .elevenlabs:
-      "ElevenLabs' Eleven v4 Turbo voice, with Gemini 3.8 Flash deciding what to say. It can't see photos, so it asks what's on the plate. ElevenLabs keeps no recording of the call."
+      "ElevenLabs' Eleven v4 Turbo voice, with Gemini 3.8 Flash deciding what to say. It sees photos you take in the call, but can't open older ones. ElevenLabs keeps no recording of the call."
     }
   }
 

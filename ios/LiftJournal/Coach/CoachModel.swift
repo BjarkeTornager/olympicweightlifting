@@ -147,7 +147,8 @@ final class CoachModel {
         }
         do {
           for try await event in stream.run(
-            id: runID, message: message, revision: app.today?.revision ?? 0, photoIDs: ids)
+            id: runID, message: message, revision: app.today?.revision ?? 0, photoIDs: ids,
+            language: CoachLanguage.current.rawValue)
           {
             switch event {
             case .step(let text): step = text

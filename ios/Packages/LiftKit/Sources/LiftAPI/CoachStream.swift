@@ -54,13 +54,17 @@ public struct CoachStream: Sendable {
     self.account = account
   }
 
+  /// `language` ("en" or "da") is the one chosen in Profile; Coach writes
+  /// every reply in it.
   public func run(
-    id: UUID, message: String, revision: Int, photoIDs: [UUID]
+    id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String? = nil
   ) -> AsyncThrowingStream<CoachEvent, any Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
-          try await stream(id: id, message: message, revision: revision, photoIDs: photoIDs) {
+          try await stream(
+            id: id, message: message, revision: revision, photoIDs: photoIDs, language: language
+          ) {
             continuation.yield($0)
           }
           continuation.finish()
@@ -85,11 +89,11 @@ public struct CoachStream: Sendable {
   }
 
   private func stream(
-    id: UUID, message: String, revision: Int, photoIDs: [UUID],
+    id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String?,
     emit: (CoachEvent) -> Void
   ) async throws {
     let runID = id.uuidString.lowercased()
-    let body: [String: Any] = [
+    var body: [String: Any] = [
       "threadId": "coach",
       "runId": runID,
       "messages": [["id": runID, "role": "user", "content": message]],
@@ -103,6 +107,10 @@ public struct CoachStream: Sendable {
         "submittedAt": ISO8601DateFormatter().string(from: .now),
       ],
     ]
+    if let language, var props = body["forwardedProps"] as? [String: Any] {
+      props["language"] = language
+      body["forwardedProps"] = props
+    }
     var request = URLRequest(url: LiftServer.origin.appending(path: "api/agent/run"))
     request.httpMethod = "POST"
     request.timeoutInterval = 180

@@ -1,9 +1,12 @@
 import { z } from "zod";
+import { coachLanguageSchema } from "../coach-language";
 // 1.0 made the package entry zod-free; the validators moved to /schemas.
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 
 const contextFields = {
   submittedAt: z.iso.datetime().optional(),
+  // Chosen in the iPhone app; without it Coach answers in the athlete's own.
+  language: coachLanguageSchema.optional(),
   photoIds: z.array(z.string().uuid()).max(4).default([]),
   revision: z.number().int().min(0),
   timezone: z

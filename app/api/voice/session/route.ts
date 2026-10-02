@@ -32,6 +32,8 @@ import {
   elevenLabsStart,
   voiceProviders,
 } from "@/lib/voice-elevenlabs";
+import { voiceFor } from "@/lib/voice-options";
+import { coachLanguageSchema } from "@/lib/coach-language";
 
 export const dynamic = "force-dynamic";
 
@@ -69,11 +71,14 @@ export async function POST(request: Request) {
         "Tap Reload update, or close and reopen the app, to use the latest voice coach.",
         426,
       );
-    const { timezone, purpose, resumeHandle, provider } = z
+    const { timezone, purpose, resumeHandle, provider, language, voice } = z
       .object({
         purpose: z.enum(["checkin", "goals"]).default("checkin"),
         // Chosen in the iPhone app's Profile; the website uses Google.
         provider: z.enum(["google", "elevenlabs"]).default("google"),
+        // Chosen in Profile; a voice that isn't on the list gets the default.
+        language: coachLanguageSchema.optional(),
+        voice: z.string().max(64).optional(),
         // Continues an interrupted call; Google validates the handle.
         resumeHandle: z.string().min(1).max(2000).optional(),
         timezone: z
@@ -114,7 +119,7 @@ export async function POST(request: Request) {
       state.profile.name || user.name?.split(" ")[0],
       purpose,
       await recentConversations(user.id, { limit: 10 }),
-      provider === "google",
+      { seesPhotos: provider === "google", language },
     );
     if (provider === "elevenlabs") {
       let url: string;
@@ -133,14 +138,20 @@ export async function POST(request: Request) {
         {
           provider,
           url,
-          start: elevenLabsStart(instruction),
+          start: elevenLabsStart(instruction, {
+            voice: voiceFor(provider, voice),
+            language,
+          }),
           model: ELEVENLABS_TTS_MODEL,
           maxMinutes: ELEVENLABS_CALL_MINUTES,
         },
         { headers: { "Cache-Control": "no-store" } },
       );
     }
-    const setup = voiceSetup(instruction, resumeHandle);
+    const setup = voiceSetup(instruction, resumeHandle, {
+      voice: voiceFor(provider, voice),
+      language,
+    });
     let token: string;
     try {
       token = await mintVoiceToken(setup);

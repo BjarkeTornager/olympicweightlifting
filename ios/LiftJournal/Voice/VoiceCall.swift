@@ -152,7 +152,11 @@ final class VoiceCall {
 
   private func connect(resume: Bool) async throws {
     guard let session = app.session else { throw VoiceError("Sign in again to talk to Coach.") }
-    var body: [String: Any] = ["timezone": TimeZone.current.identifier, "purpose": "checkin"]
+    var body: [String: Any] = [
+      "timezone": TimeZone.current.identifier, "purpose": "checkin",
+      "language": CoachLanguage.current.rawValue,
+    ]
+    if let voice = provider.chosenVoice(in: app.voiceOptions) { body["voice"] = voice }
     if resume, let handle { body["resumeHandle"] = handle }
     // Only sent for ElevenLabs, which only a server that knows it offers.
     if provider == .elevenlabs { body["provider"] = provider.rawValue }

@@ -30,6 +30,11 @@ struct ElevenLabsProtocolTests {
     #expect(events(#"{"type":"interruption","interruption_event":{"event_id":4}}"#) == [.interrupted])
     #expect(events(#"{"type":"ping","ping_event":{"event_id":9,"ping_ms":40}}"#) == [.ping(9)])
     #expect(events(#"{"type":"vad_score","vad_score_event":{"vad_score":0.9}}"#).isEmpty)
+    // Silence transcribed as dots isn't a line from the athlete.
+    #expect(events(#"{"type":"user_transcript","user_transcription_event":{"user_transcript":"..."}}"#).isEmpty)
+    #expect(events(#"{"type":"user_transcript","user_transcription_event":{"user_transcript":" … "}}"#).isEmpty)
+    #expect(
+      events(#"{"type":"user_transcript","user_transcription_event":{"user_transcript":"Ja."}}"#) == [.heard("Ja.")])
     #expect(events("not json").isEmpty)
   }
 

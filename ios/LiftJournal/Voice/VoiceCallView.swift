@@ -25,8 +25,8 @@ struct VoiceCallView: View {
           // It changes often (speaking, listening): cross-fading overlapped
           // the two labels.
           .contentTransition(.identity)
-        if app.voiceProviders.count > 1 {
-          Text("Voice by \(call.provider.title) · change it in Profile")
+        if !app.voiceOptions.isEmpty {
+          Text("\(call.provider.voiceName(in: app.voiceOptions) ?? "Voice") by \(call.provider.title) · change it in Profile")
             .font(.caption)
             .foregroundStyle(.tertiary)
             .padding(.top, 2)

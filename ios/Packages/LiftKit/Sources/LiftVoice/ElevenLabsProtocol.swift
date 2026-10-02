@@ -20,8 +20,9 @@ public enum ElevenLabsProtocol {
       guard let base64 = message.audioEvent?.audioBase64, let audio = Data(base64Encoded: base64) else { return [] }
       return [.audio(audio)]
     case "user_transcript":
+      // Silence or noise comes through as "..." or "…": not something said.
       let text = message.userTranscriptionEvent?.userTranscript ?? ""
-      return text.trimmingCharacters(in: .whitespaces).isEmpty ? [] : [.heard(text)]
+      return text.contains(where: { $0.isLetter || $0.isNumber }) ? [.heard(text)] : []
     case "agent_response":
       // The whole reply at once, as it starts playing.
       let text = spoken(message.agentResponseEvent?.agentResponse ?? "")

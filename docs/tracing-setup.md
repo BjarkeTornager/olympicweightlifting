@@ -178,6 +178,8 @@ If it shows `trace_retention_failed` instead: `"status":401` is a wrong `MLFLOW_
 
 Then update the App Store privacy label in App Store Connect, App Privacy: add Diagnostics, Performance Data, linked to the user (the pseudonymous code links it to the account), not used for tracking, for App Functionality.
 
+The iPhone app's privacy manifest (`ios/LiftJournal/Resources/PrivacyInfo.xcprivacy`) declares the same Performance Data, so that the privacy report Xcode makes from it matches the label. It ships with the next iPhone build: upload one to TestFlight, and make sure the next App Store submission is that build or a later one.
+
 ## 7. The first day, and after
 
 - Coach's speed before and after: `npm run coach:metrics -- --split <the time TRACING was set>`, comparing p50 and p95 of total and first-text time.

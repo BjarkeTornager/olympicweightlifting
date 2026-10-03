@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { aiUsage, voiceCalls } from "./db/schema";
 import type { ModelUsage } from "./agent/provider";
@@ -164,6 +164,21 @@ export async function recordPicture(
       estimated: costUsd === undefined,
     },
   );
+}
+
+// The ledger is kept for 13 months, long enough to compare a month with the
+// same one a year before. Older rows go when the account next uses Coach,
+// typed or by voice (lib/conversation-memory.ts), and all of them with the
+// account.
+export async function pruneAiUsage(userId: string) {
+  await getDb()
+    .delete(aiUsage)
+    .where(
+      and(
+        eq(aiUsage.userId, userId),
+        lt(aiUsage.createdAt, sql`now() - interval '13 months'`),
+      ),
+    );
 }
 
 export type VoiceProvider = "google" | "elevenlabs";

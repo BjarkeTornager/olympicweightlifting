@@ -5,7 +5,7 @@ import { displayMessage, VOICE_PREFIX } from "./coach-tasks";
 import type { SavedVisual } from "./coach-visuals";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
 import { withoutEmDashes } from "./agent/coach-style";
-import { withAiUsage } from "./ai-usage";
+import { pruneAiUsage, withAiUsage } from "./ai-usage";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -21,8 +21,9 @@ export type Exchange = {
 };
 
 /** Removes Coach conversation older than 90 days, with the cards and
- * pictures in it, and expired proposals (they hold recovery snapshots).
- * Runs whenever the athlete uses the assistant, typed or by voice. */
+ * pictures in it, expired proposals (they hold recovery snapshots) and AI
+ * cost records older than 13 months. Runs whenever the athlete uses the
+ * assistant, typed or by voice. */
 export async function pruneConversations(userId: string) {
   const db = getDb();
   await db
@@ -41,6 +42,7 @@ export async function pruneConversations(userId: string) {
         lt(agentTurns.createdAt, new Date(Date.now() - 90 * 86400000)),
       ),
     );
+  await pruneAiUsage(userId);
 }
 
 const clip = (text: string, max: number) =>

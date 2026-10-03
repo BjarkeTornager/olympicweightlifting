@@ -820,6 +820,41 @@ test(
 );
 
 test(
+  "the ledger is kept for 13 months, pruned when the account next uses Coach",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const db = await setup();
+    const { pruneConversations } = await import("../lib/conversation-memory");
+    try {
+      const a = await db.user(),
+        b = await db.user();
+      const add = (userId: string, months: number, cost: number) =>
+        db.pool.query(
+          `INSERT INTO ai_usage(id,user_id,feature,model,cost_usd,created_at)
+          VALUES ($1,$2,'coach','test',$3,now() - make_interval(months => $4))`,
+          [crypto.randomUUID(), userId, cost, months],
+        );
+      await add(a, 14, 0.14);
+      await add(a, 12, 0.12);
+      await add(a, 0, 0.01);
+      await add(b, 14, 0.14);
+      await pruneConversations(a);
+      assert.deepEqual(
+        (await db.rows(a)).map((r) => r.cost),
+        [0.12, 0.01],
+      );
+      // Another account's rows wait for its own next use.
+      assert.deepEqual(
+        (await db.rows(b)).map((r) => r.cost),
+        [0.14],
+      );
+    } finally {
+      await db.cleanup();
+    }
+  },
+);
+
+test(
   "the owner's usage page totals each account's AI cost for today and this month",
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {

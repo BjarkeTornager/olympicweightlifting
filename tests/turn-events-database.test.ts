@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { config } from "dotenv";
 import type { ModelResponse } from "../lib/agent/provider";
@@ -1002,5 +1003,172 @@ test(
       ).text(),
     );
     assert.deepEqual(resumed.map(typeOf), ["RUN_STARTED"]);
+  },
+);
+
+test(
+  "the website's client reads on through a real reconnect: ids, a coach.reset, and a turn that ends without its last event",
+  { skip },
+  async (t) => {
+    const { user, headers, cleanUp } = await setup();
+    t.after(cleanUp);
+    process.env.COACH_TURN_EVENTS = "1";
+    t.after(() => delete process.env.COACH_TURN_EVENTS);
+    const { runTurn, failStaleTurns, STALE_TURN_MS } =
+      await import("../lib/agent/engine");
+    const { storedCoachStream, cancelRun } =
+      await import("../lib/agent/stream");
+    const { stopTurnEventListener } = await import("../lib/agent/turn-events");
+    const { GET } = await import("../app/api/agent/run/route");
+    // The SDK's published Node entry point first: its ESM dependency ships
+    // source TS that tsx otherwise misresolves (as in coach-protocol.test.ts).
+    createRequire(import.meta.url)("@ag-ui/client");
+    const { runCoach } = await import("../lib/coach-client");
+    t.after(stopTurnEventListener);
+    type Model = Parameters<typeof runTurn>[2];
+    const run = (turn: ReturnType<typeof input>, model: Model) =>
+      storedCoachStream(
+        new Request("http://localhost"),
+        "coach",
+        turn.id,
+        (emit, signal, onAttempt) =>
+          runTurn(user, turn, model, { emit, signal, onAttempt }),
+        { key: `${user}:${turn.id}`, background: true },
+      );
+    // Half an answer, then the run waits until it is stopped, which may
+    // come first.
+    const halfAnswer: Model = async (_messages, _tools, signal, onText) => {
+      onText?.("Half an ");
+      await sleep(300);
+      onText?.("answer");
+      await new Promise((_, reject) => {
+        signal.throwIfAborted();
+        signal.addEventListener("abort", () => reject(signal.reason));
+      });
+      throw Error("unreachable");
+    };
+
+    // The website's fetch: the run's POST gets `first`, which drops once
+    // the first piece of the reply is through (the run carries on), and a
+    // reconnect goes to GET /api/agent/run, once `ready` lets it. `seen` is
+    // the last SSE id through before the drop.
+    let first: Response | undefined;
+    let seen: number | undefined;
+    let ready: Promise<unknown> = Promise.resolve();
+    const resumes: string[] = [];
+    let dropped = gate();
+    let drained: Promise<void> = Promise.resolve();
+    t.mock.method(globalThis, "fetch", (async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = new URL(String(input), headers.Origin);
+      assert.equal(url.pathname, "/api/agent/run");
+      if (init?.method === "POST") {
+        const reader = first!.body!.getReader();
+        const decoder = new TextDecoder();
+        let text = "";
+        let draining!: () => void;
+        drained = new Promise((resolve) => (draining = resolve));
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              const { value, done } = await reader.read();
+              if (done) return controller.close();
+              controller.enqueue(value);
+              text += decoder.decode(value, { stream: true });
+              if (!/"delta":"Half an "[^\n]*\n\n/.test(text)) return;
+              seen = Number([...text.matchAll(/^id: (\d+)$/gm)].at(-1)![1]);
+              controller.error(new TypeError("network error"));
+              dropped.open();
+              // The server goes on writing the reply.
+              void (async () => {
+                while (!(await reader.read()).done);
+                draining();
+              })();
+            },
+          }),
+          { headers: first!.headers },
+        );
+      }
+      resumes.push(url.search);
+      await ready;
+      // The website's headers, with the sign-in the iPhone's carry.
+      const sent = new Headers(headers);
+      new Headers(init?.headers).forEach((value, key) => sent.set(key, value));
+      return GET(new Request(url, { headers: sent, signal: init?.signal }));
+    }) as typeof fetch);
+    const ask = (turn: ReturnType<typeof input>) => {
+      const updates: Parameters<Parameters<typeof runCoach>[3]>[0][] = [];
+      const result = runCoach(
+        user,
+        { ...turn, photoIds: [] },
+        AbortSignal.timeout(30000),
+        (update) => updates.push(update),
+      );
+      return { result, updates };
+    };
+
+    // A crash cuts the first attempt off while the website reconnects; the
+    // retry's events come after a coach.reset, under the same message id.
+    const crashed = input();
+    first = run(crashed, halfAnswer);
+    const retried = gate();
+    ready = retried.opened;
+    const reset = ask(crashed);
+    await dropped.opened;
+    assert.equal(
+      await failStaleTurns({
+        userId: user,
+        now: new Date(Date.now() + STALE_TURN_MS + 1000),
+      }),
+      1,
+    );
+    assert.equal(cancelRun(`${user}:${crashed.id}`), true);
+    await drained;
+    await run(crashed, async (_messages, _tools, _signal, onText) => {
+      onText?.("A whole answer.");
+      return { role: "assistant", content: "A whole answer." };
+    }).text();
+    retried.open();
+    const finished = await reset.result;
+    assert.equal(finished.reply, "A whole answer.");
+    // One reconnect, from the last event the website read.
+    assert.deepEqual(resumes, [`?turnId=${crashed.id}&after=${seen}`]);
+    const replies = reset.updates.flatMap((u) =>
+      u.reply === undefined ? [] : [u.reply],
+    );
+    const at = reset.updates.findIndex((u) => u.reset);
+    assert.ok(at > 0, "the cut-off attempt is dropped");
+    assert.ok(
+      reset.updates.slice(0, at).some((u) => u.reply === "Half an "),
+      "the first attempt was shown",
+    );
+    assert.equal(replies.at(-1), "A whole answer.");
+    assert.ok(
+      reset.updates.slice(at).every((u) => !u.reply?.includes("Half an")),
+      "the new attempt's text starts afresh",
+    );
+
+    // Stopped on the server while the website reconnects: the resumed
+    // stream ends without a last event, which the client reports, so the
+    // website reads the saved turn.
+    resumes.length = 0;
+    dropped = gate();
+    ready = Promise.resolve();
+    const stopped = input();
+    first = run(stopped, halfAnswer);
+    const ending = ask(stopped);
+    await dropped.opened;
+    assert.equal(cancelRun(`${user}:${stopped.id}`), true);
+    await assert.rejects(ending.result, {
+      message:
+        "The connection ended before Coach finished. Reconnect to check the saved result, or retry the same message safely.",
+    });
+    assert.deepEqual(
+      resumes,
+      [`?turnId=${stopped.id}&after=${seen}`],
+      "a clean end isn't reconnected",
+    );
   },
 );

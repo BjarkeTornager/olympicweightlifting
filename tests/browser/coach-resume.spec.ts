@@ -1,7 +1,13 @@
-import { test, expect } from "./fixtures";
+import { test, expect, browserUser } from "./fixtures";
 import type { BrowserContext, Page } from "@playwright/test";
 import type { SavedVisual } from "../../lib/coach-visuals";
-import { streamingFixture, emit, type StreamWindow } from "./coach-stream";
+import {
+  streamingFixture,
+  emit,
+  recordCancels,
+  startReply,
+  type StreamWindow,
+} from "./coach-stream";
 
 // With COACH_TURN_EVENTS on, each stored event comes with its SSE id, and a
 // reply whose connection drops reads on with GET /api/agent/run?after=<id>.
@@ -254,4 +260,140 @@ test("a reply the server can't resume falls back to the saved turn", async ({
   await expect(page.getByRole("button", { name: "Retry message" })).toHaveCount(
     0,
   );
+});
+
+// A reply that has begun, then loses its connection with its third event
+// read.
+const dropAfterThree = async (page: Page) => {
+  await emit(
+    page,
+    [
+      ...startReply,
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "answer", delta: "You slept" },
+    ],
+    1,
+  );
+  await expect(reply(page)).toHaveText("You slept");
+  await page.evaluate(() =>
+    (window as unknown as StreamWindow).dropCoachStream(),
+  );
+};
+const stopped =
+  "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice.";
+
+test("Stop while a dropped reply waits to reconnect ends it at once and still cancels the run", async ({
+  page,
+  context,
+}) => {
+  const cancels = await recordCancels(context);
+  const { runId, reads } = await ask(page, context);
+  await dropAfterThree(page);
+  // Within the second the website waits before reconnecting.
+  await page.getByRole("button", { name: "Stop response" }).click();
+  await expect(page.getByText(stopped)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
+  // The cancel is what stops a run whose server didn't hear the close.
+  await expect
+    .poll(() => cancels)
+    .toEqual([{ id: runId, account: browserUser.id }]);
+  // Past the wait, nothing reconnected.
+  await page.waitForTimeout(1500);
+  expect((await state(page)).coachResumes).toEqual([]);
+  expect(cancels).toHaveLength(1);
+  expect(reads).toEqual([runId]);
+});
+
+test("Stop while reading a resumed reply ends it and makes no further reconnect", async ({
+  page,
+  context,
+}) => {
+  const cancels = await recordCancels(context);
+  const { runId, reads } = await ask(page, context);
+  await dropAfterThree(page);
+  await expect
+    .poll(async () => (await state(page)).coachResumes)
+    .toEqual([`?turnId=${runId}&after=3`]);
+  await emit(
+    page,
+    [{ type: "TEXT_MESSAGE_CONTENT", messageId: "answer", delta: " seven" }],
+    4,
+  );
+  await expect(reply(page)).toHaveText("You slept seven");
+  await page.getByRole("button", { name: "Stop response" }).click();
+  await expect(page.getByText(stopped)).toBeVisible();
+  await expect
+    .poll(() => cancels)
+    .toEqual([{ id: runId, account: browserUser.id }]);
+  // The resumed stream was closed by the Stop, not read on from again.
+  await page.waitForTimeout(1500);
+  expect((await state(page)).coachResumes).toHaveLength(1);
+  expect(reads).toEqual([runId]);
+});
+
+test("a release in progress is waited out three times, then the reply falls back to the saved turn", async ({
+  page,
+  context,
+}) => {
+  const { runId, reads } = await ask(page, context);
+  await page.evaluate(() => {
+    (window as unknown as StreamWindow).resumeStatus = 503;
+  });
+  const dropped = Date.now();
+  await dropAfterThree(page);
+  const resumes = async () => (await state(page)).coachResumes;
+  await expect.poll(resumes).toHaveLength(1);
+  // Still trying: the saved turn isn't read yet.
+  expect(reads).toEqual([]);
+  await expect(
+    page.getByRole("button", { name: "Stop response" }),
+  ).toBeVisible();
+  // After 1, 2 and 4 seconds, each from where the reply was.
+  await expect
+    .poll(resumes, { timeout: 10000 })
+    .toEqual(Array(3).fill(`?turnId=${runId}&after=3`));
+  expect(Date.now() - dropped).toBeGreaterThanOrEqual(6000);
+  await expect(
+    page.getByText(
+      "Coach lost its connection. Reconnect to check the saved result, or retry the same message safely.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
+  expect(reads).toEqual([runId]);
+  expect(await resumes()).toHaveLength(3);
+});
+
+test("a resumed reply that ends without its last event, as a stopped or timed-out turn's does, reads the saved turn", async ({
+  page,
+  context,
+}) => {
+  const { runId, reads } = await ask(page, context, {
+    question: "How did I sleep?",
+    proposals: [],
+    status: "failed",
+  });
+  await dropAfterThree(page);
+  await expect
+    .poll(async () => (await state(page)).coachResumes)
+    .toEqual([`?turnId=${runId}&after=3`]);
+  await emit(page, [{ type: "TEXT_MESSAGE_END", messageId: "answer" }], 4);
+  // The server ends the stream: the turn ended without a last event.
+  await page.evaluate(() =>
+    (window as unknown as StreamWindow).closeCoachStream(),
+  );
+  await expect(
+    page.getByText(
+      "The connection ended before Coach finished. Reconnect to check the saved result, or retry the same message safely.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry message" }),
+  ).toBeVisible();
+  expect(reads).toEqual([runId]);
+  // A clean end isn't a dropped connection: no second reconnect.
+  await page.waitForTimeout(1500);
+  expect((await state(page)).coachResumes).toHaveLength(1);
 });

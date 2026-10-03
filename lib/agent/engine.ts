@@ -55,6 +55,7 @@ import type { CoachLanguage } from "../coach-language";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
 import { guardChange } from "./change-guards";
+import { unchangedFor } from "./change-scope";
 import {
   pruneConversations,
   recentConversations,
@@ -1269,14 +1270,27 @@ async function turn(
         try {
           await save();
         } catch (error) {
-          if (!(error instanceof RevisionConflict) || !change.requested)
-            throw error;
           // Another save (voice, Health, another device) landed while Coach
-          // was answering. Make the same requested change to the newer
-          // journal instead of throwing away a paid-for reply; no model call
-          // is repeated, and Undo goes back to the newer journal. This
-          // transaction holds the journal's row lock from that read, so the
-          // second save can't conflict again.
+          // was answering. If it left alone every entry this change depends
+          // on, make the same requested change to the newer journal instead
+          // of throwing away a paid-for reply; no model call is repeated, and
+          // Undo goes back to the newer journal. This transaction holds the
+          // journal's row lock from that read, so the second save can't
+          // conflict again. Otherwise report the conflict as before, and the
+          // message is asked again on the latest records: a run Health just
+          // imported isn't logged twice, and a meal edited on the phone isn't
+          // overwritten. COACH_SAVE_RETRY=0 switches this off.
+          if (
+            !(error instanceof RevisionConflict) ||
+            !change.requested ||
+            process.env.COACH_SAVE_RETRY === "0" ||
+            !unchangedFor(
+              change.requested.action,
+              change.before,
+              error.snapshot.state,
+            )
+          )
+            throw error;
           let again: ReturnType<typeof prepareChange>;
           try {
             again = prepareChange(

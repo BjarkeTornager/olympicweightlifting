@@ -102,7 +102,9 @@ export async function saveVoiceTranscript(
     })
     .onConflictDoUpdate({
       target: voiceCalls.id,
-      set: { transcript: entries, content, updatedAt: new Date() },
+      // The database's clock, as for the first save and the tidy stamp, so
+      // a call that goes on just after a tidy is never taken as tidied.
+      set: { transcript: entries, content, updatedAt: sql`now()` },
       // A call id belongs to the account that started it.
       where: eq(voiceCalls.userId, userId),
     });

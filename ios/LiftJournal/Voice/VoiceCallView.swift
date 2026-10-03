@@ -38,6 +38,9 @@ struct VoiceCallView: View {
       .background(Theme.background)
       .navigationTitle("Voice check-in")
       .navigationBarTitleDisplayMode(.inline)
+      // Nothing passes under the bar: it would otherwise take on its paper
+      // and hairline once the transcript, below the voice, fills up.
+      .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
       .toolbar {
         ToolbarItem(placement: .principal) { header }
         ToolbarItem(placement: .confirmationAction) {

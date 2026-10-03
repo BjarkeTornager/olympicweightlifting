@@ -36,6 +36,11 @@ struct RootView: View {
         // Coach's thread always sits at its newest message, so a tab bar that
         // shrank on scroll would stay shrunk there: keep it whole in Coach.
         .tabBarMinimizeBehavior(model.tab == .coach ? .never : .onScrollDown)
+        // A page scrolled under the navigation bar meets the paper bar and its
+        // hairline (FolioChrome), not the soft scroll edge. With the edge,
+        // the bar took Train's blue button under it for a dark page and set
+        // its title white on the paper.
+        .scrollEdgeEffectHidden(true, for: .top)
         .sheet(isPresented: $model.consentForVoice, onDismiss: {
           if UserDefaults.standard.bool(forKey: AIConsent.key) { model.startVoice() }
         }) {

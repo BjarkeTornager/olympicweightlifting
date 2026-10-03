@@ -1,5 +1,6 @@
 import Foundation
 import LiftAPI
+import LiftStore
 import Testing
 
 @testable import LiftJournal
@@ -9,13 +10,53 @@ struct TodayTests {
   @Test("The standfirst lists what was logged, in plain words")
   func logged() {
     #expect(DaySummary(activities: ["running"], meals: 2).text == "A run and two meals so far.")
-    #expect(DaySummary(meals: 1).text == "A meal so far.")
-    #expect(DaySummary(activities: ["elliptical"]).text == "An elliptical session so far.")
+    #expect(DaySummary(meals: 1).text == "One meal so far.")
+    #expect(DaySummary(activities: ["elliptical"]).text == "One elliptical session so far.")
     #expect(DaySummary(meals: 12).text == "12 meals so far.")
     #expect(
       DaySummary(activities: ["running", "walking", "running"], workouts: 1, checkedIn: true).text
         == "Two runs, a walk, a workout and a check-in so far.")
-    #expect(DaySummary(activities: ["paddleboarding"]).text == "An activity so far.")
+    #expect(DaySummary(activities: ["paddleboarding"]).text == "One activity so far.")
+  }
+
+  @Test("Every count reads naturally: none, one on its own, one in a list, and many")
+  func counts() {
+    let kinds: [(summary: (Int) -> DaySummary, one: String, many: String)] = [
+      ({ DaySummary(activities: Array(repeating: "running", count: $0)) }, "One run so far.", "Three runs so far."),
+      ({ DaySummary(activities: Array(repeating: "walking", count: $0)) }, "One walk so far.", "Three walks so far."),
+      ({ DaySummary(activities: Array(repeating: "cycling", count: $0)) }, "One ride so far.", "Three rides so far."),
+      ({ DaySummary(activities: Array(repeating: "swimming", count: $0)) }, "One swim so far.", "Three swims so far."),
+      (
+        { DaySummary(activities: Array(repeating: "rowing", count: $0)) }, "One rowing session so far.",
+        "Three rowing sessions so far."
+      ),
+      ({ DaySummary(activities: Array(repeating: "hiking", count: $0)) }, "One hike so far.", "Three hikes so far."),
+      (
+        { DaySummary(activities: Array(repeating: "elliptical", count: $0)) }, "One elliptical session so far.",
+        "Three elliptical sessions so far."
+      ),
+      (
+        { DaySummary(activities: Array(repeating: "paddleboarding", count: $0)) }, "One activity so far.",
+        "Three activities so far."
+      ),
+      ({ DaySummary(workouts: $0) }, "One workout so far.", "Three workouts so far."),
+      ({ DaySummary(meals: $0) }, "One meal so far.", "Three meals so far."),
+    ]
+    for (summary, one, many) in kinds {
+      // Nothing logged and no sleep to compare: no standfirst at all.
+      #expect(summary(0).text == nil)
+      #expect(summary(1).text == one)
+      #expect(summary(3).text == many)
+    }
+    #expect(DaySummary(checkedIn: true).text == "One check-in so far.")
+    // In a list, one of a kind takes "a" or "an".
+    #expect(
+      DaySummary(activities: ["elliptical"], meals: 1, checkedIn: true).text
+        == "An elliptical session, a meal and a check-in so far.")
+    #expect(DaySummary(workouts: 1, meals: 12).text == "A workout and 12 meals so far.")
+    #expect(
+      DaySummary(meals: 1, sleepHours: 7.25, sleepAverage: 7.2).text
+        == "One meal so far. Sleep was close to your weekly average.")
   }
 
   @Test("Sleep is compared with the athlete's own week: within 15 minutes reads as close")
@@ -72,6 +113,38 @@ struct TodayTests {
     #expect(summary.workouts == 1)
     #expect(!summary.checkedIn)
     #expect(summary.meals == today.nutrition.meals.count)
+  }
+
+  @Test("Today's colophon and Profile name the athlete from one source: the display name, else the account's")
+  func athleteName() throws {
+    let model = AppModel()
+    model.session = .init(token: "t", accountID: "a", name: "Maja Jensen", email: "maja@example.test")
+    #expect(model.athleteName == "Maja Jensen")
+    var today = try #require(PreviewData.today)
+    today.name = "Maja"
+    model.today = today
+    #expect(model.athleteName == "Maja")
+    // A display name cleared on the website falls back to the account's.
+    today.name = "  "
+    model.today = today
+    #expect(model.athleteName == "Maja Jensen")
+  }
+
+  @Test("Drinks of one name and size share a line, in the order first drunk, and unnamed ones go by their kind")
+  func drinkLines() {
+    func drink(_ id: String, _ ml: Int, _ kind: String = "water", _ name: String = "") -> Components.Schemas.Drink {
+      .init(id: id, ml: ml, kind: kind, name: name, at: "2026-10-03T0\(id):00:00Z")
+    }
+    let lines = DrinkLine.lines([
+      drink("1", 250), drink("2", 200, "sparkling water"), drink("3", 250), drink("4", 500),
+      drink("5", 250, "tea", "Green tea"), drink("6", 250),
+    ])
+    #expect(lines.map(\.name) == ["Water", "Sparkling water", "Water", "Green tea"])
+    #expect(lines.map(\.amount) == ["3 × 250 ml", "200 ml", "500 ml", "250 ml"])
+    // The line stays put as its latest glass is deleted.
+    #expect(lines[0].id == "1")
+    #expect(lines[0].latest.id == "6")
+    #expect(DrinkLine.lines([]).isEmpty)
   }
 
   @Test("Each day of the journal is an issue, and weeks are ISO weeks")

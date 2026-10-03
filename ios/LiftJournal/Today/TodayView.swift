@@ -37,10 +37,13 @@ struct TodayView: View {
         .padding(.top, 80)
       }
     }
-    .onScrollGeometryChange(for: Bool.self) { geometry in
-      geometry.contentOffset.y + geometry.contentInsets.top > 120
-    } action: { _, past in
-      withAnimation(.easeInOut(duration: 0.2)) { scrolled = past }
+    // Follows the distance rather than whether it is past the masthead: as
+    // the page reloads, a change to "past" could come before an older one.
+    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+      geometry.contentOffset.y + geometry.contentInsets.top
+    } action: { _, distance in
+      let past = distance > 120
+      if past != scrolled { withAnimation(.easeInOut(duration: 0.2)) { scrolled = past } }
     }
     .background(Theme.background)
     .navigationTitle("Today")
@@ -168,7 +171,7 @@ struct TodayView: View {
       FoodSection(nutrition: today.nutrition, hydration: today.hydration, supplements: today.supplements)
         .padding(.top, Theme.Space.section)
       MovementSection(today: today).padding(.top, Theme.Space.section)
-      Colophon(issue: firstDay.map { Issue.number(first: $0, day: day) }, name: firstName(today))
+      Colophon(issue: firstDay.map { Issue.number(first: $0, day: day) }, name: firstName)
         .padding(.top, Theme.Space.section)
     }
     .padding(.horizontal, Theme.Space.gutter)
@@ -176,9 +179,8 @@ struct TodayView: View {
     .padding(.bottom, Theme.Space.l)
   }
 
-  private func firstName(_ today: Today) -> String? {
-    let name = today.name ?? model.session?.name
-    return name?.split(separator: " ").first.map(String.init)
+  private var firstName: String? {
+    model.athleteName?.split(separator: " ").first.map(String.init)
   }
 
   private func ledger(_ today: Today) -> some View {
@@ -679,7 +681,8 @@ extension Array {
 // MARK: Food and drink
 
 /// Food set like a menu: the total and how it splits, then each meal with
-/// its kind in the margin. Then drinks and supplements, one tap each.
+/// its kind in the margin. Then drinks and supplements, one tap to add,
+/// with what was logged set as lines like the meals.
 struct FoodSection: View {
   @Environment(AppModel.self) private var model
   @Environment(\.dynamicTypeSize) private var typeSize
@@ -756,7 +759,9 @@ struct FoodSection: View {
         }
       } else {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-          kind.frame(width: kindColumn, alignment: .leading)
+          // One line: "Breakfast" broke as "Break-fast" at the smaller text
+          // sizes, where the letter spacing doesn't shrink with the text.
+          kind.lineLimit(1).minimumScaleFactor(0.8).frame(width: kindColumn, alignment: .leading)
           dish
           Spacer(minLength: 8)
           energy
@@ -789,16 +794,101 @@ struct FoodSection: View {
           .buttonStyle(CardButtonStyle())
           .accessibilityLabel("Add \(ml) ml of water")
         }
-        ForEach(hydration.drinks.reversed(), id: \.id) { drink in
-          Chip(title: "\(drink.name.isEmpty ? drink.kind.capitalized : drink.name) · \(drink.ml) ml", kind: .logged)
-            .contextMenu {
-              Button("Delete", systemImage: "trash", role: .destructive) {
-                Task { await model.removeDrink(id: drink.id) }
-              }
+      }
+      LoggedLines(items: DrinkLine.lines(hydration.drinks), id: \.id) { line in
+        LoggedLine(name: line.name, amount: line.amount)
+          .contextMenu {
+            // The latest of them, so the line keeps its place.
+            Button(line.drinks.count > 1 ? "Delete one" : "Delete", systemImage: "trash", role: .destructive) {
+              Task { await model.removeDrink(id: line.latest.id) }
             }
+          }
+      }
+    }
+  }
+}
+
+/// The day's drinks of one name and size as one line of the ledger, so ten
+/// quick glasses read "Water, 10 × 250 ml" rather than ten lines of the
+/// same. The lines keep the order of each one's first drink.
+struct DrinkLine {
+  let name: String
+  /// Oldest first, as the day's drinks come.
+  let drinks: [Components.Schemas.Drink]
+
+  /// The first drink's, which stays as later ones are deleted.
+  var id: String { drinks[0].id }
+  var latest: Components.Schemas.Drink { drinks[drinks.count - 1] }
+  var amount: String {
+    drinks.count > 1 ? "\(drinks.count) × \(drinks[0].ml) ml" : "\(drinks[0].ml) ml"
+  }
+
+  static func lines(_ drinks: [Components.Schemas.Drink]) -> [DrinkLine] {
+    var lines: [DrinkLine] = []
+    for drink in drinks {
+      // Unnamed, a drink goes by its kind, in sentence case: "Sparkling water".
+      let name = drink.name.isEmpty ? drink.kind.prefix(1).uppercased() + drink.kind.dropFirst() : drink.name
+      if let index = lines.firstIndex(where: { $0.name == name && $0.drinks[0].ml == drink.ml }) {
+        lines[index] = DrinkLine(name: name, drinks: lines[index].drinks + [drink])
+      } else {
+        lines.append(DrinkLine(name: name, drinks: [drink]))
+      }
+    }
+    return lines
+  }
+}
+
+/// What has been logged under drinks or supplements, set as lines of a
+/// ledger in the order taken, as the meals are, with a hairline between
+/// them. Nothing when there is nothing.
+private struct LoggedLines<Item, ID: Hashable, Line: View>: View {
+  let items: [Item]
+  let id: KeyPath<Item, ID>
+  @ViewBuilder let line: (Item) -> Line
+
+  var body: some View {
+    if !items.isEmpty {
+      let key = (\(offset: Int, element: Item).element).appending(path: id)
+      VStack(alignment: .leading, spacing: 0) {
+        ForEach(Array(items.enumerated()), id: key) { index, item in
+          if index > 0 { Hairline() }
+          line(item)
         }
       }
     }
+  }
+}
+
+/// One line of the ledger, as the meals above it are set: the name in the
+/// serif, which wraps, and the amount, if there is one, aligned on the
+/// right. At the largest text sizes the amount goes under the name.
+private struct LoggedLine: View {
+  let name: String
+  let amount: String
+  @Environment(\.dynamicTypeSize) private var typeSize
+
+  var body: some View {
+    let title = Text(name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+    let amount = amount.isEmpty
+      ? nil : Text(amount).font(.subheadline.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+    Group {
+      if typeSize.isAccessibilitySize {
+        VStack(alignment: .leading, spacing: 4) {
+          title
+          amount
+        }
+      } else {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+          title
+          Spacer(minLength: 8)
+          amount?.fixedSize()
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.vertical, 10)
+    .contentShape(.rect)
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -826,14 +916,6 @@ struct SupplementsStrip: View {
         }
       }
       FlowLayout {
-        ForEach(supplements.taken.reversed(), id: \.id) { taken in
-          Chip(title: label(taken.name, taken.amount), kind: .logged)
-            .contextMenu {
-              Button("Delete", systemImage: "trash", role: .destructive) {
-                Task { await model.removeSupplement(id: taken.id) }
-              }
-            }
-        }
         ForEach(supplements.usual, id: \.name) { usual in
           Button {
             Task { await model.logSupplement(name: usual.name, amount: usual.amount) }
@@ -850,6 +932,14 @@ struct SupplementsStrip: View {
           Chip(title: supplements.usual.isEmpty ? "Add supplement" : "Other")
         }
         .buttonStyle(CardButtonStyle())
+      }
+      LoggedLines(items: supplements.taken, id: \.id) { taken in
+        LoggedLine(name: taken.name, amount: taken.amount)
+          .contextMenu {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+              Task { await model.removeSupplement(id: taken.id) }
+            }
+          }
       }
     }
     .alert("Add supplement", isPresented: $adding) {

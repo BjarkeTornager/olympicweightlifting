@@ -125,8 +125,11 @@ extension View {
 
 public enum FolioChrome {
   /// Serif navigation titles everywhere (Train, Journal, Profile, Trend),
-  /// scaled with Dynamic Type. Call once, when the app starts. The bar stays
-  /// transparent, so Liquid Glass and the scroll edge effect are untouched.
+  /// scaled with Dynamic Type. Call once, when the app starts. At the top of
+  /// a page the bar is transparent, so the page runs up under it; once
+  /// content scrolls under it, the bar is set on the paper with a hairline
+  /// below, as a running head is, so the title never sits over a blur of
+  /// what is beneath it.
   @MainActor public static func apply() {
     func serif(_ style: UIFont.TextStyle, _ size: CGFloat, _ weight: UIFont.Weight) -> UIFont {
       let base = UIFont.systemFont(ofSize: size, weight: weight).fontDescriptor
@@ -134,15 +137,23 @@ public enum FolioChrome {
       return UIFontMetrics(forTextStyle: style).scaledFont(for: UIFont(descriptor: descriptor, size: size))
     }
     let ink = UIColor(Theme.ink)
-    let appearance = UINavigationBarAppearance()
-    appearance.configureWithTransparentBackground()
-    appearance.largeTitleTextAttributes = [
-      .font: serif(.largeTitle, 36, .regular), .kern: -0.6, .foregroundColor: ink,
-    ]
-    appearance.titleTextAttributes = [.font: serif(.headline, 19, .medium), .foregroundColor: ink]
+    func titled(_ appearance: UINavigationBarAppearance) -> UINavigationBarAppearance {
+      appearance.largeTitleTextAttributes = [
+        .font: serif(.largeTitle, 36, .regular), .kern: -0.6, .foregroundColor: ink,
+      ]
+      appearance.titleTextAttributes = [.font: serif(.headline, 19, .medium), .foregroundColor: ink]
+      return appearance
+    }
+    let top = UINavigationBarAppearance()
+    top.configureWithTransparentBackground()
+    let scrolled = UINavigationBarAppearance()
+    scrolled.configureWithOpaqueBackground()
+    scrolled.backgroundColor = UIColor(Theme.background)
+    scrolled.shadowColor = UIColor(Theme.rule)
     let bar = UINavigationBar.appearance()
-    bar.standardAppearance = appearance
-    bar.compactAppearance = appearance
-    bar.scrollEdgeAppearance = appearance
+    bar.standardAppearance = titled(scrolled)
+    bar.compactAppearance = titled(scrolled.copy())
+    bar.scrollEdgeAppearance = titled(top)
+    bar.compactScrollEdgeAppearance = titled(top.copy())
   }
 }

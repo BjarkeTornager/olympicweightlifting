@@ -114,14 +114,29 @@ export default function PrivacyPage() {
           .
         </p>
         <p>
+          If you ask about something your journal doesn’t hold, such as the
+          ingredients of a packaged food, Coach can search the web through Exa.
+          Only a short search query is sent to Exa. Coach writes it from public
+          terms and is instructed never to include your name, measurements,
+          health details or journal contents. Exa returns titles, links and
+          short extracts from public web pages for Coach to use in its reply.
+          See{" "}
+          <a href="https://exa.ai/privacy-policy" className="underline">
+            Exa’s privacy policy
+          </a>
+          .
+        </p>
+        <p>
           Conversation is stored with your account. The app removes conversation
           older than 90 days when you next use the assistant, by typing or by
           voice. Proposals temporarily include journal snapshots for safe save
           and undo; they expire after 24 hours and are removed on subsequent
           assistant use. Clear conversation removes its messages and proposals
-          immediately, while keeping saved workouts. Journal backup exports do
-          not include chat; use your browser to copy any conversation you want
-          to keep.
+          immediately, while keeping saved workouts. Diagnostic traces,
+          described under How we measure use, hold no messages, so clearing
+          conversation leaves them to expire after 30 days. Journal backup
+          exports do not include chat; use your browser to copy any conversation
+          you want to keep.
         </p>
         <p>
           Your optional coaching focus, approved memories, agreed plans,
@@ -405,6 +420,29 @@ export default function PrivacyPage() {
           each limit this month, under the same short identifier. Logging in
           Train and Food is never limited.
         </p>
+        <p>
+          To find slow or failing replies, the owner can switch on diagnostic
+          traces; none are recorded while they are off. While they are on, Lift
+          Journal records a trace when Coach replies, a photo is tagged
+          automatically, a voice call is set up, uses a tool or reports a
+          connection problem, a call transcript is tidied or a lifting video is
+          reviewed. A trace holds timings, which models and tools were used,
+          token counts, cost, the kinds of entry Coach prepared or saved (such
+          as a meal), counts such as how many photos or transcript lines were
+          involved, settings such as the language and voice provider, whether
+          each step worked and error codes. It never includes your messages,
+          Coach’s replies, journal entries, transcripts, photos or what a photo
+          shows, video frames, video feedback, tool inputs or search queries.
+          Traces are stored in our own MLflow service on Railway in the
+          Netherlands, not with an analytics service, and only the owner can see
+          them. They are linked to your account, and to a Coach day, voice call,
+          photo or video, only by pseudonymous codes, so that they can be
+          deleted with your account. Each trace is deleted after 30 days. When
+          you delete your account, its traces are deleted straight after, and
+          again 15 minutes later for work that was still running; if that fails,
+          they still go within those 30 days. Recovery backups may keep traces
+          until those backups expire.
+        </p>
       </section>
       <section className="space-y-3">
         <h2>Cookies and other services</h2>
@@ -422,11 +460,11 @@ export default function PrivacyPage() {
           from Settings. In the iPhone app, Account › Delete account permanently
           deletes your account straight away: your journal, photos, videos,
           voice transcripts, Coach conversations and their pictures, Apple
-          Health imports, reminders, usage counts, AI cost records, sessions and
-          invitation. Signing in again then needs a new invitation. To request
-          an export, correction or deletion another way, contact the person who
-          invited you to Lift Journal. We will verify the account before acting
-          on a request.
+          Health imports, reminders, usage counts, AI cost records, diagnostic
+          traces, sessions and invitation. Signing in again then needs a new
+          invitation. To request an export, correction or deletion another way,
+          contact the person who invited you to Lift Journal. We will verify the
+          account before acting on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

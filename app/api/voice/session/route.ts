@@ -42,6 +42,8 @@ import { countUse } from "@/lib/feature-use";
 import { picturesEnabled } from "@/lib/coach-pictures";
 import { recordVoiceStart } from "@/lib/ai-usage";
 import { voiceLimit } from "@/lib/usage-limits";
+import { timed, traced } from "@/lib/tracing/spans";
+import { callSession } from "@/lib/tracing/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +81,15 @@ export async function POST(request: Request) {
         "Tap Reload update, or close and reopen the app, to use the latest voice coach.",
         426,
       );
-    const { timezone, purpose, resumeHandle, provider, language, voice } = z
+    const {
+      timezone,
+      purpose,
+      resumeHandle,
+      provider,
+      language,
+      voice,
+      callId,
+    } = z
       .object({
         purpose: z.enum(["checkin", "goals"]).default("checkin"),
         // Chosen in the iPhone app's Profile; the website uses Google.
@@ -100,118 +110,145 @@ export async function POST(request: Request) {
               return false;
             }
           }),
+        // The call this connection is for, the transcript's id. Groups the
+        // call's diagnostic traces; apps that don't send it still connect.
+        callId: z.string().uuid().optional(),
       })
       .strict()
       .parse(raw);
-    if (!voiceProviders().includes(provider))
-      throw new ApiError(
-        provider === "elevenlabs"
-          ? "ElevenLabs voice is not set up. Switch to Google in Profile."
-          : "Voice check-in is not set up yet. You can keep logging with Coach.",
-        503,
-      );
-    if (!(await allowRequest(user.id, "voice", 6)))
-      throw new ApiError(
-        "Please wait a minute before starting another call.",
-        429,
-      );
-    // Today's voice minutes, at the start and at every resume
-    // (lib/usage-limits.ts).
-    const limited = await voiceLimit(
-      user.id,
-      timezone,
-      resumeHandle ? "voice-resume" : "voice-start",
-    );
-    if (limited) throw new ApiError(limited, 429);
-    const clock = localClock(new Date(), timezone);
-    // Conversation older than 90 days goes, cards and pictures with it, as
-    // when typing to Coach; a call that can't prune still starts.
-    await pruneConversations(user.id).catch((error: unknown) =>
-      logFailure("conversation_prune_failed", error, {}, "warn"),
-    );
-    const { state } = await readJournal(user.id);
-    // Only an app that draws cards is offered show_card; older ones are
-    // told they can't show anything. A recipe card can have a picture while
-    // pictures are switched on.
-    const cards = voiceClientShowsCards(request.headers);
-    const pictures = cards && picturesEnabled();
-    const instruction = voiceInstruction(
-      voiceContext(
-        state,
-        clock.date,
-        await routeNotesFor(user.id, state, clock.date, clock.date),
-      ),
-      clock,
-      state.profile.name || user.name?.split(" ")[0],
-      purpose,
-      await recentConversations(user.id, { limit: 10 }),
-      { savedPhotos: provider === "google", language, cards, pictures },
-    );
-    // A resumed Google call is the same conversation, so it isn't counted again.
-    if (!resumeHandle) {
-      void countUse(user.id, `voice.call.${provider}`);
-      void countUse(user.id, `voice.purpose.${purpose}`);
-      void countUse(user.id, `voice.language.${language ?? "en"}`);
-    }
-    if (provider === "elevenlabs") {
-      let url: string;
-      try {
-        url = await elevenLabsSignedUrl();
-      } catch (error) {
-        logFailure("voice_elevenlabs_failed", error);
-        throw new ApiError(
-          error instanceof ElevenLabsError && error.credit
-            ? ELEVENLABS_CREDIT_MESSAGE
-            : "ElevenLabs voice is unavailable right now. Switch to Google in Profile, or keep logging with Coach.",
-          503,
-        );
-      }
-      // Each new connection gets a row in the AI cost ledger, costed by its
-      // minutes when the call ends (lib/ai-usage.ts).
-      if (!resumeHandle)
-        await recordVoiceStart(user.id, provider, ELEVENLABS_TTS_MODEL);
-      return Response.json(
-        {
-          provider,
-          url,
-          start: elevenLabsStart(instruction, {
-            voice: voiceFor(provider, voice),
-            language,
-          }),
-          model: ELEVENLABS_TTS_MODEL,
-          maxMinutes: ELEVENLABS_CALL_MINUTES,
-        },
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    }
-    const setup = voiceSetup(instruction, resumeHandle, {
-      voice: voiceFor(provider, voice),
-      language,
-      cards,
-      pictures,
-    });
-    let token: string;
-    try {
-      token = await mintVoiceToken(setup);
-    } catch (error) {
-      logFailure("voice_token_failed", error);
-      throw new ApiError(
-        error instanceof Error && isCreditError(error.message)
-          ? VOICE_CREDIT_MESSAGE
-          : "Voice check-in is unavailable right now. You can keep logging with Coach.",
-        503,
-      );
-    }
-    // A resumed connection is costed with the one it continues.
-    if (!resumeHandle) await recordVoiceStart(user.id, provider, VOICE_MODEL);
-    return Response.json(
+    // Traced as voice_setup (lib/tracing): provider, purpose, how long the
+    // context and the token took, and the instruction's length, never the
+    // instruction itself.
+    return await traced(
+      "voice_setup",
+      { userId: user.id, session: () => callSession(user.id, callId) },
       {
-        provider,
-        url: `${VOICE_SOCKET_URL}?access_token=${encodeURIComponent(token)}`,
-        setup,
-        maxMinutes: VOICE_SESSION_MINUTES,
+        "lift.provider": provider,
+        "lift.purpose": purpose,
+        "lift.language": language,
+        "lift.resumed": Boolean(resumeHandle),
       },
-      { headers: { "Cache-Control": "no-store" } },
+      async (trace) => {
+        if (!voiceProviders().includes(provider))
+          throw new ApiError(
+            provider === "elevenlabs"
+              ? "ElevenLabs voice is not set up. Switch to Google in Profile."
+              : "Voice check-in is not set up yet. You can keep logging with Coach.",
+            503,
+          );
+        if (!(await allowRequest(user.id, "voice", 6)))
+          throw new ApiError(
+            "Please wait a minute before starting another call.",
+            429,
+          );
+        // Today's voice minutes, at the start and at every resume
+        // (lib/usage-limits.ts).
+        const limited = await voiceLimit(
+          user.id,
+          timezone,
+          resumeHandle ? "voice-resume" : "voice-start",
+        );
+        if (limited) throw new ApiError(limited, 429);
+        const clock = localClock(new Date(), timezone);
+        // Only an app that draws cards is offered show_card; older ones are
+        // told they can't show anything. A recipe card can have a picture
+        // while pictures are switched on.
+        const cards = voiceClientShowsCards(request.headers);
+        const pictures = cards && picturesEnabled();
+        trace.set({ "lift.cards": cards });
+        const instruction = await timed(trace, "context", async () => {
+          // Conversation older than 90 days goes, cards and pictures with
+          // it, as when typing to Coach; a call that can't prune still
+          // starts.
+          await pruneConversations(user.id).catch((error: unknown) =>
+            logFailure("conversation_prune_failed", error, {}, "warn"),
+          );
+          const { state } = await readJournal(user.id);
+          return voiceInstruction(
+            voiceContext(
+              state,
+              clock.date,
+              await routeNotesFor(user.id, state, clock.date, clock.date),
+            ),
+            clock,
+            state.profile.name || user.name?.split(" ")[0],
+            purpose,
+            await recentConversations(user.id, { limit: 10 }),
+            { savedPhotos: provider === "google", language, cards, pictures },
+          );
+        });
+        trace.set({ "lift.instruction_chars": instruction.length });
+        // A resumed Google call is the same conversation, so it isn't
+        // counted again.
+        if (!resumeHandle) {
+          void countUse(user.id, `voice.call.${provider}`);
+          void countUse(user.id, `voice.purpose.${purpose}`);
+          void countUse(user.id, `voice.language.${language ?? "en"}`);
+        }
+        if (provider === "elevenlabs") {
+          let url: string;
+          try {
+            url = await timed(trace, "signed_url", () => elevenLabsSignedUrl());
+          } catch (error) {
+            logFailure("voice_elevenlabs_failed", error);
+            throw new ApiError(
+              error instanceof ElevenLabsError && error.credit
+                ? ELEVENLABS_CREDIT_MESSAGE
+                : "ElevenLabs voice is unavailable right now. Switch to Google in Profile, or keep logging with Coach.",
+              503,
+            );
+          }
+          // Each new connection gets a row in the AI cost ledger, costed by
+          // its minutes when the call ends (lib/ai-usage.ts).
+          if (!resumeHandle)
+            await recordVoiceStart(user.id, provider, ELEVENLABS_TTS_MODEL);
+          trace.set({ "lift.ok": true });
+          return Response.json(
+            {
+              provider,
+              url,
+              start: elevenLabsStart(instruction, {
+                voice: voiceFor(provider, voice),
+                language,
+              }),
+              model: ELEVENLABS_TTS_MODEL,
+              maxMinutes: ELEVENLABS_CALL_MINUTES,
+            },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        const setup = voiceSetup(instruction, resumeHandle, {
+          voice: voiceFor(provider, voice),
+          language,
+          cards,
+          pictures,
+        });
+        let token: string;
+        try {
+          token = await timed(trace, "mint_token", () => mintVoiceToken(setup));
+        } catch (error) {
+          logFailure("voice_token_failed", error);
+          throw new ApiError(
+            error instanceof Error && isCreditError(error.message)
+              ? VOICE_CREDIT_MESSAGE
+              : "Voice check-in is unavailable right now. You can keep logging with Coach.",
+            503,
+          );
+        }
+        // A resumed connection is costed with the one it continues.
+        if (!resumeHandle)
+          await recordVoiceStart(user.id, provider, VOICE_MODEL);
+        trace.set({ "lift.ok": true });
+        return Response.json(
+          {
+            provider,
+            url: `${VOICE_SOCKET_URL}?access_token=${encodeURIComponent(token)}`,
+            setup,
+            maxMinutes: VOICE_SESSION_MINUTES,
+          },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      },
     );
   } catch (e) {
     return apiFailure(e);

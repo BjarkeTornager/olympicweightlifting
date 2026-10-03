@@ -23,7 +23,9 @@ export async function GET(request: Request) {
     if (untidy.length)
       after(async () => {
         for (const c of untidy)
-          await tidyVoiceCall(user.id, c.id).catch(() => {});
+          await tidyVoiceCall(user.id, c.id, undefined, "catch_up").catch(
+            () => {},
+          );
       });
     return Response.json(
       voiceCallsResponse.parse({

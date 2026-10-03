@@ -26,6 +26,8 @@ import {
 import { automaticFeedback } from "./feedback";
 import { logFailure } from "../error-log";
 import { withAiUsage } from "../ai-usage";
+import { startTrace, timed } from "../tracing/spans";
+import { videoSession } from "../tracing/ids";
 export { reviewMessages } from "./review";
 // Stored size of a review: playback media, sampled frames and analysis JSON.
 function reviewBytes(
@@ -67,6 +69,13 @@ export async function claimVideo() {
   );
   return rows[0] ? { ...rows[0], token } : null;
 }
+// GPU work still running remotely: the job is queued again and resumes it.
+const waiting = (error: unknown) => error instanceof SegmentationPending;
+
+// One attempt at a video's review, traced as video_job (lib/tracing) with
+// the video's other attempts: how far it got, how it ended and each stage
+// and model call, never frames, poses or feedback. A process that dies mid
+// job leaves the stages already sent without their root.
 export async function runVideoJob(
   job: NonNullable<Awaited<ReturnType<typeof claimVideo>>>,
   model = callModel,
@@ -76,6 +85,13 @@ export async function runVideoJob(
   bodyReconstructor = reconstructBody,
   overlayRecoverer = recoverVideoOverlays,
 ) {
+  const trace = await startTrace("video_job", {
+    userId: job.user_id,
+    session: () => videoSession(job.user_id, job.id),
+  });
+  // Stopped: the account, the video or the lease went away.
+  let outcome: "done" | "requeued" | "waiting" | "failed" | "stopped" =
+    "stopped";
   const fence = and(
     eq(liftingVideos.userId, job.user_id),
     eq(liftingVideos.id, job.id),
@@ -110,6 +126,7 @@ export async function runVideoJob(
   try {
     if (!(await check())) return;
     const [row] = await getDb().select().from(liftingVideos).where(fence);
+    trace.set({ "lift.attempt": row.attempts, "lift.mode": row.input.mode });
     let progress: VideoProgress = {
       ...(row.progress ?? queuedVideoProgress()),
       bodyRequested: Boolean(bodyConfig.endpoint),
@@ -119,6 +136,7 @@ export async function runVideoJob(
       updated?: VideoAnalysis,
     ) => {
       const now = new Date().toISOString();
+      trace.set({ "lift.phase_reached": phase });
       const pending = updated?.attempts?.findIndex((a) => !a.coaching);
       progress = {
         ...progress,
@@ -148,7 +166,10 @@ export async function runVideoJob(
     if (!analysis || !frames) {
       if (!row.source)
         throw new ApiError("This video is unavailable. Upload it again.", 422);
-      const output = await processor(row.source, row.input, signal);
+      const source = row.source;
+      const output = await timed(trace, "process_video", () =>
+        processor(source, row.input, signal),
+      );
       signal.throwIfAborted();
       analysis = output.analysis;
       frames = output.frames;
@@ -169,6 +190,7 @@ export async function runVideoJob(
         .where(fence);
     }
     if (!(await check())) return;
+    trace.set({ "lift.frames": frames.length });
     if (!media)
       throw new ApiError(
         "This video's playback is unavailable. Upload it again.",
@@ -226,7 +248,9 @@ export async function runVideoJob(
         let saved: VideoRefinementCheckpoint;
         if (reusable) saved = refinement!;
         else {
-          const refined = await refiner(media!, current, attempt, signal);
+          const refined = await timed(trace, "refine", () =>
+            refiner(media!, current, attempt, signal),
+          );
           signal.throwIfAborted();
           saved = {
             version: VIDEO_REFINEMENT_VERSION,
@@ -275,20 +299,26 @@ export async function runVideoJob(
               progress: advance("tracking", current),
             })
             .where(fence);
-          const segmentation = await segmenter(
-            media!,
-            detailed,
-            signal,
-            segmentationConfig,
-            undefined,
-            segmentationBudget,
-            {
-              job: saved.sam3Job,
-              saveJob: async (job) => {
-                saved = { ...saved, sam3Job: job };
-                await save();
-              },
-            },
+          const segmentation = await timed(
+            trace,
+            "sam3",
+            () =>
+              segmenter(
+                media!,
+                detailed,
+                signal,
+                segmentationConfig,
+                undefined,
+                segmentationBudget,
+                {
+                  job: saved.sam3Job,
+                  saveJob: async (job) => {
+                    saved = { ...saved, sam3Job: job };
+                    await save();
+                  },
+                },
+              ),
+            waiting,
           );
           signal.throwIfAborted();
           saved = { ...saved, segmentation, sam3Job: undefined };
@@ -323,10 +353,8 @@ export async function runVideoJob(
                 frames: [...merged.values()].sort((a, b) => a.t - b.t),
               }
             : current.pose;
-          const recovered = await overlayRecoverer(
-            media!,
-            { ...detailed, pose },
-            signal,
+          const recovered = await timed(trace, "overlay_recovery", () =>
+            overlayRecoverer(media!, { ...detailed, pose }, signal),
           );
           signal.throwIfAborted();
           // Explicit calibrated tracking retains its measured path and scale.
@@ -361,20 +389,26 @@ export async function runVideoJob(
                 progress: advance("body", current),
               })
               .where(fence);
-            const body = await bodyReconstructor(
-              media!,
-              { ...detailed, ...reviewed },
-              signal,
-              bodyConfig,
-              undefined,
-              bodyBudget,
-              {
-                job: saved.bodyJob,
-                saveJob: async (job) => {
-                  saved = { ...saved, bodyJob: job };
-                  await save();
-                },
-              },
+            const body = await timed(
+              trace,
+              "body_reconstruction",
+              () =>
+                bodyReconstructor(
+                  media!,
+                  { ...detailed, ...reviewed },
+                  signal,
+                  bodyConfig,
+                  undefined,
+                  bodyBudget,
+                  {
+                    job: saved.bodyJob,
+                    saveJob: async (job) => {
+                      saved = { ...saved, bodyJob: job };
+                      await save();
+                    },
+                  },
+                ),
+              waiting,
             );
             signal.throwIfAborted();
             const named = body?.motion
@@ -408,6 +442,7 @@ export async function runVideoJob(
           createdAt: row.createdAt.toISOString(),
           lift,
         }),
+      trace,
     );
     analysis = result.analysis;
     const feedback = result.feedback;
@@ -450,10 +485,13 @@ export async function runVideoJob(
         leaseUntil: null,
       })
       .where(fence);
+    outcome = "done";
+    trace.set({ "lift.clip_attempts": analysis.attempts?.length });
   } catch (error) {
     if (error instanceof SegmentationPending && !signal.aborted) {
       const [saved] = await getDb().select().from(liftingVideos).where(fence);
       if (!saved || !(await check())) return;
+      outcome = "waiting";
       await getDb()
         .update(liftingVideos)
         .set({
@@ -474,6 +512,7 @@ export async function runVideoJob(
         .where(fence);
       return;
     }
+    trace.fail(error);
     logFailure(
       "video_job_failed",
       error,
@@ -496,6 +535,7 @@ export async function runVideoJob(
         (error.status === 429 || error.status >= 500)) ||
       (signal.aborted && !abort.signal.aborted);
     const retry = recoverable && saved.attempts < 3;
+    outcome = retry ? "requeued" : "failed";
     // Save fixed diagnostic codes, never provider responses, inside the private
     // checkpoint so a deployment/log-retention boundary cannot erase the cause.
     await getDb()
@@ -527,6 +567,8 @@ export async function runVideoJob(
       .where(fence);
   } finally {
     clearInterval(monitor);
+    trace.end({ "lift.outcome": outcome });
+    await trace.settle();
   }
 }
 let started = false;

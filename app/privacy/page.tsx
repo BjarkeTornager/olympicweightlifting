@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = {
   title: "Privacy · Lift Journal",
@@ -9,8 +10,11 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
-      <Link href="/" className="text-brand underline underline-offset-4">
-        ← Back to Lift Journal
+      <Link href="/" className="brand w-fit">
+        <span className="brand-icon">
+          <BrandMark />
+        </span>
+        Lift Journal
       </Link>
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>

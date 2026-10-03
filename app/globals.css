@@ -1469,9 +1469,6 @@ summary {
     left: 230px;
     right: 30px;
   }
-  .brand {
-    font-size: 15px;
-  }
   .program-card {
     padding: 15px;
     gap: 12px;
@@ -1501,12 +1498,6 @@ summary {
   .brand-icon {
     width: 34px;
     height: 34px;
-  }
-  .brand-light {
-    display: inline;
-    font-size: 16px;
-    letter-spacing: 0.7px;
-    margin-left: 5px;
   }
   .topbar {
     padding-bottom: 22px;
@@ -2776,7 +2767,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 @media (max-width: 768px) {
   .public-landing { padding-inline: 24px; }
   .landing-header { padding-block: 20px; }
-  .landing-header .brand { font-size: 13px; gap: 9px; letter-spacing: .4px; }
+  .landing-header .brand { font-size: 19px; gap: 9px; }
   .landing-main { grid-template-columns: 1fr; gap: 36px; padding: 40px 0; }
   .landing-intro h1 { letter-spacing: -1.4px; font-size: 43px; }
   .landing-intro .lead { font-size: 15px; }

@@ -176,6 +176,36 @@ test(
         (await readUserImage(revoked, blocked)).classification.status,
         "failed",
       );
+
+      // Each claim records when its own run began, not when the sweep did:
+      // a sweep's runs follow one another, and a later one mustn't look cut
+      // off to another server's sweep before its time.
+      const slow: Model = async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        return food;
+      };
+      const queued = [
+        await upload(userId, held().model),
+        await upload(userId, held().model),
+      ];
+      await pool.query(
+        "UPDATE food_photos SET tag_started_at=now()-interval '3 minutes' WHERE user_id=$1 AND id=ANY($2)",
+        [userId, queued],
+      );
+      assert.deepEqual(await retagStalledImages({ model: slow, userId }), {
+        retagged: 2,
+        failed: 0,
+      });
+      const { rows: claims } = await pool.query<{ tag_started_at: Date }>(
+        "SELECT tag_started_at FROM food_photos WHERE user_id=$1 AND id=ANY($2) ORDER BY tag_started_at",
+        [userId, queued],
+      );
+      assert.ok(
+        claims[1].tag_started_at.getTime() -
+          claims[0].tag_started_at.getTime() >=
+          250,
+        "the second run was claimed after the first one's model call",
+      );
     } finally {
       await pool.query("DELETE FROM users WHERE id=ANY($1)", [
         [userId, revoked],

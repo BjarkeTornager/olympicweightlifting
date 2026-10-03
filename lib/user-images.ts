@@ -362,9 +362,10 @@ export const IMAGE_TAG_RETRY_MS = 2 * 60000;
 export const IMAGE_TAG_TRIES = 3;
 
 // Tags again, one at a time, images whose tagging was cut off. Several
-// servers can run this at once: a claim records the new run before the model
-// call, so the same image isn't taken again for IMAGE_TAG_RETRY_MS. `userId`
-// limits it to one account (tests share a database).
+// servers can run this at once (two do during a deploy): a claim records
+// when its own run began, before the model call, so the same image isn't
+// taken again for IMAGE_TAG_RETRY_MS. `now` fixes the time in tests.
+// `userId` limits it to one account (tests share a database).
 export async function retagStalledImages(
   options: {
     model?: typeof callModel;
@@ -399,7 +400,9 @@ export async function retagStalledImages(
       ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
       UPDATE food_photos p SET tag_attempts=p.tag_attempts+1,tag_started_at=$3
       FROM next WHERE p.user_id=next.user_id AND p.id=next.id RETURNING p.user_id,p.id,p.version`,
-      [IMAGE_TAG_TRIES, cutoff, now, account],
+      // The claim's own time, not the sweep's: runs follow one another, so
+      // the sweep's start would make a later one look cut off too soon.
+      [IMAGE_TAG_TRIES, cutoff, options.now ?? new Date(), account],
     );
     const job = rows[0];
     if (!job) break;

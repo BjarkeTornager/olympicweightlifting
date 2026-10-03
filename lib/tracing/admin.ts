@@ -1,13 +1,14 @@
 // Deleting traces through MLflow's REST API: an account's traces when the
 // account is deleted, and every trace past the retention period (janitor.ts).
+// Both run whenever MLflow is configured, with capture on or off.
 // Checked against MLflow 3.16.1.
-import { tracingConfig, type TracingConfig } from "./config";
+import { traceAdminConfig, type MlflowTarget } from "./config";
 
 const PAGE = 500;
 const BATCH = 1000;
 
 async function call(
-  config: TracingConfig,
+  config: MlflowTarget,
   path: string,
   body: unknown,
   transport: typeof fetch,
@@ -30,10 +31,10 @@ async function call(
 }
 
 // Deletes every trace carrying this account code (ids.ts). Returns how many
-// were deleted; 0 with tracing off.
+// were deleted; 0 with no MLflow configured.
 export async function deleteUserTraces(
   code: string,
-  config = tracingConfig(),
+  config: MlflowTarget | null = traceAdminConfig(),
   transport: typeof fetch = fetch,
 ) {
   if (!config) return 0;
@@ -88,7 +89,7 @@ export async function deleteUserTraces(
 // batch comes back short. Safe to run from two instances at once.
 export async function deleteOlderThan(
   days: number,
-  config = tracingConfig(),
+  config: MlflowTarget | null = traceAdminConfig(),
   transport: typeof fetch = fetch,
   now = Date.now(),
 ) {

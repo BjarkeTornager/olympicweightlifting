@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { tracingConfig } from "./config";
+import { traceAdminConfig } from "./config";
 
 // Pseudonymous codes that link traces to an account, a Coach day or a call
 // without carrying the id itself. The same secret always gives the same code,
@@ -18,9 +18,10 @@ export function sessionCode(secret: string, key: string) {
   return traceCode(secret, `session:${key}`);
 }
 
-// The code an account's traces carry, or null with tracing off. Compute it
-// before the account is deleted.
+// The code an account's traces carry, or null without MLflow or a secret.
+// It doesn't depend on TRACING, so traces sent before capture was turned off
+// are still found. Compute it before the account is deleted.
 export function accountTraceCode(userId: string) {
-  const config = tracingConfig();
-  return config ? userCode(config.userSecret, userId) : null;
+  const secret = traceAdminConfig()?.userSecret;
+  return secret ? userCode(secret, userId) : null;
 }

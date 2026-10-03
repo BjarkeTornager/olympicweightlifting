@@ -2,7 +2,7 @@
 
 Coach turns can be traced to a self-hosted MLflow, to find slow or failing replies. A trace holds metadata only: timings, models, token counts, cost, routing, skills, tool names, change kinds, counts, status and error categories. It never holds messages, Coach's replies, the system prompt, journal entries, tool inputs or results, photos or what a photo shows. Accounts appear only as an HMAC code.
 
-Tracing is **off** unless `TRACING=metadata`. Off is also the kill switch: nothing in `lib/tracing` loads OpenTelemetry, no provider is created and nothing is sent.
+Tracing is **off** unless `TRACING=metadata`. Off is also the kill switch for capture: nothing in `lib/tracing` loads OpenTelemetry, no provider is created and no trace is sent. Deletion is separate and keeps running while `MLFLOW_TRACKING_URI` and `MLFLOW_EXPERIMENT_ID` are set, whatever `TRACING` says, so the traces already sent still expire and are deleted with their account. To cut MLflow off entirely, unset those two as well, but only once the older traces are gone.
 
 Production stays off until the privacy page has its Diagnostics paragraph and the MLflow service exists (see the plan's PR 3 and infra steps).
 
@@ -13,7 +13,7 @@ Production stays off until the privacy page has its Diagnostics paragraph and th
 - Every attribute key has a validator in `attributes.ts`: a number, a boolean, a value from a fixed list or a short slug. Anything else is dropped and counted in `lift.dropped_attrs`. A tool span is `tool.<name>` only for a tool Coach has, otherwise `tool.unknown`.
 - Errors are recorded only as their `errorCategory` (`lib/error-log.ts`).
 - Each Coach turn is one trace: `coach_turn` with `prepare` (and `photos_sorted`), `route` (Jev's tokens), one `round` per model round, one `chat` per provider call (including a call the content filter blocked), one span per tool, and `commit`. The trace id is saved in the turn's metrics as `traceId`.
-- Traces past `TRACE_RETENTION_DAYS` are deleted every six hours by the janitor that `instrumentation.ts` starts. `deleteUserTraces` in `admin.ts` deletes an account's traces by its code (wired to account deletion in a later PR).
+- Traces past `TRACE_RETENTION_DAYS` are deleted every six hours by the janitor that `instrumentation.ts` starts. `deleteUserTraces` in `admin.ts` deletes an account's traces by its code (wired to account deletion in a later PR). Both use `traceAdminConfig`, which needs only the MLflow variables: with `TRACING=off`, or a capture variable that is invalid, they still run. An invalid `TRACE_RETENTION_DAYS` falls back to 30 for deletion.
 
 ## Environment
 
@@ -21,14 +21,14 @@ Production stays off until the privacy page has its Diagnostics paragraph and th
 |---|---|
 | `TRACING` | `off` (default) or `metadata` |
 | `MLFLOW_TRACKING_URI` | MLflow's base URL, such as `http://127.0.0.1:5001` |
-| `MLFLOW_EXPERIMENT_ID` | The experiment traces go to |
+| `MLFLOW_EXPERIMENT_ID` | The experiment traces go to. The janitor and account deletion look only in this one, so before changing it, delete the old experiment's traces |
 | `MLFLOW_TRACKING_USERNAME`, `MLFLOW_TRACKING_PASSWORD` | Basic auth, when the server has it on |
 | `TRACE_USER_SECRET` | HMAC secret for account and session codes; at least 32 characters in production. Don't rotate it: older traces could then only expire, not be deleted with their account |
 | `TRACE_SAMPLE_RATE` | Share of turns traced, 0 to 1 (default 1) |
 | `TRACE_RETENTION_DAYS` | 1 to 30 (default 30) |
 | `TRACE_CONTENT` | `1` adds message text, with images as `[image]`, only when `NODE_ENV` isn't production, the database name ends in `_test` and MLflow is on localhost. For synthetic eval and bench accounts |
 
-A missing or invalid variable turns tracing off with one `tracing_disabled` log line naming the reason. Failed exports log `tracing_export_failed` at most every ten minutes and never slow a turn.
+A missing or invalid variable turns capture off with one `tracing_disabled` log line naming the reason. Failed exports log `tracing_export_failed` at most every ten minutes and never slow a turn.
 
 ## Local MLflow
 

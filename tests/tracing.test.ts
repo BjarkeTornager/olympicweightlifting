@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { allowed, attributes, spanName } from "../lib/tracing/attributes";
-import { contentAllowed, tracingConfig } from "../lib/tracing/config";
-import { sessionCode, userCode } from "../lib/tracing/ids";
+import {
+  contentAllowed,
+  traceAdminConfig,
+  tracingConfig,
+} from "../lib/tracing/config";
+import { accountTraceCode, sessionCode, userCode } from "../lib/tracing/ids";
 
 // Diagnostic traces (lib/tracing): off by default, metadata only, accounts
 // only as HMAC codes. Model-free: the provider and MLflow are mocked, and
@@ -585,6 +589,112 @@ test("an account's traces are found by code and deleted, and expired traces in b
     max_timestamp_millis: now - 30 * 86400000,
     max_traces: 1000,
   });
+});
+
+test("deletion needs only MLflow: the kill switch or a bad capture setting leaves it running", () => {
+  const warn = mock.method(console, "warn", () => {});
+  try {
+    const admin = (vars: Record<string, string | undefined>) =>
+      traceAdminConfig({ ...TRACING, ...vars });
+    for (const vars of [
+      { TRACING: "off" },
+      { TRACING: undefined },
+      { TRACING: "everything" },
+      { TRACE_SAMPLE_RATE: "2" },
+      { NODE_ENV: "production" },
+    ]) {
+      assert.equal(tracingConfig({ ...TRACING, ...vars }), null);
+      assert.deepEqual(
+        admin(vars),
+        {
+          trackingUri: "http://127.0.0.1:5999",
+          experimentId: "7",
+          userSecret: "test-only-secret",
+          retentionDays: 30,
+        },
+        JSON.stringify(vars),
+      );
+    }
+    // Deletion keeps to the privacy page's 30 days whatever the variable says.
+    assert.equal(admin({ TRACE_RETENTION_DAYS: "60" })?.retentionDays, 30);
+    assert.equal(admin({ TRACE_RETENTION_DAYS: "7" })?.retentionDays, 7);
+    assert.equal(
+      admin({ TRACE_USER_SECRET: undefined })?.userSecret,
+      undefined,
+      "expiry doesn't need the secret",
+    );
+    assert.equal(admin({ MLFLOW_TRACKING_URI: undefined }), null);
+    assert.equal(admin({ MLFLOW_EXPERIMENT_ID: "lift; drop" }), null);
+    assert.equal(
+      admin({ MLFLOW_TRACKING_URI: "http://user:pass@127.0.0.1:5000" }),
+      null,
+    );
+  } finally {
+    warn.mock.restore();
+  }
+});
+
+test("with TRACING off the janitor still starts and sweeps, and accounts still have their code", async (t) => {
+  const { startTraceJanitor, sweepTraces } =
+    await import("../lib/tracing/janitor");
+  const janitor = Symbol.for("lift.tracing.janitor");
+  const shared = globalThis as unknown as Record<symbol, unknown>;
+  const sent: { url: string; body: Record<string, unknown> }[] = [];
+  const fetch = mock.method(
+    globalThis,
+    "fetch",
+    async (url: string, init: RequestInit) => {
+      sent.push({ url, body: JSON.parse(String(init.body)) });
+      return Response.json({ traces_deleted: 4 });
+    },
+  );
+  const info = mock.method(console, "info", () => {});
+  mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  t.after(() => {
+    mock.timers.reset();
+    fetch.mock.restore();
+    info.mock.restore();
+    delete shared[janitor];
+  });
+  await withEnv({ ...TRACING, TRACING: "off" }, async () => {
+    assert.equal(
+      accountTraceCode("user-a"),
+      userCode("test-only-secret", "user-a"),
+    );
+    const before = Date.now();
+    await sweepTraces();
+    assert.equal(sent.length, 1);
+    assert.equal(
+      sent[0].url,
+      "http://127.0.0.1:5999/api/2.0/mlflow/traces/delete-traces",
+    );
+    assert.equal(sent[0].body.experiment_id, "7");
+    assert.ok(
+      Number(sent[0].body.max_timestamp_millis) <= before - 30 * 86400000,
+    );
+    assert.deepEqual(JSON.parse(String(info.mock.calls[0].arguments[0])), {
+      event: "trace_retention",
+      deleted: 4,
+      days: 30,
+    });
+    // instrumentation.ts leaves the decision to the janitor.
+    assert.equal(startTraceJanitor(), true);
+    mock.timers.tick(59999);
+    assert.equal(sent.length, 1);
+    mock.timers.tick(1);
+    assert.equal(sent.length, 2, "the first sweep runs a minute after start");
+    for (let i = 0; i < 50 && info.mock.callCount() < 2; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(info.mock.callCount(), 2);
+  });
+  delete shared[janitor];
+  await withEnv(
+    { ...TRACING, TRACING: "off", MLFLOW_TRACKING_URI: undefined },
+    async () => {
+      assert.equal(accountTraceCode("user-a"), null);
+      assert.equal(startTraceJanitor(), false, "nothing to sweep");
+    },
+  );
 });
 
 const sourceFiles = (dir: string): string[] =>

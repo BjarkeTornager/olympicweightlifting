@@ -2,6 +2,7 @@
 // account is deleted, and every trace past the retention period (janitor.ts).
 // Both run whenever MLflow is configured, with capture on or off.
 // Checked against MLflow 3.16.1.
+import { errorCategory } from "../error-log";
 import { traceAdminConfig, type MlflowTarget } from "./config";
 
 const PAGE = 500;
@@ -83,6 +84,27 @@ export async function deleteUserTraces(
     deleted += Number(result.traces_deleted) || 0;
   }
   return deleted;
+}
+
+// A deleted account's traces, removed once its deletion has been answered
+// (app/api/account). Best effort: a failure is logged by category, and the
+// retention janitor removes what is left within TRACE_RETENTION_DAYS.
+export async function deleteAccountTraces(
+  code: string,
+  config: MlflowTarget | null = traceAdminConfig(),
+  transport: typeof fetch = fetch,
+) {
+  try {
+    const deleted = await deleteUserTraces(code, config, transport);
+    console.info(JSON.stringify({ event: "account_traces_deleted", deleted }));
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "account_traces_delete_failed",
+        category: errorCategory(error),
+      }),
+    );
+  }
 }
 
 // Deletes every trace older than `days`, oldest first, in batches until a

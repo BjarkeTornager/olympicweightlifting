@@ -17,7 +17,7 @@ struct SessionView: View {
             LabeledContent("Date", value: JournalView.heading(workout.date))
             LabeledContent("Sets logged", value: "\(workout.exercises.flatMap(\.sets).filter(\.logged).count)")
             if let notes = workout.notes, !notes.isEmpty {
-              Text(notes).foregroundStyle(.secondary)
+              Text(notes).foregroundStyle(Theme.inkSecondary)
             }
           }
           ForEach(workout.exercises, id: \.entryId) { exercise in
@@ -26,18 +26,18 @@ struct SessionView: View {
                 HStack {
                   Text("\(index + 1)")
                     .font(.subheadline.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.inkSecondary)
                     .frame(width: 24, alignment: .leading)
                   Text(Self.values(set)).monospacedDigit()
                   Spacer()
                   Image(systemName: set.result == "miss" ? "xmark.circle.fill" : "checkmark.circle.fill")
-                    .foregroundStyle(set.result == "miss" ? Theme.danger : Theme.accent)
+                    .foregroundStyle(set.result == "miss" ? Theme.danger : Theme.success)
                     .accessibilityLabel(set.result == "miss" ? "Missed" : "Made")
                 }
                 .accessibilityElement(children: .combine)
               }
               if let notes = exercise.notes, !notes.isEmpty {
-                Text(notes).font(.footnote).foregroundStyle(.secondary)
+                Text(notes).font(.footnote).foregroundStyle(Theme.inkSecondary)
               }
             } header: {
               Text(exercise.name)
@@ -57,7 +57,7 @@ struct SessionView: View {
   }
 
   static func values(_ set: Components.Schemas.WorkoutSet) -> String {
-    let weight = set.weight.map { $0.formatted(.number.precision(.fractionLength(0...1))) + " kg" } ?? "–"
+    let weight = set.weight.map { Format.decimal($0) + " kg" } ?? "–"
     return "\(weight) × \(set.reps.map(String.init) ?? "–")"
   }
 

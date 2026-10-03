@@ -15,6 +15,8 @@ public enum Folio {
     case sectionTitle
     /// The one number a screen leads with: 66 pt.
     case hero
+    /// A second large number, such as the body's weight: 50 pt.
+    case display
     /// Protein and water beside the hero: 36 pt.
     case ledger
     /// A value in a grid cell: 34 pt.
@@ -23,10 +25,14 @@ public enum Folio {
     case inline
     /// The italic summary under a masthead: 19 pt.
     case standfirst
+    /// The roman paragraph under the cover's title: 19 pt.
+    case lede
     /// Coach's paragraphs: 18 pt.
     case coach
-    /// Dish, workout and journal titles, which wrap: 18 pt.
+    /// Dish titles, which wrap: 18 pt.
     case entry
+    /// An entry's title in Movement, Train and the Journal, which wraps: 20 pt.
+    case heading
     /// Italic empty states and footnotes: 17 pt.
     case note
 
@@ -35,10 +41,12 @@ public enum Folio {
       case .masthead: 46
       case .sectionTitle: 30
       case .hero: 66
+      case .display: 50
       case .ledger: 36
       case .tile: 34
       case .inline: 22
-      case .standfirst: 19
+      case .standfirst, .lede: 19
+      case .heading: 20
       case .coach, .entry: 18
       case .note: 17
       }
@@ -46,9 +54,9 @@ public enum Folio {
 
     var style: Font.TextStyle {
       switch self {
-      case .masthead, .hero: .largeTitle
+      case .masthead, .hero, .display: .largeTitle
       case .sectionTitle, .ledger, .tile: .title
-      case .inline, .standfirst: .title3
+      case .inline, .standfirst, .lede, .heading: .title3
       case .coach, .entry, .note: .body
       }
     }
@@ -59,6 +67,7 @@ public enum Folio {
     var tracking: CGFloat {
       switch self {
       case .hero: -2.2
+      case .display: -1.5
       case .masthead: -0.8
       case .sectionTitle, .ledger, .tile: -0.4
       default: 0
@@ -70,7 +79,8 @@ public enum Folio {
     var leading: CGFloat {
       switch self {
       case .coach: 4
-      case .standfirst: 3
+      case .standfirst, .lede: 3
+      case .heading: 1
       default: 0
       }
     }

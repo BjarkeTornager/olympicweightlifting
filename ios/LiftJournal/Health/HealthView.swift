@@ -19,25 +19,27 @@ struct HealthView: View {
           Image(systemName: "heart.text.square.fill")
             .font(.system(size: symbolSize))
             .foregroundStyle(Theme.heart)
-          Text("Apple Health").font(.title2.bold())
+          Text("Apple Health").folio(.sectionTitle).foregroundStyle(Theme.ink)
           Text(
             "Lift Journal reads your sleep, heart rate and workouts so they appear in your journal without typing them. Nothing is written back to Apple Health."
           )
-          .foregroundStyle(.secondary)
+          .foregroundStyle(Theme.inkSecondary)
         }
         .padding(.vertical, 6)
       }
       Section("Read from Apple Health") {
-        Label("Sleep, including stages", systemImage: "bed.double.fill")
-        Label("Resting heart rate, heart rate variability and average heart rate", systemImage: "heart.fill")
-        Label("Steps and active energy", systemImage: "flame.fill")
-        Label("Body fat percentage from a smart scale", systemImage: "scalemass.fill")
-        Label("Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", systemImage: "figure.run")
-        Label("Routes of outdoor workouts, simplified, with place names from Apple Maps", systemImage: "map.fill")
+        read("Sleep, including stages", "bed.double.fill", Theme.sleep)
+        read("Resting heart rate, heart rate variability and average heart rate", "heart.fill", Theme.heart)
+        read("Steps and active energy", "flame.fill", Theme.activity)
+        read("Body fat percentage from a smart scale", "scalemass.fill", Theme.body)
+        read(
+          "Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", "figure.run",
+          Theme.activity)
+        read("Routes of outdoor workouts, simplified, with place names from Apple Maps", "map.fill", Theme.activity)
       }
       if !model.health.available {
         Section {
-          Text("Apple Health isn't available on this device.").foregroundStyle(.secondary)
+          Text("Apple Health isn't available on this device.").foregroundStyle(Theme.inkSecondary)
         }
       } else if model.health.connected {
         if needsAccess {
@@ -61,7 +63,7 @@ struct HealthView: View {
             if model.health.syncing {
               ProgressView()
             } else {
-              Text("Connected").foregroundStyle(Theme.success)
+              Label("Connected", systemImage: "checkmark").foregroundStyle(Theme.success)
             }
           }
           if let last = model.health.lastSync {
@@ -122,6 +124,15 @@ struct HealthView: View {
       case .failure(let error):
         requestError = error.localizedDescription
       }
+    }
+  }
+
+  /// One kind of data read, with its symbol in the colour of its area.
+  private func read(_ title: String, _ symbol: String, _ tint: Color) -> some View {
+    Label {
+      Text(title)
+    } icon: {
+      Image(systemName: symbol).foregroundStyle(tint)
     }
   }
 }

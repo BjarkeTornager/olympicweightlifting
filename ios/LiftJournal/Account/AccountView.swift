@@ -118,7 +118,7 @@ struct AccountView: View {
             Label {
               Text("Privacy Policy")
             } icon: {
-              IconBadge(symbol: "hand.raised.fill", tint: .secondary, size: 28)
+              IconBadge(symbol: "hand.raised.fill", tint: Theme.inkSecondary, size: 28)
             }
           }
         } footer: {
@@ -131,7 +131,7 @@ struct AccountView: View {
         }
         Section {
           Toggle(isOn: $aiAllowed) {
-            Label("Share with Coach's AI provider", systemImage: "sparkles")
+            Label("Share with Coach's AI provider", systemImage: "checkmark.shield")
           }
         } footer: {
           Text("Coach and voice check-ins send your messages, photos and relevant journal and Apple Health records to a third-party AI provider. Turn this off to stop sharing; Coach stays off until you allow it again.")
@@ -225,14 +225,14 @@ private struct AthleteCard: View {
         .padding(4)
         .overlay(Circle().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 2))
       VStack(spacing: 2) {
-        Text(name).font(.title2.weight(.bold))
-        Text(email).font(.subheadline).foregroundStyle(.secondary)
+        Text(name).folio(.sectionTitle).foregroundStyle(Theme.ink)
+        Text(email).font(.subheadline).foregroundStyle(Theme.inkSecondary)
       }
       if let today {
         HStack(spacing: 0) {
-          stat(today.body?.bodyweight.map { $0.formatted() }, "kg", "Weight")
+          stat(today.body?.bodyweight.map { Format.decimal($0) }, "kg", "Weight")
           Divider().frame(height: 32)
-          stat(today.body?.bodyFatPercent.map { $0.formatted() }, "%", "Body fat")
+          stat(today.body?.bodyFatPercent.map { Format.decimal($0) }, "%", "Body fat")
           Divider().frame(height: 32)
           stat("\(today.sessionsThisWeek)", nil, "Sessions this week")
         }
@@ -245,13 +245,12 @@ private struct AthleteCard: View {
 
   private func stat(_ value: String?, _ unit: String?, _ label: String) -> some View {
     VStack(spacing: 2) {
-      HStack(alignment: .firstTextBaseline, spacing: 2) {
-        Text(value ?? "–").folio(.inline)
-        if let unit, value != nil {
-          Text(unit).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-        }
+      if let value {
+        Measure(value: value, unit: unit, role: .inline).foregroundStyle(Theme.ink)
+      } else {
+        Text("Not yet").folio(.note).foregroundStyle(Theme.inkSecondary)
       }
-      Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+      Text(label).font(.caption).foregroundStyle(Theme.inkSecondary).lineLimit(1).minimumScaleFactor(0.8)
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .combine)
@@ -269,10 +268,10 @@ private struct GoalsSection: View {
         row("Focus", focus, "target", Theme.accent)
       }
       if let kg = body?.targetWeightKg {
-        row("Weight", "\(kg.formatted()) kg", "scalemass.fill", Category.body.tint)
+        row("Weight", "\(Format.decimal(kg)) kg", "scalemass.fill", Category.body.tint)
       }
       if let percent = body?.targetBodyFatPercent {
-        row("Body fat", "\(percent.formatted()) %", "percent", Category.body.tint)
+        row("Body fat", "\(Format.decimal(percent)) %", "percent", Category.body.tint)
       }
       if let kcal = today.nutrition.targetCalories {
         row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)

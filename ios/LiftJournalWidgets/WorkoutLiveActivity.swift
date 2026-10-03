@@ -2,6 +2,7 @@ import ActivityKit
 import LiftActivity
 import LiftTheme
 import SwiftUI
+import UIKit
 import WidgetKit
 
 @main
@@ -17,18 +18,19 @@ struct LiftJournalWidgets: WidgetBundle {
 struct WorkoutLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
-      // A dark card with light text reads on any wallpaper, like the island.
+      // The ink cover's colours, light on dark, read on any wallpaper, like
+      // the island.
       LockScreenView(context: context)
         .environment(\.colorScheme, .dark)
-        .activityBackgroundTint(.black.opacity(0.6))
-        .activitySystemActionForegroundColor(.white)
+        .activityBackgroundTint(Ink.page.opacity(0.85))
+        .activitySystemActionForegroundColor(Ink.text)
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           Label {
             Text(context.state.exercise).lineLimit(1)
           } icon: {
-            Image(systemName: "dumbbell.fill")
+            BrandMark().frame(width: 18)
           }
           .font(.headline)
           .padding(.leading, 4)
@@ -40,14 +42,13 @@ struct WorkoutLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           VStack(alignment: .leading, spacing: 6) {
-            Text(context.state.next).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            Text(context.state.next).font(.subheadline).foregroundStyle(Theme.inkSecondary).lineLimit(1)
             SessionProgress(state: context.state, stale: context.isStale)
           }
           .padding(.horizontal, 4)
         }
       } compactLeading: {
-        Image(systemName: "dumbbell.fill")
-          .foregroundStyle(Theme.accent)
+        BrandMark().frame(width: 16)
       } compactTrailing: {
         RestClock(state: context.state, stale: context.isStale, compact: true)
           .frame(maxWidth: 52)
@@ -57,10 +58,10 @@ struct WorkoutLiveActivity: Widget {
             .monospacedDigit()
             .font(.caption2.weight(.semibold))
         } else {
-          Image(systemName: "dumbbell.fill")
+          BrandMark().frame(width: 16)
         }
       }
-      .keylineTint(.accentColor)
+      .keylineTint(Theme.markYou)
     }
   }
 }
@@ -72,23 +73,27 @@ private struct LockScreenView: View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top) {
         VStack(alignment: .leading, spacing: 2) {
-          Label(context.attributes.title, systemImage: "dumbbell.fill")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+          Label {
+            Text(context.attributes.title)
+          } icon: {
+            BrandMark().frame(width: 14)
+          }
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(Theme.inkSecondary)
+          .lineLimit(1)
           Text(context.state.exercise)
             .font(.headline)
             .lineLimit(1)
           Text(context.state.next)
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.inkSecondary)
             .lineLimit(1)
         }
         Spacer(minLength: 12)
         VStack(alignment: .trailing, spacing: 2) {
           Text(label)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.inkSecondary)
           RestClock(state: context.state, stale: context.isStale)
             .font(.title.weight(.semibold).monospacedDigit())
         }
@@ -136,11 +141,22 @@ private struct SessionProgress: View {
       } currentValueLabel: {
         EmptyView()
       }
-      .tint(Theme.accent)
+      .tint(Theme.activity)
     } else {
       ProgressView(value: Double(state.loggedSets), total: Double(max(state.totalSets, 1)))
-        .tint(Theme.accent)
+        .tint(Theme.activity)
     }
   }
 }
 
+
+/// The ink cover's page and text, fixed dark: the lock screen card's
+/// background tint is set outside the view's colour scheme.
+private enum Ink {
+  static let page = dark(Theme.background)
+  static let text = dark(Theme.ink)
+
+  private static func dark(_ color: Color) -> Color {
+    Color(UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark)))
+  }
+}

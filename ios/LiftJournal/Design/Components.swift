@@ -128,16 +128,6 @@ struct IconBadge: View {
   }
 }
 
-/// A small heart, marking values that came from Apple Health.
-struct AppleHealthMark: View {
-  var body: some View {
-    Image(systemName: "heart.fill")
-      .font(.caption2)
-      .foregroundStyle(Theme.heart)
-      .accessibilityLabel("From Apple Health")
-  }
-}
-
 /// The signed-in person's initials, for the account button.
 struct Avatar: View {
   let name: String
@@ -157,20 +147,41 @@ struct Avatar: View {
   }
 }
 
+/// Numbers as the app writes them. The server writes the journal's entries
+/// and Coach's replies in British English ("70.4 kg", "1,900 kcal"), so the
+/// numbers set on the device follow the same locale: Today and the Journal
+/// never mix "70,4" and "70.4" on an iPhone set to another region.
 enum Format {
+  static let locale = Locale(identifier: "en_GB")
+
   static func hours(_ value: Double) -> String {
     let minutes = Int((value * 60).rounded())
     return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) min" : "\(minutes) min"
   }
 
   static func litres(_ ml: Int) -> (String, String) {
-    ml < 1000
-      ? ("\(ml)", "ml")
-      : ((Double(ml) / 1000).formatted(.number.precision(.fractionLength(0...2))), "L")
+    ml < 1000 ? ("\(ml)", "ml") : (decimal(Double(ml) / 1000, digits: 2), "L")
   }
 
+  /// A whole number with thousands separated: "1,900".
   static func number(_ value: Double) -> String {
-    Int(value.rounded()).formatted()
+    Int(value.rounded()).formatted(.number.locale(locale))
+  }
+
+  static func number(_ value: Int) -> String {
+    value.formatted(.number.locale(locale))
+  }
+
+  /// A measurement with up to `digits` decimals: "70.4", "70".
+  static func decimal(_ value: Double, digits: Int = 1) -> String {
+    value.formatted(.number.precision(.fractionLength(0...digits)).locale(locale))
+  }
+
+  /// A count in running text: spelled out up to ten ("two meals"), in
+  /// figures above.
+  static func count(_ value: Int) -> String {
+    guard (0...10).contains(value) else { return number(value) }
+    return ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][value]
   }
 
   /// The body goal's focus, as the server names it.
@@ -216,18 +227,36 @@ struct FolioSection<Trailing: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       Rectangle().fill(Theme.ink).frame(height: 1)
-      HStack(alignment: .firstTextBaseline, spacing: 12) {
-        Text(title)
-          .folio(.sectionTitle)
-          .foregroundStyle(Theme.ink)
-          .accessibilityAddTraits(.isHeader)
-        Spacer(minLength: 0)
-        if let meta {
-          Text(meta).kicker()
+      // The note moves under the title when both don't fit on one line, so
+      // the title never breaks inside a word.
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+          heading
+          Spacer(minLength: 0)
+          note
         }
-        trailing
+        VStack(alignment: .leading, spacing: 6) {
+          heading
+          HStack(alignment: .firstTextBaseline, spacing: 12) { note }
+        }
       }
     }
+  }
+
+  private var heading: some View {
+    Text(title)
+      .folio(.sectionTitle)
+      .foregroundStyle(Theme.ink)
+      .fixedSize(horizontal: false, vertical: true)
+      .accessibilityAddTraits(.isHeader)
+  }
+
+  @ViewBuilder
+  private var note: some View {
+    if let meta {
+      Text(meta).kicker()
+    }
+    trailing
   }
 }
 

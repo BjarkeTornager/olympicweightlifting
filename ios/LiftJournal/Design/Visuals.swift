@@ -91,25 +91,63 @@ struct LedgerLine {
 
 /// One column of the Ledger: the kicker with its key, the serif number, its
 /// target, the isotype meter and the scale. VoiceOver reads it as one line:
-/// "Energy, 980 of 1,900 kilocalories".
+/// "Energy, 980 of 1,900 kilocalories". With a `link`, the column opens that
+/// chart and shows an arrow; the scale row stays outside the link, so its
+/// "Set a target" button is never a button inside a button.
 struct LedgerColumn<Accessory: View>: View {
   let line: LedgerLine
   var role: Folio.Role = .ledger
   var markWidth: CGFloat = 5
   var meterHeight: CGFloat = 24
-  var opens = false
+  var link: Trend?
   var setTarget: (() -> Void)?
   @ViewBuilder var accessory: Accessory
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      if let link {
+        NavigationLink(value: link) { reading }
+          .buttonStyle(CardButtonStyle())
+      } else {
+        reading
+      }
+      // The scale and its note side by side, or one above the other at the
+      // largest text sizes.
+      let layout =
+        typeSize.isAccessibilitySize
+        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+        : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+      layout {
+        if line.target != nil {
+          Text(line.scale)
+        } else if let setTarget {
+          Button(action: setTarget) {
+            Text("Set a target with Coach \(Image(systemName: "arrow.right"))")
+              .font(.subheadline.weight(.semibold))
+              .foregroundStyle(Theme.accent)
+          }
+          .buttonStyle(.plain)
+        }
+        if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+        accessory
+      }
+      .font(.caption2.weight(.medium))
+      .foregroundStyle(Theme.inkSecondary)
+      .padding(.top, line.target == nil ? 10 : 7)
+    }
+  }
+
+  /// The kicker, the number and the meter: what the link opens.
+  private var reading: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
         CardLabel(title: line.title, key: line.tint)
         Spacer(minLength: 0)
-        if opens { GoArrow() }
+        if link != nil { GoArrow() }
       }
       HStack(alignment: .firstTextBaseline, spacing: 5) {
-        Text(line.number).folio(role).contentTransition(.numericText())
+        Text(line.number).folio(role).foregroundStyle(Theme.ink).contentTransition(.numericText())
         Text(line.unit).unit()
         Spacer(minLength: 6)
         Group {
@@ -134,23 +172,9 @@ struct LedgerColumn<Accessory: View>: View {
         )
         .padding(.top, 12)
       }
-      HStack(alignment: .firstTextBaseline) {
-        if line.target != nil {
-          Text(line.scale)
-        } else if let setTarget {
-          Button(action: setTarget) {
-            Text("Set a target with Coach \(Image(systemName: "arrow.right"))").foregroundStyle(Theme.accent)
-          }
-          .buttonStyle(.plain)
-        }
-        Spacer(minLength: 8)
-        accessory
-      }
-      .font(.caption2.weight(.medium))
-      .foregroundStyle(Theme.inkSecondary)
-      .padding(.top, 7)
     }
-    .accessibilityElement(children: .combine)
+    .contentShape(.rect)
+    .accessibilityElement(children: .ignore)
     .accessibilityLabel(line.title)
     .accessibilityValue(line.spoken)
   }
@@ -159,10 +183,10 @@ struct LedgerColumn<Accessory: View>: View {
 extension LedgerColumn where Accessory == EmptyView {
   init(
     line: LedgerLine, role: Folio.Role = .ledger, markWidth: CGFloat = 5, meterHeight: CGFloat = 24,
-    opens: Bool = false, setTarget: (() -> Void)? = nil
+    link: Trend? = nil, setTarget: (() -> Void)? = nil
   ) {
     self.init(
-      line: line, role: role, markWidth: markWidth, meterHeight: meterHeight, opens: opens, setTarget: setTarget
+      line: line, role: role, markWidth: markWidth, meterHeight: meterHeight, link: link, setTarget: setTarget
     ) { EmptyView() }
   }
 }
@@ -176,6 +200,8 @@ struct Ledger: View {
   let water: LedgerLine
   /// Energy burned today, as printed ("205", "~205"), beside the scale.
   var burned: String?
+  /// The chart the energy column opens.
+  var energyLink: Trend?
   var setTarget: (() -> Void)?
   @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -183,7 +209,8 @@ struct Ledger: View {
     VStack(spacing: 0) {
       Rectangle().fill(Theme.ink).frame(height: 2)
       LedgerColumn(
-        line: energy, role: .hero, markWidth: 7, meterHeight: 32, opens: true, setTarget: setTarget
+        line: energy, role: .hero, markWidth: 7, meterHeight: 32, link: energyLink,
+        setTarget: offer(energy)
       ) {
         if let burned {
           HStack(spacing: 5) {
@@ -191,27 +218,49 @@ struct Ledger: View {
             Text("Burned \(Text(burned).fontWeight(.semibold).foregroundStyle(Theme.ink)) kcal")
           }
           .accessibilityElement(children: .combine)
+        } else if let over = over(energy) {
+          Text(over)
         }
       }
       .padding(.vertical, 14)
       Rectangle().fill(Theme.rule).frame(height: 1)
+      let stacked = typeSize >= .xxxLarge
       let layout =
-        typeSize >= .xxxLarge
+        stacked
         ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
         : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
       layout {
-        LedgerColumn(line: protein, setTarget: setTarget).frame(maxWidth: .infinity)
-        if typeSize < .xxxLarge {
+        LedgerColumn(
+          line: protein, markWidth: stacked ? 9 : 5, meterHeight: stacked ? 34 : 24, setTarget: offer(protein)
+        )
+        .frame(maxWidth: .infinity)
+        if !stacked {
           Rectangle().fill(Theme.rule).frame(width: 1)
         } else {
           Rectangle().fill(Theme.rule).frame(height: 1)
         }
-        LedgerColumn(line: water, markWidth: 8, setTarget: setTarget).frame(maxWidth: .infinity)
+        LedgerColumn(
+          line: water, markWidth: stacked ? 12 : 8, meterHeight: stacked ? 34 : 24, setTarget: offer(water)
+        )
+        .frame(maxWidth: .infinity)
       }
       .fixedSize(horizontal: false, vertical: true)
       .padding(.vertical, 14)
       Rectangle().fill(Theme.rule).frame(height: 1)
     }
+  }
+
+  /// "Set a target with Coach" goes on the first line without a target only,
+  /// since Coach sets them together.
+  private func offer(_ line: LedgerLine) -> (() -> Void)? {
+    let first = [energy, protein, water].first { $0.target == nil }
+    return first?.title == line.title ? setTarget : nil
+  }
+
+  /// "250 above target", once the day has passed it: a record, not a verdict.
+  private func over(_ line: LedgerLine) -> String? {
+    guard let target = line.target, line.value > target else { return nil }
+    return "\(Format.number(line.value - target)) above target"
   }
 }
 
@@ -319,7 +368,11 @@ struct MetricCell<Chart: View>: View {
   var note: String?
   var empty = "No data yet"
   var opens = true
+  /// Taller when the chart carries day initials under its bars.
+  var chartHeight: CGFloat = 40
   @ViewBuilder var chart: Chart
+  /// The chart grows a little with the text, so day initials keep room.
+  @ScaledMetric(relativeTo: .caption2) private var growth: CGFloat = 1
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -339,7 +392,7 @@ struct MetricCell<Chart: View>: View {
           .padding(.top, 8)
           .frame(maxHeight: .infinity, alignment: .top)
       }
-      chart.frame(height: 40).padding(.top, 12)
+      chart.frame(height: chartHeight * min(growth, 1.8)).padding(.top, 12)
       if let note {
         Text(note)
           .font(.footnote)
@@ -350,27 +403,6 @@ struct MetricCell<Chart: View>: View {
     }
     .frame(maxWidth: .infinity, alignment: .topLeading)
     .accessibilityElement(children: .combine)
-  }
-}
-
-/// A metric cell on a card, for screens that still set their cells in cards.
-struct MetricTile<Chart: View>: View {
-  let title: String
-  let category: Category
-  let value: String?
-  var unit: String?
-  var note: String?
-  var empty = "No data yet"
-  @ViewBuilder var chart: Chart
-
-  var body: some View {
-    MetricCell(
-      title: title, category: category, value: value, unit: unit, note: note, empty: empty, opens: false
-    ) {
-      chart
-    }
-    .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-    .card(padding: 14)
   }
 }
 
@@ -470,46 +502,52 @@ struct CardButtonStyle: ButtonStyle {
   }
 }
 
-#Preview("Ledger") {
-  ScrollView {
-    VStack(alignment: .leading, spacing: 24) {
-      Ledger(
-        energy: LedgerLine(
-          title: "Energy", tint: Theme.calories, value: 980, target: 1900, perMark: 100, number: "980",
-          unit: "kcal", targetText: "1,900", scale: "One mark = 100 kcal", spokenUnit: "kilocalories"),
-        protein: LedgerLine(
-          title: "Protein", tint: Theme.protein, value: 52, target: 130, perMark: 10, number: "52", unit: "g",
-          targetText: "130 g", scale: "10 g a mark", spokenUnit: "grams"),
-        water: LedgerLine(
-          title: "Water", tint: Theme.water, value: 500, target: 2450, perMark: 250, number: "500", unit: "ml",
-          targetText: "2.45 L", scale: "2 of 10 glasses", spokenUnit: "millilitres"),
-        burned: "205")
-      CheckInBlock(title: "Check in with Coach", detail: "Coach logs your day as you talk")
-      FolioSection("Recovery", meta: "Seven days")
-      Grid(horizontalSpacing: 16, verticalSpacing: 14) {
-        GridRow {
-          MetricCell(title: "Sleep", category: .sleep, value: "7 h 15 min", note: "Average 7 h 12 min") {
-            Sparkline(
-              values: [7.4, 6.6, 8.1, 7.0, 6.2, 7.8, 7.25], tint: Theme.sleep,
-              days: ["S", "S", "M", "T", "W", "T", "F"], average: 7.19)
+private struct LedgerPreview: View {
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 24) {
+        Ledger(
+          energy: LedgerLine(
+            title: "Energy", tint: Theme.calories, value: 980, target: 1900, perMark: 100, number: "980",
+            unit: "kcal", targetText: "1,900", scale: "One mark = 100 kcal", spokenUnit: "kilocalories"),
+          protein: LedgerLine(
+            title: "Protein", tint: Theme.protein, value: 52, target: 130, perMark: 10, number: "52", unit: "g",
+            targetText: "130 g", scale: "10 g a mark", spokenUnit: "grams"),
+          water: LedgerLine(
+            title: "Water", tint: Theme.water, value: 500, target: 2450, perMark: 250, number: "500", unit: "ml",
+            targetText: "2.45 L", scale: "2 of 10 glasses", spokenUnit: "millilitres"),
+          burned: "205")
+        CheckInBlock(title: "Check in with Coach", detail: "Coach logs your day as you talk")
+        FolioSection("Recovery", meta: "Seven days")
+        Grid(horizontalSpacing: 16, verticalSpacing: 14) {
+          GridRow {
+            MetricCell(title: "Sleep", category: .sleep, value: "7 h 15 min", note: "Average 7 h 12 min") {
+              Sparkline(
+                values: [7.4, 6.6, 8.1, 7.0, 6.2, 7.8, 7.25], tint: Theme.sleep,
+                days: ["S", "S", "M", "T", "W", "T", "F"], average: 7.19)
+            }
+            MetricCell(title: "Resting heart", category: .heart, value: "54", unit: "bpm", note: "HRV 60 ms") {
+              Sparkline(values: [54, 56, 53, 55, 57, 53, 54], tint: Theme.heart, style: .line)
+            }
           }
-          MetricCell(title: "Resting heart", category: .heart, value: "54", unit: "bpm", note: "HRV 60 ms") {
-            Sparkline(values: [54, 56, 53, 55, 57, 53, 54], tint: Theme.heart, style: .line)
+          GridRow {
+            MetricCell(title: "Steps", category: .activity, value: nil, empty: "No steps yet today") {
+              Sparkline(values: [9120, nil, 11800, 7300, 5200, 10400, nil], tint: Theme.activity)
+            }
+            VStack(spacing: 14) {
+              ScaleRow(label: "Energy", value: 4, tint: Theme.feltEnergy)
+              ScaleRow(label: "Soreness", value: nil, tint: Theme.soreness)
+            }
           }
         }
-        GridRow {
-          MetricCell(title: "Steps", category: .activity, value: nil, empty: "No steps yet today") {
-            Sparkline(values: [9120, nil, 11800, 7300, 5200, 10400, nil], tint: Theme.activity)
-          }
-          VStack(spacing: 14) {
-            ScaleRow(label: "Energy", value: 4, tint: Theme.feltEnergy)
-            ScaleRow(label: "Soreness", value: nil, tint: Theme.soreness)
-          }
-        }
+        MacroSplit(protein: 52, carbs: 100, fat: 41)
       }
-      MacroSplit(protein: 52, carbs: 100, fat: 41)
+      .padding(20)
     }
-    .padding(20)
+    .background(Theme.background)
   }
-  .background(Theme.background)
 }
+
+#Preview("Ledger") { LedgerPreview() }
+#Preview("Ledger, dark") { LedgerPreview().preferredColorScheme(.dark) }
+#Preview("Ledger, AX3") { LedgerPreview().dynamicTypeSize(.accessibility3) }

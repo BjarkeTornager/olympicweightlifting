@@ -46,8 +46,8 @@ struct WorkoutView: View {
             }
             .buttonStyle(SecondaryButtonStyle())
           }
-          .padding(.horizontal, 16)
-          .padding(.vertical, 12)
+          .padding(.horizontal, Theme.Space.gutter)
+          .padding(.vertical, Theme.Space.s)
         }
         .background(Theme.background)
         .safeAreaInset(edge: .bottom) {
@@ -116,27 +116,21 @@ struct WorkoutView: View {
     .sensoryFeedback(.success, trigger: app.saves)
   }
 
+  /// The day and the sets logged so far, counted in marks, like the Ledger.
   private func header(_ workout: WorkoutDetail) -> some View {
     let sets = workout.exercises.flatMap(\.sets)
     let logged = sets.filter(\.logged).count
     let done = workout.exercises.filter { !$0.sets.isEmpty && $0.sets.allSatisfy(\.logged) }.count
-    return HStack(spacing: 16) {
-      ZStack {
-        ProgressRing(progress: Double(logged) / Double(max(sets.count, 1)), tint: Category.training.tint, lineWidth: 8)
-        Text("\(Int((Double(logged) / Double(max(sets.count, 1)) * 100).rounded()))%")
-          .font(.subheadline.weight(.bold).monospacedDigit())
-          .contentTransition(.numericText())
-      }
-      .frame(width: 64, height: 64)
-      VStack(alignment: .leading, spacing: 3) {
-        Text(JournalView.heading(workout.date)).font(.caption.weight(.bold)).foregroundStyle(Category.training.tint)
-        Text("\(logged) of \(sets.count) sets logged").font(.headline)
-        Text("\(done) of \(workout.exercises.count) exercises done").font(.subheadline).foregroundStyle(.secondary)
-      }
-      Spacer(minLength: 0)
+    return VStack(alignment: .leading, spacing: 0) {
+      Rectangle().fill(Theme.ink).frame(height: 2)
+      CardLabel(title: JournalView.heading(workout.date), key: Category.training.tint).padding(.top, 13)
+      SetCount(logged: logged, total: sets.count).padding(.top, 6)
+      Text("\(done) of \(workout.exercises.count) exercises done")
+        .font(.footnote)
+        .foregroundStyle(Theme.inkSecondary)
+        .padding(.top, 8)
     }
-    .card()
-    .accessibilityElement(children: .combine)
+    .padding(.bottom, 8)
   }
 }
 
@@ -162,19 +156,19 @@ private struct ExerciseCard: View {
       HStack(spacing: 12) {
         Group {
           if finished {
-            Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(Theme.onAccent)
+            Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(Theme.surface)
           } else {
             Text("\(number)").font(.caption.weight(.bold).monospacedDigit())
-              .foregroundStyle(Category.training.tint)
+              .foregroundStyle(Theme.ink)
           }
         }
         .frame(width: 28, height: 28)
-        .background(finished ? Theme.accent : Theme.fill, in: .circle)
+        .background(finished ? Theme.success : Theme.fill, in: .circle)
         .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 2) {
-          Text(exercise.name).font(.headline)
+          Text(exercise.name).folio(.entry).foregroundStyle(Theme.ink)
           if let target = exercise.target {
-            Text(target).font(.subheadline).foregroundStyle(.secondary)
+            Text(target).font(.subheadline).foregroundStyle(Theme.inkSecondary)
           }
         }
       }
@@ -244,30 +238,30 @@ private struct SetRow: View {
     HStack {
       Text("\(number)")
         .font(.subheadline.weight(.semibold).monospacedDigit())
-        .foregroundStyle(isNext ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        .foregroundStyle(isNext ? Theme.accent : Theme.inkSecondary)
         .frame(width: 24, alignment: .leading)
       Text(values)
         .font(.body.monospacedDigit())
-        .foregroundStyle(set.logged ? .primary : .secondary)
+        .foregroundStyle(set.logged ? Theme.ink : Theme.inkSecondary)
       Spacer()
       if set.logged {
         Image(systemName: set.result == "miss" ? "xmark.circle.fill" : "checkmark.circle.fill")
-          .foregroundStyle(set.result == "miss" ? Theme.danger : Theme.accent)
+          .foregroundStyle(set.result == "miss" ? Theme.danger : Theme.success)
           .accessibilityLabel(set.result == "miss" ? "Missed" : "Made")
       } else if isNext {
-        Text("Next").font(.caption.weight(.semibold)).foregroundStyle(.tint)
+        Text("Next").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
       }
     }
     .padding(.vertical, 9)
     .padding(.horizontal, 10)
-    .background(isNext ? Theme.fill : .clear, in: .rect(cornerRadius: 10, style: .continuous))
+    .background(isNext ? Theme.fill : .clear, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
     .accessibilityElement(children: .combine)
   }
 
   private var values: String {
     let reps = set.reps.map { "\($0)" } ?? "–"
     guard let weight = set.weight else { return set.reps == 1 ? "1 rep" : "\(reps) reps" }
-    return "\(weight.formatted(.number.precision(.fractionLength(0...1)))) kg × \(reps)"
+    return "\(Format.decimal(weight)) kg × \(reps)"
   }
 }
 
@@ -284,7 +278,7 @@ struct NumberStepper: View {
       Button {
         value = max(range.lowerBound, value - step)
       } label: {
-        Image(systemName: "minus").frame(width: 36, height: 40)
+        Image(systemName: "minus").frame(width: 44, height: 44)
       }
       VStack(spacing: 0) {
         TextField(
@@ -294,18 +288,19 @@ struct NumberStepper: View {
         .keyboardType(fraction ? .decimalPad : .numberPad)
         .multilineTextAlignment(.center)
         .font(.title3.weight(.semibold).monospacedDigit())
-        Text(label).font(.caption2).foregroundStyle(.secondary)
+        Text(label).font(.caption2).foregroundStyle(Theme.inkSecondary)
       }
       .frame(maxWidth: .infinity)
       Button {
         value = min(range.upperBound, value + step)
       } label: {
-        Image(systemName: "plus").frame(width: 36, height: 40)
+        Image(systemName: "plus").frame(width: 44, height: 44)
       }
     }
     .buttonStyle(.borderless)
-    .padding(.vertical, 4)
-    .background(Theme.fill, in: .rect(cornerRadius: 12))
+    .tint(Theme.accent)
+    .padding(.horizontal, 4)
+    .background(Theme.fill, in: .capsule)
     .sensoryFeedback(.selection, trigger: value)
   }
 }
@@ -390,7 +385,7 @@ private struct RestTimer: View {
           .foregroundStyle(left == 0 ? Theme.attention : Theme.accent)
           .symbolEffect(.bounce, value: left == 0)
         VStack(alignment: .leading, spacing: 0) {
-          Text(left == 0 ? "Rest over" : "Rest").font(.caption).foregroundStyle(.secondary)
+          Text(left == 0 ? "Rest over" : "Rest").font(.caption).foregroundStyle(Theme.inkSecondary)
           Text(Duration.seconds(left).formatted(.time(pattern: .minuteSecond)))
             .font(.title3.weight(.semibold).monospacedDigit())
         }
@@ -410,3 +405,11 @@ private struct RestTimer: View {
     }
   }
 }
+
+#if DEBUG
+  #Preview("Workout") {
+    let train = TrainModel()
+    train.training = PreviewData.training(active: true)
+    return NavigationStack { WorkoutView(train: train) }.environment(AppModel())
+  }
+#endif

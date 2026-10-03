@@ -1,4 +1,5 @@
 import LiftAPI
+import LiftTheme
 import SwiftUI
 
 /// One programme: its days and exercises, with Start on each day. The
@@ -19,17 +20,19 @@ struct ProgrammeView: View {
     Group {
       if let programme {
         ScrollView {
-          VStack(alignment: .leading, spacing: 20) {
+          VStack(alignment: .leading, spacing: Theme.Space.section) {
             header(programme)
             ForEach(Array(programme.days.enumerated()), id: \.element.id) { index, day in
-              DayCard(number: index + 1, day: day, canStart: !busy) {
+              DaySection(number: index + 1, day: day, canStart: !busy) {
                 Task { await train.start(day: day, of: programme, app) }
               }
             }
           }
-          .padding(.horizontal, 20)
-          .padding(.vertical, 12)
+          .padding(.horizontal, Theme.Space.gutter)
+          .padding(.top, Theme.Space.s)
+          .padding(.bottom, Theme.Space.l)
         }
+        .background(Theme.background)
         .navigationTitle(programme.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -66,7 +69,11 @@ struct ProgrammeView: View {
 
   private func header(_ programme: Programme) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text(programme.name).font(.largeTitle.weight(.bold))
+      Text(programme.name)
+        .folio(.sectionTitle)
+        .foregroundStyle(Theme.ink)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityAddTraits(.isHeader)
       Text(
         [
           "\(programme.days.count) \(programme.days.count == 1 ? "day" : "days")",
@@ -74,63 +81,74 @@ struct ProgrammeView: View {
           programme.builtIn ? "Built in" : nil,
         ].compactMap { $0 }.joined(separator: " · ")
       )
-      .foregroundStyle(.secondary)
+      .kicker()
       if let notes = programme.notes, !notes.isEmpty {
-        Text(notes).font(.subheadline)
+        Text(notes).font(.subheadline).foregroundStyle(Theme.ink)
       }
       if programme.active {
-        Label("You're following this programme", systemImage: "checkmark.circle.fill")
+        Label("You're following this programme", systemImage: "checkmark")
           .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.tint)
+          .foregroundStyle(Theme.success)
       } else {
         Button("Follow This Programme") { Task { await train.follow(programme, app) } }
           .buttonStyle(PrimaryButtonStyle())
       }
       if busy {
         Text("Finish or discard the workout in progress to start another day.")
-          .font(.footnote).foregroundStyle(.secondary)
+          .font(.footnote).foregroundStyle(Theme.inkSecondary)
       }
     }
   }
 }
 
-/// A day of a programme: its exercises with sets, reps and load, and Start.
-private struct DayCard: View {
+/// A day of a programme on its ink rule: its exercises with sets, reps and
+/// load, any cardio, and Start.
+private struct DaySection: View {
   let number: Int
   let day: Components.Schemas.ProgrammeDay
   let canStart: Bool
   let start: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text("DAY \(number)").font(.caption.weight(.bold)).foregroundStyle(.tint)
-        Text(day.name).font(.headline)
-        if let notes = day.notes, !notes.isEmpty {
-          Text(notes).font(.subheadline).foregroundStyle(.secondary)
-        }
+    VStack(alignment: .leading, spacing: 0) {
+      Rectangle().fill(Theme.ink).frame(height: 1)
+      Text("Day \(number)").kicker().padding(.top, 10)
+      Text(day.name)
+        .folio(.heading)
+        .foregroundStyle(Theme.ink)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 4)
+      if let notes = day.notes, !notes.isEmpty {
+        Text(notes).font(.subheadline).foregroundStyle(Theme.inkSecondary).padding(.top, 4)
       }
       if !day.exercises.isEmpty {
-        VStack(spacing: 8) {
-          ForEach(Array(day.exercises.enumerated()), id: \.offset) { _, exercise in
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(day.exercises.enumerated()), id: \.offset) { index, exercise in
+            if index > 0 { Hairline() }
             HStack(alignment: .firstTextBaseline) {
-              Text(exercise.name)
+              Text(exercise.name).foregroundStyle(Theme.ink)
               Spacer(minLength: 12)
               Text(exercise.text)
                 .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.inkSecondary)
                 .multilineTextAlignment(.trailing)
             }
+            .padding(.vertical, 10)
+            .accessibilityElement(children: .combine)
           }
         }
+        .padding(.top, 8)
       }
       ForEach(day.cardio, id: \.self) { line in
-        Label(line, systemImage: "figure.run").font(.subheadline).foregroundStyle(.secondary)
+        Label(line, systemImage: "figure.run")
+          .font(.subheadline)
+          .foregroundStyle(Theme.inkSecondary)
+          .padding(.top, 6)
       }
       Button("Start Day \(number)", action: start)
         .buttonStyle(SecondaryButtonStyle())
         .disabled(!canStart || day.exercises.isEmpty)
+        .padding(.top, 12)
     }
-    .card()
   }
 }

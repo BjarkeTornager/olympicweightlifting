@@ -91,7 +91,7 @@ struct TodayView: View {
           detail: "Workout routes, and body fat from a smart scale, for you and Coach")
       }
 
-      SectionHeading("Recovery").padding(.horizontal, 4).padding(.top, 10)
+      FolioSection("Recovery").padding(.top, 10)
       LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
         let sleepTile = MetricTile(
           title: "Sleep", category: .sleep, value: today.sleep.hours.map(Format.hours), note: sleepNote(today),
@@ -119,8 +119,7 @@ struct TodayView: View {
           MetricTile(
             title: "Steps", category: .activity, value: today.vitals?.steps.map { $0.formatted() },
             note: today.vitals?.activeEnergyKcal.map { "\($0.formatted()) kcal active" },
-            empty: model.health.connected ? "No steps yet today" : "Connect Apple Health",
-            symbol: "figure.walk"
+            empty: model.health.connected ? "No steps yet today" : "Connect Apple Health"
           ) {
             Sparkline(values: series { $0.steps.map(Double.init) }, tint: Category.activity.tint)
           }
@@ -131,16 +130,16 @@ struct TodayView: View {
       }
       .buttonStyle(CardButtonStyle())
 
-      SectionHeading("Body").padding(.horizontal, 4).padding(.top, 10)
+      FolioSection("Body").padding(.top, 10)
       NavigationLink(value: Trend.body) {
         BodyCard(body: today.body, weights: series { $0.bodyweight })
       }
       .buttonStyle(CardButtonStyle())
 
-      SectionHeading("Nutrition").padding(.horizontal, 4).padding(.top, 10)
+      FolioSection("Nutrition").padding(.top, 10)
       NutritionCard(nutrition: today.nutrition, hydration: today.hydration, supplements: today.supplements)
 
-      SectionHeading("Training").padding(.horizontal, 4).padding(.top, 10)
+      FolioSection("Training").padding(.top, 10)
       TrainingCard(today: today)
       Text(
         "\(today.sessionsThisWeek) \(today.sessionsThisWeek == 1 ? "session" : "sessions") in the last seven days. Workouts from Apple Health appear here by themselves."
@@ -368,41 +367,20 @@ struct FeelTile: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      CardLabel(title: "How You Feel", symbol: Category.checkin.symbol, tint: Category.checkin.tint)
+      CardLabel(title: "How You Feel", key: Category.checkin.tint)
       if let checkin, checkin.energy != nil || checkin.soreness != nil {
-        scale("Energy", checkin.energy, Theme.feltEnergy)
-        scale("Soreness", checkin.soreness, Theme.soreness)
+        ScaleRow(label: "Energy", value: checkin.energy, tint: Theme.feltEnergy)
+        ScaleRow(label: "Soreness", value: checkin.soreness, tint: Theme.soreness)
       } else {
         Text("Tap to check in").font(.subheadline).foregroundStyle(.secondary)
         Spacer(minLength: 0)
         Label("Check in", systemImage: "plus.circle.fill")
           .font(.caption.weight(.semibold))
-          .foregroundStyle(.tint)
+          .foregroundStyle(Theme.accent)
       }
     }
     .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
     .card(padding: 14)
-  }
-
-  /// A 1–5 value as five dots.
-  private func scale(_ label: String, _ value: Int?, _ tint: Color) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
-      HStack {
-        Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-        Spacer()
-        Text(value.map { "\($0)/5" } ?? "–")
-          .font(.system(.caption, design: .rounded, weight: .bold)).foregroundStyle(Color.primary)
-      }
-      HStack(spacing: 4) {
-        ForEach(1...5, id: \.self) { step in
-          Capsule()
-            .fill(step <= (value ?? 0) ? tint : Theme.track)
-            .frame(height: 6)
-        }
-      }
-    }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(label) \(value.map { "\($0) of 5" } ?? "not recorded")")
   }
 }
 
@@ -419,7 +397,7 @@ struct BodyCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 6) {
-        CardLabel(title: "Weight & Body Fat", symbol: Category.body.symbol, tint: Category.body.tint)
+        CardLabel(title: "Weight & Body Fat", key: Category.body.tint)
         Spacer()
         if let focus = Format.focus(body_?.focus) {
           Text(focus)
@@ -434,10 +412,9 @@ struct BodyCard: View {
           VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
               Text(b.bodyweight.map { $0.formatted() } ?? "–")
-                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(Color.primary)
-              Text("kg").font(.system(.subheadline, design: .rounded, weight: .semibold)).foregroundStyle(.secondary)
+                .folio(.ledger)
+                .foregroundStyle(Theme.ink)
+              Text("kg").unit()
             }
             if let change = b.weeklyWeightChangeKg {
               Label(
@@ -486,10 +463,9 @@ struct NutritionCard: View {
       NavigationLink(value: Trend.food) {
         VStack(alignment: .leading, spacing: 12) {
           HStack(spacing: 6) {
-            CardLabel(title: "Food", symbol: Category.food.symbol, tint: Category.food.tint)
+            CardLabel(title: "Food", key: Category.food.tint)
             Spacer()
-            Text("\(Format.number(nutrition.calories)) kcal")
-              .font(.system(.subheadline, design: .rounded, weight: .bold)).foregroundStyle(Color.primary)
+            Measure(value: Format.number(nutrition.calories), unit: "kcal", role: .inline).foregroundStyle(Theme.ink)
             Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
           }
           MacroSplit(protein: nutrition.protein, carbs: nutrition.carbs ?? 0, fat: nutrition.fat ?? 0)
@@ -506,7 +482,7 @@ struct NutritionCard: View {
               Text(meal.name).font(.subheadline).foregroundStyle(Color.primary).lineLimit(1)
               Spacer(minLength: 6)
               Text("\(Format.number(meal.calories)) kcal")
-                .font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary).monospacedDigit()
+                .font(.subheadline.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
             }
           }
         }
@@ -515,40 +491,30 @@ struct NutritionCard: View {
       Divider()
       NavigationLink(value: Trend.water) {
         HStack(spacing: 6) {
-          CardLabel(title: "Drinks", symbol: Category.water.symbol, tint: Category.water.tint)
+          CardLabel(title: "Drinks", key: Category.water.tint)
           Spacer()
           let (value, unit) = Format.litres(hydration.totalMl)
-          Text("\(value) \(unit)")
-            .font(.system(.subheadline, design: .rounded, weight: .bold)).foregroundStyle(Color.primary)
+          Measure(value: value, unit: unit, role: .inline).foregroundStyle(Theme.ink)
           Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
         }
       }
       .buttonStyle(CardButtonStyle())
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 8) {
-          ForEach([250, 500], id: \.self) { ml in
-            Button {
-              Task { await model.logDrink(ml: ml) }
-            } label: {
-              Label("\(ml) ml", systemImage: "plus")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Theme.fill, in: .capsule)
-                .foregroundStyle(.tint)
-            }
-            .buttonStyle(CardButtonStyle())
+      FlowLayout {
+        ForEach([250, 500], id: \.self) { ml in
+          Button {
+            Task { await model.logDrink(ml: ml) }
+          } label: {
+            Chip(title: "\(ml) ml")
           }
-          ForEach(hydration.drinks.reversed(), id: \.id) { drink in
-            Text("\(drink.name.isEmpty ? drink.kind.capitalized : drink.name) · \(drink.ml) ml")
-              .font(.subheadline)
-              .padding(.horizontal, 12).padding(.vertical, 7)
-              .background(Theme.fill, in: .capsule)
-              .contextMenu {
-                Button("Delete", systemImage: "trash", role: .destructive) {
-                  Task { await model.removeDrink(id: drink.id) }
-                }
+          .buttonStyle(CardButtonStyle())
+        }
+        ForEach(hydration.drinks.reversed(), id: \.id) { drink in
+          Chip(title: "\(drink.name.isEmpty ? drink.kind.capitalized : drink.name) · \(drink.ml) ml", kind: .logged)
+            .contextMenu {
+              Button("Delete", systemImage: "trash", role: .destructive) {
+                Task { await model.removeDrink(id: drink.id) }
               }
-          }
+            }
         }
       }
       if let supplements {
@@ -572,50 +538,37 @@ struct SupplementsStrip: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 6) {
-        CardLabel(title: "Supplements", symbol: "pills.fill", tint: Category.food.tint)
+        CardLabel(title: "Supplements", key: Category.food.tint)
         Spacer()
         Text(supplements.taken.isEmpty ? "None yet" : "\(supplements.taken.count) taken")
-          .font(.system(.subheadline, design: .rounded, weight: .bold))
-          .foregroundStyle(supplements.taken.isEmpty ? .secondary : Color.primary)
+          .font(.subheadline.weight(.semibold).monospacedDigit())
+          .foregroundStyle(supplements.taken.isEmpty ? Theme.inkSecondary : Theme.ink)
       }
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 8) {
-          ForEach(supplements.usual, id: \.name) { usual in
-            Button {
-              Task { await model.logSupplement(name: usual.name, amount: usual.amount) }
-            } label: {
-              Label(label(usual.name, usual.amount), systemImage: "plus")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Theme.fill, in: .capsule)
-                .foregroundStyle(.tint)
+      FlowLayout {
+        ForEach(supplements.taken.reversed(), id: \.id) { taken in
+          Chip(title: label(taken.name, taken.amount), kind: .logged)
+            .contextMenu {
+              Button("Delete", systemImage: "trash", role: .destructive) {
+                Task { await model.removeSupplement(id: taken.id) }
+              }
             }
-            .buttonStyle(CardButtonStyle())
-          }
+        }
+        ForEach(supplements.usual, id: \.name) { usual in
           Button {
-            name = ""
-            amount = ""
-            adding = true
+            Task { await model.logSupplement(name: usual.name, amount: usual.amount) }
           } label: {
-            Label(supplements.usual.isEmpty ? "Add supplement" : "Other", systemImage: "plus")
-              .font(.subheadline.weight(.semibold))
-              .padding(.horizontal, 12).padding(.vertical, 7)
-              .background(Theme.fill, in: .capsule)
-              .foregroundStyle(.tint)
+            Chip(title: label(usual.name, usual.amount))
           }
           .buttonStyle(CardButtonStyle())
-          ForEach(supplements.taken.reversed(), id: \.id) { taken in
-            Label(label(taken.name, taken.amount), systemImage: "checkmark")
-              .font(.subheadline)
-              .padding(.horizontal, 12).padding(.vertical, 7)
-              .background(Theme.fill, in: .capsule)
-              .contextMenu {
-                Button("Delete", systemImage: "trash", role: .destructive) {
-                  Task { await model.removeSupplement(id: taken.id) }
-                }
-              }
-          }
         }
+        Button {
+          name = ""
+          amount = ""
+          adding = true
+        } label: {
+          Chip(title: supplements.usual.isEmpty ? "Add supplement" : "Other")
+        }
+        .buttonStyle(CardButtonStyle())
       }
     }
     .alert("Add supplement", isPresented: $adding) {

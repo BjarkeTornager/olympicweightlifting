@@ -90,7 +90,7 @@ private struct LockScreenView: View {
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
           RestClock(state: context.state, stale: context.isStale)
-            .font(.system(.title, design: .rounded, weight: .semibold))
+            .font(.title.weight(.semibold).monospacedDigit())
         }
       }
       SessionProgress(state: context.state, stale: context.isStale)

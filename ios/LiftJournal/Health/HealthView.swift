@@ -10,13 +10,14 @@ struct HealthView: View {
   @State private var trigger = false
   @State private var requestError: String?
   @State private var needsAccess = false
+  @ScaledMetric(relativeTo: .largeTitle) private var symbolSize: CGFloat = 40
 
   var body: some View {
     List {
       Section {
         VStack(alignment: .leading, spacing: 10) {
           Image(systemName: "heart.text.square.fill")
-            .font(.system(size: 40))
+            .font(.system(size: symbolSize))
             .foregroundStyle(Theme.heart)
           Text("Apple Health").font(.title2.bold())
           Text(
@@ -47,7 +48,7 @@ struct HealthView: View {
               Label("Allow new Apple Health data", systemImage: "heart.text.square.fill")
             }
             if let requestError {
-              Text(requestError).foregroundStyle(.red).font(.subheadline)
+              Text(requestError).foregroundStyle(Theme.danger).font(.subheadline)
             }
           } footer: {
             Text(
@@ -70,7 +71,7 @@ struct HealthView: View {
             LabeledContent("Result", value: result)
           }
           if let error = model.health.error {
-            Text(error).foregroundStyle(.red).font(.subheadline)
+            Text(error).foregroundStyle(Theme.danger).font(.subheadline)
           }
           Button("Sync now") { Task { await model.syncHealth(force: true) } }
             .disabled(model.health.syncing)
@@ -92,13 +93,11 @@ struct HealthView: View {
             trigger.toggle()
           } label: {
             Label("Connect Apple Health", systemImage: "heart.fill")
-              .foregroundStyle(Theme.onAccent)
-              .frame(maxWidth: .infinity)
           }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(PrimaryButtonStyle())
           .listRowBackground(Color.clear)
           if let requestError {
-            Text(requestError).foregroundStyle(.red).font(.subheadline)
+            Text(requestError).foregroundStyle(Theme.danger).font(.subheadline)
           }
         } footer: {
           Text(

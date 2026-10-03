@@ -58,8 +58,7 @@ struct TrainView: View {
           ZStack {
             ProgressRing(progress: Double(logged) / Double(max(total, 1)), tint: Theme.attention, lineWidth: 8)
             Text("\(logged)/\(total)")
-              .font(.system(.subheadline, design: .rounded, weight: .bold))
-              .monospacedDigit()
+              .font(.subheadline.weight(.bold).monospacedDigit())
           }
           .frame(width: 64, height: 64)
           VStack(alignment: .leading, spacing: 3) {
@@ -92,16 +91,15 @@ struct TrainView: View {
             ForEach(Array(day.exercises.prefix(6).enumerated()), id: \.offset) { index, exercise in
               HStack(spacing: 12) {
                 Text("\(index + 1)")
-                  .font(.system(.caption, design: .rounded, weight: .bold))
+                  .font(.caption.weight(.bold).monospacedDigit())
                   .foregroundStyle(Category.training.tint)
                   .frame(width: 24, height: 24)
                   .background(Theme.fill, in: .circle)
                 Text(exercise.name).font(.body.weight(.medium))
                 Spacer(minLength: 8)
                 Text(exercise.text)
-                  .font(.system(.subheadline, design: .rounded))
-                  .foregroundStyle(.secondary)
-                  .monospacedDigit()
+                  .font(.subheadline.monospacedDigit())
+                  .foregroundStyle(Theme.inkSecondary)
               }
             }
             if day.exercises.count > 6 {
@@ -133,10 +131,10 @@ struct TrainView: View {
     let bests = training.bests ?? []
     if !weeks.isEmpty || !bests.isEmpty {
       VStack(alignment: .leading, spacing: 12) {
-        SectionHeading("Progress").padding(.horizontal, 4)
+        FolioSection("Progress")
         if let week = weeks.last {
           VStack(alignment: .leading, spacing: 14) {
-            CardLabel(title: "This Week", symbol: "chart.bar.fill", tint: Category.training.tint)
+            CardLabel(title: "This Week", key: Category.training.tint)
             HStack {
               MiniValue(value: "\(week.sessions)", label: week.sessions == 1 ? "Session" : "Sessions")
               MiniValue(value: "\(week.sets)", label: "Sets")
@@ -168,12 +166,11 @@ struct TrainView: View {
 
   private func programmes(_ training: Training) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      SectionHeading(title: "Programmes") {
+      FolioSection(title: "Programmes") {
         Button("New", systemImage: "plus") { editing = .new }
           .labelStyle(.titleAndIcon)
           .font(.subheadline.weight(.semibold))
       }
-      .padding(.horizontal, 4)
       ScrollView(.horizontal) {
         HStack(spacing: 14) {
           ForEach(training.programmes, id: \.id) { programme in
@@ -195,7 +192,7 @@ struct TrainView: View {
 
   private func recent(_ training: Training) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      SectionHeading("Recent Sessions").padding(.horizontal, 4)
+      FolioSection("Recent Sessions")
       if training.recent.isEmpty {
         Text("Finished workouts appear here with every set.")
           .font(.subheadline)
@@ -266,13 +263,8 @@ private struct BestTile: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      CardLabel(title: best.name, symbol: "trophy.fill", tint: Theme.record)
-      HStack(alignment: .firstTextBaseline, spacing: 3) {
-        Text(best.weight.formatted())
-          .font(.system(.title2, design: .rounded, weight: .bold))
-          .monospacedDigit()
-        Text("kg").font(.system(.footnote, design: .rounded, weight: .semibold)).foregroundStyle(.secondary)
-      }
+      CardLabel(title: best.name, key: Theme.record)
+      Measure(value: best.weight.formatted(), unit: "kg")
       Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -294,11 +286,11 @@ private struct DateBadge: View {
     let date = JournalDay.date(day)
     VStack(spacing: 0) {
       Text(date?.formatted(.dateTime.month(.abbreviated)).uppercased() ?? "")
-        .font(.system(size: 9, weight: .bold))
+        .font(.caption2.weight(.bold))
         .foregroundStyle(Category.training.tint)
       Text(date?.formatted(.dateTime.day()) ?? "–")
-        .font(.system(.headline, design: .rounded, weight: .bold))
-        .foregroundStyle(Color.primary)
+        .font(.headline.monospacedDigit())
+        .foregroundStyle(Theme.ink)
     }
     .frame(width: 44, height: 44)
     .background(Theme.fill, in: .rect(cornerRadius: 11, style: .continuous))

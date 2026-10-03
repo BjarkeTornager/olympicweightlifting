@@ -86,4 +86,23 @@ struct ThemeTests {
     #expect(MeterLayout(value: 980, target: nil, unit: 100) == nil)
     #expect(MeterLayout(value: 980, target: 0, unit: 100) == nil)
   }
+
+  @Test("VoiceOver reads a Ledger column as one sentence")
+  func ledgerSpoken() {
+    let energy = LedgerLine(
+      title: "Energy", tint: Theme.calories, value: 980, target: 1900, perMark: 100, number: "980", unit: "kcal",
+      targetText: "1,900", scale: "One mark = 100 kcal", spokenUnit: "kilocalories")
+    #expect(energy.spoken == "980 of \(1900.formatted()) kilocalories")
+    let untargeted = LedgerLine(
+      title: "Protein", tint: Theme.protein, value: 52, target: nil, perMark: 10, number: "52", unit: "g",
+      targetText: nil, scale: "10 g a mark", spokenUnit: "grams")
+    #expect(untargeted.spoken == "52 grams logged today")
+  }
+
+  @Test("A value's numbers are set in the serif and its units beside them")
+  func measureParts() {
+    #expect(Measure.parts("7 h 15 min", nil).map(\.number) == [true, false, true, false])
+    #expect(Measure.parts("54", "bpm").map(\.text) == ["54", "bpm"])
+    #expect(Measure.parts("~205", "kcal").map(\.number) == [true, false])
+  }
 }

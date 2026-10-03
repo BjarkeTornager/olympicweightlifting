@@ -42,10 +42,9 @@ struct WorkoutView: View {
               adding = true
             } label: {
               Label("Add Exercise", systemImage: "plus")
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.roundedRectangle(radius: 14))
+            .buttonStyle(SecondaryButtonStyle())
           }
           .padding(.horizontal, 16)
           .padding(.vertical, 12)
@@ -125,8 +124,7 @@ struct WorkoutView: View {
       ZStack {
         ProgressRing(progress: Double(logged) / Double(max(sets.count, 1)), tint: Category.training.tint, lineWidth: 8)
         Text("\(Int((Double(logged) / Double(max(sets.count, 1)) * 100).rounded()))%")
-          .font(.system(.subheadline, design: .rounded, weight: .bold))
-          .monospacedDigit()
+          .font(.subheadline.weight(.bold).monospacedDigit())
           .contentTransition(.numericText())
       }
       .frame(width: 64, height: 64)
@@ -166,7 +164,7 @@ private struct ExerciseCard: View {
           if finished {
             Image(systemName: "checkmark").font(.caption.weight(.heavy)).foregroundStyle(Theme.onAccent)
           } else {
-            Text("\(number)").font(.system(.caption, design: .rounded, weight: .bold))
+            Text("\(number)").font(.caption.weight(.bold).monospacedDigit())
               .foregroundStyle(Category.training.tint)
           }
         }
@@ -209,27 +207,23 @@ private struct ExerciseCard: View {
         Button {
           log(weight, reps, false)
         } label: {
-          Label("Miss", systemImage: "xmark").frame(maxWidth: .infinity, minHeight: 44)
+          Label("Miss", systemImage: "xmark").font(.headline).frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
-        .tint(Theme.danger)
+        .buttonStyle(SecondaryButtonStyle(danger: true, height: 50))
         Button {
           log(weight, reps, true)
         } label: {
           Group {
             if busy {
-              ProgressView().tint(Theme.onAccent)
+              ProgressView().tint(Theme.onAccentFill)
             } else {
               Label(next == nil ? "Add Set" : "Made", systemImage: "checkmark")
             }
           }
-          .foregroundStyle(Theme.onAccent)
-          .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(PrimaryButtonStyle(height: 50))
       }
       .disabled(busy)
-      .buttonBorderShape(.roundedRectangle(radius: 12))
     }
   }
 
@@ -402,10 +396,10 @@ private struct RestTimer: View {
         }
         Spacer()
         Button("+30 s", action: extend)
-          .buttonStyle(.bordered)
+          .buttonStyle(SecondaryButtonStyle())
         Button("Done", systemImage: "xmark", action: done)
           .labelStyle(.iconOnly)
-          .buttonStyle(.bordered)
+          .buttonStyle(SecondaryButtonStyle())
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 10)

@@ -149,7 +149,7 @@ struct AccountView: View {
           .disabled(deleting)
         } footer: {
           if let deletionError {
-            Text(deletionError).foregroundStyle(.red)
+            Text(deletionError).foregroundStyle(Theme.danger)
           } else {
             Text("Permanently deletes your account and everything in your journal from Lift Journal's server. Data in Apple Health is not affected.")
           }
@@ -246,7 +246,7 @@ private struct AthleteCard: View {
   private func stat(_ value: String?, _ unit: String?, _ label: String) -> some View {
     VStack(spacing: 2) {
       HStack(alignment: .firstTextBaseline, spacing: 2) {
-        Text(value ?? "–").font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
+        Text(value ?? "–").folio(.inline)
         if let unit, value != nil {
           Text(unit).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
         }

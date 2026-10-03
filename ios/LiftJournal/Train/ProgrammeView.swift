@@ -128,8 +128,7 @@ private struct DayCard: View {
         Label(line, systemImage: "figure.run").font(.subheadline).foregroundStyle(.secondary)
       }
       Button("Start Day \(number)", action: start)
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
+        .buttonStyle(SecondaryButtonStyle())
         .disabled(!canStart || day.exercises.isEmpty)
     }
     .card()

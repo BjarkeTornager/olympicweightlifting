@@ -74,8 +74,8 @@ struct UpdateRequiredView: View {
       Text("This version is no longer supported. Install the latest build from TestFlight. Your journal is safe.")
     } actions: {
       Link("Open TestFlight", destination: URL(string: "itms-beta://")!)
-        .buttonStyle(.borderedProminent)
-        .foregroundStyle(Theme.onAccent)
+        .buttonStyle(PrimaryButtonStyle())
+        .padding(.horizontal, 20)
     }
     .interactiveDismissDisabled()
   }

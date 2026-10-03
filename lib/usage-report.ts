@@ -2,8 +2,10 @@ import { getPool } from "./db";
 import { utcDay } from "./feature-use";
 
 // The owner's usage page: the main measure and retention from
-// docs/product-principles.md, and per-feature counts. Only totals and
-// averages leave this module, never a person's records or identity.
+// docs/product-principles.md, per-feature counts and AI cost. Only totals
+// and averages leave this module, never a person's records or identity; AI
+// cost per account is shown under the start of its opaque id, never a name
+// or email.
 
 export type RecordedDates = {
   sleep: string[];
@@ -17,6 +19,32 @@ export type FeatureRow = {
   feature: string;
   day: string;
   count: number;
+};
+// One account's AI calls on one UTC day, from the ledger (lib/ai-usage.ts).
+export type AiCostRow = {
+  userId: string;
+  day: string;
+  costUsd: number;
+  calls: number;
+  // The part not reported by the provider: voice minutes, and pictures
+  // whose cost didn't arrive.
+  estimatedUsd: number;
+};
+type AiCostTotals = {
+  today: number;
+  month: number;
+  // Calls this month.
+  calls: number;
+  // Of this month's cost, the part that is estimated.
+  estimated: number;
+};
+export type AiCost = {
+  // Today and this calendar month, UTC like the rest of the page.
+  day: string;
+  month: string;
+  // Most expensive this month first.
+  accounts: (AiCostTotals & { account: string; you: boolean })[];
+  total: AiCostTotals;
 };
 export type UsageReport = {
   generatedAt: string;
@@ -35,6 +63,7 @@ export type UsageReport = {
   retention: { week: string; joined: number; week4: number | null }[];
   // The last 28 days, most-used first.
   features: { feature: string; people: number; uses: number; last: string }[];
+  aiCost: AiCost;
 };
 
 const DAY = 86400000;
@@ -48,11 +77,63 @@ export function weekStart(day: string) {
   return addDays(day, -((weekday + 6) % 7));
 }
 
+const usd = (n: number) => Math.round(n * 1e6) / 1e6;
+
+// Each account's AI cost today and this month. The viewer's own account is
+// marked, so the owner can tell their own testing apart.
+export function aiCostReport(
+  rows: AiCostRow[],
+  now = new Date(),
+  viewerId?: string,
+): AiCost {
+  const day = utcDay(now),
+    month = day.slice(0, 7);
+  const byAccount = new Map<string, AiCostTotals>();
+  for (const row of rows) {
+    if (row.day.slice(0, 7) !== month) continue;
+    const entry = byAccount.get(row.userId) ?? {
+      today: 0,
+      month: 0,
+      calls: 0,
+      estimated: 0,
+    };
+    if (row.day === day) entry.today += row.costUsd;
+    entry.month += row.costUsd;
+    entry.calls += row.calls;
+    entry.estimated += row.estimatedUsd;
+    byAccount.set(row.userId, entry);
+  }
+  const accounts = [...byAccount]
+    .map(([userId, e]) => ({
+      account: userId.slice(0, 8),
+      you: userId === viewerId,
+      today: usd(e.today),
+      month: usd(e.month),
+      calls: e.calls,
+      estimated: usd(e.estimated),
+    }))
+    .sort((a, b) => b.month - a.month || a.account.localeCompare(b.account));
+  const sum = (key: keyof AiCostTotals) =>
+    usd(accounts.reduce((n, a) => n + a[key], 0));
+  return {
+    day,
+    month,
+    accounts,
+    total: {
+      today: sum("today"),
+      month: sum("month"),
+      calls: sum("calls"),
+      estimated: sum("estimated"),
+    },
+  };
+}
+
 export function usageReport(
   people: { id: string; joined: string }[],
   recorded: Map<string, RecordedDates>,
   features: FeatureRow[],
   now = new Date(),
+  ai: { rows: AiCostRow[]; viewerId?: string } = { rows: [] },
 ): UsageReport {
   const today = utcDay(now);
   // Days on which each person recorded something, and recorded everything.
@@ -165,6 +246,7 @@ export function usageReport(
           b.uses - a.uses ||
           a.feature.localeCompare(b.feature),
       ),
+    aiCost: aiCostReport(ai.rows, now, ai.viewerId),
   };
 }
 
@@ -222,11 +304,26 @@ export async function loadRecordedDates(since: string) {
   return new Map(rows.map(({ userId, ...dates }) => [userId, dates] as const));
 }
 
-export async function loadUsageReport(now = new Date()) {
+// Per account and UTC day, this calendar month only.
+const aiCostQuery = `
+SELECT user_id AS "userId",
+  to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+  sum(cost_usd)::float8 AS "costUsd",
+  count(*)::int AS calls,
+  coalesce(sum(cost_usd) FILTER (WHERE estimated), 0)::float8 AS "estimatedUsd"
+FROM ai_usage
+WHERE created_at >= $1 AND created_at < $2
+GROUP BY 1, 2`;
+
+export async function loadUsageReport(now = new Date(), viewerId?: string) {
   const pool = getPool();
   // Eight weeks of weeks and cohorts, plus the four weeks a cohort needs.
   const since = addDays(weekStart(utcDay(now)), -7 * (WEEKS + 4));
-  const [people, recorded, features] = await Promise.all([
+  const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+    nextMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
+    );
+  const [people, recorded, features, ai] = await Promise.all([
     pool.query<{ id: string; joined: string }>(
       `SELECT id, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS joined FROM users`,
     ),
@@ -235,6 +332,10 @@ export async function loadUsageReport(now = new Date()) {
       `SELECT user_id AS "userId", feature, day::text AS day, count FROM feature_use WHERE day >= $1`,
       [since],
     ),
+    pool.query<AiCostRow>(aiCostQuery, [month, nextMonth]),
   ]);
-  return usageReport(people.rows, recorded, features.rows, now);
+  return usageReport(people.rows, recorded, features.rows, now, {
+    rows: ai.rows,
+    viewerId,
+  });
 }

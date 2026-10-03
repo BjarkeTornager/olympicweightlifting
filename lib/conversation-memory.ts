@@ -5,6 +5,7 @@ import { displayMessage, VOICE_PREFIX } from "./coach-tasks";
 import type { SavedVisual } from "./coach-visuals";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
 import { withoutEmDashes } from "./agent/coach-style";
+import { pruneAiUsage, withAiUsage } from "./ai-usage";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -20,8 +21,9 @@ export type Exchange = {
 };
 
 /** Removes Coach conversation older than 90 days, with the cards and
- * pictures in it, and expired proposals (they hold recovery snapshots).
- * Runs whenever the athlete uses the assistant, typed or by voice. */
+ * pictures in it, expired proposals (they hold recovery snapshots) and AI
+ * cost records older than 13 months. Runs whenever the athlete uses the
+ * assistant, typed or by voice. */
 export async function pruneConversations(userId: string) {
   const db = getDb();
   await db
@@ -40,6 +42,7 @@ export async function pruneConversations(userId: string) {
         lt(agentTurns.createdAt, new Date(Date.now() - 90 * 86400000)),
       ),
     );
+  await pruneAiUsage(userId);
 }
 
 const clip = (text: string, max: number) =>
@@ -99,7 +102,9 @@ export async function saveVoiceTranscript(
     })
     .onConflictDoUpdate({
       target: voiceCalls.id,
-      set: { transcript: entries, content, updatedAt: new Date() },
+      // The database's clock, as for the first save and the tidy stamp, so
+      // a call that goes on just after a tidy is never taken as tidied.
+      set: { transcript: entries, content, updatedAt: sql`now()` },
       // A call id belongs to the account that started it.
       where: eq(voiceCalls.userId, userId),
     });
@@ -119,7 +124,10 @@ export async function tidyVoiceCall(
     .from(voiceCalls)
     .where(and(eq(voiceCalls.id, id), eq(voiceCalls.userId, userId)));
   if (!call || (call.tidiedAt && call.tidiedAt >= call.updatedAt)) return;
-  const tidy = await tidyWith(call.transcript);
+  const tidy = await withAiUsage(
+    { userId, feature: "transcript-tidy", sourceId: id },
+    () => tidyWith(call.transcript),
+  );
   if (!tidy) return;
   await db
     .update(voiceCalls)

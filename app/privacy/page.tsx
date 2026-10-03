@@ -377,12 +377,26 @@ export default function PrivacyPage() {
           counts how often each feature is used: for each account and day, a
           feature name such as &ldquo;Coach message&rdquo; or &ldquo;voice
           call&rdquo; and a number. The counts never include what you said,
-          wrote, ate, photographed or recorded. The owner sees only totals and
-          averages across everyone, such as how many people used a feature or
-          how many days a week people record sleep, food and movement, worked
-          out from your journal&apos;s dates inside the database. Nothing is
-          shared with an analytics service, and the counts are deleted with your
-          account.
+          wrote, ate, photographed or recorded. For these counts the owner sees
+          only totals and averages across everyone, such as how many people used
+          a feature or how many days a week people record sleep, food and
+          movement, worked out from your journal&apos;s dates inside the
+          database. Nothing is shared with an analytics service, and the counts
+          are deleted with your account.
+        </p>
+        <p>
+          To keep AI costs in check, each paid AI request made for your account
+          is also recorded: Coach replies with the routing and web searches they
+          use, image tagging, video reviews, transcript tidying, dish pictures
+          and voice call minutes. A record holds the feature, the model, token
+          counts, the cost in US dollars (estimated for voice calls from their
+          minutes) and which message, image, video, picture or call it was for,
+          never what was said, asked or shown. The owner sees each
+          account&apos;s AI cost today and this month and how many requests it
+          made, listed under the first eight characters of its account
+          identifier, never a name or email. These records are kept for 13
+          months: older ones are removed when you next use Coach, by typing or
+          by voice, and all of them are deleted with your account.
         </p>
       </section>
       <section className="space-y-3">
@@ -401,11 +415,11 @@ export default function PrivacyPage() {
           from Settings. In the iPhone app, Account › Delete account permanently
           deletes your account straight away: your journal, photos, videos,
           voice transcripts, Coach conversations and their pictures, Apple
-          Health imports, reminders, usage counts, sessions and invitation.
-          Signing in again then needs a new invitation. To request an export,
-          correction or deletion another way, contact the person who invited you
-          to Lift Journal. We will verify the account before acting on a
-          request.
+          Health imports, reminders, usage counts, AI cost records, sessions and
+          invitation. Signing in again then needs a new invitation. To request
+          an export, correction or deletion another way, contact the person who
+          invited you to Lift Journal. We will verify the account before acting
+          on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

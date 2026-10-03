@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { EventType } from "@ag-ui/core";
 import { parseCoachRun } from "../lib/agent/input";
 import { coachStream } from "../lib/agent/stream";
-import { readModelStream } from "../lib/agent/model-stream";
+import {
+  ContentFiltered,
+  readModelStream,
+  type StreamUsage,
+} from "../lib/agent/model-stream";
 import { parseModelResponse } from "../lib/agent/provider";
 import { createRequire } from "node:module";
 import type { CoachUpdate } from "../lib/coach-client";
@@ -203,6 +207,51 @@ test("provider streams reject truncation, upstream errors and excessive content 
         new AbortController().signal,
       ),
     );
+});
+test("a reply blocked by the host's filter keeps its usage for the ledger, waiting only briefly, and shows none of its text", async () => {
+  const blocked = sse({
+    model: "openai/gpt-5.6-luna",
+    choices: [
+      {
+        delta: { content: "I'm sorry, but I cannot assist." },
+        finish_reason: "content_filter",
+      },
+    ],
+  });
+  const text: string[] = [];
+  const seen: StreamUsage = {};
+  await assert.rejects(
+    readModelStream(
+      chunks(
+        blocked +
+          sse({ choices: [], usage: { prompt_tokens: 900, cost: 0.0004 } }) +
+          "data: [DONE]\n\n",
+        5,
+      ),
+      "openrouter",
+      (delta) => text.push(delta),
+      new AbortController().signal,
+      seen,
+    ),
+    ContentFiltered,
+  );
+  assert.deepEqual(text, []);
+  assert.equal(seen.model, "openai/gpt-5.6-luna");
+  assert.equal(seen.usage?.cost, 0.0004);
+  // A connection that stays open after the block gives way within moments.
+  const open = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(blocked));
+      },
+    }),
+  );
+  const started = Date.now();
+  await assert.rejects(
+    readModelStream(open, "openrouter", () => {}, AbortSignal.timeout(10000)),
+    ContentFiltered,
+  );
+  assert.ok(Date.now() - started < 5000);
 });
 test("Ollama NDJSON preserves complete tools and requires the provider's done marker", async () => {
   const data = [

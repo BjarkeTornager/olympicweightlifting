@@ -1,6 +1,12 @@
 import { z } from "zod";
-import { readModelStream, ContentFiltered, usageSchema } from "./model-stream";
+import {
+  readModelStream,
+  ContentFiltered,
+  usageSchema,
+  type StreamUsage,
+} from "./model-stream";
 import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
+import { recordModelCall } from "../ai-usage";
 import type { SpanAttributes } from "../tracing/attributes";
 import type { TraceSpan } from "../tracing/spans";
 export class ProviderError extends Error {
@@ -297,6 +303,36 @@ export function parseModelResponse(
       : {}),
   };
 }
+// What a reply that can't be used still says it served and cost.
+const billedSchema = z.object({
+  model: z.string().max(200).optional().catch(undefined),
+  usage: usageSchema.optional().catch(undefined),
+});
+// Reads a provider's reply and records the call in the AI cost ledger
+// (lib/ai-usage.ts), against the account and feature of the current usage
+// context. Every reply read is a call billed, so a retry is recorded too,
+// and so is a reply that can't be used.
+export async function readModelResponse(
+  raw: unknown,
+  kind: "ollama" | "openrouter",
+  model: string,
+): Promise<ModelResponse> {
+  let response: ModelResponse;
+  try {
+    response = parseModelResponse(raw, kind);
+  } catch (error) {
+    const billed = billedSchema.safeParse(raw);
+    await recordModelCall(
+      billed.success
+        ? servedBy(billed.data.model, billed.data.usage)
+        : undefined,
+      model,
+    );
+    throw error;
+  }
+  await recordModelCall(response.served, model);
+  return response;
+}
 export async function providerResponseError(
   response: Response,
   hasImages = false,
@@ -500,11 +536,23 @@ async function requestModel(
       response,
       messages.some((m) => m.images?.length),
     );
-  if (onText)
-    return parseModelResponse(
-      await readModelStream(response, config.kind, onText, signal),
-      config.kind,
-    );
+  // From here the call is billed however it ends. A reply blocked by the
+  // host's filter, a Stop, the turn's timeout or a reply cut short is
+  // recorded too, with the usage seen so far (lib/ai-usage.ts).
+  const seen: StreamUsage = {};
+  let raw: unknown;
+  try {
+    raw = onText
+      ? await readModelStream(response, config.kind, onText, signal, seen)
+      : await readReply(response);
+  } catch (error) {
+    await recordModelCall(servedBy(seen.model, seen.usage), request.body.model);
+    throw error;
+  }
+  return readModelResponse(raw, config.kind, request.body.model);
+}
+
+async function readReply(response: Response): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw Error("The assistant returned an empty response.");
   const chunks: Uint8Array[] = [];
@@ -519,8 +567,5 @@ async function requestModel(
     }
     chunks.push(value);
   }
-  return parseModelResponse(
-    JSON.parse(Buffer.concat(chunks).toString("utf8")),
-    config.kind,
-  );
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }

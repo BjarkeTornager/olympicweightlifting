@@ -3,12 +3,18 @@ config({ path: ".env.local", quiet: true });
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { sql } from "drizzle-orm";
 import { getDb, getPool } from "../lib/db";
+import { migrationOrderProblems } from "../lib/db/migration-order";
 import { catalog } from "../lib/db/schema";
 import { EXERCISES, program } from "../lib/domain";
 async function main() {
   // A separate migration role can own DDL while the app uses a restricted role.
   if (process.env.MIGRATION_DATABASE_URL)
     process.env.DATABASE_URL = process.env.MIGRATION_DATABASE_URL;
+  // drizzle would skip a migration older than the newest applied one and
+  // still report success; stop the release instead.
+  const outOfOrder = migrationOrderProblems("./drizzle");
+  if (outOfOrder.length)
+    throw Error(`Migrations are out of order. ${outOfOrder.join(" ")}`);
   const db = getDb();
   try {
     // Serialise migrations across concurrent releases using a dedicated connection.

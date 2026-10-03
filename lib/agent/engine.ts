@@ -7,6 +7,7 @@ import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { countUse } from "../feature-use";
+import { withAiUsage } from "../ai-usage";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
 import { MAX_EXECUTED_TOOLS } from "./limits";
@@ -199,12 +200,24 @@ type TurnHooks = {
 // is on. The trace ends with the turn, not the connection, so a background
 // run is traced to its saved result. While a deploy shuts the server down,
 // the turn waits briefly for its trace to be sent, since the process exits
-// as soon as the last request closes.
-export async function runTurn(
+// as soon as the last request closes. Every AI call the turn makes is
+// charged to the athlete and the turn in the AI cost ledger (lib/ai-usage.ts).
+export function runTurn(
   userId: string,
   input: TurnInput,
   model: TurnModel = callModel,
   hooks: TurnHooks = {},
+) {
+  return withAiUsage({ userId, feature: "coach", sourceId: input.id }, () =>
+    tracedTurn(userId, input, model, hooks),
+  );
+}
+
+async function tracedTurn(
+  userId: string,
+  input: TurnInput,
+  model: TurnModel,
+  hooks: TurnHooks,
 ) {
   const trace = await startTrace(
     "coach_turn",

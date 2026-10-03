@@ -9,6 +9,7 @@ import { providerBudget } from "./provider-budget";
 import type { BudgetState } from "./tracking-status";
 import { errorCategory, logFailure } from "./error-log";
 import { countUse } from "./feature-use";
+import { recordPicture } from "./ai-usage";
 
 // Pictures of dishes on recipe cards. The card is on screen first; an image
 // model draws the picture in the background and the apps fetch it from
@@ -340,6 +341,13 @@ const retryable = (error: unknown) =>
     ? /^http_(429|5\d\d)$/.test(error.reason)
     : error instanceof TypeError;
 
+// Whether a picture that failed was still paid for: the model answered, or
+// was cut off while drawing. An HTTP error or no connection costs nothing.
+const billed = (error: unknown) =>
+  error instanceof PictureFailure
+    ? !error.reason.startsWith("http_")
+    : !(error instanceof TypeError);
+
 async function requestPicture(
   job: PictureJob,
   fetcher: typeof fetch,
@@ -435,6 +443,14 @@ export async function drawPicture(
       },
       reply.costUsd ?? null,
     );
+    // The AI cost ledger too (lib/ai-usage.ts).
+    await recordPicture(
+      job.userId,
+      job.id,
+      reply.model ?? job.model,
+      reply.costUsd,
+      DRAWING_COST_USD,
+    );
     void countUse(job.userId, "coach.picture.ready");
     return "ready";
   } catch (error) {
@@ -444,6 +460,14 @@ export async function drawPicture(
       { status: "failed", reason: reason.slice(0, 60) },
       error instanceof PictureFailure ? (error.costUsd ?? null) : null,
     ).catch((e: unknown) => logFailure("coach_picture_failed", e, {}, "warn"));
+    if (billed(error))
+      await recordPicture(
+        job.userId,
+        job.id,
+        job.model,
+        error instanceof PictureFailure ? error.costUsd : undefined,
+        DRAWING_COST_USD,
+      );
     // Codes only: never the dish or the account.
     logFailure("coach_picture_failed", error, { reason }, "warn");
     void countUse(job.userId, "coach.picture.failed");

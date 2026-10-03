@@ -65,6 +65,21 @@ test("Owner can invite a Google account and revoke or restore access on mobile",
             last: "2026-10-02",
           },
         ],
+        aiCost: {
+          day: "2026-10-03",
+          month: "2026-10",
+          accounts: [
+            {
+              account: "a1b2c3d4",
+              you: true,
+              today: 0.0637,
+              month: 1.25,
+              calls: 12,
+              estimated: 0,
+            },
+          ],
+          total: { today: 0.0637, month: 1.25, calls: 12, estimated: 0 },
+        },
       },
     });
   });
@@ -76,6 +91,16 @@ test("Owner can invite a Google account and revoke or restore access on mobile",
   const usage = page.getByRole("region", { name: "Usage" });
   await expect(usage.getByText("coach.message")).toBeVisible();
   await expect(usage.getByText("1 (50%)")).toBeVisible();
+  // What each account's AI use cost, by the start of its id.
+  const cost = page.getByRole("region", { name: "AI cost per account" });
+  await expect(
+    cost.getByRole("rowheader", { name: "a1b2c3d4 (you)" }),
+  ).toBeVisible();
+  await expect(
+    cost
+      .getByRole("row", { name: /a1b2c3d4/ })
+      .getByRole("cell", { name: "$1.25" }),
+  ).toBeVisible();
   await page.getByLabel("Google account email").fill(email);
   await page.getByRole("button", { name: "Grant access" }).click();
   await expect(page.getByText(email, { exact: true })).toBeVisible();

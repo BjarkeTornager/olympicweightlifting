@@ -25,6 +25,7 @@ import {
 } from "./checkpoint";
 import { automaticFeedback } from "./feedback";
 import { logFailure } from "../error-log";
+import { withAiUsage } from "../ai-usage";
 export { reviewMessages } from "./review";
 // Stored size of a review: playback media, sampled frames and analysis JSON.
 function reviewBytes(
@@ -188,7 +189,12 @@ export async function runVideoJob(
       row.input,
       analysis,
       frames,
-      model,
+      // Each model call of the review is charged to the athlete and video.
+      (...args) =>
+        withAiUsage(
+          { userId: job.user_id, feature: "video", sourceId: job.id },
+          () => model(...args),
+        ),
       signal,
       async (updated, stage, clearRefinement) => {
         if (!(await check())) signal.throwIfAborted();

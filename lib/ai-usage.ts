@@ -1,7 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { getDb } from "./db";
-import { aiUsage } from "./db/schema";
+import { aiUsage, voiceCalls } from "./db/schema";
 import type { ModelUsage } from "./agent/provider";
 
 // The AI cost ledger: one row per paid AI call, charged to the account it was
@@ -49,6 +50,9 @@ export function aiPrices() {
     jevRequest: price("AI_PRICE_JEV_REQUEST", 0.0001),
     // A search plus page text for five results, at Exa's list prices.
     exaSearch: price("AI_PRICE_EXA_SEARCH", 0.01),
+    // Per minute of call (docs/voice-elevenlabs-2026-09-30.md).
+    geminiVoiceMinute: price("AI_PRICE_VOICE_GEMINI_MINUTE", 0.023),
+    elevenLabsVoiceMinute: price("AI_PRICE_VOICE_ELEVENLABS_MINUTE", 0.08),
   };
 }
 
@@ -132,4 +136,89 @@ export async function recordFixedPrice(
   const usage = context.getStore();
   if (!usage) return;
   await record(usage, { feature, model, costUsd });
+}
+
+export type VoiceProvider = "google" | "elevenlabs";
+const voiceFeatures = ["voice-gemini", "voice-elevenlabs"] as const;
+const voiceRate = (feature: string) =>
+  feature === "voice-elevenlabs"
+    ? aiPrices().elevenLabsVoiceMinute
+    : aiPrices().geminiVoiceMinute;
+
+// A voice connection has opened: a fresh call, or a reconnect without a
+// resumption handle. Its row is costed when the call ends.
+export async function recordVoiceStart(
+  userId: string,
+  provider: VoiceProvider,
+  model: string,
+  now = new Date(),
+) {
+  const feature = provider === "google" ? "voice-gemini" : "voice-elevenlabs";
+  await record(
+    { userId, feature },
+    { feature, model, costUsd: 0, estimated: true, createdAt: now },
+  );
+}
+
+// A voice connection opened this long before the call's first saved line
+// belongs to the call.
+const VOICE_START_SLACK_MS = 5 * 60000;
+// The phone ends a call after 30 minutes, so an end that arrives later (the
+// app was suspended mid-call) is not charged beyond that.
+const MAX_CALL_MINUTES = 30;
+
+// The call has ended. Each connection opened for it is costed at its
+// provider's rate, for the minutes from its start to the next connection or
+// the end of the call, and linked to the call. A repeated end changes nothing.
+export async function recordVoiceEnd(
+  userId: string,
+  callId: string,
+  now = new Date(),
+) {
+  try {
+    await getDb().transaction(async (tx) => {
+      const [call] = await tx
+        .select({ startedAt: voiceCalls.startedAt })
+        .from(voiceCalls)
+        .where(and(eq(voiceCalls.id, callId), eq(voiceCalls.userId, userId)));
+      if (!call) return;
+      const open = await tx
+        .select({
+          id: aiUsage.id,
+          feature: aiUsage.feature,
+          at: aiUsage.createdAt,
+        })
+        .from(aiUsage)
+        .where(
+          and(
+            eq(aiUsage.userId, userId),
+            inArray(aiUsage.feature, [...voiceFeatures]),
+            isNull(aiUsage.sourceId),
+            gte(
+              aiUsage.createdAt,
+              new Date(call.startedAt.getTime() - VOICE_START_SLACK_MS),
+            ),
+            lte(aiUsage.createdAt, now),
+          ),
+        )
+        .orderBy(asc(aiUsage.createdAt))
+        .for("update");
+      for (const [i, row] of open.entries()) {
+        const end = open[i + 1]?.at ?? now;
+        const minutes = Math.min(
+          MAX_CALL_MINUTES,
+          Math.max(0, end.getTime() - row.at.getTime()) / 60000,
+        );
+        await tx
+          .update(aiUsage)
+          .set({
+            sourceId: callId,
+            costUsd: usd(minutes * voiceRate(row.feature)),
+          })
+          .where(eq(aiUsage.id, row.id));
+      }
+    });
+  } catch (error) {
+    failed("voice", error);
+  }
 }

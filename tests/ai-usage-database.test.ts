@@ -439,6 +439,98 @@ test(
 );
 
 test(
+  "voice calls are estimated from their minutes, per connection",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const db = await setup();
+    const { recordVoiceStart, recordVoiceEnd, aiPrices } =
+        await import("../lib/ai-usage"),
+      { saveVoiceTranscript } = await import("../lib/conversation-memory");
+    try {
+      const user = await db.user(),
+        minute = 60000,
+        start = Date.now() - 3 * 60 * minute;
+      const call = async (id: string, startedAt: number) => {
+        await saveVoiceTranscript(user, {
+          id,
+          purpose: "checkin",
+          entries: [{ role: "coach", text: "Secret greeting" }],
+        });
+        await db.pool.query(
+          "UPDATE voice_calls SET started_at=$2 WHERE id=$1",
+          [id, new Date(startedAt)],
+        );
+      };
+      // A connection that never became a call, long before.
+      await recordVoiceStart(
+        user,
+        "google",
+        "gemini-live",
+        new Date(start - 60 * minute),
+      );
+      // A call that reconnected once, after four minutes.
+      const first = crypto.randomUUID();
+      await recordVoiceStart(
+        user,
+        "elevenlabs",
+        "eleven_v4_turbo",
+        new Date(start),
+      );
+      await recordVoiceStart(
+        user,
+        "elevenlabs",
+        "eleven_v4_turbo",
+        new Date(start + 4 * minute),
+      );
+      await call(first, start + 10_000);
+      await recordVoiceEnd(user, first, new Date(start + 10 * minute));
+      // Ending it again changes nothing.
+      await recordVoiceEnd(user, first, new Date(start + 20 * minute));
+      // A call whose end arrived long after the phone's 30-minute cap.
+      const second = crypto.randomUUID();
+      await recordVoiceStart(
+        user,
+        "google",
+        "gemini-live",
+        new Date(start + 60 * minute),
+      );
+      await call(second, start + 60 * minute + 5000);
+      await recordVoiceEnd(user, second, new Date(start + 150 * minute));
+
+      const rows = await db.rows(user);
+      const rate = aiPrices();
+      assert.deepEqual(
+        rows.map((r) => [r.feature, r.sourceId, r.cost, r.estimated]),
+        [
+          ["voice-gemini", null, 0, true],
+          [
+            "voice-elevenlabs",
+            first,
+            Math.round(4 * rate.elevenLabsVoiceMinute * 1e6) / 1e6,
+            true,
+          ],
+          [
+            "voice-elevenlabs",
+            first,
+            Math.round(6 * rate.elevenLabsVoiceMinute * 1e6) / 1e6,
+            true,
+          ],
+          [
+            "voice-gemini",
+            second,
+            Math.round(30 * rate.geminiVoiceMinute * 1e6) / 1e6,
+            true,
+          ],
+        ],
+      );
+      assert.doesNotMatch(JSON.stringify(rows), /Secret/);
+    } finally {
+      await db.cleanup();
+    }
+  },
+);
+
+test(
   "an account's ledger is deleted with it",
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {

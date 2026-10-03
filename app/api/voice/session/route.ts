@@ -40,6 +40,7 @@ import { voiceFor } from "@/lib/voice-options";
 import { coachLanguageSchema } from "@/lib/coach-language";
 import { countUse } from "@/lib/feature-use";
 import { picturesEnabled } from "@/lib/coach-pictures";
+import { recordVoiceStart } from "@/lib/ai-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -156,6 +157,10 @@ export async function POST(request: Request) {
           503,
         );
       }
+      // Each new connection gets a row in the AI cost ledger, costed by its
+      // minutes when the call ends (lib/ai-usage.ts).
+      if (!resumeHandle)
+        await recordVoiceStart(user.id, provider, ELEVENLABS_TTS_MODEL);
       return Response.json(
         {
           provider,
@@ -188,6 +193,8 @@ export async function POST(request: Request) {
         503,
       );
     }
+    // A resumed connection is costed with the one it continues.
+    if (!resumeHandle) await recordVoiceStart(user.id, provider, VOICE_MODEL);
     return Response.json(
       {
         provider,

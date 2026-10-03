@@ -14,5 +14,36 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+  # Only with --profile restate (docs/restate-setup.md). The same image and
+  # memory settings as the Railway service. Ingress on 8080, admin API and UI
+  # on 9070; it reaches the app's endpoint at host.docker.internal:9080.
+  restate:
+    profiles: [restate]
+    image: docker.restate.dev/restatedev/restate:1.7.13
+    environment:
+      RESTATE_NODE_NAME: restate-1
+      RESTATE_CLUSTER_NAME: lift-journal-dev
+      RESTATE_ROCKSDB_TOTAL_MEMORY_SIZE: 512MiB
+      RESTATE_ADMIN__QUERY_ENGINE__MEMORY_SIZE: 256MiB
+      RESTATE_BIFROST__RECORD_CACHE_MEMORY_SIZE: 128MiB
+      RESTATE_WORKER__INVOKER__CONCURRENT_INVOCATIONS_LIMIT: 100
+      RESTATE_WORKER__INVOKER__MEMORY_LIMIT: 256MiB
+      RESTATE_DEFAULT_NUM_PARTITIONS: 4
+      RESTATE_DEFAULT_JOURNAL_RETENTION: 1h
+      RESTATE_DEFAULT_IDEMPOTENCY_RETENTION: 1h
+      RESTATE_DISABLE_TELEMETRY: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9070:9070"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - lift-restate:/restate-data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9070/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 volumes:
   lift-postgres:
+  lift-restate:

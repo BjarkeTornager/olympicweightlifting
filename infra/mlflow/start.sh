@@ -23,6 +23,13 @@ authorization_function = mlflow.server.auth:authenticate_request_basic_auth
 grant_default_workspace_access = false
 INI
 export MLFLOW_AUTH_CONFIG_PATH=/tmp/basic_auth.ini
+# A newer MLflow may refuse to start on the tables an older one made
+# ("out-of-date database schema"). When upgrading (docs/tracing.md), once
+# the databases are backed up, MLFLOW_DB_UPGRADE=1 runs this version's
+# migrations first.
+if [ "${MLFLOW_DB_UPGRADE:-}" = 1 ]; then
+  mlflow db upgrade "$MLFLOW_BACKEND_STORE_URI"
+fi
 # :: listens on IPv6, which Railway's private network uses. The port is
 # fixed: the app's MLFLOW_TRACKING_URI names it.
 exec mlflow server \

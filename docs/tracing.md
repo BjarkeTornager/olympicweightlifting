@@ -81,10 +81,11 @@ MLflow had two CVEs in 2026 that needed no login; watch its [security advisories
 1. Read the release notes between the pinned version and the new one, for changes to OTLP ingest, trace search, `delete-traces` or basic auth.
 2. Check the new version locally first: change the tag in `infra/mlflow/Dockerfile`, run it as in [Local MLflow](#local-mlflow), send a few traces with `TRACING=metadata`, and run `npm test` (the deletion tests mock MLflow, so also delete a test account's traces against the local server).
 3. Back up the production databases: in a shell with Railway's Postgres URL, `pg_dump -Fc -d mlflow -f mlflow.dump` and the same for `mlflow_auth`.
-4. Migrate the schema: from the `mlflow` service's shell (`railway ssh`), run `mlflow db upgrade "$MLFLOW_BACKEND_STORE_URI"`. The server also migrates on start, but doing it first shows any error before the new version serves traffic.
-5. Merge the tag change. The service rebuilds from `infra/mlflow`; check its log ends with `Uvicorn running`, and that the app's log shows no `tracing_export_failed` and the next `trace_retention` line.
+4. On the `mlflow` service, set `MLFLOW_DB_UPGRADE=1` and deploy. The running version checks its own migrations and starts again; nothing changes yet.
+5. Merge the tag change. The service rebuilds from `infra/mlflow`, and `start.sh` runs the new version's `mlflow db upgrade` before its server starts. Without step 4 the new server may refuse to start: it migrates the traces database itself only when the new version adds a table, and otherwise exits with `Detected out-of-date database schema` (only basic auth's database always migrates on start). Check its log ends with `Uvicorn running`, and that the app's log shows no `tracing_export_failed` and the next `trace_retention` line.
+6. Remove `MLFLOW_DB_UPGRADE` and let the service redeploy. Left set, the next tag change would migrate before anyone took a backup.
 
-If the upgrade fails, redeploy the previous image and restore the dumps with `pg_restore --clean -d mlflow mlflow.dump`.
+If the upgrade fails, restore both dumps (`pg_restore --clean -d mlflow mlflow.dump`, and the same for `mlflow_auth`), then redeploy the previous image; it won't start on the newer schema.
 
 ## Local MLflow
 
@@ -121,6 +122,7 @@ To try the production image with basic auth on Postgres, build `infra/mlflow` an
 - One trace of each kind (`image_tag`, `voice_setup`, `voice_tool`, `voice_socket`, `voice_tidy`, `video_job`) arrived with its tree, user and session; the four voice traces of one call shared a session.
 - Search is `POST /api/3.0/mlflow/traces/search` with the filter ``metadata.`mlflow.trace.user` = '<code>'``; deletion is `POST /api/2.0/mlflow/traces/delete-traces`, by ids or by `max_timestamp_millis` with `max_traces`. Deleting a trace removes its spans. Deleting a test account's traces, and the retention sweep, worked with the app user's credentials.
 - With MLflow stopped, a turn takes as long as with tracing off.
+- Upgrading, on SQLite with `infra/mlflow/start.sh`: on tables made by 3.10.1 the server migrated them itself, because 3.16.1 adds tables. One migration behind, with no table to add, it exited with `Detected out-of-date database schema`; with `MLFLOW_DB_UPGRADE=1` it migrated and started. The variable did no harm on a current or an empty database.
 - `next build --webpack` bundles the packages without warnings or `serverExternalPackages`; the exporter loads on demand from its own chunk. The built bundle exports, and flushes on SIGTERM. A script that ends on its own flushes before it exits.
 
 Not checked, because it needs Railway: the image on Railway itself, the Tailscale router and its host name, and the private network in this project's environment.

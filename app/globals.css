@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @theme inline {
   --color-brand: var(--accent);
-  --font-sans: var(--font-journal), Arial, sans-serif;
+  --font-sans: var(--font-ui);
 }
 /* Everything below is one layer so it sits above Tailwind's layers by
    declaration order rather than by being unlayered. Within the layer the
@@ -60,8 +60,13 @@
   --red: var(--danger);
   --green: var(--success);
   --gold: var(--warning-solid);
-  /* Titles and Coach: New York where ui-serif resolves (Safari), otherwise
-     Newsreader from layout.tsx. Everything else stays in --font-journal. */
+  /* The interface: the system face (San Francisco on Apple devices, Segoe
+     UI on Windows, Roboto on Android), with Inter from layout.tsx only where
+     none resolves. */
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, var(--font-inter),
+    sans-serif;
+  /* Titles, large figures and Coach: New York where ui-serif resolves
+     (Safari), otherwise Newsreader from layout.tsx. */
   --font-serif: ui-serif, var(--font-newsreader), Georgia, serif;
 }
 * {
@@ -70,7 +75,7 @@
 body {
   margin: 0;
   color: var(--ink);
-  font-family: var(--font-journal), Arial, sans-serif;
+  font-family: var(--font-ui);
   font-variant-numeric: lining-nums tabular-nums;
   font-size: 16px;
   line-height: 1.6;
@@ -2916,7 +2921,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-recipe-nutrition dt { font-size: 11px; color: var(--ink-2); }
 .coach-recipe-nutrition dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .coach-diagram-scroll { overflow: auto; max-height: 450px; padding: 10px 0; overscroll-behavior: contain; }
-.coach-diagram-scroll svg { display: block; width: 100%; min-width: 350px; max-width: 480px; margin: auto; font: 13px var(--font-sans), sans-serif; fill: var(--success); }
+.coach-diagram-scroll svg { display: block; width: 100%; min-width: 350px; max-width: 480px; margin: auto; font: 13px var(--font-ui); fill: var(--success); }
 .coach-diagram-scroll .coach-diagram-number { font-size: 11px; font-weight: 600; }
 .coach-diagram-details { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 12px; color: var(--success); }
 .coach-diagram-details summary { cursor: pointer; padding: 4px 0; font-weight: 600; }
@@ -3372,7 +3377,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .video-metrics dd {margin:.5rem 0 0;font-size:1.1rem;font-weight:650;}
 .video-velocity-chart {margin:0;}
 .video-velocity-chart svg {width:100%;height:auto;}
-.video-velocity-chart text {font:13px system-ui;fill:currentColor;}
+.video-velocity-chart text {font:13px var(--font-ui);fill:currentColor;}
 .video-velocity-chart figcaption {font-size:.8rem;color:var(--ink-2);}
 .lifting-video-flow .video-check {display:flex;align-items:center;gap:.6rem;font-weight:400;margin:.75rem 0;}
 .lifting-video-flow .video-check input {width:20px;flex:none;}

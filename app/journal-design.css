@@ -1936,7 +1936,7 @@ textarea {
   white-space: nowrap;
 }
 .today-record-value small {
-  font-family: var(--font-journal), sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 500;
   color: var(--ink-2);
@@ -2312,8 +2312,8 @@ textarea {
 .pr-list.list-card .pr-row > strong { font-size: 17px; }
 
 /* Identity: the serif sets titles and the large figures, like a printed
-   journal, as New York does in the iPhone app. Barlow sets everything you
-   operate, so inputs, timers and small numbers stay in it. Radii step down
+   journal, as New York does in the iPhone app. The system face sets
+   everything you operate, so inputs, timers and small numbers stay in it. Radii step down
    from panels to controls to chips instead of one radius on everything. */
 h1,
 .dialog-title,
@@ -2328,11 +2328,11 @@ h1,
   font-weight: 500;
   letter-spacing: -0.01em;
 }
-/* Units beside a serif figure stay in Barlow, as they do in the app. */
+/* Units beside a serif figure stay in the system face, as they do in the app. */
 .stat-number > span,
 .food-macros strong small,
 .health-summary-grid strong small {
-  font-family: var(--font-journal), sans-serif;
+  font-family: var(--font-ui);
   letter-spacing: 0;
 }
 h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 400; }

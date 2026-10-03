@@ -1,24 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader } from "next/font/google";
-import localFont from "next/font/local";
+import { Inter, Newsreader } from "next/font/google";
 import "./globals.css";
 import "./journal-design.css";
 import "./theme.css";
-const barlow = localFont({
-  src: [
-    { path: "./fonts/Barlow-400.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/Barlow-500.woff2", weight: "500", style: "normal" },
-    { path: "./fonts/Barlow-600.woff2", weight: "600", style: "normal" },
-    { path: "./fonts/Barlow-700.woff2", weight: "700", style: "normal" },
-  ],
-  variable: "--font-journal",
+// The interface is set in the system face (San Francisco on Apple devices,
+// see --font-ui). Inter (SIL OFL 1.1) stands in only where no system face
+// resolves, so it is not preloaded either.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
   display: "swap",
-  adjustFontFallback: "Arial",
+  preload: false,
 });
 // Titles and Coach's replies are set in a serif. Safari shows Apple's New
 // York through ui-serif (see --font-serif), so Newsreader (SIL OFL 1.1) is
 // not preloaded: other browsers fetch it when a title first needs it.
-// next/font downloads it at build time and serves it from this application.
+// next/font downloads both at build time and serves them from this
+// application, so browsers never contact Google.
 const newsreader = Newsreader({
   subsets: ["latin"],
   style: ["normal", "italic"],
@@ -51,7 +49,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${barlow.variable} ${newsreader.variable}`}>
+    <html lang="en" className={`${inter.variable} ${newsreader.variable}`}>
       <body>{children}</body>
     </html>
   );

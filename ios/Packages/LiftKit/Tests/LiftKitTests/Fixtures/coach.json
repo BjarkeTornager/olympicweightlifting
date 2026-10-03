@@ -162,7 +162,7 @@
     },
     {
       "id": "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a21",
-      "question": "Can you give me a high-protein dinner with salmon for two?",
+      "question": "Can you give me a high-protein dinner with salmon for two, and show me what it looks like?",
       "fromVoice": false,
       "photoIds": [],
       "createdAt": "2026-09-26T18:00:00.000Z",
@@ -217,7 +217,8 @@
             "protein": 37,
             "carbs": 66,
             "fat": 21
-          }
+          },
+          "pictureId": "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58"
         }
       ]
     }

@@ -52,7 +52,10 @@ struct VoiceCallView: View {
         }
       }
       .sheet(item: $over.card, onDismiss: { over.sheetDismissed(cameraWaiting: call.cameraRequested) }) { line in
-        if let visual = line.visual { CardSheet(visual: visual) }
+        // As it is now: a picture may have been added since it opened.
+        if let visual = call.lines.first(where: { $0.id == line.id })?.visual ?? line.visual {
+          CardSheet(visual: visual)
+        }
       }
       .fullScreenCover(
         isPresented: Binding(
@@ -178,7 +181,8 @@ struct CallPresentation {
 }
 
 /// A card the coach put on screen, compact so the conversation stays in
-/// view; the whole card opens in a sheet.
+/// view; the whole card opens in a sheet. Its picture doesn't open full
+/// screen over the call.
 private struct VoiceCard: View {
   let visual: Visual
   let expand: () -> Void
@@ -195,6 +199,7 @@ private struct VoiceCard: View {
     .padding(14)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Theme.surface, in: .rect(cornerRadius: 18, style: .continuous))
+    .environment(\.picturesOpenFullScreen, false)
   }
 }
 
@@ -208,6 +213,7 @@ private struct CardSheet: View {
       ScrollView {
         CoachVisualView(visual: visual)
           .padding(16)
+          .environment(\.picturesOpenFullScreen, false)
       }
       .background(Theme.background)
       .navigationTitle(visual.kind == "recipe" ? "Recipe" : "Card")

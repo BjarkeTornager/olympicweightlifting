@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { after } from "next/server";
 import {
   ApiError,
   apiFailure,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/voice-actions";
 import { flattenVisual } from "@/lib/native-api";
 import { countUse } from "@/lib/feature-use";
+import { drawPicture } from "@/lib/coach-pictures";
 
 export const dynamic = "force-dynamic";
 
@@ -65,8 +67,13 @@ export async function POST(request: Request) {
       );
     const today = localClock(new Date(), input.timezone).date;
     try {
-      const result = await runVoiceTool(user.id, { ...input, today });
+      const outcome = await runVoiceTool(user.id, { ...input, today });
+      // The picture to draw stays on the server.
+      const { job, ...result } = { job: undefined, ...outcome };
       if (result.ok) void countUse(user.id, `voice.tool.${input.name}`);
+      // A picture of the dish is drawn once the card is on screen; the apps
+      // fetch it when it is ready.
+      if (job) after(() => drawPicture(job));
       // The website draws the stored visual; the iPhone the flat shape it
       // decodes everywhere else (CoachVisual).
       return Response.json(

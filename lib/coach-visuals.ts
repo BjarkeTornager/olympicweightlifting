@@ -308,6 +308,9 @@ export const visualToolSchema = z
     parts: splitFields.parts.optional(),
     ...optional(calendarFields),
     ...optional(recipeFields),
+    // recipe: draw a picture of the dish. The engine takes it out before the
+    // strict check and keeps the picture's id on the card (pictureId).
+    picture: z.boolean().optional(),
   })
   .strict();
 export type SavedVisual = { id: string; content: CoachVisual };

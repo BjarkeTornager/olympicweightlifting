@@ -386,13 +386,13 @@ struct VisualCalendar: View {
   }
 }
 
-/// A recipe or meal idea: servings and time, every ingredient with its
-/// amount, numbered steps (none for a quick idea) and the estimated
-/// nutrition per serving.
+/// A recipe or meal idea: an AI picture of the dish when one was asked for,
+/// servings and time, every ingredient with its amount, numbered steps (none
+/// for a quick idea) and the estimated nutrition per serving.
 struct VisualRecipe: View {
   let visual: Visual
-  /// On the call screen: the first ingredients only, without the method or
-  /// nutrition.
+  /// On the call screen: the picture as a strip and the first ingredients
+  /// only, without the method or nutrition.
   var compact = false
   static let compactIngredients = 4
 
@@ -407,6 +407,10 @@ struct VisualRecipe: View {
     let steps = compact ? [] : visual.steps ?? []
     let nutrition = compact ? [] : Self.nutrition(visual.nutrition)
     VStack(alignment: .leading, spacing: 16) {
+      // Drawn after the card appears; a strip in the compact card.
+      if let picture = visual.pictureId {
+        CoachPicture(id: picture, title: visual.title, height: compact ? 140 : nil)
+      }
       Text(Self.meta(servings: visual.servings ?? 1, minutes: visual.minutes))
         .font(.subheadline)
         .foregroundStyle(.secondary)

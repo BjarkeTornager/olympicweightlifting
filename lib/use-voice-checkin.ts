@@ -18,6 +18,7 @@ import {
   type Receipt,
   isCreditError,
   NUDGE_AFTER_MS,
+  placeCard,
   promisesAction,
   spokenLines,
   VOICE_CREDIT_MESSAGE,
@@ -63,13 +64,13 @@ const readTools = new Set([
   "list_photos",
   "recall_conversations",
 ]);
-// Tools that put a card on screen; no receipt either.
-const displayTools = new Set(["show_card"]);
+// Tools that put a card on screen, or a picture on a card; no receipt either.
+const displayTools = new Set(["show_card", "show_picture"]);
 const MAX_CALL_MINUTES = 30;
 // After the coach's goodbye, how long the athlete has to keep talking.
 const ENDING_GRACE_MS = 12000;
 // The server refuses calls from an app older than this voice protocol, and
-// offers cards (show_card) from version 4.
+// offers cards (show_card) and their pictures (show_picture) from version 4.
 export const VOICE_CLIENT_VERSION = "4";
 
 type Session = {
@@ -806,8 +807,8 @@ export function useVoiceCheckin({
   };
 
   // A card on screen, shown in the conversation as soon as the server has
-  // kept it, with no receipt. A quick retry uses the same id, so a lost
-  // reply never shows the card twice.
+  // kept it, with no receipt, or a picture added to one. A quick retry uses
+  // the same id, so a lost reply never shows the card twice.
   const display = async (
     s: Session,
     call: FunctionCall,
@@ -844,7 +845,10 @@ export function useVoiceCheckin({
     if (!result.ok) return respond(send, call, { error: result.error });
     if ("visual" in result && result.visual) {
       const visual = result.visual;
-      setLines((l) => [...l, { role: "card", id: call.id, visual }]);
+      // The card's id is the one show_picture names it by.
+      const card =
+        (result.data as { card_id?: unknown } | undefined)?.card_id ?? id;
+      setLines((l) => placeCard(l, { role: "card", id: String(card), visual }));
       // The card is a turn in Coach's thread too.
       onSaved();
     }

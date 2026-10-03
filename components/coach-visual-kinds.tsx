@@ -4,9 +4,11 @@ import {
   recipeMeta,
   type CoachVisual,
 } from "@/lib/coach-visuals";
+import { CoachPicture } from "./coach-picture";
 
 // The visual kinds Coach composes from journal numbers: trends, targets,
-// headline numbers, comparisons, splits and calendars, and recipe cards.
+// headline numbers, comparisons, splits and calendars, and recipe cards with
+// an AI picture of the dish when one was asked for.
 // Drawn from validated data only; the iPhone app draws the same kinds
 // natively.
 type Kind<K extends CoachVisual["kind"]> = Extract<CoachVisual, { kind: K }>;
@@ -257,13 +259,26 @@ const nutrients = [
   { key: "fat", label: "Fat", unit: "g" },
 ] as const;
 
-export function RecipeCard({ visual }: { visual: Kind<"recipe"> }) {
+export function RecipeCard({
+  visual,
+  accountId,
+}: {
+  visual: Kind<"recipe">;
+  accountId: string;
+}) {
   const nutrition = nutrients.flatMap((n) => {
     const value = visual.nutrition?.[n.key];
     return value === undefined ? [] : [{ ...n, value }];
   });
   return (
     <div className="coach-recipe">
+      {visual.pictureId && (
+        <CoachPicture
+          id={visual.pictureId}
+          accountId={accountId}
+          title={visual.title}
+        />
+      )}
       <p className="coach-recipe-meta">{recipeMeta(visual)}</p>
       <div>
         <h4>Ingredients</h4>

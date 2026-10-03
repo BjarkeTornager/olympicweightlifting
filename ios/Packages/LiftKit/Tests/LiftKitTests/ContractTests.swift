@@ -65,7 +65,7 @@ struct ContractTests {
     #expect(recipe.ingredients?.last?.item == "Spring onion" && recipe.ingredients?.last?.amount == nil)
     #expect(recipe.steps?.count == 4)
     #expect(recipe.nutrition?.kcal == 625 && recipe.nutrition?.protein == 37 && recipe.nutrition?.fat == 21)
-    #expect(recipe.pictureId == nil)
+    #expect(recipe.pictureId == "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58")
   }
 
   @Test("A visual streamed mid-reply reads as the saved one will")

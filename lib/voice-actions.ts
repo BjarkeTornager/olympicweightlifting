@@ -36,6 +36,14 @@ import {
   type SavedVisual,
 } from "./coach-visuals";
 import { voiceCardKinds, voiceClientShowsCards } from "./voice-checkin";
+import {
+  PICTURE_DRAWING,
+  PICTURE_UNAVAILABLE,
+  pictureGate,
+  pictureStatus,
+  reservePicture,
+  type PictureJob,
+} from "./coach-pictures";
 
 // Saves requested by the voice coach. They skip a second model: each tool call
 // becomes one ordinary journal action, checked by the same guards and saved
@@ -123,7 +131,7 @@ const cardArgs = z.object({
   protein_g: optionalNumber(z.number().min(0).max(500)),
   carbs_g: optionalNumber(z.number().min(0).max(500)),
   fat_g: optionalNumber(z.number().min(0).max(500)),
-  // Pictures of dishes come later; asking for one is answered, not refused.
+  // recipe: a picture of the dish, drawn after the card is on screen.
   picture: z.boolean().optional(),
   columns: z.array(cellText(120)).max(6).optional(),
   rows: z
@@ -355,12 +363,17 @@ export const voiceToolArgs = {
   undo_save: z.object({ save_id: z.string().uuid() }),
   // Not a save: a card on the athlete's screen, kept in the Coach thread.
   show_card: cardArgs,
+  // A picture of the dish on a recipe card already shown.
+  show_picture: z.object({ card_id: z.string().uuid() }),
 };
 export type VoiceToolName = keyof typeof voiceToolArgs;
 type ReadTool = "read_journal" | "list_photos" | "recall_conversations";
-type CardTool = "show_card";
+type CardTool = "show_card" | "show_picture";
 // Tools only an app that draws cards may call (voiceClientShowsCards).
-export const cardTools = new Set<string>(["show_card"] satisfies CardTool[]);
+export const cardTools = new Set<string>([
+  "show_card",
+  "show_picture",
+] satisfies CardTool[]);
 
 /** Why this app can't use a card tool, or nothing when it can. */
 export function cardRefusal(name: string, headers: Headers) {
@@ -525,7 +538,8 @@ function allRead(state: JournalState, day: string) {
 
 export type VoiceResult =
   | { ok: true; saveId?: string; title: string; detail: string }
-  | { ok: true; data: unknown; visual?: SavedVisual }
+  // A card, and the picture to draw once the reply has gone (never sent).
+  | { ok: true; data: unknown; visual?: SavedVisual; job?: PictureJob }
   | { ok: false; error: string };
 
 export async function runVoiceTool(
@@ -542,6 +556,7 @@ export async function runVoiceTool(
   },
 ): Promise<VoiceResult> {
   if (input.name === "show_card") return showCard(userId, input);
+  if (input.name === "show_picture") return showPicture(userId, input);
   if (input.name === "read_journal") {
     const { from, to } = voiceToolArgs.read_journal.parse(input.args);
     const { state } = await readJournal(userId);
@@ -637,7 +652,9 @@ function uniqueViolation(error: unknown) {
 
 // A card is its own Spoken turn in the Coach thread, with no reply or save:
 // the thread draws it after the call like any visual. The phone's tool-call
-// id is the turn's id, so a retry after a lost reply shows the same card.
+// id is the turn's id, so a retry after a lost reply shows the same card. A
+// recipe asked for with a picture keeps its place in the same transaction;
+// the route draws it once the reply has gone.
 async function showCard(
   userId: string,
   input: { id: string; args: unknown; callId?: string },
@@ -645,7 +662,7 @@ async function showCard(
   const db = getDb();
   const picture =
     (input.args as { picture?: unknown } | null)?.picture === true;
-  const shown = (visual: SavedVisual): VoiceResult => ({
+  const shown = (visual: SavedVisual, job?: PictureJob): VoiceResult => ({
     ok: true,
     data: {
       shown: true,
@@ -653,11 +670,16 @@ async function showCard(
       ...(picture
         ? {
             picture:
-              "not available: pictures of dishes aren't ready yet; the recipe card is on screen",
+              visual.content.kind !== "recipe"
+                ? "not available: pictures are only of dishes, on a recipe card"
+                : visual.content.pictureId
+                  ? PICTURE_DRAWING
+                  : PICTURE_UNAVAILABLE,
           }
         : {}),
     },
     visual,
+    ...(job ? { job } : {}),
   });
   const existing = async () => {
     const [turn] = await db
@@ -673,21 +695,50 @@ async function showCard(
     return { ok: false, error: "That call id was already used." };
   }
   const args = voiceToolArgs.show_card.parse(input.args);
-  const visual = { id: uid(), content: cardVisual(args) };
+  const content = cardVisual(args);
+  const wanted = picture && content.kind === "recipe";
+  // Before the transaction: the AI allowance is looked up, then cached.
+  const gate = wanted ? await pictureGate() : undefined;
   try {
-    await db.insert(agentTurns).values({
-      id: input.id,
-      userId,
-      question: `${VOICE_PREFIX}${args.summary}`,
-      photoIds: [],
-      status: "done",
-      response: {
-        reply: "",
-        proposals: [],
-        visuals: [visual],
-        ...(input.callId ? { voiceCallId: input.callId } : {}),
+    const kept = await db.transaction(
+      async (tx): Promise<{ visual: SavedVisual; job?: PictureJob }> => {
+        const visual: SavedVisual = { id: uid(), content };
+        const response = {
+          reply: "",
+          proposals: [],
+          visuals: [visual],
+          ...(input.callId ? { voiceCallId: input.callId } : {}),
+        };
+        await tx.insert(agentTurns).values({
+          id: input.id,
+          userId,
+          question: `${VOICE_PREFIX}${args.summary}`,
+          photoIds: [],
+          status: "done",
+          response,
+        });
+        if (!wanted || content.kind !== "recipe") return { visual };
+        const reserved = await reservePicture(tx, {
+          userId,
+          turnId: input.id,
+          recipe: content,
+          refused: gate,
+        });
+        if ("refused" in reserved) return { visual };
+        const drawn = {
+          ...visual,
+          content: { ...content, pictureId: reserved.job.id },
+        };
+        await tx
+          .update(agentTurns)
+          .set({ response: { ...response, visuals: [drawn] } })
+          .where(
+            and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)),
+          );
+        return { visual: drawn, job: reserved.job };
       },
-    });
+    );
+    return shown(kept.visual, kept.job);
   } catch (error) {
     if (!uniqueViolation(error)) throw error;
     // The same call id was shown at the same time: return that card.
@@ -695,7 +746,64 @@ async function showCard(
     if (card) return shown(card);
     return { ok: false, error: "That call id was already used." };
   }
-  return shown(visual);
+}
+
+// A picture of the dish on a recipe card already shown, when the athlete
+// wants to see it after all. One picture per card.
+async function showPicture(
+  userId: string,
+  input: { args: unknown },
+): Promise<VoiceResult> {
+  const { card_id } = voiceToolArgs.show_picture.parse(input.args);
+  const gate = await pictureGate();
+  return getDb().transaction(async (tx) => {
+    const card = and(eq(agentTurns.id, card_id), eq(agentTurns.userId, userId));
+    const [turn] = await tx.select().from(agentTurns).where(card).for("update");
+    const [visual, ...others] = turn?.response?.visuals ?? [];
+    const content = visual?.content;
+    if (!turn?.response || content?.kind !== "recipe")
+      return {
+        ok: false,
+        error:
+          "Only a recipe card can have a picture: pass the card_id show_card returned for it.",
+      };
+    const answer = (
+      picture: string,
+      saved = visual,
+      job?: PictureJob,
+    ): VoiceResult => ({
+      ok: true,
+      data: { card_id, picture },
+      visual: saved,
+      ...(job ? { job } : {}),
+    });
+    if (content.pictureId) {
+      const status = await pictureStatus(tx, userId, content.pictureId);
+      return answer(
+        status === "ready"
+          ? "already on the card"
+          : status === "drawing"
+            ? PICTURE_DRAWING
+            : PICTURE_UNAVAILABLE,
+      );
+    }
+    const reserved = await reservePicture(tx, {
+      userId,
+      turnId: card_id,
+      recipe: content,
+      refused: gate,
+    });
+    if ("refused" in reserved) return answer(PICTURE_UNAVAILABLE);
+    const updated = {
+      ...visual,
+      content: { ...content, pictureId: reserved.job.id },
+    };
+    await tx
+      .update(agentTurns)
+      .set({ response: { ...turn.response, visuals: [updated, ...others] } })
+      .where(card);
+    return answer(PICTURE_DRAWING, updated, reserved.job);
+  });
 }
 
 async function saveVoiceAction(

@@ -59,11 +59,14 @@ function assertValid(node: Node, path: string) {
 
 test("the ElevenLabs coach gets every voice tool but the photo viewers", () => {
   const tools = elevenLabsTools();
-  // One shared agent for every app build: always with the card tool.
-  const gemini = voiceTools({ cards: true })[0].functionDeclarations.map(
-    (t) => t.name,
-  );
+  // One shared agent for every app build: always with the card and picture
+  // tools.
+  const gemini = voiceTools({
+    cards: true,
+    pictures: true,
+  })[0].functionDeclarations.map((t) => t.name);
   assert.ok(gemini.includes("show_card"));
+  assert.ok(gemini.includes("show_picture"));
   assert.deepEqual(
     tools.map((t) => t.name),
     gemini.filter((name) => name !== "list_photos" && name !== "view_photo"),
@@ -105,6 +108,11 @@ test("the ElevenLabs coach gets every voice tool but the photo viewers", () => {
     "progress",
     "stats",
   ]);
+  assert.equal(card.parameters.properties!.picture.type, "boolean");
+  const picture = tools.find((t) => t.name === "show_picture") as unknown as {
+    parameters: Node;
+  };
+  assert.deepEqual(picture.parameters.required, ["card_id"]);
 });
 
 test("the agent speaks v4 Turbo, keeps nothing and starts only from a signed link", () => {
@@ -294,8 +302,10 @@ test("saves are spoken over, reads and call controls aren't", () => {
   assert.equal(speech.log_sleep, "force");
   assert.equal(speech.log_meal, "force");
   assert.equal(speech.undo_save, "force");
-  // The coach says a few words as the card goes up, not after.
+  // The coach says a few words as the card goes up, not after; a picture
+  // follows what it already said.
   assert.equal(speech.show_card, "force");
+  assert.equal(speech.show_picture, "auto");
   assert.equal(speech.read_journal, "auto");
   assert.equal(speech.end_check_in, "auto");
 });

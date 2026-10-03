@@ -24,6 +24,9 @@ test("clear signals in English and Danish load the skills a message needs", () =
     ["Har du en opskrift på grød?", ["recipes"]],
     ["Hvad skal jeg spise til aftensmad?", ["recipes"]],
     ["Hvad skal jeg lave til mad i aften?", ["recipes"]],
+    // A picture of the dish; photos come too, in case one is saved.
+    ["Can I see a picture of that dish?", ["photos", "recipes"]],
+    ["Vis mig et billede af retten", ["photos", "recipes"]],
     // "Lave" alone is to do, not to cook: a training question.
     ["Hvad skal jeg lave i dag?", []],
   ];

@@ -50,6 +50,14 @@ import { guardChange } from "./change-guards";
 import { recentConversations } from "../conversation-memory";
 import { dayForCoach } from "../journal-summary";
 import { withoutEmDashes } from "./coach-style";
+import {
+  drawPicture,
+  PICTURE_DRAWING,
+  PICTURE_UNAVAILABLE,
+  pictureGate,
+  reservePicture,
+} from "../coach-pictures";
+import { logFailure } from "../error-log";
 
 export { toolDefinitions };
 type SavedImage = Awaited<ReturnType<typeof readUserImage>>;
@@ -757,13 +765,42 @@ export async function runTurn(
               throw Error(
                 "Three visuals are enough for one reply. Explain the result now.",
               );
-            const visual = {
-              id: uid(),
-              content: visualSchema.parse(args),
-            };
+            const { picture, ...fields } =
+              specifications.show_visual.schema.parse(args);
+            const content = visualSchema.parse(fields);
+            let visual: SavedVisual = { id: uid(), content };
+            let pictureNote: string | undefined;
+            if (picture && content.kind !== "recipe")
+              pictureNote =
+                "not available: pictures are only of dishes, on a recipe card";
+            else if (picture && content.kind === "recipe") {
+              // The turn's row exists while it runs, so the picture can
+              // belong to it; it is drawn while the reply goes on.
+              const reserved = await reservePicture(db, {
+                userId,
+                turnId: input.id,
+                recipe: content,
+                refused: await pictureGate(),
+              });
+              if ("refused" in reserved) pictureNote = PICTURE_UNAVAILABLE;
+              else {
+                visual = {
+                  ...visual,
+                  content: { ...content, pictureId: reserved.job.id },
+                };
+                pictureNote = PICTURE_DRAWING;
+                void drawPicture(reserved.job).catch((error) =>
+                  logFailure("coach_picture_failed", error, {}, "warn"),
+                );
+              }
+            }
             visuals.push(visual);
             emitDisplayedVisual(emit, visual);
-            output = { displayed: true, title: visual.content.title };
+            output = {
+              displayed: true,
+              title: visual.content.title,
+              ...(pictureNote ? { picture: pictureNote } : {}),
+            };
           } else if (isReadTool(key)) {
             output = await runReadTool(key, args, readContext);
           } else if (key === "prepare_change" || key === "log_entry") {

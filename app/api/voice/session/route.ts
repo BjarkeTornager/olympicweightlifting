@@ -36,6 +36,7 @@ import {
 import { voiceFor } from "@/lib/voice-options";
 import { coachLanguageSchema } from "@/lib/coach-language";
 import { countUse } from "@/lib/feature-use";
+import { picturesEnabled } from "@/lib/coach-pictures";
 
 export const dynamic = "force-dynamic";
 
@@ -112,8 +113,10 @@ export async function POST(request: Request) {
     const clock = localClock(new Date(), timezone);
     const { state } = await readJournal(user.id);
     // Only an app that draws cards is offered show_card; older ones are
-    // told they can't show anything.
+    // told they can't show anything. A recipe card can have a picture while
+    // pictures are switched on.
     const cards = voiceClientShowsCards(request.headers);
+    const pictures = cards && picturesEnabled();
     const instruction = voiceInstruction(
       voiceContext(
         state,
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
       state.profile.name || user.name?.split(" ")[0],
       purpose,
       await recentConversations(user.id, { limit: 10 }),
-      { savedPhotos: provider === "google", language, cards },
+      { savedPhotos: provider === "google", language, cards, pictures },
     );
     // A resumed Google call is the same conversation, so it isn't counted again.
     if (!resumeHandle) {
@@ -163,6 +166,7 @@ export async function POST(request: Request) {
       voice: voiceFor(provider, voice),
       language,
       cards,
+      pictures,
     });
     let token: string;
     try {

@@ -98,6 +98,30 @@ struct VoiceCallTests {
     #expect(!over.camera)
   }
 
+  @Test("A picture added to a card on screen updates that card where it is")
+  func picture() throws {
+    let card = try #require(VoiceCall.card(Self.recipeJSON))
+    #expect(VoiceCall.displayTools == ["show_card", "show_picture"])
+    var lines = [Line(id: "1", role: .coach, text: "Here it is.")]
+    lines = VoiceCall.placing(card, id: "card-1", in: lines)
+    lines.append(Line(id: "2", role: .coach, text: "A picture's on its way."))
+    #expect(lines.map(\.id) == ["1", "card-1", "2"])
+    var json = Self.recipeJSON
+    json["pictureId"] = "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58"
+    let drawn = try #require(VoiceCall.card(json))
+    lines = VoiceCall.placing(drawn, id: "card-1", in: lines)
+    #expect(lines.map(\.id) == ["1", "card-1", "2"])
+    #expect(lines[1].visual?.pictureId == "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58")
+    // Another card is its own line.
+    lines = VoiceCall.placing(card, id: "card-2", in: lines)
+    #expect(lines.filter { $0.role == .card }.map(\.id) == ["card-1", "card-2"])
+    // What ElevenLabs is told once the picture settles.
+    #expect(
+      VoiceCall.pictureNote(title: "Salmon rice bowl", ready: true)
+        == "(The picture of Salmon rice bowl is now on the athlete's screen.)")
+    #expect(VoiceCall.pictureNote(title: "Salmon rice bowl", ready: false).contains("couldn't be drawn"))
+  }
+
   @Test("The end of the call counts saves and cards")
   func ended() {
     #expect(VoiceCallView.ended(saved: 0, cards: 0) == "Call ended.")

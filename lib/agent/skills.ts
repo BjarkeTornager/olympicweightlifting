@@ -215,7 +215,8 @@ export const skills: Record<SkillName, Skill> = {
     ),
   },
   recipes: {
-    summary: "recipes and meal ideas, shown as recipe cards",
+    summary:
+      "recipes and meal ideas as recipe cards, with an optional picture of the dish",
     paragraphs: ["When the athlete asks for a recipe"],
     tools: ["show_visual"],
     fields: [],
@@ -227,6 +228,9 @@ export const skills: Record<SkillName, Skill> = {
       "opskrift(en|er|erne)?",
       "madplan(en)?",
       "hvad skal jeg (spise|lave (til )?(mad|aftensmad|frokost|morgenmad))",
+      // Not "photo of the meal", which is usually the athlete's own.
+      "(picture|photo|image) of (the|that|this) (dish|recipe)",
+      "billede af (retten|opskriften)",
     ),
   },
 };

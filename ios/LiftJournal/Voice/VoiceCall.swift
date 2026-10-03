@@ -24,7 +24,8 @@ final class VoiceCall {
     var role: Role
     var text: String
     var state: SaveState?
-    /// A card the coach put on screen (show_card).
+    /// A card the coach put on screen (show_card), with its picture once
+    /// one is asked for (show_picture).
     var visual: Components.Schemas.CoachVisual?
 
     /// What was said, as opposed to a save or a card.
@@ -66,12 +67,15 @@ final class VoiceCall {
   private var ending: Task<Void, Never>?
   private var nudge: Task<Void, Never>?
   private var persistTask: Task<Void, Never>?
+  /// Pictures ElevenLabs has been or will be told about, each once.
+  private var watchedPictures: Set<String> = []
   private let log = Logger(subsystem: "com.bjarketornager.liftjournal", category: "voice")
 
   static let maxMinutes = 30
   /// After the coach's goodbye, how long the athlete has to keep talking.
   static let endingGrace: Duration = .seconds(12)
-  /// 4: draws show_card's cards, so the server offers the tool.
+  /// 4: draws show_card's cards and their pictures, so the server offers
+  /// the tools.
   static let clientVersion = "4"
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
@@ -82,8 +86,9 @@ final class VoiceCall {
   ]
   /// Server tools that only read; they leave no receipt in the conversation.
   private static let readTools: Set<String> = ["read_journal", "list_photos", "recall_conversations"]
-  /// Server tools that put a card on screen instead of saving.
-  static let displayTools: Set<String> = ["show_card"]
+  /// Server tools that put a card on screen, or a picture on a card,
+  /// instead of saving.
+  static let displayTools: Set<String> = ["show_card", "show_picture"]
 
   init(app: AppModel) {
     self.app = app
@@ -526,8 +531,8 @@ final class VoiceCall {
   }
 
   /// A card on the athlete's screen, drawn as soon as the server has kept it
-  /// in Coach, with no Save chip. A quick retry uses the same id, so a lost
-  /// reply never shows the card twice.
+  /// in Coach, with no Save chip, or a picture added to one. A quick retry
+  /// uses the same id, so a lost reply never shows the card twice.
   private func display(_ call: FunctionCall) async {
     let failure = "The card could not be shown; give the gist in words."
     guard let session = app.session else {
@@ -559,10 +564,55 @@ final class VoiceCall {
       return
     }
     if let visual = Self.card(result["card"]) {
-      lines.append(Line(id: call.id, role: .card, text: visual.title, visual: visual))
-      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      // The card's id is the one show_picture names it by.
+      let card = (result["data"] as? [String: Any])?["card_id"] as? String ?? id
+      let fresh = !lines.contains { $0.role == .card && $0.id == card }
+      lines = Self.placing(visual, id: card, in: lines)
+      if fresh { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+      if let picture = visual.pictureId { watchPicture(picture, title: visual.title) }
     }
     respond(call, ["result": result["data"] ?? [String: Any]()])
+  }
+
+  /// The call's lines with a card shown: a new card at the end, or one
+  /// already on screen updated where it is (its picture added).
+  static func placing(_ visual: Components.Schemas.CoachVisual, id: String, in lines: [Line]) -> [Line] {
+    var lines = lines
+    if let index = lines.firstIndex(where: { $0.role == .card && $0.id == id }) {
+      lines[index].visual = visual
+    } else {
+      lines.append(Line(id: id, role: .card, text: visual.title, visual: visual))
+    }
+    return lines
+  }
+
+  /// ElevenLabs is told once a picture it asked for is on screen, or
+  /// couldn't be drawn, without being made to reply. Gemini answers every
+  /// note, so it gets none; the card shows the picture either way.
+  private func watchPicture(_ picture: String, title: String) {
+    guard provider == .elevenlabs, !watchedPictures.contains(picture), let session = app.session else { return }
+    watchedPictures.insert(picture)
+    tasks.append(
+      Task { [weak self] in
+        let until = ContinuousClock.now + CoachPicture.patience
+        var outcome = CoachPicture.Outcome.drawing
+        while outcome == .drawing, ContinuousClock.now < until, !Task.isCancelled {
+          let response = try? await RawRequest.send(
+            "api/coach/pictures/\(picture)", method: "GET", json: nil, token: session.token,
+            account: session.accountID, timeout: 15)
+          outcome = CoachPicture.outcome(status: response?.status ?? 0)
+          if outcome == .drawing { try? await Task.sleep(for: CoachPicture.interval) }
+        }
+        guard let self, !Task.isCancelled, !self.closed else { return }
+        self.note(Self.pictureNote(title: title, ready: outcome == .ready), answer: false)
+      })
+  }
+
+  /// What ElevenLabs is told when a picture settles.
+  static func pictureNote(title: String, ready: Bool) -> String {
+    ready
+      ? "(The picture of \(title) is now on the athlete's screen.)"
+      : "(The picture of \(title) couldn't be drawn; the recipe card is still on screen. Mention it only if asked.)"
   }
 
   /// The card in an action's reply, in the shape the Coach thread draws.

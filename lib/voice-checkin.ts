@@ -122,9 +122,16 @@ export function voiceInstruction(
     language?: CoachLanguage;
     // The app draws show_card's cards; older ones can't show anything.
     cards?: boolean;
+    // A recipe card can have a picture of the dish (picturesEnabled).
+    pictures?: boolean;
   } = {},
 ) {
-  const { savedPhotos = true, language, cards = false } = options;
+  const {
+    savedPhotos = true,
+    language,
+    cards = false,
+    pictures = false,
+  } = options;
   return `You are the person's health coach (sleep, food and drink, movement and training, fat loss and muscle building, with strength and Olympic weightlifting know-how for those who lift; not a registered dietitian or doctor) doing a short spoken check-in${name ? ` with ${name}` : ""}. Sound like a real personal coach: warm, confident, direct and encouraging, with short natural sentences, genuine encouragement for good habits and calm matter-of-factness about off days. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 How to sound like a person, not an assistant:
 - Talk the way a good personal coach talks: relaxed, direct and a little informal, in everyday words. Never sound like you are reading out a form or a list.
@@ -176,7 +183,7 @@ How to run the check-in:
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids. If a note says the photo couldn't be shown to you, ask what's on the plate instead.
 ${
   cards
-    ? `- The athlete's screen: they see this call on their phone, and you can put things on it with show_card. Use it when they ask for a recipe, a meal idea or to see something, and for anything too long to say in two sentences (a recipe, options side by side, numbers over several days). Say a few words as you call it ("I'll put it on your screen") and don't claim it's there before the tool returns. Then give the gist in one sentence and let them ask; never read out the ingredients, steps or numbers on the card unless asked. A recipe lists every ingredient with its amount, short steps, and estimated kcal and protein per serving, fitted to what they asked for. For their own numbers, read_journal first and never invent or fill in missing days. There are no pictures of dishes yet: if they want to see what one looks like, describe it in a sentence. Never say you can't show things on screen.`
+    ? `- The athlete's screen: they see this call on their phone, and you can put things on it with show_card. Use it when they ask for a recipe, a meal idea or to see something, and for anything too long to say in two sentences (a recipe, options side by side, numbers over several days). Say a few words as you call it ("I'll put it on your screen") and don't claim it's there before the tool returns. Then give the gist in one sentence and let them ask; never read out the ingredients, steps or numbers on the card unless asked. A recipe lists every ingredient with its amount, short steps, and estimated kcal and protein per serving, fitted to what they asked for. For their own numbers, read_journal first and never invent or fill in missing days. ${pictures ? `If they want to see the dish, set picture to true (or call show_picture with the card_id of a recipe already shown): the picture appears a few seconds later, so say it's on its way and never describe it as if you can see it. If the result says no picture is available, say there's no picture this time but the whole recipe is on the card, without explaining why. Pictures are only of food.` : "There are no pictures of dishes in this call: if they want to see what one looks like, describe it in a sentence."} Never say you can't show things on screen.`
     : "- You can't put anything on the athlete's screen in this call. If they ask to see a recipe or picture, give the gist in a couple of sentences and say typed Coach can show it."
 }
 - Only end the call when the athlete has clearly finished: ask "Anything else?" first, and call end_check_in after they say no, goodbye or that they are done. Short answers like "not yet", "no" to a single question, "okay" or silence do not mean the call is over. Never end the call while you are checking something, while a save is running, or while the athlete is waiting for an answer: finish that first.
@@ -282,7 +289,7 @@ export const voiceCardKinds = [
   "progress",
   "stats",
 ] as const;
-const showCard = {
+const showCard = (pictures: boolean) => ({
   name: "show_card",
   description:
     "Put a card on the athlete's screen during the call: a recipe or meal idea, or a short table or chart of their numbers. It stays in their Coach thread after the call. Pass kind, title and only that kind's fields, written in the language you are speaking.",
@@ -331,6 +338,15 @@ const showCard = {
       protein_g: number("recipe: estimated protein per serving, grams."),
       carbs_g: number("recipe: estimated carbohydrate per serving, grams."),
       fat_g: number("recipe: estimated fat per serving, grams."),
+      ...(pictures
+        ? {
+            picture: {
+              type: "BOOLEAN",
+              description:
+                "recipe: true to add a picture of the finished dish, only when the athlete wants to see it.",
+            },
+          }
+        : {}),
       columns: {
         type: "ARRAY",
         description: "table: 1 to 6 column headings.",
@@ -399,12 +415,24 @@ const showCard = {
     },
     required: ["summary", "kind", "title"],
   },
+});
+const showPicture = {
+  name: "show_picture",
+  description:
+    "Add a picture of the finished dish to a recipe card already on screen, when the athlete asks what it looks like. It appears a few seconds later.",
+  parameters: {
+    type: "OBJECT",
+    properties: { card_id: text("The card_id that show_card returned.") },
+    required: ["card_id"],
+  },
 };
 
 export function voiceTools(
   options: {
     // The app draws cards: see voiceClientShowsCards.
     cards?: boolean;
+    // A recipe card can have a picture of the dish (picturesEnabled).
+    pictures?: boolean;
   } = {},
 ) {
   return [
@@ -690,7 +718,12 @@ export function voiceTools(
             required: ["save_id"],
           },
         },
-        ...(options.cards ? [showCard] : []),
+        ...(options.cards
+          ? [
+              showCard(Boolean(options.pictures)),
+              ...(options.pictures ? [showPicture] : []),
+            ]
+          : []),
         {
           name: "open_camera",
           description:
@@ -715,7 +748,12 @@ export function voiceTools(
 export function voiceSetup(
   instruction: string,
   resumeHandle?: string,
-  options: { voice?: string; language?: CoachLanguage; cards?: boolean } = {},
+  options: {
+    voice?: string;
+    language?: CoachLanguage;
+    cards?: boolean;
+    pictures?: boolean;
+  } = {},
 ) {
   return {
     model: `models/${VOICE_MODEL}`,
@@ -734,7 +772,7 @@ export function voiceSetup(
         : {}),
     },
     systemInstruction: { parts: [{ text: instruction }] },
-    tools: voiceTools({ cards: options.cards }),
+    tools: voiceTools({ cards: options.cards, pictures: options.pictures }),
     inputAudioTranscription: {},
     sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
     // Long calls keep going: older turns are compressed instead of ending it.

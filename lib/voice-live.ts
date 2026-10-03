@@ -113,6 +113,14 @@ export type Receipt = {
 export type Card = { role: "card"; id: string; visual: SavedVisual };
 export type Entry = Line | Receipt | Card;
 
+// A card shown in the call: a new card at the end, or one already on screen
+// updated where it is (its picture added). The iPhone app does the same
+// (VoiceCall.placing).
+export const placeCard = (entries: Entry[], card: Card): Entry[] =>
+  entries.some((e) => e.role === "card" && e.id === card.id)
+    ? entries.map((e) => (e.role === "card" && e.id === card.id ? card : e))
+    : [...entries, card];
+
 // What was said, for the stored transcript: saves and cards are kept in
 // Coach as their own turns.
 export const spokenLines = (entries: Entry[]) =>

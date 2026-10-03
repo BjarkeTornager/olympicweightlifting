@@ -306,7 +306,9 @@ export const CoachVisuals = memo(function CoachVisuals({
             {visual.kind === "comparison" && <Comparison visual={visual} />}
             {visual.kind === "split" && <Split visual={visual} />}
             {visual.kind === "calendar" && <Calendar visual={visual} />}
-            {visual.kind === "recipe" && <RecipeCard visual={visual} />}
+            {visual.kind === "recipe" && (
+              <RecipeCard visual={visual} accountId={accountId} />
+            )}
             {visual.kind === "photo_gallery" && (
               <CoachPhotoGallery
                 imageIds={visual.imageIds}

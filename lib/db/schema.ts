@@ -13,6 +13,7 @@ import {
   check,
   date,
   customType,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { JournalState, Workout, Entry } from "../model";
@@ -433,6 +434,48 @@ export const agentProposals = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("agent_proposals_user_idx").on(t.userId)],
+);
+
+// Pictures of dishes Coach drew for a recipe card (lib/coach-pictures.ts).
+// Kept apart from the photo library, so a picture is never a meal's evidence
+// and never counts toward the photo quota; it goes with its card's turn when
+// the chat is cleared, after 90 days, or with the account.
+export const coachPictures = pgTable(
+  "coach_pictures",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    turnId: text("turn_id")
+      .notNull()
+      .references(() => agentTurns.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<"drawing" | "ready" | "failed">()
+      .notNull()
+      .default("drawing"),
+    // Why a picture failed, as a code (refused, timeout, http_503…).
+    reason: text("reason"),
+    model: text("model"),
+    costUsd: doublePrecision("cost_usd"),
+    durationMs: integer("duration_ms"),
+    bytes: integer("bytes"),
+    // A JPEG, once ready.
+    data: bytea("data"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.id] }),
+    index("coach_pictures_user_date_idx").on(t.userId, t.createdAt),
+    // The daily spending ceiling counts every account's pictures.
+    index("coach_pictures_date_idx").on(t.createdAt),
+    index("coach_pictures_turn_idx").on(t.turnId),
+  ],
 );
 
 export const liftingVideos = pgTable(

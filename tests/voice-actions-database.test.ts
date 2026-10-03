@@ -428,7 +428,7 @@ test(
           const data = first.data as Record<string, unknown>;
           assert.equal(data.shown, true);
           assert.equal(data.card_id, id);
-          // Pictures come in a later release: asked for, not promised.
+          // Pictures are switched off here: asked for, not promised.
           assert.match(String(data.picture), /^not available/);
           assert.deepEqual(first.visual.content, {
             title: "Salmon rice bowl",

@@ -18,6 +18,7 @@ import {
   isCreditError,
   liveEvents,
   pcmToBase64,
+  placeCard,
   promisesAction,
   spokenLines,
   VOICE_CREDIT_MESSAGE,
@@ -221,8 +222,48 @@ test("show_card's declaration lists every card kind and the recipe's parts", () 
   assert.deepEqual(parameters.required, ["summary", "kind", "title"]);
   assert.equal(parameters.properties.servings.type, "INTEGER");
   assert.equal(parameters.properties.ingredients.type, "ARRAY");
-  // Pictures come in a later release.
+  // A picture can be asked for only while pictures are switched on.
   assert.ok(!("picture" in parameters.properties));
+  const tools = voiceSetup("Instructions", undefined, {
+    cards: true,
+    pictures: true,
+  }).tools[0].functionDeclarations;
+  const names = tools.map((f) => f.name);
+  assert.equal(names[names.indexOf("show_card") + 1], "show_picture");
+  const drawn = tools.find((f) => f.name === "show_card")!;
+  assert.ok("parameters" in drawn);
+  assert.equal(
+    (drawn.parameters as typeof parameters).properties.picture.type,
+    "BOOLEAN",
+  );
+  // Pictures need an app that draws cards.
+  assert.ok(
+    !voiceSetup("Instructions", undefined, {
+      pictures: true,
+    }).tools[0].functionDeclarations.some((f) => f.name === "show_picture"),
+  );
+});
+
+test("the coach offers a picture of the dish only while pictures are on", () => {
+  const clock = localClock("2026-09-25T17:00:00Z", "Europe/Copenhagen");
+  const context = voiceContext(emptyJournal(), clock.date);
+  const instruction = (pictures: boolean) =>
+    voiceInstruction(context, clock, "Sam", "checkin", [], {
+      cards: true,
+      pictures,
+    });
+  const on = instruction(true),
+    off = instruction(false);
+  assert.match(on, /set picture to true \(or call show_picture/);
+  assert.match(on, /never describe it as if you can see it/);
+  assert.match(on, /there's no picture this time/);
+  assert.match(on, /Pictures are only of food\./);
+  assert.doesNotMatch(off, /show_picture|set picture/);
+  assert.match(off, /There are no pictures of dishes in this call/);
+  for (const text of [on, off]) {
+    assert.match(text, /Never say you can't show things on screen/);
+    assert.ok(!text.includes("—"), "no em dashes");
+  }
 });
 
 test("only what was said is kept as the call's transcript", () => {
@@ -245,6 +286,45 @@ test("only what was said is kept as the call's transcript", () => {
       { role: "coach", text: "I'll put it on your screen." },
       { role: "you", text: "Thanks" },
     ],
+  );
+});
+
+test("a picture added to a card on screen updates that card where it is", () => {
+  const recipe = (pictureId?: string) => ({
+    id: "8e2a7c1d-4b5f-4e60-9a7b-1c2d3e4f5a6b",
+    content: {
+      kind: "recipe" as const,
+      title: "Salmon rice bowl",
+      servings: 2,
+      ingredients: [{ item: "Salmon fillet", amount: "250 g" }],
+      ...(pictureId ? { pictureId } : {}),
+    },
+  });
+  const said = { role: "coach" as const, text: "A picture's on its way." };
+  const shown = placeCard([{ role: "you", text: "A dinner idea?" }], {
+    role: "card",
+    id: "card-1",
+    visual: recipe(),
+  });
+  const drawn = placeCard([...shown, said], {
+    role: "card",
+    id: "card-1",
+    visual: recipe("5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58"),
+  });
+  assert.deepEqual(
+    drawn.map((e) => e.role),
+    ["you", "card", "coach"],
+  );
+  const [, card] = drawn;
+  assert.ok(card.role === "card" && card.visual.content.kind === "recipe");
+  assert.equal(
+    card.visual.content.pictureId,
+    "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58",
+  );
+  // Another card is its own entry.
+  assert.equal(
+    placeCard(drawn, { role: "card", id: "card-2", visual: recipe() }).length,
+    4,
   );
 });
 
@@ -386,6 +466,8 @@ test("show_card's flat arguments become the visuals typed Coach draws", () => {
     /can't show cards; give the gist in words/,
   );
   assert.equal(cardRefusal("show_card", app("4")), undefined);
+  assert.match(cardRefusal("show_picture", app("3"))!, /can't show cards/);
+  assert.equal(cardRefusal("show_picture", app("4")), undefined);
   assert.equal(cardRefusal("log_meal", app("3")), undefined);
 });
 

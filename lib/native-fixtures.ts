@@ -255,7 +255,7 @@ export function nativeFixtures() {
         {
           id: "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a21",
           question:
-            "Can you give me a high-protein dinner with salmon for two?",
+            "Can you give me a high-protein dinner with salmon for two, and show me what it looks like?",
           photoIds: [],
           createdAt: now.toISOString(),
           status: "done",
@@ -286,6 +286,8 @@ export function nativeFixtures() {
                   "Flake the salmon over the rice and top with the vegetables, sliced spring onion, soy sauce and sesame seeds.",
                 ],
                 nutrition: { kcal: 625, protein: 37, carbs: 66, fat: 21 },
+                // An AI picture of the dish (GET api/coach/pictures/{id}).
+                pictureId: "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58",
               } satisfies CoachVisual,
             },
           ],

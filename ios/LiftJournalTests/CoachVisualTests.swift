@@ -59,6 +59,15 @@ struct CoachVisualTests {
     #expect(VisualRecipe.nutrition(nil).isEmpty)
   }
 
+  @Test("A dish's picture is shown at 200, asked for again while drawn or the server is busy, and gone at 404")
+  func pictureOutcome() {
+    #expect(CoachPicture.outcome(status: 200) == .ready)
+    for status in [202, 0, 429, 502, 503] { #expect(CoachPicture.outcome(status: status) == .drawing) }
+    for status in [404, 401, 400] { #expect(CoachPicture.outcome(status: status) == .gone) }
+    #expect(CoachPicture.interval == .milliseconds(1500))
+    #expect(CoachPicture.patience == .seconds(45))
+  }
+
   @Test("Line chart labels thin to four, keeping the first and last")
   func sparseLabels() {
     let labels = (1...14).map { "Sep \($0)" }

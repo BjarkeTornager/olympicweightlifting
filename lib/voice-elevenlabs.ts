@@ -46,6 +46,8 @@ const quietTools = new Set([
   "open_camera",
   "take_photo",
   "end_check_in",
+  // Asked for once the card is on screen and the coach has said so.
+  "show_picture",
 ]);
 
 type GeminiSchema = {
@@ -92,11 +94,12 @@ export function elevenLabsSchema(
   return { type, description, ...(schema.enum && { enum: [...schema.enum] }) };
 }
 
-// One shared agent serves every app build, so it always has the card tool;
-// an older app's call instructions say it can't show anything, and the
-// server refuses show_card from it.
+// One shared agent serves every app build, so it always has the card and
+// picture tools; an older app's call instructions say it can't show
+// anything, and the server refuses the tools from it. With pictures switched
+// off, the instructions say so and the server answers "not available".
 export function elevenLabsTools() {
-  return voiceTools({ cards: true })[0]
+  return voiceTools({ cards: true, pictures: true })[0]
     .functionDeclarations.filter((tool) => !photoTools.has(tool.name))
     .map((tool) => ({
       type: "client",

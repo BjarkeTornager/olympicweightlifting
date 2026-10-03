@@ -165,6 +165,12 @@ test("Only Coach messages and voice calls can meet a limit; Train, Food, Health 
   ]);
   assert.deepEqual(using(/from "[^"]*usage-limits"/, "lib"), [
     "lib/agent/engine.ts",
+    "lib/usage-report.ts",
   ]);
   assert.deepEqual(using(/\brunTurn\(/, "lib"), ["lib/agent/engine.ts"]);
+  // The usage page only reads the mode.
+  assert.match(
+    readFileSync("lib/usage-report.ts", "utf8"),
+    /import \{ limitsMode \} from "\.\/usage-limits";/,
+  );
 });

@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aiCostReport, usageReport, weekStart } from "../lib/usage-report";
+import {
+  aiCostReport,
+  limitHits,
+  usageReport,
+  weekStart,
+} from "../lib/usage-report";
 
 const now = new Date("2026-10-02T12:00:00Z"); // a Friday
 
@@ -140,4 +145,76 @@ test("AI cost is totalled per account for today and this month, under a short id
   assert.doesNotMatch(JSON.stringify(cost), /5555|1111/);
   // With no ledger rows the report still has an empty AI cost section.
   assert.deepEqual(usageReport([], new Map(), [], now).aiCost.accounts, []);
+});
+
+test("Usage limits reached this month are counted per account and limit, apart from features", () => {
+  const owner = "0wner000-1111-2222-3333-444444444444",
+    athlete = "athlete0-5555-6666-7777-888888888888";
+  const features = [
+    { userId: owner, feature: "coach.message", day: "2026-10-02", count: 4 },
+    {
+      userId: athlete,
+      feature: "limit.log.spend-day-usd",
+      day: "2026-10-01",
+      count: 2,
+    },
+    {
+      userId: athlete,
+      feature: "limit.log.spend-day-usd",
+      day: "2026-10-02",
+      count: 1,
+    },
+    {
+      userId: athlete,
+      feature: "limit.enforce.spend-day-usd",
+      day: "2026-10-02",
+      count: 1,
+    },
+    {
+      userId: owner,
+      feature: "limit.log.voice-minutes-day",
+      day: "2026-10-02",
+      count: 1,
+    },
+    // Last month: not counted.
+    {
+      userId: owner,
+      feature: "limit.log.provider",
+      day: "2026-09-30",
+      count: 7,
+    },
+  ];
+  const limits = limitHits(features, now, owner, "log");
+  assert.deepEqual(limits, {
+    mode: "log",
+    rows: [
+      {
+        account: "athlete0",
+        you: false,
+        limit: "spend-day-usd",
+        logged: 3,
+        refused: 1,
+      },
+      {
+        account: "0wner000",
+        you: true,
+        limit: "voice-minutes-day",
+        logged: 1,
+        refused: 0,
+      },
+    ],
+  });
+  assert.doesNotMatch(JSON.stringify(limits), /5555|1111/);
+  // The page shows them in their own table, not as features.
+  const report = usageReport([], new Map(), features, now, {
+    rows: [],
+    viewerId: owner,
+    limitsMode: "enforce",
+  });
+  assert.deepEqual(
+    report.features.map((f) => f.feature),
+    ["coach.message"],
+  );
+  assert.equal(report.limits.mode, "enforce");
+  assert.equal(report.limits.rows.length, 2);
 });

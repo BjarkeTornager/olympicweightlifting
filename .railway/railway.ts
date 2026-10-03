@@ -56,6 +56,18 @@ export default defineRailway(() => {
       // Usage limits (lib/usage-limits.ts): "enforce" refuses, anything else
       // only logs, so losing it would quietly stop enforcement.
       LIMITS_MODE: preserve(),
+      // Diagnostic traces (docs/tracing.md). TRACING is the kill switch for
+      // capture; the MLflow variables also drive the deletion of traces
+      // already sent, so losing them would stop traces expiring.
+      TRACING: preserve(),
+      MLFLOW_TRACKING_URI: preserve(),
+      MLFLOW_EXPERIMENT_ID: preserve(),
+      MLFLOW_TRACKING_USERNAME: preserve(),
+      MLFLOW_TRACKING_PASSWORD: preserve(),
+      TRACE_USER_SECRET: preserve(),
+      TRACE_SAMPLE_RATE: preserve(),
+      TRACE_RETENTION_DAYS: preserve(),
+      NEXT_OTEL_FETCH_DISABLED: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

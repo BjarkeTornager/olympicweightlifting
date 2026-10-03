@@ -431,3 +431,26 @@ test("a lookup-shaped split still goes to Terra on any sign of judgment or stake
     "terra",
   );
 });
+
+test("recorded answers pin the lookup thresholds from both sides", () => {
+  // 0.88 on log and explain, just below 0.9: stays on Terra, so the mass
+  // threshold can't drop to 0.88. (Jev's other answer for this message put
+  // 0.90 there and went to Luna.)
+  assert.deepEqual(
+    policyFromJev(
+      recorded("log", [0.56, 0.08, 0.32, 0, 0.04], 0.02, [0.98, 0.02, 0], 0.33),
+    ),
+    { tier: "terra", reason: "uncertain" },
+    "Har jeg allerede logget det her måltid?",
+  );
+  // A lookup at difficulty 0.15, the highest among the 214 recorded
+  // decisions the rule matched: goes to Luna, so the 0.30 score threshold
+  // can't drop to 0.15.
+  assert.deepEqual(
+    policyFromJev(
+      recorded("explain", [0.45, 0, 0.54, 0, 0.01], 0.15, [0.85, 0.15, 0], 0.4),
+    ),
+    { tier: "luna", reason: "lookup" },
+    "Hvordan sov jeg i nat?",
+  );
+});

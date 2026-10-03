@@ -44,11 +44,13 @@ export default defineRailway(() => {
       GEMINI_API_KEY: preserve(),
       VOICE_NAME: preserve(),
       VOICE_MODEL: preserve(),
+      ELEVENLABS_API_KEY: preserve(),
       // Releases without downtime: the previous server keeps serving until
-      // the new one is live, then gets time to finish open requests. Calls
-      // and saves in progress are not cut off by a deploy.
+      // the new one is live, then gets time to finish open requests. Calls,
+      // saves and Coach replies in progress (up to 100 s) are not cut off by
+      // a deploy; the server exits as soon as it is idle.
       RAILWAY_DEPLOYMENT_OVERLAP_SECONDS: "30",
-      RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "20",
+      RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "100",
     },
   });
   return project("olympicweightlifting", {

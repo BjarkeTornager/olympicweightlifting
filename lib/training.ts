@@ -122,6 +122,19 @@ export function trainingSummary(
         title: w.title,
         date: w.date,
         ...workoutTotals(w),
+        // For one exercise the sets answer "what did I lift", which the best
+        // set per rep count leaves out.
+        ...(exerciseId
+          ? {
+              lifts: w.exercises.flatMap((e) =>
+                e.sets.filter(isValidLoggedSet).map((s) => ({
+                  weight: Number(s.weight),
+                  reps: Number(s.reps),
+                  ...(s.result ? { result: s.result } : {}),
+                })),
+              ),
+            }
+          : {}),
       })),
   };
 }

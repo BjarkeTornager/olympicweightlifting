@@ -421,6 +421,30 @@ export const aiUsage = pgTable(
   (t) => [index("ai_usage_user_date_idx").on(t.userId, t.createdAt)],
 );
 
+// An account's own value for a usage limit, where it differs from the
+// default (lib/usage-limits.ts). Set by the owner; deleted with the account.
+export const userLimits = pgTable(
+  "user_limits",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // coach-messages-day, spend-day-usd, spend-month-usd, spend-turn-usd or
+    // voice-minutes-day.
+    key: text("key").notNull(),
+    // Messages, US dollars or minutes, as the key says.
+    value: numeric("value", {
+      precision: 12,
+      scale: 4,
+      mode: "number",
+    }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.key] }),
+    check("user_limits_value_nonnegative", sql`${t.value} >= 0`),
+  ],
+);
+
 export const agentTurns = pgTable(
   "agent_turns",
   {
@@ -432,6 +456,8 @@ export const agentTurns = pgTable(
     photoIds: jsonb("photo_ids").$type<string[]>().notNull().default([]),
     response:
       jsonb("response").$type<import("../coach-visuals").CoachResponse>(),
+    // running, done, failed, or limited: refused by a usage limit before
+    // any AI call, with the limit's reply (lib/usage-limits.ts).
     status: text("status").notNull().default("running"),
     // When the current attempt began; a "running" turn older than
     // STALE_TURN_MS was cut off and may be retried.

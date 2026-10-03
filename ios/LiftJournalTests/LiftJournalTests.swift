@@ -135,4 +135,11 @@ struct LiftJournalTests {
     #expect(strong != nil)
     #expect(text.runs.allSatisfy { $0.inlinePresentationIntent == nil })
   }
+
+  @Test("A saved change's margin note takes the key of its area")
+  func confirmationKey() {
+    #expect(AppModel.category(AppModel.drink(ml: 250)) == .water)
+    #expect(
+      AppModel.category(.recordCheckin(.init(kind: .recordCheckin, checkin: .init(date: "2026-10-02")))) == .checkin)
+  }
 }

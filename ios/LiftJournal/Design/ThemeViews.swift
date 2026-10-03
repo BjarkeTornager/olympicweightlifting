@@ -95,10 +95,10 @@ extension View {
   }
 
   /// Shows a saved change as a margin note under the navigation bar for
-  /// 1.6 s, and reads it to VoiceOver. Setting `message` shows it; it clears
-  /// itself.
-  func toast(_ message: Binding<String?>, tint: Color = Theme.accent) -> some View {
-    modifier(ToastPresenter(message: message, tint: tint))
+  /// 1.6 s, and reads it to VoiceOver. Setting `note` shows it, a new one
+  /// in its place; it clears itself.
+  func toast(_ note: Binding<AppModel.Confirmation?>) -> some View {
+    modifier(ToastPresenter(note: note))
   }
 }
 
@@ -120,25 +120,27 @@ struct Toast: View {
 }
 
 private struct ToastPresenter: ViewModifier {
-  @Binding var message: String?
-  let tint: Color
+  @Binding var note: AppModel.Confirmation?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func body(content: Content) -> some View {
     content
       .overlay(alignment: .top) {
-        if let message {
-          Toast(text: message, tint: tint)
+        if let note {
+          Toast(text: note.text, tint: note.category?.tint ?? Theme.accent)
+            .id(note.id)
             .padding(.top, 8)
+            .padding(.horizontal, Theme.Space.gutter)
             .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+            .accessibilityHidden(true)
         }
       }
-      .animation(Theme.Motion.spring(reduceMotion: reduceMotion), value: message)
-      .task(id: message) {
-        guard let message else { return }
-        AccessibilityNotification.Announcement(message).post()
+      .animation(Theme.Motion.spring(reduceMotion: reduceMotion), value: note)
+      .task(id: note?.id) {
+        guard let note else { return }
+        AccessibilityNotification.Announcement(note.text).post()
         try? await Task.sleep(for: .seconds(1.6))
-        if !Task.isCancelled { self.message = nil }
+        if !Task.isCancelled { self.note = nil }
       }
   }
 }

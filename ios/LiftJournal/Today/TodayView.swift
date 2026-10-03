@@ -71,6 +71,8 @@ struct TodayView: View {
       CheckinSheet(existing: model.today?.checkin, body_: model.today?.body, sleep: model.today?.sleep)
     }
     .sensoryFeedback(.success, trigger: model.saves)
+    // What was just saved, as a margin note under the bar.
+    .toast($model.confirmation)
     .task(id: model.session?.accountID) {
       if let account = model.session?.accountID { firstDay = Issue.firstDay(account: account) }
     }

@@ -30,6 +30,9 @@ final class AppModel {
 
   /// A save that did not go through, shown as an alert.
   var notice: Notice?
+  /// The change just saved, as a margin note on Today ("Added 250 ml"),
+  /// which VoiceOver reads too.
+  var confirmation: Confirmation?
   /// Counts successful saves, for the success haptic.
   var saves = 0
   /// Whether the server offers the spoken check-in.
@@ -72,6 +75,13 @@ final class AppModel {
     var undo: NativeAction?
     var problem = false
     static func == (a: Notice, b: Notice) -> Bool { a.id == b.id }
+  }
+
+  struct Confirmation: Identifiable, Equatable {
+    let id = UUID()
+    var text: String
+    /// The area it belongs to, for the note's key.
+    var category: Category?
   }
 
   struct HealthState {
@@ -322,14 +332,32 @@ final class AppModel {
     switch outcome {
     case .saved:
       saves += 1
+      confirm(confirmation, action)
       await loadToday()
     case .queued:
       // Shown in Today's queue section until it is sent.
       saves += 1
+      confirm(confirmation, action)
     case .refused(let message):
       notice = Notice(text: message, problem: true)
     }
     await countQueue()
+  }
+
+  private func confirm(_ text: String?, _ action: NativeAction) {
+    guard let text else { return }
+    confirmation = Confirmation(text: text, category: Self.category(action))
+  }
+
+  /// The area a change belongs to, for its margin note's key.
+  static func category(_ action: NativeAction) -> Category? {
+    switch action {
+    case .logDrink, .deleteDrink: .water
+    case .logSupplement, .deleteSupplement: .food
+    case .recordCheckin: .checkin
+    case .recordBodyFat, .deleteBodyFat: .body
+    default: nil
+    }
   }
 
   func flush() async {

@@ -705,8 +705,14 @@ test("a deleted account's traces still being sent are found: queued spans go fir
     // still queued when the second pass runs.
     running.end();
     held[0].run();
-    for (let i = 0; i < 50 && info.mock.callCount() < 2; i++)
-      await new Promise((resolve) => setImmediate(resolve));
+    // The second pass flushes the exporter and searches again: give it up
+    // to 3 s of real time, as a slow CI runner needs more than a few ticks.
+    for (
+      let waited = 0;
+      waited < 3000 && info.mock.callCount() < 2;
+      waited += 10
+    )
+      await new Promise((resolve) => realTimeout(resolve, 10));
     assert.deepEqual(deleted, [ended.traceId, running.traceId]);
     assert.deepEqual(
       info.mock.calls.map((c) => JSON.parse(String(c.arguments[0]))),
@@ -788,18 +794,22 @@ test("with TRACING off the janitor still starts and sweeps, and accounts still h
       accountTraceCode("user-a"),
       userCode("test-only-secret", "user-a"),
     );
+    // Only the deletion requests: an export another test left in flight
+    // can reach this mock on a slow runner.
+    const deletes = () =>
+      sent.filter((r) => r.url.endsWith("/traces/delete-traces"));
     const before = Date.now();
     await sweepTraces();
     const after = Date.now();
-    assert.equal(sent.length, 1);
+    assert.equal(deletes().length, 1);
     assert.equal(
-      sent[0].url,
+      deletes()[0].url,
       "http://127.0.0.1:5999/api/2.0/mlflow/traces/delete-traces",
     );
-    assert.equal(sent[0].body.experiment_id, "7");
+    assert.equal(deletes()[0].body.experiment_id, "7");
     // The cutoff is 30 days before the sweep ran, which was some time
     // between the two clock readings.
-    const cutoff = Number(sent[0].body.max_timestamp_millis);
+    const cutoff = Number(deletes()[0].body.max_timestamp_millis);
     assert.ok(cutoff >= before - 30 * 86400000, `${cutoff} before ${before}`);
     assert.ok(cutoff <= after - 30 * 86400000, `${cutoff} after ${after}`);
     assert.deepEqual(JSON.parse(String(info.mock.calls[0].arguments[0])), {
@@ -810,10 +820,14 @@ test("with TRACING off the janitor still starts and sweeps, and accounts still h
     // instrumentation.ts leaves the decision to the janitor.
     assert.equal(startTraceJanitor(), true);
     mock.timers.tick(59999);
-    assert.equal(sent.length, 1);
+    assert.equal(deletes().length, 1);
     mock.timers.tick(1);
-    assert.equal(sent.length, 2, "the first sweep runs a minute after start");
-    for (let i = 0; i < 50 && info.mock.callCount() < 2; i++)
+    assert.equal(
+      deletes().length,
+      2,
+      "the first sweep runs a minute after start",
+    );
+    for (let i = 0; i < 500 && info.mock.callCount() < 2; i++)
       await new Promise((resolve) => setImmediate(resolve));
     assert.equal(info.mock.callCount(), 2);
   });

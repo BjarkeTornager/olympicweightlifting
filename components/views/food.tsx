@@ -255,7 +255,7 @@ export function FoodView({
           </Button>
         </section>
       )}
-      <section className="panel">
+      <section className="panel food-meals">
         <div className="section-top">
           <h2>{allDates ? "Your meals" : `Meals · ${date}`}</h2>
           {!searching && (

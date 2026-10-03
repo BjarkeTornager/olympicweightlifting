@@ -482,7 +482,7 @@ export function HealthView({
       </div>
       <div className="health-summary-grid">
         <section className="panel">
-          <span>Sleep · 14 days</span>
+          <span>Sleep · 14&nbsp;days</span>
           <strong>
             {view.sleepAverage ?? "—"}
             <small>hours</small>

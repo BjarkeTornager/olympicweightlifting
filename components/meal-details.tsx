@@ -14,7 +14,8 @@ export function MealDetails({ meal }: { meal: Meal }) {
         <span className="meal-type-chip">{meal.type}</span>
       </div>
       <p className="meal-details-summary">
-        <strong>{total.calories} kcal</strong> · {macros(total)} · {meal.date}
+        <strong>{total.calories} kcal</strong> · {macros(total)} ·{" "}
+        <span className="whitespace-nowrap">{meal.date}</span>
       </p>
       <ul className="meal-items">
         {meal.items.map((item, i) => (

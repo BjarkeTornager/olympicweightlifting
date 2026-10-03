@@ -2224,6 +2224,9 @@ textarea {
 .food-meal-actions .food-meal-delete:hover { background: var(--danger-soft); }
 .food-meal .food-photo-strip { margin: 0; }
 .food-search-controls { gap: 10px; margin: 12px 0 4px; }
+/* The date stays on one line with its heading; search moves below it. */
+.food-meals > .section-top { flex-wrap: wrap; gap: 4px 14px; }
+.food-meals > .section-top h2 { white-space: nowrap; }
 .food-week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

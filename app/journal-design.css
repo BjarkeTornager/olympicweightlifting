@@ -2534,7 +2534,9 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .hydration-progress { height: 8px; margin: 0 16px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
 .hydration-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-solid); transition: width 200ms; }
 .hydration-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
-.hydration-actions .button { min-height: 44px; }
+/* The two amounts share one row when they fit and each take a full row when
+   they don't, rather than leave half-width buttons stacked. */
+.hydration-actions .button { flex: 1 1 auto; min-height: 44px; padding-inline: 16px; }
 .hydration-row > .notice { margin: 0 16px; }
 @media (prefers-reduced-motion: reduce) { .hydration-progress > span { transition: none; } }
 .supplement-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0 16px; list-style: none; }

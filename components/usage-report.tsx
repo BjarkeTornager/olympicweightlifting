@@ -16,7 +16,7 @@ const dollars = (n: number) =>
   n === 0 ? "$0" : `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
 // Owner only: totals and averages across accounts, never anyone's records.
-// AI cost is shown per account, under the start of its id.
+// AI cost and usage limits are shown per account, under the start of its id.
 export function UsageReport({ accountId }: { accountId: string }) {
   const [report, setReport] = useState<Report>();
   // Missing from a server older than the cost ledger.

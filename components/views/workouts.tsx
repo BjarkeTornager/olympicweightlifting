@@ -376,10 +376,10 @@ export function Workouts(props: Props) {
                   </span>
                   <span className="pill">
                     {d.id === "saturday"
-                      ? "COACHED"
+                      ? "Coached"
                       : d.id === "gym_accessories"
-                        ? "ANY DAY"
-                        : "SOLO"}
+                        ? "Any day"
+                        : "Solo"}
                   </span>
                 </div>
                 <h2>{d.title}</h2>

@@ -97,7 +97,7 @@ function Landing({
       <main className="landing-main">
         <div className="landing-intro">
           <span className="landing-kicker">
-            <LockKeyhole size={15} /> A PERSONAL SPACE FOR YOUR HEALTH
+            <LockKeyhole size={15} /> A personal space for your health
           </span>
           <h1>
             Your health.

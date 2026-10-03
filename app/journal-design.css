@@ -396,8 +396,8 @@ textarea {
   color: var(--accent);
 }.coach-opening-toggle small {
   color: var(--ink-2);
-  font-size: 10px;
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  font-weight: 600;
 }.coach-opening-toggle strong {
   font-size: 15px;
 }.coach-opening p,
@@ -571,7 +571,6 @@ textarea {
   letter-spacing: -0.02em;
 }.coach-visual-label {
   color: var(--muted);
-  letter-spacing: 0.06em;
 }.coach-photo-gallery {
   padding: 16px;
   gap: 20px 14px;
@@ -716,7 +715,6 @@ textarea {
   border-bottom: 1px solid var(--line);
 }.landing-kicker {
   color: var(--muted);
-  letter-spacing: 0.08em;
 }.landing-intro h1 {
   color: var(--ink);
 }.landing-intro h1 em {
@@ -861,9 +859,6 @@ textarea {
     padding: 16px;
     margin-top: 20px;
   }
-  .coach-opening-toggle small {
-    font-size: 9px;
-  }
   .coach-opening.compact {
     margin-top: 10px;
   }
@@ -1002,8 +997,9 @@ textarea {
   gap: 5px;
   flex: 1;
 }.today-workout small {
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
 }.today-summaries {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2455,7 +2451,7 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .composer-send-controls { margin-left: auto; }
 .coach-workspace .composer-talk-button { min-height: 48px; padding: 0 22px; gap: 8px; border-radius: 999px; background: var(--accent-solid); color: var(--on-solid); font-size: 16px; font-weight: 700; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-solid) 35%, transparent); }
 .coach-workspace .composer-talk-button:hover { background: var(--accent-hover); }
-.chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
+.chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; opacity: 0.85; }
 .chat-task:only-child { margin: 0; font-size: 15px; opacity: 1; }
 /* Goals */
 .goals-start { display: grid; gap: 10px; }

@@ -52,7 +52,7 @@ export function CoachOpening({
       >
         <WhistleIcon size={17} aria-hidden="true" />
         <span>
-          <small>A THOUGHT FOR TODAY</small>
+          <small>A thought for today</small>
           <strong>{suggestion.title}</strong>
         </span>
         <ChevronDown size={17} aria-hidden="true" />

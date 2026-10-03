@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         Lift Journal
       </Link>
       <header>
-        <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
+        <p className="eyebrow">Your journal, your data</p>
         <h1>Privacy</h1>
         <p className="lead">Last updated 3 October 2026.</p>
       </header>

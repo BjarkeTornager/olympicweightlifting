@@ -381,7 +381,7 @@ export function DailyOverview({
         <button className="today-workout" onClick={() => go("workout")}>
           <Dumbbell size={22} />
           <span>
-            <small>YOUR WORKOUT</small>
+            <small>Your workout</small>
             <strong>{state.activeWorkout.title}</strong>
             <span>{state.activeWorkout.date} · Continue your draft</span>
           </span>

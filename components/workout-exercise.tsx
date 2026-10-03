@@ -362,10 +362,10 @@ export function WorkoutExercise({
                 <ChevronDown size={17} />
               </summary>
               <div className="set-labels">
-                <span>SET</span>
-                <span>WEIGHT · KG</span>
-                <span>REPS</span>
-                <span>RESULT</span>
+                <span>Set</span>
+                <span>Weight · kg</span>
+                <span>Reps</span>
+                <span>Result</span>
               </div>
               {entry.sets.map((set, i) =>
                 i === nextSetIndex ? null : (

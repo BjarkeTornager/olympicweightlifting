@@ -1,7 +1,7 @@
 // Registers the app's Restate endpoint with the Restate server
 // (docs/restate-setup.md). Run it by hand after the first deploy with
 // RESTATE_ENDPOINT=1, and after any deploy that adds, removes or changes a
-// service or handler:
+// service or handler, or upgrades the SDK:
 //
 //   locally:  node --import tsx scripts/restate-register.ts [--dry-run] [--ping]
 //   Railway:  railway ssh --service lift-journal -- env RESTATE_ADMIN_URL=...
@@ -18,14 +18,21 @@
 // its services has an invocation that hasn't completed: an invocation that
 // started on the old handlers must not be resumed by changed ones.
 
-type Handler = { name: string; ty?: string };
+type Handler = { name: string; ty?: string; [setting: string]: unknown };
 type Service = {
   name: string;
   ty: string;
   handlers: Handler[];
   [setting: string]: unknown;
 };
-type Deployment = { id: string; uri?: string; services: Service[] };
+type Deployment = {
+  id: string;
+  uri?: string;
+  services: Service[];
+  sdk_version?: string | null;
+  min_protocol_version?: number;
+  max_protocol_version?: number;
+};
 
 const env = process.env;
 const trim = (url: string) => url.replace(/\/+$/, "");
@@ -59,21 +66,48 @@ async function call<T>(method: string, path: string, body?: unknown) {
 
 const sameUrl = (a: string, b: string) => new URL(a).href === new URL(b).href;
 
-// What registration decides on: a service's type, its handlers and their
-// kinds, and its settings (retention, timeouts, retries).
+// The same value with every object's keys in order, so that equal settings
+// compare equal whatever order Restate lists them in.
+const sorted = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(sorted)
+    : value && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, item]) => [key, sorted(item)]),
+        )
+      : value;
+
+// What registration decides on: a service's type and settings (retention,
+// timeouts, retries), and each handler's kind and settings, which override
+// the service's.
 function summary(service: Service) {
-  const settings = Object.fromEntries(
-    Object.entries(service)
-      .filter(
-        ([key]) => !["deployment_id", "revision", "handlers"].includes(key),
+  const settings = JSON.stringify(
+    sorted(
+      Object.fromEntries(
+        Object.entries(service).filter(
+          ([key]) => !["deployment_id", "revision", "handlers"].includes(key),
+        ),
+      ),
+    ),
+  );
+  const handlers = new Map(
+    service.handlers
+      .map(
+        ({ name, ty, ...rest }) =>
+          [
+            `${name}${ty ? ` (${ty})` : ""}`,
+            JSON.stringify(sorted(rest)),
+          ] as const,
       )
       .sort(([a], [b]) => a.localeCompare(b)),
   );
-  const handlers = service.handlers
-    .map((h) => `${h.name}${h.ty ? ` (${h.ty})` : ""}`)
-    .sort();
   return { settings, handlers };
 }
+
+const handlerList = (service: Service) =>
+  [...summary(service).handlers.keys()].join(", ");
 
 export function changes(current: Service[], next: Service[]) {
   const lines: string[] = [];
@@ -82,7 +116,7 @@ export function changes(current: Service[], next: Service[]) {
   for (const [name, service] of after) {
     const old = before.get(name);
     if (!old) {
-      lines.push(`+ ${name}: ${summary(service).handlers.join(", ")}`);
+      lines.push(`+ ${name}: ${handlerList(service)}`);
       continue;
     }
     if (old.ty !== service.ty)
@@ -91,16 +125,30 @@ export function changes(current: Service[], next: Service[]) {
       );
     const a = summary(old);
     const b = summary(service);
-    for (const h of b.handlers.filter((h) => !a.handlers.includes(h)))
-      lines.push(`+ ${name}.${h}`);
-    for (const h of a.handlers.filter((h) => !b.handlers.includes(h)))
-      lines.push(`- ${name}.${h}`);
-    if (JSON.stringify(a.settings) !== JSON.stringify(b.settings))
-      lines.push(`~ ${name} settings`);
+    for (const [h, settings] of b.handlers) {
+      const was = a.handlers.get(h);
+      if (was === undefined) lines.push(`+ ${name}.${h}`);
+      else if (was !== settings) lines.push(`~ ${name}.${h} settings`);
+    }
+    for (const h of a.handlers.keys())
+      if (!b.handlers.has(h)) lines.push(`- ${name}.${h}`);
+    if (a.settings !== b.settings) lines.push(`~ ${name} settings`);
   }
   for (const name of before.keys())
     if (!after.has(name)) lines.push(`- ${name}`);
   return lines;
+}
+
+// The SDK's version and the protocol versions it speaks. An SDK upgrade
+// changes them, and Restate learns of it only from an update.
+export function deploymentChanges(current: Deployment, next: Deployment) {
+  return (
+    ["sdk_version", "min_protocol_version", "max_protocol_version"] as const
+  )
+    .filter((key) => (current[key] ?? null) !== (next[key] ?? null))
+    .map(
+      (key) => `~ ${key}: ${current[key] ?? "none"} to ${next[key] ?? "none"}`,
+    );
 }
 
 // Invocations of these services that haven't completed: running, waiting,
@@ -117,9 +165,7 @@ async function unfinished(names: string[]) {
 }
 
 const describe = (services: Service[]) =>
-  services
-    .map((s) => `${s.name} (${s.ty}): ${summary(s).handlers.join(", ")}`)
-    .join("; ");
+  services.map((s) => `${s.name} (${s.ty}): ${handlerList(s)}`).join("; ");
 
 async function register() {
   await call("GET", "/health").catch((error) => {
@@ -150,25 +196,35 @@ async function register() {
     );
     return;
   }
-  const { services: current } = await call<Deployment>(
-    "GET",
-    `/deployments/${existing.id}`,
-  );
+  const current = await call<Deployment>("GET", `/deployments/${existing.id}`);
   // Discovery through Restate, which signs the request; nothing is saved.
-  const { services: next } = await call<Deployment>(
-    "PATCH",
-    `/deployments/${existing.id}`,
-    { uri: endpoint, overwrite: true, dry_run: true },
-  );
-  const diff = changes(current, next);
+  const next = await call<Deployment>("PATCH", `/deployments/${existing.id}`, {
+    uri: endpoint,
+    overwrite: true,
+    dry_run: true,
+  }).catch((error: unknown) => {
+    // Restate updates a deployment in place only while the SDK speaks the
+    // same protocol versions.
+    if (error instanceof Error && error.message.includes("META0016"))
+      throw Error(
+        `${error.message}\nRestate can't update ${existing.id} in place. Register the endpoint under a new address (docs/restate-setup.md, Runbook).`,
+      );
+    throw error;
+  });
+  const diff = [
+    ...deploymentChanges(current, next),
+    ...changes(current.services, next.services),
+  ];
   if (!diff.length) {
     console.log(
-      `${endpoint} is registered as ${existing.id} and nothing changed: ${describe(current)}`,
+      `${endpoint} is registered as ${existing.id} and nothing changed: ${describe(current.services)}`,
     );
     return;
   }
   console.log(`Changes for ${existing.id} at ${endpoint}:\n${diff.join("\n")}`);
-  const names = [...new Set([...current, ...next].map((s) => s.name))];
+  const names = [
+    ...new Set([...current.services, ...next.services].map((s) => s.name)),
+  ];
   const busy = await unfinished(names);
   if (busy.length)
     throw Error(

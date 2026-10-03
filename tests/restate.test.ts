@@ -11,7 +11,7 @@ import {
   newIdentityKey,
   restatePublicKey,
 } from "../lib/restate/identity";
-import { changes } from "../scripts/restate-register";
+import { changes, deploymentChanges } from "../scripts/restate-register";
 
 // The Restate endpoint (lib/restate): off by default, signed in production,
 // HTTP/2 on its own port. No Restate server needed: requests are signed here
@@ -264,6 +264,66 @@ test("Registration sees added, removed and changed handlers, and refuses a type 
   assert.throws(
     () => changes([ping], [{ ...ping, ty: "VirtualObject" }]),
     /never change a service's type in place/i,
+  );
+});
+
+test("Registration sees a handler's own settings and a new SDK", () => {
+  // A virtual object's handler as Restate lists it, with its own settings.
+  const drain = (settings: Record<string, unknown> = {}) => ({
+    ...service("CoachSession", []),
+    ty: "VirtualObject",
+    handlers: [
+      {
+        name: "drain",
+        ty: "Exclusive",
+        public: true,
+        retry_policy: { max_attempts: null },
+        ...settings,
+      },
+    ],
+  });
+  const before = drain();
+  // The same settings in another order are no change.
+  const reordered = {
+    ...before,
+    handlers: [
+      {
+        retry_policy: { max_attempts: null },
+        public: true,
+        ty: "Exclusive",
+        name: "drain",
+      },
+    ],
+  };
+  assert.deepEqual(changes([before], [reordered]), []);
+  for (const settings of [
+    { retry_policy: { max_attempts: 5, on_max_attempts: "Kill" } },
+    { inactivity_timeout: "5m" },
+    { journal_retention: "2h" },
+  ])
+    assert.deepEqual(
+      changes([before], [drain(settings)]),
+      ["~ CoachSession.drain (Exclusive) settings"],
+      JSON.stringify(settings),
+    );
+  const deployment = {
+    id: "dp_1",
+    services: [],
+    sdk_version: "restate-sdk-typescript/1.17.2",
+    min_protocol_version: 5,
+    max_protocol_version: 7,
+  };
+  assert.deepEqual(deploymentChanges(deployment, { ...deployment }), []);
+  assert.deepEqual(
+    deploymentChanges(deployment, {
+      ...deployment,
+      sdk_version: "restate-sdk-typescript/1.18.0",
+      max_protocol_version: 8,
+    }),
+    [
+      "~ sdk_version: restate-sdk-typescript/1.17.2 to restate-sdk-typescript/1.18.0",
+      "~ max_protocol_version: 7 to 8",
+    ],
   );
 });
 

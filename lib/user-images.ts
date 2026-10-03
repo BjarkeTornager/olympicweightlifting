@@ -18,6 +18,8 @@ import { classifyImage } from "./image-classifier";
 import { callModel } from "./agent/provider";
 import { withAiUsage } from "./ai-usage";
 import { logFailure } from "./error-log";
+import { traced } from "./tracing/spans";
+import { imageSession } from "./tracing/ids";
 
 export const imageUploadSchema = z
   .object({
@@ -206,11 +208,21 @@ export async function saveUserImage(
   // Persist bytes before the provider call; never hold database locks during inference.
   if (saved.fresh && input.autoTag) {
     if (!input.tagInBackground)
-      return tagUserImage(userId, input.id, saved.photo.version, model);
+      return tagUserImage(
+        userId,
+        input.id,
+        saved.photo.version,
+        model,
+        "upload",
+      );
     // The image is saved, pending tagging; a failure leaves it pending.
-    void tagUserImage(userId, input.id, saved.photo.version, model).catch(
-      (error) => logFailure("image_tag_failed", error, {}, "warn"),
-    );
+    void tagUserImage(
+      userId,
+      input.id,
+      saved.photo.version,
+      model,
+      "upload_background",
+    ).catch((error) => logFailure("image_tag_failed", error, {}, "warn"));
   }
   return saved.photo;
 }
@@ -311,46 +323,71 @@ export async function patchUserImage(userId: string, id: string, raw: unknown) {
   });
 }
 
+// What started a tagging run: an upload answered after tagging or before
+// it, the athlete's Retag, or the sweep for a run a restart cut off.
+export type TagTrigger = "upload" | "upload_background" | "retag" | "retry";
+
+// One tagging run, traced as image_tag (lib/tracing): its trigger, the
+// model call, whether it succeeded and how many tags it gave, never the
+// category or the tags, which say what the photo shows.
 export async function tagUserImage(
   userId: string,
   id: string,
   version: number,
   model = callModel,
+  trigger: TagTrigger = "retag",
 ) {
-  const photo = await readUserImage(userId, id);
-  if (photo.version !== version)
-    throw new ApiError(
-      "This image changed. Refresh before tagging it again.",
-      409,
-    );
-  let result: { category: ImageCategory; classification: ImageClassification };
-  try {
-    result = await withAiUsage(
-      { userId, feature: "image-tag", sourceId: id },
-      () => classifyImage(photo.data, model),
-    );
-  } catch {
-    // Failure never loses a saved image or defaults it to food. Failed retags keep the prior category.
-    result = {
-      category: photo.category,
-      classification: { ...photo.classification, status: "failed" },
-    };
-  }
-  try {
-    return await updateCategory(
-      userId,
-      id,
-      version,
-      result.category,
-      result.classification,
-    );
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 409) {
-      const current = await imageMetadata(userId, id);
-      if (current.version !== version) return current; // A user's edit wins an in-flight model response.
-    }
-    throw error;
-  }
+  return traced(
+    "image_tag",
+    { userId, session: () => imageSession(userId, id) },
+    { "lift.trigger": trigger },
+    async (trace) => {
+      const photo = await readUserImage(userId, id);
+      if (photo.version !== version)
+        throw new ApiError(
+          "This image changed. Refresh before tagging it again.",
+          409,
+        );
+      let result: {
+        category: ImageCategory;
+        classification: ImageClassification;
+      };
+      try {
+        result = await withAiUsage(
+          { userId, feature: "image-tag", sourceId: id },
+          () => classifyImage(photo.data, model, trace),
+        );
+        trace.set({
+          "lift.ok": true,
+          "lift.tag_count": result.classification.tags.length,
+          "lift.confident": result.classification.confidence === "high",
+        });
+      } catch (error) {
+        trace.set({ "lift.ok": false });
+        trace.fail(error);
+        // Failure never loses a saved image or defaults it to food. Failed retags keep the prior category.
+        result = {
+          category: photo.category,
+          classification: { ...photo.classification, status: "failed" },
+        };
+      }
+      try {
+        return await updateCategory(
+          userId,
+          id,
+          version,
+          result.category,
+          result.classification,
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          const current = await imageMetadata(userId, id);
+          if (current.version !== version) return current; // A user's edit wins an in-flight model response.
+        }
+        throw error;
+      }
+    },
+  );
 }
 
 // A tagging run takes at most 20 seconds (classifyImage's limit), so an image
@@ -422,7 +459,7 @@ export async function retagStalledImages(
         failed++;
         continue;
       }
-      await tagUserImage(job.user_id, job.id, job.version, model);
+      await tagUserImage(job.user_id, job.id, job.version, model, "retry");
       retagged++;
     } catch (error) {
       // Left pending: the next sweep tries again while tries remain.

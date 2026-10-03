@@ -18,6 +18,16 @@ export function sessionCode(secret: string, key: string) {
   return traceCode(secret, `session:${key}`);
 }
 
+// Session keys, hashed by sessionCode. A voice call's setup, tools,
+// connection reports and tidying share one; so do the attempts of one
+// video's review and the tagging runs of one photo.
+export const callSession = (userId: string, callId: string | undefined) =>
+  callId ? `voice:${userId}:${callId}` : undefined;
+export const videoSession = (userId: string, videoId: string) =>
+  `video:${userId}:${videoId}`;
+export const imageSession = (userId: string, imageId: string) =>
+  `image:${userId}:${imageId}`;
+
 // The code an account's traces carry, or null without MLflow or a secret.
 // It doesn't depend on TRACING, so traces sent before capture was turned off
 // are still found. Compute it before the account is deleted.

@@ -636,6 +636,88 @@ test("an account's traces are found by code and deleted, and expired traces in b
   });
 });
 
+test("a deleted account's traces still being sent are found: queued spans go first, and a second pass follows work still running", async (t) => {
+  const { memoryExporterForTests } = await import("../lib/tracing/provider");
+  const { startTrace } = await import("../lib/tracing/spans");
+  const { deleteAccountTraces } = await import("../lib/tracing/admin");
+  const memory = await memoryExporterForTests(false, { batched: true });
+  const info = mock.method(console, "info", () => {});
+  // The second pass's timer is held here; every other timer runs, as the
+  // exporter needs them.
+  const realTimeout = globalThis.setTimeout;
+  const held: { run: () => void; ms?: number; unref: boolean }[] = [];
+  const timeout = mock.method(globalThis, "setTimeout", ((
+    run: () => void,
+    ms?: number,
+  ) => {
+    if (ms !== undefined && ms < 60000) return realTimeout(run, ms);
+    const timer = { run, ms, unref: false };
+    held.push(timer);
+    return {
+      unref() {
+        timer.unref = true;
+        return this;
+      },
+    };
+  }) as typeof setTimeout);
+  t.after(async () => {
+    timeout.mock.restore();
+    info.mock.restore();
+    await memory.stop();
+  });
+  await withEnv(TRACING, async () => {
+    const config = traceAdminConfig()!;
+    const code = userCode("test-only-secret", "user-a");
+    // MLflow, as far as deletion goes: a trace has its user once its root
+    // has arrived.
+    const deleted: string[] = [];
+    const transport = (async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (url.endsWith("/traces/search"))
+        return Response.json({
+          traces: memory
+            .spans()
+            .filter(
+              (s) =>
+                !s.parentSpanId &&
+                s.attributes["user.id"] === code &&
+                !deleted.includes(s.traceId),
+            )
+            .map((s) => ({ trace_id: s.traceId })),
+        });
+      deleted.push(...body.request_ids);
+      return Response.json({ traces_deleted: body.request_ids.length });
+    }) as typeof fetch;
+    // A Coach turn that has just ended, its spans waiting for the batch
+    // timer, and a video review still running.
+    const ended = await startTrace("coach_turn", { userId: "user-a" });
+    ended.end();
+    const running = await startTrace("video_job", { userId: "user-a" });
+    assert.equal(memory.spans().length, 0);
+    await deleteAccountTraces(code, config, transport);
+    assert.deepEqual(deleted, [ended.traceId]);
+    // A second pass in 15 minutes, which doesn't keep a process alive.
+    assert.deepEqual(
+      held.map(({ ms, unref }) => ({ ms, unref })),
+      [{ ms: 15 * 60000, unref: true }],
+    );
+    // The review ends once it notices the account is gone; its root is
+    // still queued when the second pass runs.
+    running.end();
+    held[0].run();
+    for (let i = 0; i < 50 && info.mock.callCount() < 2; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(deleted, [ended.traceId, running.traceId]);
+    assert.deepEqual(
+      info.mock.calls.map((c) => JSON.parse(String(c.arguments[0]))),
+      [
+        { event: "account_traces_deleted", deleted: 1 },
+        { event: "account_traces_deleted", deleted: 1, later: true },
+      ],
+    );
+  });
+});
+
 test("deletion needs only MLflow: the kill switch or a bad capture setting leaves it running", () => {
   const warn = mock.method(console, "warn", () => {});
   try {

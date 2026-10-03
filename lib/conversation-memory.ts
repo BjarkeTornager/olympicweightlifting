@@ -6,6 +6,8 @@ import type { SavedVisual } from "./coach-visuals";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
 import { withoutEmDashes } from "./agent/coach-style";
 import { pruneAiUsage, withAiUsage } from "./ai-usage";
+import { traced } from "./tracing/spans";
+import { callSession } from "./tracing/ids";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -112,11 +114,15 @@ export async function saveVoiceTranscript(
 
 // Tidies a call's transcript when it has none, or the call went on after
 // the last tidy. The tidy text replaces the raw text for Coach's memory and
-// search; the raw lines stay in transcript.
+// search; the raw lines stay in transcript. Traced as voice_tidy
+// (lib/tracing), with the call: what started it (the call ending, or the
+// Coach thread catching up on a call no app marked as ended), line and
+// chunk counts and each chunk's model call, never the transcript.
 export async function tidyVoiceCall(
   userId: string,
   id: string,
   tidyWith: typeof tidyTranscript = tidyTranscript,
+  trigger: "final" | "catch_up" = "final",
 ) {
   const db = getDb();
   const [call] = await db
@@ -124,28 +130,39 @@ export async function tidyVoiceCall(
     .from(voiceCalls)
     .where(and(eq(voiceCalls.id, id), eq(voiceCalls.userId, userId)));
   if (!call || (call.tidiedAt && call.tidiedAt >= call.updatedAt)) return;
-  const tidy = await withAiUsage(
-    { userId, feature: "transcript-tidy", sourceId: id },
-    () => tidyWith(call.transcript),
+  await traced(
+    "voice_tidy",
+    { userId, session: () => callSession(userId, id) },
+    {
+      "lift.trigger": trigger,
+      "lift.lines": call.transcript.length,
+    },
+    async (trace) => {
+      const tidy = await withAiUsage(
+        { userId, feature: "transcript-tidy", sourceId: id },
+        () => tidyWith(call.transcript, undefined, trace),
+      );
+      trace.set({ "lift.ok": Boolean(tidy) });
+      if (!tidy) return;
+      await db
+        .update(voiceCalls)
+        // Stamped with the version it tidied, so it's current until a new save.
+        .set({
+          tidy,
+          tidiedAt: sql`${voiceCalls.updatedAt}`,
+          content: transcriptContent(tidy),
+        })
+        .where(
+          and(
+            eq(voiceCalls.id, id),
+            eq(voiceCalls.userId, userId),
+            // Not if the call was saved again meanwhile: that needs a new tidy.
+            // PostgreSQL keeps microseconds; the Date read back has milliseconds.
+            sql`date_trunc('milliseconds', ${voiceCalls.updatedAt}) = ${call.updatedAt}`,
+          ),
+        );
+    },
   );
-  if (!tidy) return;
-  await db
-    .update(voiceCalls)
-    // Stamped with the version it tidied, so it's current until a new save.
-    .set({
-      tidy,
-      tidiedAt: sql`${voiceCalls.updatedAt}`,
-      content: transcriptContent(tidy),
-    })
-    .where(
-      and(
-        eq(voiceCalls.id, id),
-        eq(voiceCalls.userId, userId),
-        // Not if the call was saved again meanwhile: that needs a new tidy.
-        // PostgreSQL keeps microseconds; the Date read back has milliseconds.
-        sql`date_trunc('milliseconds', ${voiceCalls.updatedAt}) = ${call.updatedAt}`,
-      ),
-    );
 }
 
 export type VoiceCallSummary = {

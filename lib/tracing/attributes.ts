@@ -115,25 +115,113 @@ export const attributes = {
   "lift.guard_rejected": flag,
   "lift.rows": count,
 
+  // What started a photo's tagging or a call transcript's tidying.
+  "lift.trigger": oneOf(
+    "upload",
+    "upload_background",
+    "retag",
+    "retry",
+    "final",
+    "catch_up",
+  ),
+  // Photo tagging. Never the category or the tags: they say what a photo
+  // shows.
+  "lift.tag_count": count,
+  "lift.confident": flag,
+
+  // Voice calls: setup, tools, connection reports and transcript tidying.
+  "lift.provider": oneOf("google", "elevenlabs"),
+  "lift.purpose": oneOf("checkin", "goals"),
+  "lift.resumed": flag,
+  "lift.cards": flag,
+  "lift.instruction_chars": count,
+  "lift.http_status": count,
+  "lift.saved": flag,
+  "lift.socket_event": oneOf(
+    "socket_closed",
+    "go_away",
+    "reconnected",
+    "reconnect_failed",
+  ),
+  "lift.close_code": count,
+  "lift.reconnect_attempts": count,
+  "lift.lines": count,
+  "lift.chunks": count,
+
+  // Video reviews: the job's attempt, how far it got and each stage.
+  "lift.attempt": count,
+  "lift.mode": oneOf("automatic", "manual"),
+  "lift.phase_reached": oneOf(
+    "queued",
+    "preparing",
+    "tracking",
+    "coaching",
+    "body",
+    "ready",
+  ),
+  "lift.outcome": oneOf("done", "requeued", "waiting", "failed", "stopped"),
+  "lift.frames": count,
+  "lift.clip_attempts": count,
+  // A GPU job still running, resumed by a later attempt.
+  "lift.waiting": flag,
+  "lift.pass": count,
+  "lift.repair": flag,
+  "lift.valid": flag,
+  "lift.review_failure": oneOf(
+    "invalid_json",
+    "response_schema",
+    "phase_schema",
+    "phase_evidence",
+    "coaching_schema",
+    "coaching_evidence",
+    "attempt_range",
+    "truncated",
+    "tool_calls",
+  ),
+
   "lift.dropped_attrs": count,
 } satisfies Record<string, Validator>;
 
 export type AttributeKey = keyof typeof attributes;
 export type SpanAttributes = Partial<Record<AttributeKey, unknown>>;
 
+// A trace's root: one unit of work.
+export const rootNames = [
+  "coach_turn",
+  "image_tag",
+  "voice_setup",
+  "voice_tool",
+  "voice_socket",
+  "voice_tidy",
+  "video_job",
+] as const;
+export type RootName = (typeof rootNames)[number];
+
 // Root spans, steps and model calls. Tool spans are tool.<name> for a tool
 // Coach offers and tool.unknown otherwise (spans.ts).
 export const spanNames = [
-  "coach_turn",
+  ...rootNames,
+  // A Coach turn.
   "prepare",
   "photos_sorted",
   "route",
   "round",
   "chat",
   "commit",
+  // Voice setup.
+  "context",
+  "mint_token",
+  "signed_url",
+  // A video job.
+  "process_video",
+  "identify",
+  "refine",
+  "sam3",
+  "overlay_recovery",
+  "review",
+  "body_reconstruction",
 ] as const;
 export type SpanName = (typeof spanNames)[number] | `tool.${string}`;
-export type RootName = "coach_turn";
 export const eventNames = ["batch_guard"] as const;
 export type EventName = (typeof eventNames)[number];
 

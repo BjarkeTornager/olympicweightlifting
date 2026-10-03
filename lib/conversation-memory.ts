@@ -5,6 +5,7 @@ import { displayMessage, VOICE_PREFIX } from "./coach-tasks";
 import type { SavedVisual } from "./coach-visuals";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
 import { withoutEmDashes } from "./agent/coach-style";
+import { withAiUsage } from "./ai-usage";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -119,7 +120,10 @@ export async function tidyVoiceCall(
     .from(voiceCalls)
     .where(and(eq(voiceCalls.id, id), eq(voiceCalls.userId, userId)));
   if (!call || (call.tidiedAt && call.tidiedAt >= call.updatedAt)) return;
-  const tidy = await tidyWith(call.transcript);
+  const tidy = await withAiUsage(
+    { userId, feature: "transcript-tidy", sourceId: id },
+    () => tidyWith(call.transcript),
+  );
   if (!tidy) return;
   await db
     .update(voiceCalls)

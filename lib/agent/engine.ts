@@ -7,6 +7,7 @@ import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { countUse } from "../feature-use";
+import { withAiUsage } from "../ai-usage";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
 import { MAX_EXECUTED_TOOLS } from "./limits";
@@ -153,7 +154,16 @@ async function photosSorted(userId: string, ids: string[]) {
   }
 }
 
-export async function runTurn(
+// Every AI call the turn makes is charged to the athlete and the turn in the
+// AI cost ledger (lib/ai-usage.ts).
+export function runTurn(...args: Parameters<typeof coachTurn>) {
+  const [userId, input] = args;
+  return withAiUsage({ userId, feature: "coach", sourceId: input.id }, () =>
+    coachTurn(...args),
+  );
+}
+
+async function coachTurn(
   userId: string,
   input: {
     id: string;

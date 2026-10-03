@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { providerConfig } from "./provider";
+import { aiPrices, recordFixedPrice } from "../ai-usage";
 
 export const COACH_MODELS = {
   luna: "openai/gpt-5.6-luna",
@@ -230,5 +231,7 @@ async function askJev(
     throw Error("Jev routing unavailable.");
   }
   const raw: unknown = await response.json();
+  // Billed per request once Jev answers, whether or not the answer is used.
+  await recordFixedPrice("routing", MODEL, aiPrices().jevRequest);
   return policyFromJev(raw);
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { readModelStream, ContentFiltered, usageSchema } from "./model-stream";
 import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
+import { recordModelCall } from "../ai-usage";
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -288,6 +289,18 @@ export function parseModelResponse(
       : {}),
   };
 }
+// Reads a provider's reply and records the call in the AI cost ledger
+// (lib/ai-usage.ts), against the account and feature of the current usage
+// context. Every reply read is a call billed, so a retry is recorded too.
+export async function readModelResponse(
+  raw: unknown,
+  kind: "ollama" | "openrouter",
+  model: string,
+): Promise<ModelResponse> {
+  const response = parseModelResponse(raw, kind);
+  await recordModelCall(response.served, model);
+  return response;
+}
 export async function providerResponseError(
   response: Response,
   hasImages = false,
@@ -418,9 +431,10 @@ async function requestModel(
       messages.some((m) => m.images?.length),
     );
   if (onText)
-    return parseModelResponse(
+    return readModelResponse(
       await readModelStream(response, config.kind, onText, signal),
       config.kind,
+      request.body.model,
     );
   const reader = response.body?.getReader();
   if (!reader) throw Error("The assistant returned an empty response.");
@@ -436,8 +450,9 @@ async function requestModel(
     }
     chunks.push(value);
   }
-  return parseModelResponse(
+  return readModelResponse(
     JSON.parse(Buffer.concat(chunks).toString("utf8")),
     config.kind,
+    request.body.model,
   );
 }

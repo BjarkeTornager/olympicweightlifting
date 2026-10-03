@@ -7,8 +7,8 @@
 import { EXERCISES } from "./domain";
 import {
   modelRequest,
-  parseModelResponse,
   providerConfig,
+  readModelResponse,
 } from "./agent/provider";
 
 export type Line = { role: "you" | "coach"; text: string };
@@ -117,7 +117,11 @@ async function tidyChunk(
     await response.body?.cancel();
     return null;
   }
-  const reply = parseModelResponse(await response.json(), "openrouter");
+  const reply = await readModelResponse(
+    await response.json(),
+    "openrouter",
+    TIDY_MODEL,
+  );
   if (reply.truncated) return null;
   const json = reply.content.slice(
     reply.content.indexOf("{"),

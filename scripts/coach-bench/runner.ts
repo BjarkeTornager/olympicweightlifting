@@ -15,7 +15,7 @@ import type {
   ModelResponse,
   ToolDefinition,
 } from "../../lib/agent/provider";
-import type { TurnMetrics } from "../../lib/agent/turn-metrics";
+import { turnTotals, type TurnMetrics } from "../../lib/agent/turn-metrics";
 import {
   BENCH_NOW,
   TIMEZONE,
@@ -233,7 +233,9 @@ export async function runConversation(
               proposals: response?.proposals ?? [],
               tools,
             }),
-        rounds: rounds.length,
+        // A call the content filter blocked and its retry are one round,
+        // though both count towards the cost and tokens.
+        rounds: metrics ? turnTotals(metrics).rounds : 0,
         costUsd,
         inputTokens: rounds.reduce((n, r) => n + (r.inputTokens ?? 0), 0),
         cachedTokens: rounds.reduce((n, r) => n + (r.cachedTokens ?? 0), 0),

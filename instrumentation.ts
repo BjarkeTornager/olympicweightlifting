@@ -13,4 +13,11 @@ export async function register() {
     const { startVideoWorker } = await import("./lib/video/worker");
     startVideoWorker();
   }
+  // Deletes diagnostic traces past their retention (lib/tracing). It
+  // decides itself whether to run: whenever MLflow is configured, whatever
+  // TRACING says.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startTraceJanitor } = await import("./lib/tracing/janitor");
+    startTraceJanitor();
+  }
 }

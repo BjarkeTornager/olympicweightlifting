@@ -114,6 +114,18 @@ test("turn totals add up every round", () => {
   );
 });
 
+test("a call the content filter blocked counts its cost, not an extra round", () => {
+  const totals = turnTotals({
+    rounds: [
+      { ms: 900, inputTokens: 33000, costUsd: 0.004, filtered: true },
+      { ms: 2000, inputTokens: 33000, costUsd: 0.001 },
+    ],
+  });
+  assert.equal(totals.rounds, 1);
+  assert.equal(totals.inputTokens, 66000);
+  assert.equal(totals.costUsd, 0.005);
+});
+
 test(
   "a Coach turn saves its timings and usage, and none of the conversation",
   { skip: !process.env.TEST_DATABASE_URL },

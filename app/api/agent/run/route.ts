@@ -31,6 +31,9 @@ export async function POST(request: Request) {
         "Please wait a minute before sending another message.",
         429,
       );
+    // The iPhone app keeps Coach working when the athlete switches app,
+    // and reads the saved reply when it's back.
+    const background = request.headers.get("x-coach-background") === "1";
     return coachStream(
       request,
       threadId,
@@ -46,12 +49,9 @@ export async function POST(request: Request) {
           // A picture still drawing when the reply ends keeps a release's
           // shutdown waiting for it.
           waitUntil: after,
+          background,
         }),
-      // The iPhone app keeps Coach working when the athlete switches app,
-      // and reads the saved reply when it's back.
-      request.headers.get("x-coach-background") === "1"
-        ? { background: { key: `${user.id}:${input.id}` } }
-        : {},
+      background ? { background: { key: `${user.id}:${input.id}` } } : {},
     );
   } catch (error) {
     return apiFailure(error);

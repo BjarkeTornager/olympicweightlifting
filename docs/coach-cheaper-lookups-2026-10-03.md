@@ -23,7 +23,7 @@ Simple questions about the athlete's own records, such as "How much water have I
   - Terra keeps small talk, acceptances and confirmations (`mixed_or_unclear`), follow-ups such as "and yesterday?" or "why?", mixed requests, plans, and "Slept 5 hours. Should I skip training today?";
   - logs, corrections and advice stay on Luna, as before.
 
-The matched lookups have difficulty scores of 0.15 at most. The closest controls are "Slept 5 hours. Should I skip training today?" (difficulty 0.71 to 0.77) and "why?" (only 0.70 to 0.72 on log and explain).
+Among the 214 recorded decisions, the matched lookups have difficulty scores of 0.15 at most (up to 0.29 in the adversarial set, see Limits). The closest controls are "Slept 5 hours. Should I skip training today?" (difficulty 0.71 to 0.77) and "why?" (only 0.70 to 0.72 on log and explain).
 
 **Quality, same message on each tier.** Each turn ran through the real engine on a fresh synthetic account with a seeded journal, the tier forced, and the reply and journal checked:
 
@@ -61,6 +61,12 @@ Production Terra traffic has a colder cache than these runs. An uncached first T
 
 - **One seeded journal and one clock.** Most messages ran twice per tier, which can't tell apart a difference of a few percent.
 - **Jev sees only the latest message.** A short follow-up can reach Luna whenever Jev puts its mass mostly on `log` and `explain` and sees no judgment in it. "Og min puls?" ("And my pulse?") did in both recorded runs (0.95 and 0.97 on log and explain), and Luna then relies on the conversation history to know what it refers to. Follow-ups with more of the mass on `mixed_or_unclear`, such as "and yesterday?" and "og i går?", stayed on Terra. `tests/agent-routing.test.ts` records "Og min puls?" going to Luna as accepted behaviour.
+- **Lookups with health context can move too.** The rule looks at Jev's answers, not at the topic. In a separate adversarial set, these went to Luna:
+  - "Hvor mange kalorier har jeg spist i dag? Jeg prøver at holde mig under 800." (difficulty 0.16 to 0.20);
+  - "I'm on blood thinners. How much fish oil have I logged this week?" (0.22 to 0.24);
+  - a calorie-target check, a photo with "How many calories is this?", and once a three-week sleep comparison (0.29).
+
+  Run on Luna, the two health ones passed 6/6, in two runs: Luna flagged 800 kcal as very low and pointed to a doctor or dietitian, and raised the bleeding risk with a prescriber or pharmacist. Messages with clearer warning signs (chest pain, pregnancy, purging, new medication) scored higher on difficulty and stayed on Terra. Health safety comes from Coach's instructions, which both tiers follow; confident health messages already went to Luna before this change.
 - **Small talk and acceptances stay on Terra.** Luna equalled Terra on thanks and confirmations. But it prepared the agreed plan for review in only 4 of 14 acceptances, so this group needs its own change first.
 
 Spend for this step was $0.50 of OpenRouter use, plus under $0.01 for Jev.

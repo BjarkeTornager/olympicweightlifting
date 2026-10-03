@@ -831,3 +831,29 @@ struct VisualRecipe: View {
     }
   }
 }
+
+#if DEBUG
+  /// The recipe as Coach sends it, in full and as the call screen's compact
+  /// card, with its AI picture.
+  private struct RecipePreview: View {
+    init() {
+      CoachPicture.cache.setObject(PreviewData.dishPicture, forKey: PreviewData.pictureID as NSString)
+    }
+
+    var body: some View {
+      ScrollView {
+        VStack(spacing: 20) {
+          CoachVisualView(visual: PreviewData.recipe, tint: Theme.calories).card(padding: 14)
+          CoachVisualView(visual: PreviewData.recipe, compact: true, tint: Theme.calories).card(padding: 14)
+        }
+        .padding(20)
+      }
+      .background(Theme.background)
+      .environment(AppModel())
+    }
+  }
+
+  #Preview("Recipe card") { RecipePreview() }
+  #Preview("Recipe card, dark") { RecipePreview().preferredColorScheme(.dark) }
+  #Preview("Recipe card, AX3") { RecipePreview().dynamicTypeSize(.accessibility3) }
+#endif

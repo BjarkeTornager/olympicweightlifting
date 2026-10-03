@@ -16,7 +16,8 @@ struct Hairline: View {
 /// One thing in a list set on the page, in Movement, Train and the Journal:
 /// a pigment key or a word in the left column ("Next"), the title in the
 /// serif, an SF line of detail, where it came from, and an arrow when it
-/// opens. Titles wrap; nothing is cut short.
+/// opens. Titles wrap; nothing is cut short. At the largest text sizes the
+/// word sits above the title, so the title keeps the full width.
 struct EntryRow: View {
   enum Lead {
     case key(Color)
@@ -33,8 +34,10 @@ struct EntryRow: View {
   var sourceTint: Color?
   var opens = false
   @ScaledMetric(relativeTo: .footnote) private var wordColumn: CGFloat = 58
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
+    let stacked = typeSize.isAccessibilitySize
     HStack(alignment: .firstTextBaseline, spacing: 0) {
       switch lead {
       case .key(let tint):
@@ -42,14 +45,17 @@ struct EntryRow: View {
           .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
           .frame(width: 24, alignment: .leading)
       case .word(let word):
-        Text(word)
-          .font(.footnote.weight(.semibold))
-          .foregroundStyle(Theme.inkSecondary)
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-          .frame(width: wordColumn, alignment: .leading)
+        if !stacked {
+          wordText(word)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(width: wordColumn, alignment: .leading)
+        }
       }
       VStack(alignment: .leading, spacing: 2) {
+        if stacked, case .word(let word) = lead {
+          wordText(word).padding(.bottom, 2)
+        }
         Text(title)
           .folio(.heading)
           .foregroundStyle(Theme.ink)
@@ -77,6 +83,10 @@ struct EntryRow: View {
     .padding(.vertical, 14)
     .contentShape(.rect)
     .accessibilityElement(children: .combine)
+  }
+
+  private func wordText(_ word: String) -> some View {
+    Text(word).font(.footnote.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
   }
 }
 
@@ -122,7 +132,9 @@ struct NoteRow: View {
 }
 
 /// An action written into the page in place of a missing value ("Add in a
-/// check-in"), in the accent with an arrow.
+/// check-in"), in the accent with an arrow. It takes taps 44 pt high
+/// without taking more room on the page, and VoiceOver reads the words
+/// without the arrow.
 struct ActionText: View {
   let title: String
 
@@ -133,6 +145,10 @@ struct ActionText: View {
       .font(.subheadline.weight(.semibold))
       .foregroundStyle(Theme.accent)
       .multilineTextAlignment(.leading)
+      .padding(.vertical, 12)
+      .contentShape(.rect)
+      .padding(.vertical, -12)
+      .accessibilityLabel(title)
   }
 }
 

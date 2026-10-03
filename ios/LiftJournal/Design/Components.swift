@@ -2,9 +2,8 @@ import LiftTheme
 import SwiftUI
 
 /// Colours per kind of record, used the same way everywhere, and only on
-/// data and its symbols (see Theme). Each follows its area of life: training
-/// is movement, a check-in is how you feel, and Coach keeps the accent for
-/// its symbol only.
+/// data and its keys (see Theme). Each follows its area of life: training
+/// is movement, a check-in is how you feel, and Coach keeps the accent.
 enum Category {
   case sleep, heart, activity, water, food, training, checkin, coach, body
 
@@ -18,20 +17,6 @@ enum Category {
     case .checkin: Theme.feltEnergy
     case .coach: Theme.accent
     case .body: Theme.body
-    }
-  }
-
-  var symbol: String {
-    switch self {
-    case .sleep: "bed.double.fill"
-    case .heart: "heart.fill"
-    case .activity: "flame.fill"
-    case .water: "drop.fill"
-    case .food: "fork.knife"
-    case .training: "dumbbell.fill"
-    case .checkin: "face.smiling"
-    case .coach: "waveform"
-    case .body: "scalemass.fill"
     }
   }
 }
@@ -367,6 +352,8 @@ struct Chip: View {
 }
 
 /// Lays its views out in rows, wrapping to the next row when one is full.
+/// A view wider than a whole row gets the row's width and grows taller, so
+/// its text wraps instead of being cut short.
 struct FlowLayout: Layout {
   var spacing: CGFloat = 8
   var lineSpacing: CGFloat = 8
@@ -382,12 +369,9 @@ struct FlowLayout: Layout {
     var y = bounds.minY
     for row in rows(subviews, width: bounds.width) {
       var x = bounds.minX
-      for index in row.indices {
-        let size = subviews[index].sizeThatFits(.unspecified)
-        let fitted = CGSize(width: min(size.width, bounds.width), height: size.height)
-        subviews[index].place(
-          at: CGPoint(x: x, y: y + (row.height - fitted.height) / 2), proposal: ProposedViewSize(fitted))
-        x += fitted.width + spacing
+      for (index, size) in zip(row.indices, row.sizes) {
+        subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
+        x += size.width + spacing
       }
       y += row.height + lineSpacing
     }
@@ -395,23 +379,33 @@ struct FlowLayout: Layout {
 
   private struct Row {
     var indices: [Int] = []
+    var sizes: [CGSize] = []
     var width: CGFloat = 0
     var height: CGFloat = 0
+  }
+
+  /// A view's size on one line, or at most `width` wide and as tall as it
+  /// then needs.
+  private func size(_ subview: LayoutSubview, width: CGFloat) -> CGSize {
+    let ideal = subview.sizeThatFits(.unspecified)
+    guard ideal.width > width else { return ideal }
+    let wrapped = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    return CGSize(width: min(wrapped.width, width), height: wrapped.height)
   }
 
   private func rows(_ subviews: Subviews, width: CGFloat) -> [Row] {
     var rows: [Row] = []
     var row = Row()
     for index in subviews.indices {
-      let size = subviews[index].sizeThatFits(.unspecified)
-      let itemWidth = min(size.width, width)
-      if !row.indices.isEmpty && row.width + spacing + itemWidth > width {
+      let size = size(subviews[index], width: width)
+      if !row.indices.isEmpty && row.width + spacing + size.width > width {
         rows.append(row)
         row = Row()
       }
-      row.width += (row.indices.isEmpty ? 0 : spacing) + itemWidth
+      row.width += (row.indices.isEmpty ? 0 : spacing) + size.width
       row.height = max(row.height, size.height)
       row.indices.append(index)
+      row.sizes.append(size)
     }
     if !row.indices.isEmpty { rows.append(row) }
     return rows

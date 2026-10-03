@@ -329,6 +329,7 @@ struct SetEditor: View {
           }
           .pickerStyle(.segmented)
         }
+        .themedRows()
       }
       .themedList()
       .navigationTitle(title)

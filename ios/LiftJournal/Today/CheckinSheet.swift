@@ -42,6 +42,7 @@ struct CheckinSheet: View {
             Text("Connect Apple Health in Profile and it fills in by itself.")
           }
         }
+        .themedRows()
         Section {
           ScalePicker(value: $energy)
         } header: {
@@ -49,6 +50,7 @@ struct CheckinSheet: View {
         } footer: {
           Text("1 is drained, 5 is full of energy.")
         }
+        .themedRows()
         Section {
           ScalePicker(value: $soreness)
         } header: {
@@ -56,6 +58,7 @@ struct CheckinSheet: View {
         } footer: {
           Text("1 is no soreness, 5 is very sore.")
         }
+        .themedRows()
         Section("Bodyweight") {
           HStack {
             TextField("Weight", value: $bodyweight, format: .number.precision(.fractionLength(0...1)))
@@ -64,6 +67,7 @@ struct CheckinSheet: View {
             Text("kg").foregroundStyle(.secondary)
           }
         }
+        .themedRows()
         Section {
           HStack {
             TextField("Body fat", value: $bodyFat, format: .number.precision(.fractionLength(0...1)))
@@ -83,10 +87,12 @@ struct CheckinSheet: View {
         } footer: {
           Text("Methods differ by a few points, and scales move with hydration. Use the same one each time; the trend is what counts.")
         }
+        .themedRows()
         Section("Notes") {
           TextField("Anything else about today?", text: $notes, axis: .vertical)
             .lineLimit(2...6)
         }
+        .themedRows()
       }
       .themedList()
       .navigationTitle("Check In")

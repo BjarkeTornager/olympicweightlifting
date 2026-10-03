@@ -67,12 +67,16 @@ struct TrendView: View {
         } else {
           VStack(alignment: .leading, spacing: 16) {
             headline
-            chart.frame(height: trend == .body ? 320 : 220)
+            let charts = trend == .body ? bodyCharts : 1
+            if charts > 0 {
+              chart.frame(height: charts > 1 ? 320 : 220)
+            }
             if trend == .heart { HeartLegend() }
           }
           .padding(.vertical, 6)
         }
       }
+      .themedRows()
       if trends != nil {
         Section("Days") {
           // Body is weighed now and then: list only the days with a reading.
@@ -85,6 +89,7 @@ struct TrendView: View {
             }
           }
         }
+        .themedRows()
       }
     }
     .themedList()
@@ -134,20 +139,27 @@ struct TrendView: View {
         figure(average(\.calories).map(Format.number), "kcal")
       case .body:
         HStack(alignment: .firstTextBaseline, spacing: 20) {
-          figure(days.last(where: { $0.bodyweight != nil })?.bodyweight.map { Format.decimal($0) }, "kg")
-          figure(days.last(where: { $0.bodyFatPercent != nil })?.bodyFatPercent.map { Format.decimal($0) }, "% fat")
+          figure(
+            days.last(where: { $0.bodyweight != nil })?.bodyweight.map { Format.decimal($0) }, "kg",
+            empty: "No weight in this range")
+          figure(
+            days.last(where: { $0.bodyFatPercent != nil })?.bodyFatPercent.map { Format.decimal($0) }, "% fat",
+            empty: "No body fat in this range")
         }
       }
     }
   }
 
-  /// A value in the serif, or a sentence when there is none.
+  /// A value in the serif, or a sentence when there is none, naming the
+  /// measure when there are two.
   @ViewBuilder
-  private func figure(_ value: String?, _ unit: String?) -> some View {
+  private func figure(
+    _ value: String?, _ unit: String?, empty: String = "Nothing logged in this range"
+  ) -> some View {
     if let value {
       BigValue(value: value, unit: unit).foregroundStyle(Theme.ink)
     } else {
-      Text("Nothing logged in this range").folio(.note).foregroundStyle(Theme.inkSecondary)
+      Text(empty).folio(.note).foregroundStyle(Theme.inkSecondary)
     }
   }
 
@@ -189,7 +201,7 @@ struct TrendView: View {
           if let hrv = day.heartRateVariabilityMs {
             LineMark(
               x: .value("Day", date(day), unit: .day), y: .value("Value", hrv), series: .value("Measure", "HRV"))
-              .foregroundStyle(Theme.variability)
+              .foregroundStyle(Theme.heart)
               .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, dash: [4, 3]))
           }
         }
@@ -199,12 +211,20 @@ struct TrendView: View {
       .chartYAxis { valueAxis }
       .chartLegend(.hidden)
     case .body:
-      // Weight and body fat on their own scales, one above the other.
+      // Weight and body fat on their own scales, one above the other. One
+      // with no reading in the range is left out; the headline says so.
       VStack(spacing: 12) {
-        line(days.filter { $0.bodyweight != nil }, \.bodyweight, unit: "kg", tint: Theme.body)
-        line(days.filter { $0.bodyFatPercent != nil }, \.bodyFatPercent, unit: "% body fat", tint: Theme.bodyFat)
+        let weights = days.filter { $0.bodyweight != nil }
+        let fat = days.filter { $0.bodyFatPercent != nil }
+        if !weights.isEmpty { line(weights, \.bodyweight, unit: "kg", tint: Theme.body) }
+        if !fat.isEmpty { line(fat, \.bodyFatPercent, unit: "% body fat", tint: Theme.bodyFat) }
       }
     }
+  }
+
+  /// How many of weight and body fat have a reading in the range.
+  private var bodyCharts: Int {
+    [days.contains { $0.bodyweight != nil }, days.contains { $0.bodyFatPercent != nil }].filter { $0 }.count
   }
 
   /// Bars on a zero baseline: earlier days in the track, today in the
@@ -277,10 +297,22 @@ struct TrendView: View {
     }
   }
 
+  /// Values written as the headline and the days are ("3,000", "70.5"),
+  /// whatever the iPhone's region; weight and body fat to one decimal.
   private var valueAxis: some AxisContent {
-    AxisMarks(position: .trailing) { _ in
+    AxisMarks(position: .trailing) { value in
       AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Theme.rule)
-      AxisValueLabel().font(.caption2).foregroundStyle(Theme.inkSecondary)
+      AxisValueLabel {
+        if let number = value.as(Double.self) {
+          Text(
+            trend == .body
+              ? number.formatted(.number.precision(.fractionLength(1)).locale(Format.locale))
+              : number.formatted(.number.locale(Format.locale))
+          )
+          .font(.caption2)
+          .foregroundStyle(Theme.inkSecondary)
+        }
+      }
     }
   }
 

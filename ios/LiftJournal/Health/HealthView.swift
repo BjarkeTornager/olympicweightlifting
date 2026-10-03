@@ -27,6 +27,7 @@ struct HealthView: View {
         }
         .padding(.vertical, 6)
       }
+      .themedRows()
       Section("Read from Apple Health") {
         read("Sleep, including stages", "bed.double.fill", Theme.sleep)
         read("Resting heart rate, heart rate variability and average heart rate", "heart.fill", Theme.heart)
@@ -37,10 +38,12 @@ struct HealthView: View {
           Theme.activity)
         read("Routes of outdoor workouts, simplified, with place names from Apple Maps", "map.fill", Theme.activity)
       }
+      .themedRows()
       if !model.health.available {
         Section {
           Text("Apple Health isn't available on this device.").foregroundStyle(Theme.inkSecondary)
         }
+        .themedRows()
       } else if model.health.connected {
         if needsAccess {
           Section {
@@ -57,6 +60,7 @@ struct HealthView: View {
               "Lift Journal can now read your workout routes and a smart scale's body fat readings, so you and Coach can use them. Apple asks once for the new permissions."
             )
           }
+          .themedRows()
         }
         Section {
           LabeledContent("Status") {
@@ -82,6 +86,7 @@ struct HealthView: View {
             "New sleep and workouts arrive in the background. Entries you edit or delete in the journal stay as you left them. To change what the app can read, open Settings › Health › Data Access & Devices › Lift Journal."
           )
         }
+        .themedRows()
         Section {
           Button("Stop syncing on this iPhone", role: .destructive) {
             Task { await model.disconnectHealth() }
@@ -89,6 +94,7 @@ struct HealthView: View {
         } footer: {
           Text("Entries already imported stay in your journal.")
         }
+        .themedRows()
       } else {
         Section {
           Button {

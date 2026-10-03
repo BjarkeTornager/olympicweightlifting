@@ -52,12 +52,12 @@ struct TodayView: View {
       await model.syncHealth(force: true)
     }
     .toolbar {
-      ToolbarItem(placement: .topBarLeading) {
-        issueLine
-          .opacity(scrolled ? 0 : 1)
-          .accessibilityHidden(scrolled)
+      // Taken out of the bar once scrolled, not only hidden, so the title
+      // is centred and has room at every text size.
+      if !scrolled {
+        ToolbarItem(placement: .topBarLeading) { issueLine }
+          .sharedBackgroundVisibility(.hidden)
       }
-      .sharedBackgroundVisibility(.hidden)
       ToolbarItem(placement: .principal) {
         Text("Today")
           .font(.system(.headline, design: .serif, weight: .medium))
@@ -445,6 +445,9 @@ private struct BodySection: View {
   /// The week's readings, oldest first.
   let weights: [(day: Date?, kg: Double?)]
   let checkIn: () -> Void
+  /// The chart grows with the text, as Recovery's do, so its two labelled
+  /// hairlines keep apart.
+  @ScaledMetric(relativeTo: .caption2) private var chartGrowth: CGFloat = 1
 
   init(body: Components.Schemas.Body?, weights: [(Date?, Double?)], checkIn: @escaping () -> Void) {
     body_ = body
@@ -455,10 +458,23 @@ private struct BodySection: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       FolioSection("Body", meta: Format.focus(body_?.focus))
-      if let kg = body_?.bodyweight {
-        NavigationLink(value: Trend.body) { weight(kg) }
-          .buttonStyle(CardButtonStyle())
+      // Body fat can come from a smart scale through Apple Health while
+      // weight only comes from a check-in in the last 30 days, so either may
+      // be missing.
+      if body_?.bodyweight != nil || body_?.bodyFatPercent != nil {
+        if let kg = body_?.bodyweight {
+          NavigationLink(value: Trend.body) { weight(kg) }
+            .buttonStyle(CardButtonStyle())
+            .padding(.top, 16)
+        } else {
+          VStack(alignment: .leading, spacing: 10) {
+            NavigationLink(value: Trend.body) { weightLabel.contentShape(.rect) }
+              .buttonStyle(CardButtonStyle())
+            Button(action: checkIn) { ActionText("Add your weight in a check-in") }
+              .buttonStyle(.plain)
+          }
           .padding(.top, 16)
+        }
         CellGrid(columns: goal == nil ? 2 : 3) {
           bodyFat
           leanMass
@@ -498,13 +514,18 @@ private struct BodySection: View {
     return nil
   }
 
+  /// The kicker over the weight, with the arrow to the chart.
+  private var weightLabel: some View {
+    HStack {
+      CardLabel(title: "Weight", key: Theme.body)
+      Spacer(minLength: 0)
+      GoArrow()
+    }
+  }
+
   private func weight(_ kg: Double) -> some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack {
-        CardLabel(title: "Weight", key: Theme.body)
-        Spacer(minLength: 0)
-        GoArrow()
-      }
+      weightLabel
       HStack(alignment: .lastTextBaseline) {
         Measure(value: Format.decimal(kg), unit: "kg", role: .display).foregroundStyle(Theme.ink)
         Spacer(minLength: 12)
@@ -528,7 +549,7 @@ private struct BodySection: View {
       let points = weights.enumerated().compactMap { index, item in item.kg.map { (index, $0) } }
       if points.count > 1 {
         WeightChart(points: points, days: weights.map(\.day), count: weights.count)
-          .frame(height: 92)
+          .frame(height: 92 * min(chartGrowth, 1.8))
           .padding(.top, 18)
       }
     }
@@ -554,7 +575,7 @@ private struct BodySection: View {
       if let lean = body_?.leanMassKg {
         Measure(value: Format.decimal(lean), unit: "kg", role: .inline).foregroundStyle(Theme.ink)
       } else {
-        Text("Shown once body fat is in")
+        Text(body_?.bodyFatPercent == nil ? "Shown once body fat is in" : "Shown once weight is in")
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -611,7 +632,8 @@ private struct WeightChart: View {
     .chartYAxis {
       AxisMarks(position: .trailing, values: lines) { value in
         AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Theme.rule)
-        AxisValueLabel {
+        // Clear of the ring on the latest reading at the trailing edge.
+        AxisValueLabel(horizontalSpacing: 9) {
           if let kg = value.as(Double.self) {
             Text(kg.formatted(.number.precision(.fractionLength(1)).locale(Format.locale)))
               .font(.caption2.weight(.medium))
@@ -789,12 +811,17 @@ struct SupplementsStrip: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack(alignment: .firstTextBaseline, spacing: 6) {
-        CardLabel(title: "Supplements", key: Category.food.tint)
-        Spacer()
-        Text(supplements.taken.isEmpty ? "None yet" : "\(Format.number(supplements.taken.count)) taken")
-          .font(.subheadline.monospacedDigit())
-          .foregroundStyle(Theme.inkSecondary)
+      // The count moves under the label when both don't fit on one line.
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+          CardLabel(title: "Supplements", key: Category.food.tint).fixedSize()
+          Spacer()
+          count
+        }
+        VStack(alignment: .leading, spacing: 4) {
+          CardLabel(title: "Supplements", key: Category.food.tint)
+          count
+        }
       }
       FlowLayout {
         ForEach(supplements.taken.reversed(), id: \.id) { taken in
@@ -833,6 +860,12 @@ struct SupplementsStrip: View {
         Task { await model.logSupplement(name: String(name.prefix(80)), amount: String(amount.prefix(40))) }
       }
     }
+  }
+
+  private var count: some View {
+    Text(supplements.taken.isEmpty ? "None yet" : "\(Format.number(supplements.taken.count)) taken")
+      .font(.subheadline.monospacedDigit())
+      .foregroundStyle(Theme.inkSecondary)
   }
 
   private func label(_ name: String, _ amount: String) -> String {
@@ -898,10 +931,14 @@ struct MovementSection: View {
           .accessibilityHint("Opens Train")
           Hairline()
         }
-        if today.activeWorkout == nil && done.isEmpty && today.activities.isEmpty && next == nil {
+        // Without a programme, Train is one tap away even after a walk
+        // has come in from Apple Health.
+        if today.activeWorkout == nil && done.isEmpty && next == nil {
           Button { model.tab = .train } label: {
             VStack(alignment: .leading, spacing: 6) {
-              Text("Nothing recorded yet.").folio(.note).foregroundStyle(Theme.inkSecondary)
+              if today.activities.isEmpty {
+                Text("Nothing recorded yet.").folio(.note).foregroundStyle(Theme.inkSecondary)
+              }
               ActionText("Start a workout")
             }
             .frame(maxWidth: .infinity, alignment: .leading)

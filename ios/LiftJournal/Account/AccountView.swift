@@ -45,6 +45,7 @@ struct AccountView: View {
         } footer: {
           Text("System follows your iPhone's light and dark setting.")
         }
+        .themedRows()
         Section {
           Picker("Language", selection: $language) {
             ForEach(CoachLanguage.allCases) { Text($0.title).tag($0) }
@@ -57,6 +58,7 @@ struct AccountView: View {
         } footer: {
           Text("Coach writes and speaks in this language, in chat and in voice check-ins.")
         }
+        .themedRows()
         if model.voiceEnabled {
           Section {
             if model.voiceProviders.count > 1 {
@@ -79,6 +81,7 @@ struct AccountView: View {
           } footer: {
             if model.voiceProviders.count > 1 { Text(callProvider.detail) }
           }
+          .themedRows()
         }
         Section {
           NavigationLink {
@@ -124,11 +127,13 @@ struct AccountView: View {
         } footer: {
           Text("Routines, programmes, videos and backups are managed on the website for now.")
         }
+        .themedRows()
         Section {
           Button("Sign out", role: .destructive) { confirmingSignOut = true }
         } footer: {
           Text("Signs out this iPhone only. Your journal stays on the server.")
         }
+        .themedRows()
         Section {
           Toggle(isOn: $aiAllowed) {
             Label("Share with Coach's AI provider", systemImage: "checkmark.shield")
@@ -136,6 +141,7 @@ struct AccountView: View {
         } footer: {
           Text("Coach and voice check-ins send your messages, photos and relevant journal and Apple Health records to a third-party AI provider. Turn this off to stop sharing; Coach stays off until you allow it again.")
         }
+        .themedRows()
         Section {
           Button(role: .destructive) {
             confirmingDeletion = true
@@ -154,6 +160,7 @@ struct AccountView: View {
             Text("Permanently deletes your account and everything in your journal from Lift Journal's server. Data in Apple Health is not affected.")
           }
         }
+        .themedRows()
         Section {
         } footer: {
           Text("Lift Journal \(LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "").replacingOccurrences(of: "/", with: " (")))")
@@ -288,6 +295,7 @@ private struct GoalsSection: View {
     } footer: {
       Text("Set with Coach. Ask Coach to change any of them.")
     }
+    .themedRows()
   }
 
   private func row(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {

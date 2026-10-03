@@ -61,10 +61,14 @@ public enum Theme {
   // MARK: Data: one pigment per area
 
   public static let sleep = Palette.nocturne
-  /// Food: energy, meals, carbs (solid) and fat (hatched).
+  /// Food: energy, meals and carbs. Today draws fat as a hatch of this
+  /// pigment, beside solid carbs.
   public static let calories = Palette.madder
   public static let carbs = Palette.madder
-  public static let fat = Palette.madder
+  /// Fat and HRV where a chart can tell series apart only by colour, as
+  /// Coach's splits and line charts do until they learn the hatch and the
+  /// dash. Today hatches fat in `carbs` and dashes HRV in `heart`.
+  public static let fat = Palette.saffron
   /// Protein is set in ink, so it stands at least 3:1 from the food pigment
   /// beside it.
   public static let protein = Palette.ink
@@ -73,19 +77,21 @@ public enum Theme {
   public static let activity = Palette.moss
   /// Personal bests, with the rest of movement.
   public static let record = Palette.moss
-  /// Body: weight, body fat, resting heart and heart rate variability (HRV
-  /// is drawn dashed).
+  /// Body: weight, body fat and resting heart. Today draws HRV as a dashed
+  /// line of this pigment.
   public static let body = Palette.slate
   public static let bodyFat = Palette.slate
   public static let heart = Palette.slate
-  public static let variability = Palette.slate
+  /// HRV on its own pigment, for Coach's charts: see `fat`.
+  public static let variability = Palette.saffron
   /// Energy as the athlete feels it, from 1 to 5.
   public static let feltEnergy = Palette.saffron
   /// Soreness should never look like a reward.
   public static let soreness = Palette.ink2
 
-  /// The voice orb's colours, until the orb becomes the split mark.
-  @available(*, deprecated, message: "The orb is the mark: use markCoach and markYou")
+  /// The voice orb's colours. The orb is retired for the split mark
+  /// (`markCoach` and `markYou`) when the voice call is set in the Folio
+  /// style; remove this then.
   public static let orb = [Palette.markCoach, Palette.ultramarine, Palette.vermilion, Palette.markCoach]
 
   // MARK: Tokens

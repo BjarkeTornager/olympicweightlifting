@@ -46,18 +46,24 @@ struct Hatch: View {
 }
 
 /// The small spaced capitals that head a column or a cell, with the key of
-/// its data colour.
+/// its data colour. One line, or up to three at the largest text sizes, so
+/// a long name wraps rather than being cut short.
 struct CardLabel: View {
   let title: String
   var key: Color?
   var hatched = false
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
-    HStack(spacing: 7) {
+    let wraps = typeSize >= .xxxLarge
+    HStack(alignment: wraps ? .firstTextBaseline : .center, spacing: 7) {
       if let key {
         Key(tint: key, hatched: hatched)
       }
-      Text(title).kicker().lineLimit(1)
+      Text(title)
+        .kicker()
+        .lineLimit(wraps ? 3 : 1)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 }
@@ -79,6 +85,13 @@ extension View {
   /// Lists and forms on the app's paper instead of the system grey.
   func themedList() -> some View {
     scrollContentBackground(.hidden).background(Theme.background)
+  }
+
+  /// A themed list's rows on the sheet colour instead of the system's
+  /// white, so the paper has one white. Set on each Section; a row that
+  /// sets its own background keeps it.
+  func themedRows() -> some View {
+    listRowBackground(Theme.surface)
   }
 
   /// Shows a saved change as a margin note under the navigation bar for
@@ -133,7 +146,7 @@ private struct ToastPresenter: ViewModifier {
 #Preview("Labels") {
   VStack(alignment: .leading, spacing: 16) {
     CardLabel(title: "Energy", key: Theme.calories)
-    CardLabel(title: "Fat", key: Theme.fat, hatched: true)
+    CardLabel(title: "Fat", key: Theme.carbs, hatched: true)
     CardLabel(title: "Body fat")
     HStack {
       CardLabel(title: "Sleep", key: Theme.sleep)

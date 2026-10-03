@@ -122,12 +122,8 @@ struct LedgerColumn<Accessory: View>: View {
         if line.target != nil {
           Text(line.scale)
         } else if let setTarget {
-          Button(action: setTarget) {
-            Text("Set a target with Coach \(Image(systemName: "arrow.right"))")
-              .font(.subheadline.weight(.semibold))
-              .foregroundStyle(Theme.accent)
-          }
-          .buttonStyle(.plain)
+          Button(action: setTarget) { ActionText("Set a target with Coach") }
+            .buttonStyle(.plain)
         }
         if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
         accessory
@@ -146,23 +142,20 @@ struct LedgerColumn<Accessory: View>: View {
         Spacer(minLength: 0)
         if link != nil { GoArrow() }
       }
-      HStack(alignment: .firstTextBaseline, spacing: 5) {
-        Text(line.number).folio(role).foregroundStyle(Theme.ink).contentTransition(.numericText())
-        Text(line.unit).unit()
-        Spacer(minLength: 6)
-        Group {
-          if let target = line.targetText, line.target != nil {
-            Text("of \(Text(target).fontWeight(.semibold).foregroundStyle(Theme.ink))")
-          } else {
-            Text("logged today")
-          }
+      // The target sits beside the number when both fit on one line, and
+      // under it when they don't, so the number is never cut short.
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+          amount
+          Spacer(minLength: 6)
+          target
         }
-        .font(role == .hero ? .subheadline.monospacedDigit() : .footnote.monospacedDigit())
-        .foregroundStyle(Theme.inkSecondary)
-        .layoutPriority(1)
+        VStack(alignment: .leading, spacing: 2) {
+          amount.minimumScaleFactor(0.6)
+          target
+        }
       }
       .lineLimit(1)
-      .minimumScaleFactor(0.8)
       .fixedSize(horizontal: false, vertical: true)
       .padding(.top, 6)
       if line.target != nil {
@@ -177,6 +170,27 @@ struct LedgerColumn<Accessory: View>: View {
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(line.title)
     .accessibilityValue(line.spoken)
+  }
+
+  /// The number in the serif and its unit: "980 kcal".
+  private var amount: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 5) {
+      Text(line.number).folio(role).foregroundStyle(Theme.ink).contentTransition(.numericText())
+      Text(line.unit).unit()
+    }
+  }
+
+  /// "of 1,900", or "logged today" without a target.
+  private var target: some View {
+    Group {
+      if let target = line.targetText, line.target != nil {
+        Text("of \(Text(target).fontWeight(.semibold).foregroundStyle(Theme.ink))")
+      } else {
+        Text("logged today")
+      }
+    }
+    .font(role == .hero ? .subheadline.monospacedDigit() : .footnote.monospacedDigit())
+    .foregroundStyle(Theme.inkSecondary)
   }
 }
 
@@ -418,7 +432,9 @@ struct MacroSplit: View {
     let parts = [
       ("Protein", protein, protein * 4, Theme.protein, false),
       ("Carbs", carbs, carbs * 4, Theme.carbs, false),
-      ("Fat", fat, fat * 9, Theme.fat, true),
+      // Fat is the hatch of the food pigment, so it reads apart without
+      // a colour of its own.
+      ("Fat", fat, fat * 9, Theme.carbs, true),
     ]
     let total = parts.map(\.2).reduce(0, +)
     VStack(alignment: .leading, spacing: 9) {

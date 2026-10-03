@@ -20,6 +20,7 @@ struct SessionView: View {
               Text(notes).foregroundStyle(Theme.inkSecondary)
             }
           }
+          .themedRows()
           ForEach(workout.exercises, id: \.entryId) { exercise in
             Section {
               ForEach(Array(exercise.sets.filter(\.logged).enumerated()), id: \.element.id) { index, set in
@@ -42,6 +43,7 @@ struct SessionView: View {
             } header: {
               Text(exercise.name)
             }
+            .themedRows()
           }
         }
         .themedList()

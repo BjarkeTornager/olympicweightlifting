@@ -22,6 +22,7 @@ struct RemindersView: View {
         } footer: {
           Text("Allow notifications in Settings to get these reminders.")
         }
+        .themedRows()
       }
       Section {
         Toggle(isOn: $settings.checkIn.on) {
@@ -33,6 +34,7 @@ struct RemindersView: View {
       } footer: {
         Text("Asks how you slept and how you feel. Skipped once you've checked in.")
       }
+      .themedRows()
       Section {
         Toggle(isOn: $settings.water) {
           row("Water", "drop.fill", Category.water.tint)
@@ -40,6 +42,7 @@ struct RemindersView: View {
       } footer: {
         Text("At 11, 14 and 17, only when you're behind your daily target. Log 250 ml straight from the notification.")
       }
+      .themedRows()
       Section {
         Toggle(isOn: $settings.catchUp.on) {
           row("Evening catch-up", "moon.stars.fill", Category.sleep.tint)
@@ -50,6 +53,7 @@ struct RemindersView: View {
       } footer: {
         Text("Only when meals, last night's sleep or a started workout are missing, and says which.")
       }
+      .themedRows()
       Section {
         Toggle(isOn: $settings.windDown.on) {
           row("Wind down", "bed.double.fill", Theme.sleep)
@@ -60,6 +64,7 @@ struct RemindersView: View {
       } footer: {
         Text("A nudge towards bed, for a full night's sleep.")
       }
+      .themedRows()
     }
     .themedList()
     .tint(Theme.accent)

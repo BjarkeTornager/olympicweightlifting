@@ -207,7 +207,8 @@ struct JournalRow: View {
 
 /// The week as a printed register: one row per area of life, one mark per
 /// day, filled in that area's pigment when something was logged that day.
-/// Today's initial is bold.
+/// Today's initial is bold. At the largest text sizes each area's name sits
+/// over its marks, so the days keep the full width.
 struct WeekRegister: View {
   enum Area: String, CaseIterable {
     case sleep = "Sleep", food = "Food", drinks = "Drinks", movement = "Movement", body = "Body"
@@ -243,9 +244,11 @@ struct WeekRegister: View {
   /// The dates with a check-in.
   let checkins: Set<String>
   @ScaledMetric(relativeTo: .footnote) private var labelColumn: CGFloat = 92
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     let dates = days.map { JournalDay.date($0.date) }
+    let stacked = typeSize.isAccessibilitySize
     VStack(alignment: .leading, spacing: 0) {
       Rectangle().fill(Theme.ink).frame(height: 2)
       HStack(alignment: .firstTextBaseline) {
@@ -257,24 +260,22 @@ struct WeekRegister: View {
         }
       }
       .padding(.top, 10)
-      VStack(alignment: .leading, spacing: 7) {
+      VStack(alignment: .leading, spacing: stacked ? 12 : 7) {
         ForEach(Area.allCases, id: \.self) { area in
-          HStack(spacing: 5) {
-            HStack(spacing: 7) {
-              Key(tint: area.tint)
-              Text(area.rawValue).font(.footnote).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.8)
+          if stacked {
+            VStack(alignment: .leading, spacing: 5) {
+              label(area)
+              marks(area)
             }
-            .frame(width: labelColumn, alignment: .leading)
-            ForEach(days.indices, id: \.self) { index in
-              RoundedRectangle(cornerRadius: Theme.Radius.key)
-                .fill(area.logged(days[index], checkins: checkins) ? area.tint : Theme.track)
-                .frame(maxWidth: .infinity)
-                .frame(height: 12)
+          } else {
+            HStack(spacing: 5) {
+              label(area).lineLimit(1).minimumScaleFactor(0.8).frame(width: labelColumn, alignment: .leading)
+              marks(area)
             }
           }
         }
         HStack(spacing: 5) {
-          Color.clear.frame(width: labelColumn, height: 1)
+          if !stacked { Color.clear.frame(width: labelColumn, height: 1) }
           ForEach(dates.indices, id: \.self) { index in
             let today = index == dates.count - 1
             Text(dates[index]?.formatted(.dateTime.weekday(.narrow).locale(Format.locale)) ?? "")
@@ -293,6 +294,25 @@ struct WeekRegister: View {
         .foregroundStyle(Theme.inkSecondary)
         .padding(.top, 10)
         .accessibilityHidden(true)
+    }
+  }
+
+  private func label(_ area: Area) -> some View {
+    HStack(spacing: 7) {
+      Key(tint: area.tint)
+      Text(area.rawValue).font(.footnote).foregroundStyle(Theme.ink)
+    }
+  }
+
+  /// One mark per day, filled when something in `area` was logged.
+  private func marks(_ area: Area) -> some View {
+    HStack(spacing: 5) {
+      ForEach(days.indices, id: \.self) { index in
+        RoundedRectangle(cornerRadius: Theme.Radius.key)
+          .fill(area.logged(days[index], checkins: checkins) ? area.tint : Theme.track)
+          .frame(maxWidth: .infinity)
+          .frame(height: 12)
+      }
     }
   }
 

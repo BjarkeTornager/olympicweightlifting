@@ -103,13 +103,16 @@ test(
     const exists = async (id: string) =>
       (await pool.query("SELECT 1 FROM users WHERE id=$1", [id])).rowCount;
 
-    let mlflowUp = true;
+    let mlflow: "up" | "down" | "forbidden" = "up";
     const requests: { url: string; body: Record<string, unknown> }[] = [];
     const fetch = mock.method(
       globalThis,
       "fetch",
       async (url: string, init: RequestInit) => {
-        if (!mlflowUp) throw new TypeError("fetch failed");
+        if (mlflow === "down") throw new TypeError("fetch failed");
+        // The app's MLflow user without MANAGE on the experiment.
+        if (mlflow === "forbidden")
+          return new Response("Permission denied", { status: 403 });
         const body = JSON.parse(String(init.body));
         requests.push({ url, body });
         if (url.endsWith("/api/3.0/mlflow/traces/search"))
@@ -172,16 +175,24 @@ test(
 
     // MLflow unreachable: the account is still deleted and the reply says
     // so; the failure is logged by category for the expiry to clean up.
-    mlflowUp = false;
-    const second = await member();
-    assert.equal((await remove(second)).status, 200);
-    assert.equal(await exists(second.id), 0);
+    // A refusal is logged with MLflow's status.
+    for (const state of ["down", "forbidden"] as const) {
+      mlflow = state;
+      const account = await member();
+      assert.equal((await remove(account)).status, 200);
+      assert.equal(await exists(account.id), 0);
+    }
     assert.deepEqual(lines(warn), [
       { event: "account_traces_delete_failed", category: "network" },
+      {
+        event: "account_traces_delete_failed",
+        category: "Error",
+        status: 403,
+      },
     ]);
 
     // Without MLflow configured nothing is sent or scheduled.
-    mlflowUp = true;
+    mlflow = "up";
     requests.length = 0;
     delete process.env.MLFLOW_TRACKING_URI;
     const third = await member();

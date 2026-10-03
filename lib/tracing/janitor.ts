@@ -3,8 +3,7 @@
 // Started from instrumentation.ts on every server; it runs whenever MLflow is
 // configured, including with TRACING off, so turning capture off still lets
 // the traces already sent expire.
-import { errorCategory } from "../error-log";
-import { deleteOlderThan } from "./admin";
+import { deleteOlderThan, deletionFailure } from "./admin";
 import { traceAdminConfig } from "./config";
 
 const KEY = Symbol.for("lift.tracing.janitor");
@@ -26,7 +25,7 @@ export async function sweepTraces() {
     console.warn(
       JSON.stringify({
         event: "trace_retention_failed",
-        category: errorCategory(error),
+        ...deletionFailure(error),
       }),
     );
   }

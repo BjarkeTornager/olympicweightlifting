@@ -8,6 +8,20 @@ import { traceAdminConfig, type MlflowTarget } from "./config";
 const PAGE = 500;
 const BATCH = 1000;
 
+// MLflow's answer when it refuses, such as 403 when the app's MLflow user
+// lacks MANAGE on the experiment (docs/tracing-setup.md).
+export class MlflowError extends Error {
+  constructor(readonly status: number) {
+    super(`MLflow returned ${status}.`);
+  }
+}
+
+// What a failed deletion logs: the category and MLflow's status, if any.
+export const deletionFailure = (error: unknown) => ({
+  category: errorCategory(error),
+  ...(error instanceof MlflowError ? { status: error.status } : {}),
+});
+
 async function call(
   config: MlflowTarget,
   path: string,
@@ -26,7 +40,7 @@ async function call(
   });
   if (!response.ok) {
     await response.body?.cancel();
-    throw Error(`MLflow returned ${response.status}.`);
+    throw new MlflowError(response.status);
   }
   return (await response.json()) as Record<string, unknown>;
 }
@@ -101,7 +115,7 @@ export async function deleteAccountTraces(
     console.warn(
       JSON.stringify({
         event: "account_traces_delete_failed",
-        category: errorCategory(error),
+        ...deletionFailure(error),
       }),
     );
   }

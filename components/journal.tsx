@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { BrandMark } from "./brand-mark";
 import {
   ChevronRight,
   Check,
@@ -166,7 +167,7 @@ export function Journal(props: PrivateSessionProps) {
       <aside className="sidebar">
         <a className="brand" href="#today">
           <span className="brand-icon">
-            <BarbellIcon size={22} active />
+            <BrandMark />
           </span>
           <span>
             Lift<span className="brand-light">Journal</span>

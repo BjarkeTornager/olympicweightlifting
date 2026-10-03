@@ -366,6 +366,12 @@ test("Only the endpoint loads the Restate SDK, and only with RESTATE_ENDPOINT=1"
   );
   assert.ok(block, "the RESTATE_ENDPOINT block");
   assert.match(block[1], /import\("\.\/lib\/restate\/endpoint"\)/);
+  // The log level defaults to WARN in production before the SDK loads,
+  // which is when it reads it.
+  assert.match(
+    block[1],
+    /RESTATE_LOGGING \|\|=\s*process\.env\.NODE_ENV === "production" \? "WARN"[\s\S]*import\("\.\/lib\/restate\/endpoint"\)/,
+  );
   assert.equal(
     instrumentation.match(/lib\/restate\//g)?.length,
     1,

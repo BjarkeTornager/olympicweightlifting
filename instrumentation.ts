@@ -35,6 +35,12 @@ export async function register() {
     process.env.NEXT_RUNTIME === "nodejs" &&
     process.env.RESTATE_ENDPOINT === "1"
   ) {
+    // The SDK reads its log level once, as it loads. At INFO it logs every
+    // call with its target, which for Coach will include the account id, so
+    // production logs only warnings and errors unless RESTATE_LOGGING says
+    // otherwise.
+    process.env.RESTATE_LOGGING ||=
+      process.env.NODE_ENV === "production" ? "WARN" : "INFO";
     try {
       const { startRestateEndpoint } = await import("./lib/restate/endpoint");
       startRestateEndpoint();

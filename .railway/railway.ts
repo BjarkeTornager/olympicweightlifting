@@ -60,10 +60,15 @@ export default defineRailway(() => {
       // endpoint Restate calls, which needs RESTATE_IDENTITY_KEYS in
       // production; the two URLs are the restate service's private
       // addresses, for scripts/restate-register.ts and later Coach turns.
+      // The rest are normally unset: port 9080 on ::, and SDK logs at WARN,
+      // which keep account ids out of the logs.
       RESTATE_ENDPOINT: preserve(),
       RESTATE_IDENTITY_KEYS: preserve(),
       RESTATE_ADMIN_URL: preserve(),
       RESTATE_INGRESS_URL: preserve(),
+      RESTATE_ENDPOINT_PORT: preserve(),
+      RESTATE_ENDPOINT_HOST: preserve(),
+      RESTATE_LOGGING: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

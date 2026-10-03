@@ -164,9 +164,40 @@ enum CoachReplyFormat {
         failurePolicy: .returnPartiallyParsedIfPossible)))
       ?? AttributedString(text)
   }
+
+  /// As `attributed`, set in New York at `size`: strong words in weight 500
+  /// rather than bold, which is too heavy in running serif text, and code in
+  /// SF Mono. A short strong figure ("7 h 15 min") never breaks across lines.
+  static func letter(_ text: String, size: CGFloat) -> AttributedString {
+    let source = attributed(text)
+    var letter = AttributedString()
+    for run in source.runs {
+      var piece = AttributedString(source[run.range])
+      let intent = run.inlinePresentationIntent ?? []
+      let strong = intent.contains(.stronglyEmphasized)
+      let italic = intent.contains(.emphasized)
+      let code = intent.contains(.code)
+      if strong || italic || code {
+        if strong && piece.characters.count <= 16 {
+          let joined = String(piece.characters).replacingOccurrences(of: " ", with: "\u{00A0}")
+          piece = AttributedString(joined, attributes: run.attributes)
+        }
+        var font: Font =
+          code
+          ? .system(size: size * 0.85, weight: .regular, design: .monospaced)
+          : .system(size: size, weight: strong ? .medium : .regular, design: .serif)
+        if italic { font = font.italic() }
+        piece.font = font.monospacedDigit()
+        piece.inlinePresentationIntent = nil
+      }
+      letter.append(piece)
+    }
+    return letter
+  }
 }
 
-/// A Coach reply rendered natively.
+/// A Coach reply rendered natively, as a letter: New York paragraphs and
+/// lists, tables as small sheets, code in SF Mono.
 struct CoachText: View {
   let text: String
 
@@ -179,58 +210,78 @@ struct CoachText: View {
 
 struct MarkdownBlocksView: View {
   let blocks: [MarkdownBlock]
+  /// The serif's size for Coach's paragraphs, which runs of strong or
+  /// italic text must match.
+  @ScaledMetric(relativeTo: .body) private var size: CGFloat = 18
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 12) {
       ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
         switch block {
         case .heading(let text):
-          Text(CoachReplyFormat.attributed(text))
-            .font(.headline)
+          Text(CoachReplyFormat.letter(text, size: size * 20 / 18))
+            .folio(.heading)
+            .foregroundStyle(Theme.ink)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 4)
+            .accessibilityAddTraits(.isHeader)
         case .paragraph(let text):
-          Text(CoachReplyFormat.attributed(text))
-            .lineSpacing(2)
+          paragraph(text)
         case .list(let ordered, let start, let items):
-          VStack(alignment: .leading, spacing: 6) {
+          VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-              HStack(alignment: .firstTextBaseline, spacing: 8) {
+              HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(ordered ? "\(start + index)." : "•")
-                  .monospacedDigit()
-                  .foregroundStyle(.secondary)
-                  .frame(minWidth: ordered ? 20 : 10, alignment: .trailing)
-                VStack(alignment: .leading, spacing: 6) {
-                  Text(CoachReplyFormat.attributed(item.text)).lineSpacing(2)
+                  .folio(.coach)
+                  .foregroundStyle(Theme.inkSecondary)
+                  .frame(minWidth: ordered ? 22 : 10, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 8) {
+                  paragraph(item.text)
                   if !item.children.isEmpty { MarkdownBlocksView(blocks: item.children) }
                 }
               }
             }
           }
         case .table(let header, let rows):
-          DataTable(columns: header, rows: rows)
+          DataTable(columns: header, rows: rows).card(padding: 0)
         case .code(let code):
           ScrollView(.horizontal) {
             Text(code)
               .font(.system(.footnote, design: .monospaced))
+              .foregroundStyle(Theme.ink)
               .padding(12)
           }
-          .background(Theme.fill, in: .rect(cornerRadius: 10))
+          .background(Theme.fill, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
         case .quote(let text):
-          HStack(spacing: 10) {
-            Capsule().fill(.tertiary).frame(width: 3)
-            Text(CoachReplyFormat.attributed(text)).foregroundStyle(.secondary)
+          HStack(spacing: 12) {
+            Rectangle().fill(Theme.track).frame(width: 2)
+            Text(CoachReplyFormat.letter(text, size: size))
+              .folio(.coach)
+              .italic()
+              .foregroundStyle(Theme.inkSecondary)
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
       }
     }
   }
+
+  private func paragraph(_ text: String) -> some View {
+    Text(CoachReplyFormat.letter(text, size: size))
+      .folio(.coach)
+      .foregroundStyle(Theme.ink)
+      .fixedSize(horizontal: false, vertical: true)
+  }
 }
 
-/// A table as a native grid: bold header, the first column as row labels,
-/// scrolling sideways when it is wider than the screen.
+/// A table as a native grid: the header in small capitals, the first
+/// column as row labels, hairlines between rows, scrolling sideways when it
+/// is wider than the screen. It sits on whatever sheet holds it.
 struct DataTable: View {
   let columns: [String]
   let rows: [[String]]
+  /// Room at the sides: none inside a figure, which has its own margin.
+  var inset: CGFloat = 14
 
   var body: some View {
     ScrollView(.horizontal) {
@@ -238,18 +289,18 @@ struct DataTable: View {
         GridRow {
           ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
             Text(CoachReplyFormat.attributed(column))
-              .font(.footnote.weight(.semibold))
-              .foregroundStyle(.secondary)
+              .kicker()
               .padding(.vertical, 8)
           }
         }
         ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-          Divider().gridCellUnsizedAxes(.horizontal)
+          Rectangle().fill(Theme.rule).frame(height: 1).gridCellUnsizedAxes(.horizontal)
           GridRow {
             ForEach(Array(row.enumerated()), id: \.offset) { index, cell in
               Text(CoachReplyFormat.attributed(cell))
                 .font(.subheadline.weight(index == 0 ? .semibold : .regular))
                 .monospacedDigit()
+                .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 220, alignment: .leading)
                 .padding(.vertical, 8)
@@ -257,10 +308,9 @@ struct DataTable: View {
           }
         }
       }
-      .padding(.horizontal, 14)
+      .padding(.horizontal, inset)
       .padding(.vertical, 4)
     }
     .scrollIndicators(.hidden)
-    .background(Theme.fill, in: .rect(cornerRadius: 14))
   }
 }

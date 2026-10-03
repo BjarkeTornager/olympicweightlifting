@@ -18,19 +18,19 @@ struct RouteMap: View {
     let shown = visual.loop == true && stops.count > 2 ? Array(stops.dropLast()) : stops
     Map(interactionModes: [.pan, .zoom]) {
       MapPolyline(coordinates: path)
-        .stroke(Theme.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        .stroke(Theme.activity, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
       ForEach(Array(shown.enumerated()), id: \.offset) { index, stop in
         Marker(
           stop.label, systemImage: symbol(index, of: stops.count),
           coordinate: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng)
         )
-        .tint(index == 0 ? Theme.success : Theme.accent)
+        .tint(index == 0 ? Theme.ink : Theme.activity)
       }
     }
     .mapStyle(.standard(pointsOfInterest: .excludingAll))
     .frame(height: height)
     .frame(maxHeight: height == nil ? .infinity : nil)
-    .clipShape(.rect(cornerRadius: height == nil ? 0 : 14))
+    .clipShape(.rect(cornerRadius: height == nil ? 0 : Theme.Radius.badge, style: .continuous))
     .accessibilityLabel(accessibilityText)
   }
 
@@ -69,6 +69,6 @@ struct RouteFacts: View {
       }
     }
     .font(.footnote)
-    .foregroundStyle(.secondary)
+    .foregroundStyle(Theme.inkSecondary)
   }
 }

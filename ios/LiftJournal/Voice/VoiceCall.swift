@@ -35,7 +35,12 @@ final class VoiceCall {
   private(set) var status: Status = .idle
   private(set) var error: String?
   private(set) var lines: [Line] = []
-  private(set) var level: Float = 0
+  /// Coach's voice and the athlete's, each from 0 to 1 and smoothed: each
+  /// half of the call's mark rises with its own speaker.
+  private(set) var coachLevel: Float = 0
+  private(set) var micLevel: Float = 0
+  /// When the voice answered, for the call's running time.
+  private(set) var connectedAt: Date?
   var muted = false {
     didSet { audio.muted = muted }
   }
@@ -157,7 +162,8 @@ final class VoiceCall {
     socket?.cancel(with: .normalClosure, reason: nil)
     socket = nil
     audio.stop()
-    level = 0
+    coachLevel = 0
+    micLevel = 0
     connected(.failure(CancellationError()))
     error = failure
     status = failure == nil ? .ended : .failed
@@ -270,6 +276,7 @@ final class VoiceCall {
     status = audio.coachSpeaking ? .speaking : .listening
     if !started {
       started = true
+      connectedAt = .now
       // Let the coach speak first.
       note("(The athlete started the call.)", answer: true)
       UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -357,13 +364,17 @@ final class VoiceCall {
     }
   }
 
-  /// Drives the on-screen voice from the coach's and the athlete's levels.
+  /// Drives the on-screen voice from the coach's and the athlete's levels,
+  /// kept apart so the mark shows whose turn it is. A muted microphone
+  /// moves nothing.
   private func meter() {
     tasks.append(
       Task { [weak self] in
         while let self, !self.closed {
-          let target = max(self.audio.coachLevel * 4, self.audio.micLevel * 6)
-          self.level = min(1, self.level * 0.7 + target * 0.3)
+          let coach = min(1, self.audio.coachLevel * 4)
+          let mic = self.muted ? 0 : min(1, self.audio.micLevel * 6)
+          self.coachLevel = self.coachLevel * 0.7 + coach * 0.3
+          self.micLevel = self.micLevel * 0.7 + mic * 0.3
           try? await Task.sleep(for: .milliseconds(50))
         }
       })
@@ -795,6 +806,26 @@ final class VoiceCall {
     }
   }
 }
+
+#if DEBUG
+  extension VoiceCall {
+    /// A call at a given moment, for previews and screenshots: nothing
+    /// connects or plays.
+    static func staged(
+      _ status: Status, lines: [Line] = [], coachLevel: Float = 0, micLevel: Float = 0, muted: Bool = false
+    ) -> VoiceCall {
+      let call = VoiceCall(app: AppModel())
+      call.status = status
+      call.lines = lines
+      call.coachLevel = coachLevel
+      call.micLevel = micLevel
+      call.connectedAt = .now - 192
+      call.closed = !call.inCall
+      call.muted = muted
+      return call
+    }
+  }
+#endif
 
 struct VoiceError: LocalizedError {
   let message: String

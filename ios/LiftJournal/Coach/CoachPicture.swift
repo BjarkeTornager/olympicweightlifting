@@ -14,6 +14,8 @@ extension EnvironmentValues {
 /// athlete's session. It is drawn after the card appears, so this asks again
 /// every second and a half while it is being drawn, for up to 45 seconds. It
 /// is always marked as an AI picture, and tapping it opens it full screen.
+/// A picture already fetched shows at once when its card scrolls back into
+/// view.
 struct CoachPicture: View {
   @Environment(AppModel.self) private var app
   @Environment(\.picturesOpenFullScreen) private var opensFullScreen
@@ -28,9 +30,12 @@ struct CoachPicture: View {
 
   @State private var phase = Phase.drawing
   @State private var viewing = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let interval: Duration = .milliseconds(1500)
   static let patience: Duration = .seconds(45)
+  /// Pictures fetched this session, by id.
+  static let cache = NSCache<NSString, UIImage>()
 
   /// 200 is the picture and 202 still drawing; no answer, a busy server or a
   /// release in progress is worth asking again; anything else (404) is gone.
@@ -46,17 +51,21 @@ struct CoachPicture: View {
     if case .unavailable = phase {
       Label("Picture unavailable", systemImage: "photo")
         .font(.footnote)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Theme.inkSecondary)
     } else {
       frame
         .overlay { picture }
-        .clipShape(.rect(cornerRadius: 14, style: .continuous))
+        .clipShape(.rect(cornerRadius: Theme.Radius.badge, style: .continuous))
+        // A printed label on the picture, legible on any dish.
         .overlay(alignment: .topLeading) {
           Text("AI picture")
             .font(.caption2.weight(.semibold))
+            .textCase(.uppercase)
+            .tracking(1)
+            .foregroundStyle(Theme.ink)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: .capsule)
+            .background(Theme.surface.opacity(0.88), in: .capsule)
             .padding(8)
             .accessibilityHidden(true)
         }
@@ -100,10 +109,10 @@ struct CoachPicture: View {
       VStack(spacing: 8) {
         Image(systemName: "photo.artframe")
           .font(.title2)
-          .symbolEffect(.pulse, options: .repeating)
-        Text("Drawing a picture…").font(.footnote)
+          .foregroundStyle(Theme.inkTertiary)
+          .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+        Text("Drawing a picture…").folio(.note).foregroundStyle(Theme.inkSecondary)
       }
-      .foregroundStyle(.secondary)
     case .unavailable:
       EmptyView()
     }
@@ -111,6 +120,10 @@ struct CoachPicture: View {
 
   private func load() async {
     guard case .drawing = phase else { return }
+    if let image = Self.cache.object(forKey: id as NSString) {
+      phase = .ready(image)
+      return
+    }
     guard let session = app.session else {
       phase = .unavailable
       return
@@ -122,7 +135,12 @@ struct CoachPicture: View {
         account: session.accountID, timeout: 15)
       switch Self.outcome(status: response?.status ?? 0) {
       case .ready:
-        phase = response.flatMap { UIImage(data: $0.data) }.map(Phase.ready) ?? .unavailable
+        guard let image = response.flatMap({ UIImage(data: $0.data) }) else {
+          phase = .unavailable
+          return
+        }
+        Self.cache.setObject(image, forKey: id as NSString)
+        phase = .ready(image)
         return
       case .gone:
         phase = .unavailable

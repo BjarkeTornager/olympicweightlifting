@@ -2,76 +2,14 @@ import LiftAPI
 import LiftTheme
 import SwiftUI
 
-/// The Coach conversation as a text thread with a human coach, in the style
-/// of Messages: the athlete's texts and photos on the right in the accent
-/// colour, the coach's on the left on white, one bubble per paragraph, with the coach's
-/// avatar beside the last text of each reply.
-enum Speaker {
-  case athlete, coach
-}
+// The Coach conversation, set as correspondence rather than chat bubbles:
+// the athlete's words in a crisp ink capsule on the right, and Coach's
+// replies as letters, with a byline and a margin rule in the colour of
+// what the reply is about.
 
-/// One text. The last in a run gets a tighter corner on the speaker's side.
-struct MessageBubble<Content: View>: View {
-  let speaker: Speaker
-  var last = true
-  @ViewBuilder var content: Content
-
-  var body: some View {
-    content
-      .foregroundStyle(speaker == .athlete ? Theme.onAccent : Color.primary)
-      .tint(speaker == .athlete ? Theme.onAccent : Theme.accent)
-      .padding(.horizontal, 13)
-      .padding(.vertical, 8)
-      .background(speaker == .athlete ? Theme.accent : Theme.surface, in: shape)
-  }
-
-  private var shape: UnevenRoundedRectangle {
-    let tail: CGFloat = last ? 5 : 18
-    return speaker == .athlete
-      ? UnevenRoundedRectangle(
-        topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: tail, topTrailingRadius: 18,
-        style: .continuous)
-      : UnevenRoundedRectangle(
-        topLeadingRadius: 18, bottomLeadingRadius: tail, bottomTrailingRadius: 18, topTrailingRadius: 18,
-        style: .continuous)
-  }
-}
-
-/// A row in the thread: the athlete's on the right, the coach's on the left
-/// beside the avatar's column.
-struct MessageRow<Content: View>: View {
-  let speaker: Speaker
-  var avatar = false
-  @ViewBuilder var content: Content
-
-  var body: some View {
-    HStack(alignment: .bottom, spacing: 6) {
-      if speaker == .athlete {
-        Spacer(minLength: 56)
-      } else {
-        CoachAvatar().opacity(avatar ? 1 : 0)
-      }
-      content
-      if speaker == .coach { Spacer(minLength: 40) }
-    }
-  }
-}
-
-struct CoachAvatar: View {
-  var body: some View {
-    Image("tab-coach-fill")
-      .renderingMode(.template)
-      .resizable()
-      .scaledToFit()
-      .frame(width: 16, height: 16)
-      .foregroundStyle(Theme.onAccent)
-      .frame(width: 28, height: 28)
-      .background(Theme.accent, in: .circle)
-      .accessibilityHidden(true)
-  }
-}
-
-/// What the athlete sent: photos first, then the text, as Messages shows it.
+/// What the athlete sent: photos first, then the words in an ink capsule.
+/// A message still in the queue (waiting its turn, or not sent) is drawn as
+/// the capsule's dashed outline, as it hasn't reached Coach yet.
 struct SentMessage: View {
   let text: String
   var photoIDs: [String] = []
@@ -79,29 +17,46 @@ struct SentMessage: View {
   /// What VoiceOver calls a photo not yet saved in the thread.
   var previewLabel = "Photo you sent"
   var voice = false
+  var queued = false
+  @ScaledMetric(relativeTo: .body) private var widest: CGFloat = 280
 
   var body: some View {
-    VStack(alignment: .trailing, spacing: 3) {
+    VStack(alignment: .trailing, spacing: 4) {
       if !photoIDs.isEmpty || !previews.isEmpty {
-        MessageRow(speaker: .athlete) {
-          PhotoTiles(ids: photoIDs, previews: previews, previewLabel: previewLabel)
-        }
+        PhotoTiles(ids: photoIDs, previews: previews, previewLabel: previewLabel)
       }
       if !text.isEmpty {
-        MessageRow(speaker: .athlete) {
-          MessageBubble(speaker: .athlete) {
-            Text(CoachReplyFormat.attributed(text)).textSelection(.enabled)
+        Text(CoachReplyFormat.attributed(text))
+          .font(.body)
+          .foregroundStyle(queued ? Theme.ink : Theme.background)
+          .tint(queued ? Theme.accent : Theme.background)
+          .textSelection(.enabled)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, 17)
+          .padding(.vertical, 11)
+          .background {
+            if queued {
+              Self.shape.strokeBorder(Theme.inkSecondary, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            } else {
+              Self.shape.fill(Theme.ink)
+            }
           }
-        }
+          .frame(maxWidth: widest, alignment: .trailing)
       }
       if voice {
         Label("Spoken", systemImage: "waveform")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
+          .font(.caption2.weight(.medium))
+          .foregroundStyle(Theme.inkSecondary)
       }
     }
+    .padding(.leading, 48)
     .frame(maxWidth: .infinity, alignment: .trailing)
   }
+
+  /// Round, with a small tail at the bottom on the speaker's side.
+  static let shape = UnevenRoundedRectangle(
+    topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 6, topTrailingRadius: 22,
+    style: .continuous)
 }
 
 /// A message waiting for Coach to finish the one before, or one that
@@ -113,67 +68,90 @@ struct QueuedMessage: View {
   let coach: CoachModel
 
   var body: some View {
-    VStack(alignment: .trailing, spacing: 2) {
+    VStack(alignment: .trailing, spacing: 6) {
       SentMessage(
         text: item.text, previews: item.photos.map(\.preview),
-        previewLabel: item.failure == nil ? "Photo waiting to send" : "Photo not sent")
+        previewLabel: item.failure == nil ? "Photo waiting to send" : "Photo not sent", queued: true)
       if let failure = item.failure {
-        Label(failure, systemImage: "exclamationmark.circle")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.trailing)
-          .padding(.top, 2)
+        Label {
+          Text(failure).foregroundStyle(Theme.inkSecondary)
+        } icon: {
+          Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger)
+        }
+        .font(.footnote)
+        .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.leading, 48)
         // Edit needs the text field: a message that can only be edited
         // says how to free it.
         if item.expired && coach.hasDraft {
           Text("Empty the text field to edit it.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.footnote)
+            .foregroundStyle(Theme.inkSecondary)
         }
-        HStack(spacing: 4) {
-          action("Remove", label: "Remove message", role: .destructive) { coach.remove(item.id, app: app) }
-          if !coach.hasDraft {
-            action("Edit", label: "Edit message") { coach.edit(item.id, app: app) }
-          } else if item.expired {
-            action("Edit", label: "Edit message") {}
-              .disabled(true)
-          }
-          // A message that waited over a day can only be edited or removed.
-          if !item.expired {
-            action("Retry", label: "Retry sending") { coach.retry(item.id, app: app) }
-              .fontWeight(.semibold)
-          }
+        // In a row while they fit, otherwise one under another.
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 8) { actions }
+          VStack(alignment: .trailing, spacing: 8) { actions }
         }
-        .font(.footnote)
       } else {
-        HStack(spacing: 4) {
-          Label(status, systemImage: "clock")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-          action("Remove", label: "Remove message") { coach.remove(item.id, app: app) }
-            .font(.caption)
+        // On one line while it fits, otherwise Remove under the status.
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 4) { waiting }
+          VStack(alignment: .trailing, spacing: 0) { waiting }
         }
       }
     }
     .frame(maxWidth: .infinity, alignment: .trailing)
-    .padding(.top, 4)
     .accessibilityElement(children: .contain)
   }
 
-  /// A small text button with a full-size target, named for VoiceOver
-  /// with the message it acts on.
-  private func action(
-    _ title: String, label: String, role: ButtonRole? = nil, perform: @escaping () -> Void
-  ) -> some View {
-    Button(role: role, action: perform) {
-      Text(title)
+  @ViewBuilder
+  private var waiting: some View {
+    Label(status, systemImage: "clock")
+      .font(.footnote)
+      .foregroundStyle(Theme.inkSecondary)
+      .multilineTextAlignment(.trailing)
+    Button {
+      coach.remove(item.id, app: app)
+    } label: {
+      Text("Remove")
+        .font(.footnote.weight(.semibold))
         .padding(.horizontal, 6)
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(.rect)
     }
     .buttonStyle(.borderless)
-    .accessibilityLabel(label)
+    .tint(Theme.accent)
+    .accessibilityLabel("Remove message")
     .accessibilityHint(item.summary)
+  }
+
+  @ViewBuilder
+  private var actions: some View {
+    Button("Remove", role: .destructive) { coach.remove(item.id, app: app) }
+      .buttonStyle(SecondaryButtonStyle())
+      .accessibilityLabel("Remove message")
+      .accessibilityHint(item.summary)
+    if !coach.hasDraft {
+      Button("Edit") { coach.edit(item.id, app: app) }
+        .buttonStyle(SecondaryButtonStyle())
+        .accessibilityLabel("Edit message")
+        .accessibilityHint(item.summary)
+    } else if item.expired {
+      Button("Edit") {}
+        .buttonStyle(SecondaryButtonStyle())
+        .disabled(true)
+        .accessibilityLabel("Edit message")
+        .accessibilityHint(item.summary)
+    }
+    // A message that waited over a day can only be edited or removed.
+    if !item.expired {
+      Button("Retry") { coach.retry(item.id, app: app) }
+        .buttonStyle(PrimaryButtonStyle(height: 44, fullWidth: false))
+        .accessibilityLabel("Retry sending")
+        .accessibilityHint(item.summary)
+    }
   }
 
   private var status: String {
@@ -232,7 +210,7 @@ struct PhotoTiles: View {
       } label: {
         PrivateImage(id: id)
           .frame(width: side, height: side)
-          .clipShape(.rect(cornerRadius: 18, style: .continuous))
+          .clipShape(.rect(cornerRadius: Theme.Radius.sheet, style: .continuous))
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Photo you sent")
@@ -241,7 +219,7 @@ struct PhotoTiles: View {
         .resizable()
         .scaledToFill()
         .frame(width: side, height: side)
-        .clipShape(.rect(cornerRadius: 18, style: .continuous))
+        .clipShape(.rect(cornerRadius: Theme.Radius.sheet, style: .continuous))
         .opacity(0.8)
         .accessibilityLabel(previewLabel)
     }
@@ -267,85 +245,169 @@ private struct PhotoViewer: View {
   }
 }
 
-/// Coach's reply as a run of texts: each paragraph, list or quote its own
-/// bubble, a table as a card, the avatar beside the last one.
-struct CoachMessages: View {
-  let text: String
+/// The head of Coach's letter: the mark, "Coach" in the accent, and what the
+/// reply is about with its key ("■ Sleep"). VoiceOver reads it as a heading,
+/// so replies can be skipped through.
+struct CoachByline: View {
+  var topic: Category?
+  @ScaledMetric(relativeTo: .caption) private var mark: CGFloat = 18
 
   var body: some View {
-    let parts = Self.split(text)
-    VStack(alignment: .leading, spacing: 3) {
-      ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
-        let last = index == parts.count - 1
-        MessageRow(speaker: .coach, avatar: last) {
-          if case .table(let header, let rows) = part {
-            DataTable(columns: header, rows: rows)
-          } else {
-            MessageBubble(speaker: .coach, last: last) {
-              MarkdownBlocksView(blocks: [part]).textSelection(.enabled)
-            }
-          }
+    // The topic moves to a line of its own when it doesn't fit beside.
+    FlowLayout(spacing: 8, lineSpacing: 6) {
+      HStack(spacing: 8) {
+        BrandMark().frame(width: mark, height: mark)
+        Text("Coach").foregroundStyle(Theme.accent).kicker().fixedSize()
+      }
+      if let topic {
+        HStack(spacing: 6) {
+          Key(tint: topic.tint)
+          Text(topic.name).kicker().fixedSize()
         }
-      }
-    }
-  }
-
-  /// Headings join the text they introduce, so no bubble holds only a title.
-  static func split(_ text: String) -> [MarkdownBlock] {
-    var parts: [MarkdownBlock] = []
-    var heading: String?
-    for block in MarkdownBlock.parse(text) {
-      switch block {
-      case .heading(let title):
-        heading = [heading, "**\(title)**"].compactMap { $0 }.joined(separator: "\n")
-      case .paragraph(let body) where heading != nil:
-        parts.append(.paragraph(heading! + "\n" + body))
-        heading = nil
-      default:
-        if let title = heading { parts.append(.paragraph(title)) }
-        heading = nil
-        parts.append(block)
-      }
-    }
-    if let title = heading { parts.append(.paragraph(title)) }
-    return parts
-  }
-}
-
-/// Coach is typing: three dots in a grey bubble, and what it is doing.
-struct TypingBubble: View {
-  let step: String?
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 3) {
-      MessageRow(speaker: .coach, avatar: true) {
-        MessageBubble(speaker: .coach) {
-          Image(systemName: "ellipsis")
-            .font(.title3.weight(.bold))
-            .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating)
-            .foregroundStyle(.secondary)
-            .padding(.vertical, 4)
-        }
-      }
-      if let step {
-        Text(step).font(.caption).foregroundStyle(.secondary).padding(.leading, 40)
+        .padding(.leading, 8)
+        .padding(.trailing, 10)
+        .padding(.vertical, 4)
+        .background(Theme.fill, in: .capsule)
       }
     }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Coach is replying")
+    .accessibilityLabel(topic.map { "Coach, \($0.name)" } ?? "Coach")
+    .accessibilityAddTraits(.isHeader)
   }
 }
 
-/// A single text, as used by the voice call's transcript.
-struct Bubble: View {
-  let text: String
-  let mine: Bool
+/// Coach's reply as a letter: the byline, then the reply in New York behind
+/// a 2 pt margin rule in the colour of its topic (ultramarine when it has
+/// none), with its figures and receipts inside the same margin.
+struct CoachLetter<Content: View>: View {
+  var topic: Category?
+  @ViewBuilder var content: Content
 
   var body: some View {
-    MessageRow(speaker: mine ? .athlete : .coach, avatar: !mine) {
-      MessageBubble(speaker: mine ? .athlete : .coach) {
-        Text(CoachReplyFormat.attributed(text))
-      }
+    VStack(alignment: .leading, spacing: 10) {
+      CoachByline(topic: topic)
+      VStack(alignment: .leading, spacing: 16) { content }
+        .padding(.leading, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .leading) {
+          Rectangle()
+            .fill(topic?.tint ?? Theme.accent)
+            .frame(width: 2)
+            .accessibilityHidden(true)
+        }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
+
+/// Coach is writing: a moving ellipsis in the letter's margin, and what it
+/// is doing in serif italic ("Reading your journal").
+struct CoachWriting: View {
+  let step: String?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 10) {
+      Image(systemName: "ellipsis")
+        .font(.title3.weight(.bold))
+        .foregroundStyle(Theme.inkSecondary)
+        .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating, isActive: !reduceMotion)
+      if let step {
+        Text(step).folio(.note).foregroundStyle(Theme.inkSecondary)
+      }
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(step.map { "Coach is replying: \($0)" } ?? "Coach is replying")
+  }
+}
+
+/// One spoken line of a call, in the thread and on the call screen, below
+/// a hairline: who in small capitals, then what was said, yours in SF and
+/// Coach's in the serif. At the largest text sizes who stands above the
+/// words.
+struct TranscriptLine: View {
+  let coach: Bool
+  let text: String
+  @Environment(\.dynamicTypeSize) private var typeSize
+  /// The column the names stand in, at the default text size.
+  static let indent: CGFloat = 66
+  @ScaledMetric(relativeTo: .caption) private var column: CGFloat = TranscriptLine.indent
+
+  var body: some View {
+    let stacked = typeSize.isAccessibilitySize
+    let layout =
+      stacked
+      ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+      : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+    layout {
+      Text(coach ? "Coach" : "You")
+        .foregroundStyle(coach ? Theme.accent : Theme.inkSecondary)
+        .kicker()
+        .frame(width: stacked ? nil : column - 8, alignment: .leading)
+      Text(CoachReplyFormat.attributed(text))
+        .font(coach ? .system(.body, design: .serif) : .callout)
+        .foregroundStyle(Theme.ink)
+        .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .padding(.vertical, 10)
+    .overlay(alignment: .top) { Rectangle().fill(Theme.rule).frame(height: 1) }
+    .accessibilityElement(children: .combine)
+  }
+}
+
+#if DEBUG
+  /// A thread as Coach shows it: a sent message, a letter about sleep with
+  /// its figure, a recipe with its picture, and the queue's two states.
+  struct CoachThreadPreview: View {
+    init() {
+      CoachPicture.cache.setObject(PreviewData.dishPicture, forKey: PreviewData.pictureID as NSString)
+    }
+
+    var body: some View {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 18) {
+          SentMessage(text: "How did I sleep this week?")
+          CoachLetter(topic: .sleep) {
+            CoachText(
+              text:
+                "You logged sleep on all 7 nights this week, averaging **7 h 12 min** from 26 September to 2 October.")
+            CoachVisualView(visual: PreviewData.sleepFigure, number: 1, tint: Theme.sleep).card(padding: 14)
+            CoachText(
+              text:
+                "Your longest night was **8 h 6 min** on 28 September. The shortest was **6 h 12 min** on 30 September.")
+          }
+          SentMessage(text: "Something with salmon for dinner?")
+          CoachLetter(topic: .food) {
+            CoachText(text: "A quick bowl that keeps protein high. The picture is drawn for the card.")
+            CoachVisualView(visual: PreviewData.recipe, tint: Theme.calories).card(padding: 14)
+          }
+          QueuedPreview()
+        }
+        .padding(20)
+      }
+      .background(Theme.background)
+      .environment(AppModel())
+    }
+  }
+
+  /// A message that couldn't be sent, and one waiting behind it.
+  struct QueuedPreview: View {
+    @State private var coach = PreviewData.queuedCoach()
+
+    var body: some View {
+      VStack(spacing: 18) {
+        ForEach(coach.waiting) { QueuedMessage(item: $0, coach: coach) }
+      }
+      .environment(AppModel())
+    }
+  }
+
+  #Preview("Coach letter") { CoachThreadPreview() }
+  #Preview("Coach letter, dark") { CoachThreadPreview().preferredColorScheme(.dark) }
+  #Preview("Coach letter, AX3") { CoachThreadPreview().dynamicTypeSize(.accessibility3) }
+  #Preview("Queue") { QueuedPreview().padding(20).background(Theme.background) }
+  #Preview("Queue, dark") { QueuedPreview().padding(20).background(Theme.background).preferredColorScheme(.dark) }
+  #Preview("Queue, AX3") { QueuedPreview().padding(20).background(Theme.background).dynamicTypeSize(.accessibility3) }
+#endif

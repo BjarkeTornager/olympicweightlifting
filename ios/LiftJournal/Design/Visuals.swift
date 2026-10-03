@@ -2,63 +2,6 @@ import Charts
 import LiftTheme
 import SwiftUI
 
-/// A progress ring with rounded ends over a neutral track. Past 100 % the
-/// ring stays full; the number beside it tells the rest.
-struct ProgressRing: View {
-  let progress: Double
-  let tint: Color
-  var lineWidth: CGFloat = 10
-
-  var body: some View {
-    ZStack {
-      Circle().stroke(Theme.track, lineWidth: lineWidth)
-      Circle()
-        .trim(from: 0, to: max(0.001, min(1, progress)))
-        .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-        .rotationEffect(.degrees(-90))
-    }
-    .animation(.spring(duration: 0.8, bounce: 0.2), value: progress)
-    .accessibilityHidden(true)
-  }
-}
-
-/// One target as a ring with the value inside. Today's targets are the
-/// Ledger now; this stays for Coach's progress visual until it moves to the
-/// isotype meter too.
-struct TargetRing: View {
-  let title: String
-  let value: String
-  let target: String
-  let progress: Double
-  let tint: Color
-
-  var body: some View {
-    VStack(spacing: 8) {
-      ZStack {
-        ProgressRing(progress: progress, tint: tint, lineWidth: 9)
-        VStack(spacing: -2) {
-          Text(value)
-            .font(.headline.weight(.semibold).monospacedDigit())
-            .minimumScaleFactor(0.6)
-            .lineLimit(1)
-            .contentTransition(.numericText())
-          Text(target)
-            .font(.caption2.weight(.medium).monospacedDigit())
-            .foregroundStyle(Theme.inkSecondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-        }
-        .padding(.horizontal, 12)
-      }
-      .frame(width: 88, height: 88)
-      CardLabel(title: title)
-    }
-    .frame(maxWidth: .infinity)
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(title): \(value) of \(target)")
-  }
-}
-
 // MARK: The Ledger
 
 /// One line of the Ledger: an amount against its target, counted in marks of

@@ -74,6 +74,8 @@ struct TodayView: View {
       CheckinSheet(existing: model.today?.checkin, body_: model.today?.body, sleep: model.today?.sleep)
     }
     .sensoryFeedback(.success, trigger: model.saves)
+    // What was just saved, as a margin note under the bar.
+    .toast($model.confirmation)
     .task(id: model.session?.accountID) {
       if let account = model.session?.accountID { firstDay = Issue.firstDay(account: account) }
     }
@@ -793,11 +795,12 @@ struct FoodSection: View {
           .accessibilityLabel("Add \(ml) ml of water")
         }
       }
-      LoggedLines(items: hydration.drinks.reversed(), id: \.id) { drink in
-        LoggedLine(name: drink.name.isEmpty ? drink.kind.capitalized : drink.name, amount: "\(drink.ml) ml")
+      LoggedLines(items: DrinkLine.lines(hydration.drinks), id: \.id) { line in
+        LoggedLine(name: line.name, amount: line.amount)
           .contextMenu {
-            Button("Delete", systemImage: "trash", role: .destructive) {
-              Task { await model.removeDrink(id: drink.id) }
+            // The latest of them, so the line keeps its place.
+            Button(line.drinks.count > 1 ? "Delete one" : "Delete", systemImage: "trash", role: .destructive) {
+              Task { await model.removeDrink(id: line.latest.id) }
             }
           }
       }
@@ -805,9 +808,39 @@ struct FoodSection: View {
   }
 }
 
+/// The day's drinks of one name and size as one line of the ledger, so ten
+/// quick glasses read "Water, 10 × 250 ml" rather than ten lines of the
+/// same. The lines keep the order of each one's first drink.
+struct DrinkLine {
+  let name: String
+  /// Oldest first, as the day's drinks come.
+  let drinks: [Components.Schemas.Drink]
+
+  /// The first drink's, which stays as later ones are deleted.
+  var id: String { drinks[0].id }
+  var latest: Components.Schemas.Drink { drinks[drinks.count - 1] }
+  var amount: String {
+    drinks.count > 1 ? "\(drinks.count) × \(drinks[0].ml) ml" : "\(drinks[0].ml) ml"
+  }
+
+  static func lines(_ drinks: [Components.Schemas.Drink]) -> [DrinkLine] {
+    var lines: [DrinkLine] = []
+    for drink in drinks {
+      // Unnamed, a drink goes by its kind, in sentence case: "Sparkling water".
+      let name = drink.name.isEmpty ? drink.kind.prefix(1).uppercased() + drink.kind.dropFirst() : drink.name
+      if let index = lines.firstIndex(where: { $0.name == name && $0.drinks[0].ml == drink.ml }) {
+        lines[index] = DrinkLine(name: name, drinks: lines[index].drinks + [drink])
+      } else {
+        lines.append(DrinkLine(name: name, drinks: [drink]))
+      }
+    }
+    return lines
+  }
+}
+
 /// What has been logged under drinks or supplements, set as lines of a
-/// ledger, newest first, with a hairline between them. Nothing when there
-/// is nothing.
+/// ledger in the order taken, as the meals are, with a hairline between
+/// them. Nothing when there is nothing.
 private struct LoggedLines<Item, ID: Hashable, Line: View>: View {
   let items: [Item]
   let id: KeyPath<Item, ID>
@@ -900,7 +933,7 @@ struct SupplementsStrip: View {
         }
         .buttonStyle(CardButtonStyle())
       }
-      LoggedLines(items: supplements.taken.reversed(), id: \.id) { taken in
+      LoggedLines(items: supplements.taken, id: \.id) { taken in
         LoggedLine(name: taken.name, amount: taken.amount)
           .contextMenu {
             Button("Delete", systemImage: "trash", role: .destructive) {

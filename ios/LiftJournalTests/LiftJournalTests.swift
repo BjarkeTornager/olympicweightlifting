@@ -124,4 +124,22 @@ struct LiftJournalTests {
     #expect(blocks[5] == .quote("Logged only"))
     #expect(MarkdownBlock.cells(#"| a \| b | `x|y` |"#) == ["a | b", "`x|y`"])
   }
+
+  @Test("Coach's strong words are set in weight 500 New York, not bold")
+  func letterEmphasis() {
+    let text = CoachReplyFormat.letter("You slept **7 h 12 min** on *average*.", size: 18)
+    // The figure keeps together: its spaces don't break.
+    #expect(String(text.characters) == "You slept 7\u{00A0}h\u{00A0}12\u{00A0}min on average.")
+    // The emphasis is carried by the run's font, so Text adds no bold.
+    let strong = text.runs.first { String(text[$0.range].characters) == "7\u{00A0}h\u{00A0}12\u{00A0}min" }
+    #expect(strong != nil)
+    #expect(text.runs.allSatisfy { $0.inlinePresentationIntent == nil })
+  }
+
+  @Test("A saved change's margin note takes the key of its area")
+  func confirmationKey() {
+    #expect(AppModel.category(AppModel.drink(ml: 250)) == .water)
+    #expect(
+      AppModel.category(.recordCheckin(.init(kind: .recordCheckin, checkin: .init(date: "2026-10-02")))) == .checkin)
+  }
 }

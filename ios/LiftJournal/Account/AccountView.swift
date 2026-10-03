@@ -25,7 +25,7 @@ struct AccountView: View {
       List {
         if let session = model.session {
           Section {
-            AthleteCard(name: session.name, email: session.email, today: model.today)
+            AthleteCard(name: model.athleteName ?? session.name, email: session.email, today: model.today)
               .listRowInsets(EdgeInsets())
               .listRowBackground(Color.clear)
           }

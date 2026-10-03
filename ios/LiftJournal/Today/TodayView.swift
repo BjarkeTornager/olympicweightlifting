@@ -37,10 +37,13 @@ struct TodayView: View {
         .padding(.top, 80)
       }
     }
-    .onScrollGeometryChange(for: Bool.self) { geometry in
-      geometry.contentOffset.y + geometry.contentInsets.top > 120
-    } action: { _, past in
-      withAnimation(.easeInOut(duration: 0.2)) { scrolled = past }
+    // Follows the distance rather than whether it is past the masthead: as
+    // the page reloads, a change to "past" could come before an older one.
+    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+      geometry.contentOffset.y + geometry.contentInsets.top
+    } action: { _, distance in
+      let past = distance > 120
+      if past != scrolled { withAnimation(.easeInOut(duration: 0.2)) { scrolled = past } }
     }
     .background(Theme.background)
     .navigationTitle("Today")
@@ -166,7 +169,7 @@ struct TodayView: View {
       FoodSection(nutrition: today.nutrition, hydration: today.hydration, supplements: today.supplements)
         .padding(.top, Theme.Space.section)
       MovementSection(today: today).padding(.top, Theme.Space.section)
-      Colophon(issue: firstDay.map { Issue.number(first: $0, day: day) }, name: firstName(today))
+      Colophon(issue: firstDay.map { Issue.number(first: $0, day: day) }, name: firstName)
         .padding(.top, Theme.Space.section)
     }
     .padding(.horizontal, Theme.Space.gutter)
@@ -174,9 +177,8 @@ struct TodayView: View {
     .padding(.bottom, Theme.Space.l)
   }
 
-  private func firstName(_ today: Today) -> String? {
-    let name = today.name ?? model.session?.name
-    return name?.split(separator: " ").first.map(String.init)
+  private var firstName: String? {
+    model.athleteName?.split(separator: " ").first.map(String.init)
   }
 
   private func ledger(_ today: Today) -> some View {
@@ -677,7 +679,8 @@ extension Array {
 // MARK: Food and drink
 
 /// Food set like a menu: the total and how it splits, then each meal with
-/// its kind in the margin. Then drinks and supplements, one tap each.
+/// its kind in the margin. Then drinks and supplements, one tap to add,
+/// with what was logged set as lines like the meals.
 struct FoodSection: View {
   @Environment(AppModel.self) private var model
   @Environment(\.dynamicTypeSize) private var typeSize
@@ -754,7 +757,9 @@ struct FoodSection: View {
         }
       } else {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-          kind.frame(width: kindColumn, alignment: .leading)
+          // One line: "Breakfast" broke as "Break-fast" at the smaller text
+          // sizes, where the letter spacing doesn't shrink with the text.
+          kind.lineLimit(1).minimumScaleFactor(0.8).frame(width: kindColumn, alignment: .leading)
           dish
           Spacer(minLength: 8)
           energy
@@ -787,16 +792,70 @@ struct FoodSection: View {
           .buttonStyle(CardButtonStyle())
           .accessibilityLabel("Add \(ml) ml of water")
         }
-        ForEach(hydration.drinks.reversed(), id: \.id) { drink in
-          Chip(title: "\(drink.name.isEmpty ? drink.kind.capitalized : drink.name) · \(drink.ml) ml", kind: .logged)
-            .contextMenu {
-              Button("Delete", systemImage: "trash", role: .destructive) {
-                Task { await model.removeDrink(id: drink.id) }
-              }
+      }
+      LoggedLines(items: hydration.drinks.reversed(), id: \.id) { drink in
+        LoggedLine(name: drink.name.isEmpty ? drink.kind.capitalized : drink.name, amount: "\(drink.ml) ml")
+          .contextMenu {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+              Task { await model.removeDrink(id: drink.id) }
             }
+          }
+      }
+    }
+  }
+}
+
+/// What has been logged under drinks or supplements, set as lines of a
+/// ledger, newest first, with a hairline between them. Nothing when there
+/// is nothing.
+private struct LoggedLines<Item, ID: Hashable, Line: View>: View {
+  let items: [Item]
+  let id: KeyPath<Item, ID>
+  @ViewBuilder let line: (Item) -> Line
+
+  var body: some View {
+    if !items.isEmpty {
+      let key = (\(offset: Int, element: Item).element).appending(path: id)
+      VStack(alignment: .leading, spacing: 0) {
+        ForEach(Array(items.enumerated()), id: key) { index, item in
+          if index > 0 { Hairline() }
+          line(item)
         }
       }
     }
+  }
+}
+
+/// One line of the ledger, as the meals above it are set: the name in the
+/// serif, which wraps, and the amount, if there is one, aligned on the
+/// right. At the largest text sizes the amount goes under the name.
+private struct LoggedLine: View {
+  let name: String
+  let amount: String
+  @Environment(\.dynamicTypeSize) private var typeSize
+
+  var body: some View {
+    let title = Text(name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+    let amount = amount.isEmpty
+      ? nil : Text(amount).font(.subheadline.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+    Group {
+      if typeSize.isAccessibilitySize {
+        VStack(alignment: .leading, spacing: 4) {
+          title
+          amount
+        }
+      } else {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+          title
+          Spacer(minLength: 8)
+          amount?.fixedSize()
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.vertical, 10)
+    .contentShape(.rect)
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -824,14 +883,6 @@ struct SupplementsStrip: View {
         }
       }
       FlowLayout {
-        ForEach(supplements.taken.reversed(), id: \.id) { taken in
-          Chip(title: label(taken.name, taken.amount), kind: .logged)
-            .contextMenu {
-              Button("Delete", systemImage: "trash", role: .destructive) {
-                Task { await model.removeSupplement(id: taken.id) }
-              }
-            }
-        }
         ForEach(supplements.usual, id: \.name) { usual in
           Button {
             Task { await model.logSupplement(name: usual.name, amount: usual.amount) }
@@ -848,6 +899,14 @@ struct SupplementsStrip: View {
           Chip(title: supplements.usual.isEmpty ? "Add supplement" : "Other")
         }
         .buttonStyle(CardButtonStyle())
+      }
+      LoggedLines(items: supplements.taken.reversed(), id: \.id) { taken in
+        LoggedLine(name: taken.name, amount: taken.amount)
+          .contextMenu {
+            Button("Delete", systemImage: "trash", role: .destructive) {
+              Task { await model.removeSupplement(id: taken.id) }
+            }
+          }
       }
     }
     .alert("Add supplement", isPresented: $adding) {

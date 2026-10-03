@@ -28,6 +28,15 @@ final class AppModel {
   var loadingToday = false
   var todayError: String?
 
+  /// The athlete's name, the one Today's colophon and Profile both show: the
+  /// display name in their journal's profile (set in the website's
+  /// settings), or the account's name from signing in when that is blank.
+  /// The account's name is kept from sign-in and can differ from it.
+  var athleteName: String? {
+    if let name = today?.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty { return name }
+    return session?.name
+  }
+
   /// A save that did not go through, shown as an alert.
   var notice: Notice?
   /// Counts successful saves, for the success haptic.

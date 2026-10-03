@@ -16,6 +16,8 @@ struct JournalView: View {
   @State private var query = ""
   /// The last seven days, for the register.
   @State private var week: Components.Schemas.Trends?
+  /// Scrolled far enough that the large title is rising into the bar.
+  @State private var scrolled = false
 
   init(items: [Components.Schemas.JournalItem] = [], week: Components.Schemas.Trends? = nil) {
     _items = State(initialValue: items)
@@ -101,18 +103,32 @@ struct JournalView: View {
       .padding(.horizontal, Theme.Space.gutter)
       .padding(.bottom, Theme.Space.l)
     }
+    // Follows the distance rather than whether it is past the mark: as
+    // more days load, a change to "past" could come before an older one.
+    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+      geometry.contentOffset.y + geometry.contentInsets.top
+    } action: { _, distance in
+      let past = distance > Self.titleRisesAt
+      if past != scrolled { withAnimation(.easeInOut(duration: 0.2)) { scrolled = past } }
+    }
     .background(Theme.background)
     .navigationTitle("Journal")
     .searchable(text: $query, prompt: "Search your journal")
     .toolbar {
-      ToolbarItem(placement: .topBarLeading) {
-        Text(filter == .all ? "All entries" : filter.rawValue)
-          .foregroundStyle(Theme.ink)
-          .kicker()
-          .fixedSize()
-          .accessibilityLabel(filter == .all ? "Showing all entries" : "Showing \(filter.rawValue.lowercased())")
+      // The running head over the large title. Taken out of the bar as the
+      // title rises into it, so it neither runs into the title nor reads as
+      // a second one beside the inline title; the filter button still
+      // shows when a filter is on.
+      if !scrolled {
+        ToolbarItem(placement: .topBarLeading) {
+          Text(filter == .all ? "All entries" : filter.rawValue)
+            .foregroundStyle(Theme.ink)
+            .kicker()
+            .fixedSize()
+            .accessibilityLabel(filter == .all ? "Showing all entries" : "Showing \(filter.rawValue.lowercased())")
+        }
+        .sharedBackgroundVisibility(.hidden)
       }
-      .sharedBackgroundVisibility(.hidden)
       ToolbarItem(placement: .topBarTrailing) {
         Menu {
           Picker("Show", selection: $filter) {
@@ -152,6 +168,10 @@ struct JournalView: View {
       nextBefore = nil
     }
   }
+
+  /// How far the page scrolls, once the search field has tucked away,
+  /// before the rising large title would meet the running head.
+  private static let titleRisesAt: CGFloat = 24
 
   static func heading(_ day: String) -> String {
     guard let date = JournalDay.date(day) else { return day }

@@ -54,7 +54,8 @@ struct DaySummary: Equatable {
     return logged
   }
 
-  /// "A run and two meals so far."
+  /// "A run and two meals so far.", or "One meal so far." when there is
+  /// only one thing to count.
   private var logged: String? {
     var kinds: [(noun: Noun, count: Int)] = []
     for activity in activities {
@@ -69,7 +70,7 @@ struct DaySummary: Equatable {
     if meals > 0 { kinds.append((.meal, meals)) }
     if checkedIn { kinds.append((.checkin, 1)) }
     guard !kinds.isEmpty else { return nil }
-    let phrases = kinds.map { $0.noun.phrase($0.count) }
+    let phrases = kinds.map { $0.noun.phrase($0.count, alone: kinds.count == 1) }
     let list =
       phrases.count == 1
       ? phrases[0] : phrases.dropLast().joined(separator: ", ") + " and " + phrases[phrases.count - 1]
@@ -108,22 +109,25 @@ struct DaySummary: Equatable {
       }
     }
 
-    func phrase(_ count: Int) -> String {
-      let (one, many): (String, String) =
+    /// "a run" in a list, "one run" on its own ("A run so far." reads as
+    /// unfinished), and "two runs".
+    func phrase(_ count: Int, alone: Bool) -> String {
+      let (article, one, many): (String, String, String) =
         switch self {
-        case .run: ("a run", "runs")
-        case .walk: ("a walk", "walks")
-        case .ride: ("a ride", "rides")
-        case .swim: ("a swim", "swims")
-        case .row: ("a row", "rows")
-        case .hike: ("a hike", "hikes")
-        case .elliptical: ("an elliptical session", "elliptical sessions")
-        case .activity: ("an activity", "activities")
-        case .workout: ("a workout", "workouts")
-        case .meal: ("a meal", "meals")
-        case .checkin: ("a check-in", "check-ins")
+        case .run: ("a", "run", "runs")
+        case .walk: ("a", "walk", "walks")
+        case .ride: ("a", "ride", "rides")
+        case .swim: ("a", "swim", "swims")
+        case .row: ("a", "rowing session", "rowing sessions")
+        case .hike: ("a", "hike", "hikes")
+        case .elliptical: ("an", "elliptical session", "elliptical sessions")
+        case .activity: ("an", "activity", "activities")
+        case .workout: ("a", "workout", "workouts")
+        case .meal: ("a", "meal", "meals")
+        case .checkin: ("a", "check-in", "check-ins")
         }
-      return count == 1 ? one : "\(Format.count(count)) \(many)"
+      guard count == 1 else { return "\(Format.count(count)) \(many)" }
+      return "\(alone ? Format.count(1) : article) \(one)"
     }
   }
 }

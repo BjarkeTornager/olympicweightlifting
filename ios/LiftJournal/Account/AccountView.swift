@@ -312,7 +312,8 @@ private struct GoalsSection: View {
 
   private func row(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
     LabeledContent {
-      Text(value)
+      // A column of targets: tabular figures, so they line up.
+      Text(value).monospacedDigit()
     } label: {
       Label {
         Text(title)

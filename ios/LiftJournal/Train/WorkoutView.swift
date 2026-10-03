@@ -126,7 +126,7 @@ struct WorkoutView: View {
       CardLabel(title: JournalView.heading(workout.date), key: Category.training.tint).padding(.top, 13)
       SetCount(logged: logged, total: sets.count).padding(.top, 6)
       Text("\(done) of \(workout.exercises.count) exercises done")
-        .font(.footnote)
+        .font(.footnote.monospacedDigit())
         .foregroundStyle(Theme.inkSecondary)
         .padding(.top, 8)
     }

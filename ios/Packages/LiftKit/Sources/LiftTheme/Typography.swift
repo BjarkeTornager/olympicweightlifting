@@ -7,8 +7,10 @@ import UIKit
 /// numbers, Coach's letters, dish and entry titles. San Francisco is
 /// everything you operate: labels, units, buttons, lists and chrome.
 /// New York is never set below 15 pt, and serif numbers start at 22 pt.
-/// Spaced capitals (`kicker()`) are kept for running heads and one level of
-/// section labels; every other label is in sentence case (`label()`).
+/// Numbers that update or line up take tabular figures; running text keeps
+/// proportional ones. Spaced capitals (`kicker()`) are kept for running
+/// heads and one level of section labels; every other label is in sentence
+/// case (`label()`).
 public enum Folio {
   public enum Role: Sendable {
     /// The day's date on Today and the Journal: 46 pt.
@@ -70,7 +72,18 @@ public enum Folio {
 
     var italic: Bool { self == .standfirst || self == .note }
 
-    /// Display sizes tighten; text sizes keep the default tracking.
+    /// Numbers that update or line up take tabular figures, so a total
+    /// doesn't jitter as it counts and a column of values aligns. Running
+    /// text keeps the serif's proportional figures.
+    var tabular: Bool {
+      switch self {
+      case .hero, .display, .ledger, .tile, .inline: true
+      default: false
+      }
+    }
+
+    /// Display sizes tighten; text sizes and the wordmark keep the default
+    /// tracking.
     var tracking: CGFloat {
       switch self {
       case .hero: -2.2
@@ -111,7 +124,13 @@ private struct FolioFont: ViewModifier {
       .italic(role.italic)
       .tracking(role.tracking)
       .lineSpacing(leading)
-      .monospacedDigit()
+      .tabularFigures(role.tabular)
+  }
+}
+
+extension View {
+  @ViewBuilder fileprivate func tabularFigures(_ tabular: Bool) -> some View {
+    if tabular { monospacedDigit() } else { self }
   }
 }
 

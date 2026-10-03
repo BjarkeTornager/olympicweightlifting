@@ -168,6 +168,7 @@ enum CoachReplyFormat {
   /// As `attributed`, set in New York at `size`: strong words in weight 500
   /// rather than bold, which is too heavy in running serif text, and code in
   /// SF Mono. A short strong figure ("7 h 15 min") never breaks across lines.
+  /// Figures keep the serif's proportional digits, as running text does.
   static func letter(_ text: String, size: CGFloat) -> AttributedString {
     let source = attributed(text)
     var letter = AttributedString()
@@ -187,7 +188,7 @@ enum CoachReplyFormat {
           ? .system(size: size * 0.85, weight: .regular, design: .monospaced)
           : .system(size: size, weight: strong ? .medium : .regular, design: .serif)
         if italic { font = font.italic() }
-        piece.font = font.monospacedDigit()
+        piece.font = font
         piece.inlinePresentationIntent = nil
       }
       letter.append(piece)

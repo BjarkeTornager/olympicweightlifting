@@ -72,7 +72,7 @@ struct LedgerColumn<Accessory: View>: View {
         if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
         accessory
       }
-      .font(.caption2.weight(.medium))
+      .font(.caption2.weight(.medium).monospacedDigit())
       .foregroundStyle(Theme.inkSecondary)
       .padding(.top, line.target == nil ? 10 : 7)
     }
@@ -353,7 +353,7 @@ struct MetricCell<Chart: View>: View {
       chart.frame(height: chartHeight * min(growth, 1.8)).padding(.top, 12)
       if let note {
         Text(note)
-          .font(.footnote)
+          .font(.footnote.monospacedDigit())
           .foregroundStyle(Theme.inkSecondary)
           .lineLimit(2)
           .padding(.top, 6)

@@ -644,7 +644,7 @@ private struct WeightChart: View {
         AxisValueLabel(horizontalSpacing: 9) {
           if let kg = value.as(Double.self) {
             Text(kg.formatted(.number.precision(.fractionLength(1)).locale(Format.locale)))
-              .font(.caption2.weight(.medium))
+              .font(.caption2.weight(.medium).monospacedDigit())
               .foregroundStyle(Theme.inkSecondary)
           }
         }
@@ -655,7 +655,7 @@ private struct WeightChart: View {
         AxisValueLabel(anchor: value.index == 0 ? .topLeading : .topTrailing) {
           if let index = value.as(Int.self), let day = days[safe: index] ?? nil {
             Text(day.formatted(.dateTime.weekday(.abbreviated).day().locale(Format.locale)))
-              .font(.caption2.weight(.medium))
+              .font(.caption2.weight(.medium).monospacedDigit())
               .foregroundStyle(Theme.inkSecondary)
           }
         }

@@ -2,12 +2,17 @@ import { mealLoggingPolicy, shouldResumeMealLogging } from "./meal-logging";
 import { z } from "zod";
 import { EventType } from "@ag-ui/core";
 import { searchWeb, webSearchEnabled } from "../web-search";
-import { visualSchema, type SavedVisual } from "../coach-visuals";
+import {
+  visualSchema,
+  type CoachResponse,
+  type SavedVisual,
+} from "../coach-visuals";
 import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { countUse } from "../feature-use";
 import { withAiUsage } from "../ai-usage";
+import { coachLimits } from "../usage-limits";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
 import { MAX_EXECUTED_TOOLS } from "./limits";
@@ -316,6 +321,55 @@ async function turn(
       409,
     );
   const requestAt = existing[0]?.createdAt ?? submittedAt;
+  const photoIds = [...new Set(input.photoIds ?? [])];
+  // Only one retry can take over a failed or cut-off turn.
+  const retryable = () =>
+    and(
+      eq(agentTurns.id, input.id),
+      eq(agentTurns.userId, userId),
+      or(
+        eq(agentTurns.status, "failed"),
+        and(
+          eq(agentTurns.status, "running"),
+          sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(Date.now() - STALE_TURN_MS)}`,
+        ),
+      ),
+    );
+  // Usage limits (lib/usage-limits.ts), checked before anything is paid for.
+  const limits = coachLimits(userId, {
+    id: input.id,
+    timezone: input.timezone,
+    provider: model === callModel,
+  });
+  const limitReply = await limits.start();
+  if (limitReply) {
+    // Coach's reply, not an error. Kept out of Coach's memory and of the
+    // day's message count.
+    const response: CoachResponse = { reply: limitReply, proposals: [] };
+    const saved = existing[0]
+      ? await db
+          .update(agentTurns)
+          .set({ status: "limited", response, startedAt: new Date() })
+          .where(retryable())
+          .returning({ id: agentTurns.id })
+      : await db
+          .insert(agentTurns)
+          .values({
+            id: input.id,
+            userId,
+            question: input.message,
+            photoIds,
+            createdAt: requestAt,
+            startedAt: new Date(),
+            status: "limited",
+            response,
+          })
+          .onConflictDoNothing()
+          .returning({ id: agentTurns.id });
+    if (!saved.length)
+      throw new ApiError("That request is already being processed.", 409);
+    return response;
+  }
   const requestClock = localClock(requestAt, input.timezone),
     currentDate = requestClock.date,
     recent = await history(userId);
@@ -326,7 +380,6 @@ async function turn(
       since: new Date(Date.now() - 7 * 86400000),
     })
   ).filter((c) => c.kind === "voice");
-  const photoIds = [...new Set(input.photoIds ?? [])];
   if (photoIds.length) {
     const sorting = prepare.child("photos_sorted"),
       sortStarted = Date.now(),
@@ -352,20 +405,7 @@ async function turn(
     ? await db
         .update(agentTurns)
         .set({ status: "running", startedAt: new Date() })
-        .where(
-          and(
-            eq(agentTurns.id, input.id),
-            eq(agentTurns.userId, userId),
-            // Only one retry can take over a failed or cut-off turn.
-            or(
-              eq(agentTurns.status, "failed"),
-              and(
-                eq(agentTurns.status, "running"),
-                sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(Date.now() - STALE_TURN_MS)}`,
-              ),
-            ),
-          ),
-        )
+        .where(retryable())
         .returning({ id: agentTurns.id })
     : await db
         .insert(agentTurns)
@@ -627,6 +667,15 @@ async function turn(
       });
       roundKind = "normal";
       signal.throwIfAborted();
+      // Over a spend limit between rounds, the turn finishes with what it
+      // has: a change's receipt, or the limit's reply.
+      if (round > 0) {
+        const stop = await limits.round();
+        if (stop) {
+          reply = answering ?? stop;
+          break;
+        }
+      }
       const messageId = `${input.id}-${round}`;
       let started = false;
       emit?.({

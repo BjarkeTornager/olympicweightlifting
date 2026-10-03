@@ -56,6 +56,14 @@ export default defineRailway(() => {
       // Usage limits (lib/usage-limits.ts): "enforce" refuses, anything else
       // only logs, so losing it would quietly stop enforcement.
       LIMITS_MODE: preserve(),
+      // Restate (docs/restate-setup.md): RESTATE_ENDPOINT=1 starts the
+      // endpoint Restate calls, which needs RESTATE_IDENTITY_KEYS in
+      // production; the two URLs are the restate service's private
+      // addresses, for scripts/restate-register.ts and later Coach turns.
+      RESTATE_ENDPOINT: preserve(),
+      RESTATE_IDENTITY_KEYS: preserve(),
+      RESTATE_ADMIN_URL: preserve(),
+      RESTATE_INGRESS_URL: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

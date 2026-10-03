@@ -177,7 +177,7 @@ function CheckinForm({
                 min={min}
                 max={max}
                 step={step}
-                placeholder="—"
+                placeholder="–"
                 value={draft[key] ?? ""}
                 onChange={(e) =>
                   setDraft({
@@ -204,7 +204,7 @@ function CheckinForm({
               min={3}
               max={70}
               step={0.1}
-              placeholder="—"
+              placeholder="–"
               value={bodyFat ?? ""}
               onChange={(e) =>
                 setBodyFat(
@@ -381,7 +381,7 @@ export function DailyOverview({
         <button className="today-workout" onClick={() => go("workout")}>
           <Dumbbell size={22} />
           <span>
-            <small>YOUR WORKOUT</small>
+            <small>Your workout</small>
             <strong>{state.activeWorkout.title}</strong>
             <span>{state.activeWorkout.date} · Continue your draft</span>
           </span>
@@ -401,7 +401,7 @@ export function DailyOverview({
           <span>Food</span>
           <strong>
             {view.mealCount
-              ? `${view.nutrients.calories} kcal`
+              ? `${view.nutrients.calories.toLocaleString("en-GB")} kcal`
               : "No entries today"}
           </strong>
           <small>
@@ -482,21 +482,21 @@ export function HealthView({
       </div>
       <div className="health-summary-grid">
         <section className="panel">
-          <span>Sleep · 14 days</span>
+          <span>Sleep</span>
           <strong>
-            {view.sleepAverage ?? "—"}
+            {view.sleepAverage ?? "–"}
             <small>hours</small>
           </strong>
           <p>
             {view.sleepSamples
-              ? `Average of ${view.sleepSamples} logged nights`
+              ? `14-day average of ${view.sleepSamples} logged nights`
               : "Log sleep to build your picture"}
           </p>
         </section>
         <section className="panel">
           <span>Bodyweight</span>
           <strong>
-            {view.latestWeight?.value ?? "—"}
+            {view.latestWeight?.value ?? "–"}
             <small>kg</small>
           </strong>
           <p>
@@ -540,7 +540,7 @@ export function HealthView({
                 </span>
                 <strong>
                   {c?.sleepHours == null
-                    ? "—"
+                    ? "–"
                     : Math.round(c.sleepHours * 10) / 10}
                 </strong>
                 <small>{date.slice(8)}</small>

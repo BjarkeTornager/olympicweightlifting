@@ -46,7 +46,7 @@ export function TrainingInsights({ state }: { state: JournalState }) {
                     <th>{w.week}</th>
                     <td>{w.sessions}</td>
                     <td>{w.sets}</td>
-                    <td>{w.volume.toLocaleString()}</td>
+                    <td>{w.volume.toLocaleString("en-GB")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -104,7 +104,7 @@ export function TrainingInsights({ state }: { state: JournalState }) {
                   <>
                     <p>
                       <strong>
-                        {totals.sets} sets · {totals.volume.toLocaleString()} kg
+                        {totals.sets} sets · {totals.volume.toLocaleString("en-GB")} kg
                         volume
                       </strong>
                     </p>

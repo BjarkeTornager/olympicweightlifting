@@ -1,9 +1,17 @@
 "use client";
+import { dateInProse } from "@/lib/domain";
 import { totalNutrients, type Meal } from "@/lib/nutrition";
 import { FoodTags } from "./food-tags";
 
+// A figure stays with its letter and unit, and each dot with the figure
+// before it, so a narrow column breaks only between macros.
+const nb = "\u00a0";
 const macros = (n: { protein: number; carbs: number; fat: number }) =>
-  `P ${n.protein} g · C ${n.carbs} g · F ${n.fat} g`;
+  [
+    `P${nb}${n.protein}${nb}g`,
+    `C${nb}${n.carbs}${nb}g`,
+    `F${nb}${n.fat}${nb}g`,
+  ].join(`${nb}· `);
 
 export function MealDetails({ meal }: { meal: Meal }) {
   const total = totalNutrients(meal.items);
@@ -14,7 +22,9 @@ export function MealDetails({ meal }: { meal: Meal }) {
         <span className="meal-type-chip">{meal.type}</span>
       </div>
       <p className="meal-details-summary">
-        <strong>{total.calories} kcal</strong> · {macros(total)} · {meal.date}
+        <strong>{total.calories.toLocaleString("en-GB")}&nbsp;kcal</strong>
+        &nbsp;· {macros(total)}
+        &nbsp;· {dateInProse(meal.date)}
       </p>
       <ul className="meal-items">
         {meal.items.map((item, i) => (
@@ -24,7 +34,7 @@ export function MealDetails({ meal }: { meal: Meal }) {
               <small>{item.portion}</small>
             </span>
             <span className="meal-item-energy">
-              {item.calories} kcal
+              {item.calories.toLocaleString("en-GB")}&nbsp;kcal
               <small>{macros(item)}</small>
             </span>
             <FoodTags value={item.classification} />

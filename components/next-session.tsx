@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { dateInProse } from "@/lib/domain";
 import type { JournalState } from "@/lib/model";
 import { nextTraining, startNextTraining } from "@/lib/next-training";
 import type { JournalController } from "./journal";
@@ -22,13 +23,13 @@ export function NextSession({
       <h2>{state.activeWorkout?.title ?? next.title}</h2>
       <p className="muted">
         {state.activeWorkout
-          ? `Ready to resume your saved workout from ${state.activeWorkout.date}`
+          ? `Ready to resume your saved workout from ${dateInProse(state.activeWorkout.date)}`
           : `Next in ${next.programName}, day ${next.position} of ${next.count}`}
       </p>
       {!state.activeWorkout && (
         <p className="fine-print">
           {next.previousDate
-            ? `Follows your recorded session on ${next.previousDate}. Train when it suits you.`
+            ? `Follows your recorded session on ${dateInProse(next.previousDate)}. Train when it suits you.`
             : "Start at the beginning, or choose another session."}
         </p>
       )}

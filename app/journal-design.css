@@ -23,7 +23,30 @@
 h2,
 h3 {
   color: inherit;
+}/* Line breaks. Titles balance their lines and never break inside a word;
+   paragraphs avoid leaving one word on their last line. In a phone's narrow
+   column, long words in running text may hyphenate by the rules of the
+   text's lang: British English for the site, Danish for a reply marked
+   lang="da". Names, labels and captions never hyphenate. */
+:is(h1, h2, h3, h4, .dialog-title, .coach-opening-toggle strong, .exercise-toggle strong, .meal-details-heading > strong, .meal-item-name) {
   text-wrap: balance;
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}:is(p, li, dd, figcaption, .chat-user) {
+  text-wrap: pretty;
+}@media (max-width: 600px) {
+  /* Running text only: Coach's replies, recipe steps and opening thought,
+     your messages, lead paragraphs and the privacy notice. Only long words,
+     with four letters either side of the hyphen. Chrome counts trailing
+     punctuation in the word, so "journal." is eight. */
+  :is(.assistant-response :is(p, li), .coach-recipe-steps li, .coach-opening p, .chat-user, .lead, .privacy-notice section :is(p, li)) {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    hyphenate-limit-chars: 10 4 4;
+    -webkit-hyphenate-limit-before: 4;
+    -webkit-hyphenate-limit-after: 4;
+    -webkit-hyphenate-limit-lines: 2;
+  }
 }h1 {
   /* A large title in the style of a native health app: bold and tight, and
      the only big type on a screen so the records under it still lead. */
@@ -31,9 +54,8 @@ h3 {
   letter-spacing: -0.028em;
   font-weight: 720;
 }h2 {
-  font-size: 19px;
-  letter-spacing: -0.018em;
-  font-weight: 660;
+  /* Serif and regular, with the titles in the identity rules below. */
+  font-size: 20px;
 }button,
 a,
 input,
@@ -141,20 +163,19 @@ textarea {
   background: var(--surface);
   min-height: 0;
 }.brand {
-  gap: 11px;
-  font-size: 19px;
-  letter-spacing: -0.7px;
-  font-weight: 700;
+  /* The wordmark: "Lift Journal" in the serif, regular weight, normal case
+     and tracking, beside the split-disc mark, as in the iPhone app. */
+  gap: 10px;
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.2;
+  text-transform: none;
 }.brand-icon {
   /* The split-disc mark stands on the page, without a tile behind it. */
   width: 38px;
   height: 38px;
-}.brand-light {
-  display: inline;
-  font-size: inherit;
-  font-weight: inherit;
-  letter-spacing: inherit;
-  margin-left: 5px;
 }.sidebar-navigation {
   flex: 1;
   min-height: 0;
@@ -355,8 +376,6 @@ textarea {
   padding: 18px 12px;
 }.coach-start h2 {
   font-size: clamp(20px, 2.1vw, 25px);
-  letter-spacing: -0.02em;
-  font-weight: 640;
   margin-bottom: 10px;
 }.coach-start > p {
   font-size: 14px;
@@ -397,8 +416,8 @@ textarea {
   color: var(--accent);
 }.coach-opening-toggle small {
   color: var(--ink-2);
-  font-size: 10px;
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  font-weight: 600;
 }.coach-opening-toggle strong {
   font-size: 15px;
 }.coach-opening p,
@@ -552,7 +571,7 @@ textarea {
   align-items: center;
   gap: 8px;
 }.coach-composer-note {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   padding: 10px 6px 0;
 }.coach-composer-note button {
@@ -568,11 +587,8 @@ textarea {
   padding: 18px;
 }.coach-visual h3 {
   color: var(--ink);
-  font-size: 17px;
-  letter-spacing: -0.02em;
 }.coach-visual-label {
   color: var(--muted);
-  letter-spacing: 0.06em;
 }.coach-photo-gallery {
   padding: 16px;
   gap: 20px 14px;
@@ -717,7 +733,6 @@ textarea {
   border-bottom: 1px solid var(--line);
 }.landing-kicker {
   color: var(--muted);
-  letter-spacing: 0.08em;
 }.landing-intro h1 {
   color: var(--ink);
 }.landing-intro h1 em {
@@ -745,9 +760,6 @@ textarea {
   .sidebar {
     padding: 17px 22px;
     background: var(--surface);
-  }
-  .brand {
-    font-size: 17px;
   }
   .sidebar-navigation {
     display: none;
@@ -796,10 +808,10 @@ textarea {
     margin: 0 0 10px;
   }
   .coach-mode .topbar-date {
-    font-size: 10px;
+    font-size: 11px;
   }
   .coach-mode .topbar .sync-status {
-    font-size: 10px;
+    font-size: 11px;
     min-height: 28px;
   }
   .coach-header {
@@ -828,7 +840,7 @@ textarea {
     font-size: 13px;
   }
   .coach-navigation .coach-connection {
-    font-size: 10px;
+    font-size: 11px;
   }
   .coach-workspace .conversation {
     padding: 20px 0;
@@ -865,9 +877,6 @@ textarea {
     padding: 16px;
     margin-top: 20px;
   }
-  .coach-opening-toggle small {
-    font-size: 9px;
-  }
   .coach-opening.compact {
     margin-top: 10px;
   }
@@ -895,7 +904,7 @@ textarea {
     padding-inline: 14px;
   }
   .coach-composer-note {
-    font-size: 9px;
+    font-size: 11px;
     padding-top: 8px;
   }
   .coach-photo-gallery {
@@ -919,7 +928,7 @@ textarea {
     padding-inline: 14px;
   }
   .coach-navigation .coach-connection {
-    font-size: 9px;
+    font-size: 11px;
   }
   .coach-workspace .agent-composer {
     padding-inline: 9px;
@@ -1006,8 +1015,9 @@ textarea {
   gap: 5px;
   flex: 1;
 }.today-workout small {
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
 }.today-summaries {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1173,6 +1183,8 @@ textarea {
   gap: 18px;
   cursor: pointer;
   font-size: 0.85rem;
+}.week-evidence h3 {
+  font-weight: 600;
 }.week-evidence-row strong {
   white-space: nowrap;
 }.week-evidence-row > span:nth-child(2) {
@@ -1323,7 +1335,7 @@ textarea {
     padding: 9px 0 12px;
   }
   .coach-navigation .coach-connection {
-    font-size: 9px;
+    font-size: 11px;
     flex-shrink: 0;
   }
   .today-focus .coach-section-title h2 {
@@ -1936,7 +1948,7 @@ textarea {
   white-space: nowrap;
 }
 .today-record-value small {
-  font-family: var(--font-journal), sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 500;
   color: var(--ink-2);
@@ -2008,6 +2020,18 @@ textarea {
   .today-record-value { font-size: 21px; }
   .today-week { padding: 14px; }
   .week-strip-sleep { font-size: 15px; }
+}
+/* On the narrowest phones a status in place of a figure ("Nothing recorded
+   yet") takes two balanced lines rather than push the row off the screen. */
+@media (max-width: 360px) {
+  .today-record { gap: 10px; }
+  .today-record-value small {
+    display: inline-block;
+    max-width: 7em;
+    white-space: normal;
+    text-wrap: balance;
+    line-height: 1.3;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .button { transition: none; }
@@ -2180,7 +2204,7 @@ textarea {
 }
 .meal-details { display: grid; gap: 8px; }
 .meal-details-heading { display: flex; align-items: center; gap: 10px; }
-.meal-details-heading > strong { flex: 1; min-width: 0; font-size: 17px; font-weight: 680; }
+.meal-details-heading > strong { flex: 1; min-width: 0; }
 .meal-type-chip {
   flex-shrink: 0;
   padding: 3px 10px;
@@ -2196,7 +2220,9 @@ textarea {
 .meal-items { display: grid; gap: 0; margin: 2px 0 0; padding: 0; list-style: none; }
 .meal-items > li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* The name keeps its longest word whole; the figures wrap between macros
+     instead. */
+  grid-template-columns: minmax(min-content, 1fr) auto;
   gap: 4px 12px;
   padding: 10px 0;
   border-top: 1px solid var(--line);
@@ -2204,6 +2230,7 @@ textarea {
 }
 .meal-items > li > .food-tags { grid-column: 1 / -1; }
 .meal-item-name, .meal-item-energy { display: grid; gap: 2px; }
+.meal-item-name { overflow-wrap: break-word; }
 .meal-item-energy { text-align: right; font-weight: 620; }
 .meal-items small { color: var(--ink-2); font-size: 12px; font-weight: 500; }
 .food-meal-actions { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -2212,6 +2239,9 @@ textarea {
 .food-meal-actions .food-meal-delete:hover { background: var(--danger-soft); }
 .food-meal .food-photo-strip { margin: 0; }
 .food-search-controls { gap: 10px; margin: 12px 0 4px; }
+/* The date stays on one line with its heading; search moves below it. */
+.food-meals > .section-top { flex-wrap: wrap; gap: 4px 14px; }
+.food-meals > .section-top h2 { white-space: nowrap; }
 .food-week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2249,7 +2279,7 @@ textarea {
   .food-calories p strong { font-size: 34px; }
   .food-macros strong { font-size: 19px; }
   .food-completeness { flex-direction: column; align-items: stretch; }
-  .food-week button strong { font-size: 10px; }
+  .food-week button strong { font-size: 11px; }
 }
 .food-page .food-search-controls .food-check {
   display: flex;
@@ -2278,7 +2308,9 @@ textarea {
 
 /* Health: three glanceable tiles instead of three full-width panels. */
 .health-summary-grid { gap: 10px; }
-.health-summary-grid .panel { padding: 16px; gap: 6px; align-content: start; }
+/* Label, figure and caption share rows across the tiles, so the figures line
+   up when a label or caption takes two lines. */
+.health-summary-grid .panel { padding: 16px; gap: 6px; align-content: start; grid-row: span 3; grid-template-rows: subgrid; }
 .health-summary-grid .panel > span { color: var(--ink-2); font-weight: 600; font-size: 13px; }
 .health-summary-grid strong { font-size: 28px; font-weight: 720; letter-spacing: -0.03em; }
 .health-summary-grid p { margin: 0; }
@@ -2312,28 +2344,77 @@ textarea {
 .pr-list.list-card .pr-row > strong { font-size: 17px; }
 
 /* Identity: the serif sets titles and the large figures, like a printed
-   journal, as New York does in the iPhone app. Barlow sets everything you
-   operate, so inputs, timers and small numbers stay in it. Radii step down
-   from panels to controls to chips instead of one radius on everything. */
+   journal, as New York does in the iPhone app. Titles are in its regular
+   weight: page titles, every section and card title (h2), entry titles (the
+   next session, the exercise in focus, a dish, the cards Coach draws) and
+   the headings in Coach's replies. Headings that label a list or a table
+   inside a card (h3, h4) are interface text in the system face, semibold,
+   as is everything you operate: inputs, timers and small numbers. Radii step
+   down from panels to controls to chips instead of one radius on
+   everything. */
 h1,
+h2,
 .dialog-title,
-.training-quick-start h2,
+.focused-workout .expanded .exercise-toggle strong,
+.meal-details-heading > strong,
+.coach-visual h3,
+.assistant-response h3,
+.week-reflection h3,
+.week-changes h3,
+.week-next h3 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
 .food-calories p strong,
 .food-macros strong,
 .stat-number,
 .health-summary-grid strong,
-.focused-workout .expanded .exercise-toggle strong,
+.coach-stats dd strong,
 .date-tile strong {
   font-family: var(--font-serif);
   font-weight: 500;
   letter-spacing: -0.01em;
 }
-/* Units beside a serif figure stay in Barlow, as they do in the app. */
+/* Units beside a serif figure stay in the system face, as they do in the
+   app. */
 .stat-number > span,
 .food-macros strong small,
 .health-summary-grid strong small {
-  font-family: var(--font-journal), sans-serif;
+  font-family: var(--font-ui);
   letter-spacing: 0;
+}
+/* Equal-width digits wherever figures update or line up: the day's records,
+   tables, set entry, timers, counters and charts. Running text keeps the
+   body's proportional digits. */
+table,
+input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]),
+.set-row input,
+.set-number,
+.set-chips,
+.exercise-number,
+.workout-dock strong,
+.timer-digits,
+.today-record-value,
+.week-strip-sleep,
+.food-calories p strong,
+.food-macros strong,
+.meal-item-energy,
+.food-week,
+.health-summary-grid strong,
+.sleep-bars,
+.stat-number,
+.pr-row > strong,
+.load-row strong,
+.record-grid span,
+.date-tile strong,
+.week-stats strong,
+.cardio-totals dd,
+.import-counts strong,
+.video-metrics dd,
+.progress-chart,
+:is(.coach-line-chart, .coach-split, .coach-calendar, .coach-diagram-number) {
+  font-variant-numeric: lining-nums tabular-nums;
 }
 h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 400; }
 .page-heading h1,
@@ -2341,6 +2422,12 @@ h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 400; }
 .coach-title h1 { font-weight: 400; letter-spacing: -0.01em; }
 .landing-intro h1 { letter-spacing: -0.02em; }
 .training-quick-start h2 { font-size: clamp(25px, 4.5vw, 30px); margin: 0 0 4px; }
+.meal-details-heading > strong { font-size: 18px; line-height: 1.35; }
+.coach-visual h3 { font-size: 19px; line-height: 1.35; }
+.coach-stats dd strong { font-size: 22px; }
+/* Larger than Coach's paragraphs (17 px, or 19 px with larger text), so a
+   heading never reads weaker than the text under it. */
+.assistant-response h3 { font-size: 1.18em; line-height: 1.35; }
 .focused-workout .expanded .exercise-toggle strong { font-size: 30px; }
 .focused-workout .focus-set .set-row input { font-size: 36px; font-weight: 600; }
 .food-calories p strong { font-size: 46px; font-weight: 400; }
@@ -2387,7 +2474,7 @@ h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 400; }
   box-shadow: none;
 }
 .library-card:last-child { border-bottom: 0; }
-.library-card h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.library-card h2 { margin: 0; font-size: 18px; }
 .library-card-main .fine-print { margin: 2px 0 0; }
 .library-card-more { grid-column: 1 / -1; }
 .library-card-more > summary { font-size: 13px; font-weight: 560; color: var(--ink-2); min-height: 32px; display: flex; align-items: center; cursor: pointer; }
@@ -2459,7 +2546,7 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .composer-send-controls { margin-left: auto; }
 .coach-workspace .composer-talk-button { min-height: 48px; padding: 0 22px; gap: 8px; border-radius: 999px; background: var(--accent-solid); color: var(--on-solid); font-size: 16px; font-weight: 700; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-solid) 35%, transparent); }
 .coach-workspace .composer-talk-button:hover { background: var(--accent-hover); }
-.chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
+.chat-task { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; opacity: 0.85; }
 .chat-task:only-child { margin: 0; font-size: 15px; opacity: 1; }
 /* Goals */
 .goals-start { display: grid; gap: 10px; }
@@ -2476,6 +2563,16 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .hydration-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-solid); transition: width 200ms; }
 .hydration-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
 .hydration-actions .button { min-height: 44px; }
+/* On a phone the two water amounts share one row when they fit and each take
+   a full row when they don't, rather than leave half-width buttons stacked.
+   Undo and the supplements keep the width of their label. */
+@media (max-width: 600px) {
+  .hydration-row:not(.supplements-row) .hydration-actions .button-secondary {
+    flex: 1 1 9rem;
+    padding-inline: 16px;
+    white-space: nowrap;
+  }
+}
 .hydration-row > .notice { margin: 0 16px; }
 @media (prefers-reduced-motion: reduce) { .hydration-progress > span { transition: none; } }
 .supplement-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0 16px; list-style: none; }

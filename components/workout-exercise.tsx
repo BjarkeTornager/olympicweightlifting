@@ -295,7 +295,7 @@ export function WorkoutExercise({
           <strong>{exerciseName(entry.exerciseId)}</strong>
           <small>
             {entry.prescribed.targetSets ?? entry.sets.length} sets ×{" "}
-            {entry.prescribed.targetReps ?? entry.prescribed.reps ?? "—"} reps ·{" "}
+            {entry.prescribed.targetReps ?? entry.prescribed.reps ?? "–"} reps ·{" "}
             {entry.prescribed.targetWeight !== "" &&
             entry.prescribed.targetWeight != null
               ? `${entry.prescribed.targetWeight} kg`
@@ -362,10 +362,10 @@ export function WorkoutExercise({
                 <ChevronDown size={17} />
               </summary>
               <div className="set-labels">
-                <span>SET</span>
-                <span>WEIGHT · KG</span>
-                <span>REPS</span>
-                <span>RESULT</span>
+                <span>Set</span>
+                <span>Weight · kg</span>
+                <span>Reps</span>
+                <span>Result</span>
               </div>
               {entry.sets.map((set, i) =>
                 i === nextSetIndex ? null : (

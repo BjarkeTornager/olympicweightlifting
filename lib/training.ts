@@ -3,7 +3,7 @@ import { today, uid } from "./domain";
 import type { JournalState, Workout, WorkoutTemplate } from "./model";
 
 export function formatSet(weight: string | number, reps: string | number) {
-  return `${Number(weight) === 0 && weight !== "" ? "Bodyweight" : `${weight || "—"} kg`} × ${reps || "—"}`;
+  return `${Number(weight) === 0 && weight !== "" ? "Bodyweight" : `${weight || "–"} kg`} × ${reps || "–"}`;
 }
 export function templateFromWorkout(
   workout: Workout,

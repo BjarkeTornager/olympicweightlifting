@@ -14,9 +14,22 @@ async function files(dir) {
     )
   ).flat();
 }
-const assets = (await files(".next/static"))
+const statics = await files(".next/static");
+// Inter only stands in where no system face resolves (layout.tsx), so the
+// shell does not download it for every device. Offline, such a browser
+// falls back to its own sans-serif.
+const css = await Promise.all(
+  statics.filter((p) => p.endsWith(".css")).map((p) => readFile(p, "utf8")),
+);
+const standIn = new Set(
+  (css.join("").match(/@font-face\{font-family:["']?Inter["']?;[^}]*\}/g) ?? [])
+    .flatMap((rule) => [...rule.matchAll(/url\(([^)]+)\)/g)])
+    .map((m) => m[1]),
+);
+const assets = statics
   .filter((p) => /\.(js|css|woff2?)$/.test(p))
-  .map((p) => p.replace(".next/", "/_next/"));
+  .map((p) => p.replace(".next/", "/_next/"))
+  .filter((url) => !standIn.has(url));
 const shell = [
   "/offline.html",
   "/manifest.webmanifest",

@@ -217,7 +217,7 @@ test("tracking setup is opt-in, reports unavailable push and shows a key once wi
   ).toBeDisabled();
   expect(creates).toBe(0);
   await page.getByRole("button", { name: "Create sleep import key" }).click();
-  await expect(page.getByLabel("Sleep import key — shown once")).toHaveValue(
+  await expect(page.getByLabel("Sleep import key · shown once")).toHaveValue(
     token,
   );
   await expect(
@@ -245,7 +245,7 @@ test("tracking setup is opt-in, reports unavailable push and shows a key once wi
   await page
     .getByRole("button", { name: "Reminders & Apple Health", exact: true })
     .click();
-  await expect(page.getByLabel("Sleep import key — shown once")).toHaveCount(0);
+  await expect(page.getByLabel("Sleep import key · shown once")).toHaveCount(0);
   await page.getByRole("button", { name: "1. Connect", exact: true }).click();
   await page.getByRole("button", { name: "Disconnect Apple Health" }).click();
   await expect(

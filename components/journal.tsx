@@ -169,9 +169,7 @@ export function Journal(props: PrivateSessionProps) {
           <span className="brand-icon">
             <BrandMark />
           </span>
-          <span>
-            Lift<span className="brand-light">Journal</span>
-          </span>
+          <span>Lift Journal</span>
         </a>
         <nav aria-label="Primary" className="sidebar-navigation">
           {primaryNavigation.map(({ id, label, icon: Icon }) => (

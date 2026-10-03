@@ -393,7 +393,7 @@ export function LiftingCoach({
                     <tr key={w.to}>
                       <th scope="row">{shortDate(w.to)}</th>
                       <td>{w.sessions || "No logs"}</td>
-                      <td>{w.loggedSets || "—"}</td>
+                      <td>{w.loggedSets || "–"}</td>
                       <td>
                         {w.rpeSets
                           ? `${w.averageReportedRpe}/10 · ${w.rpeSets} sets`

@@ -11,9 +11,11 @@ const shortDate = (day: string) =>
   });
 const percent = (part: number, whole: number) =>
   whole ? `${Math.round((part / whole) * 100)}%` : "–";
-// Cents for a dollar or more; small amounts keep four decimals.
-const dollars = (n: number) =>
-  n === 0 ? "$0" : `$${n.toFixed(n < 1 ? 4 : 2)}`;
+// Cents for a dollar or more; small amounts keep four decimals. Every amount
+// in a column takes the same places, so the points line up.
+const places = (...amounts: number[]) =>
+  amounts.some((n) => n > 0 && n < 1) ? 4 : 2;
+const dollars = (n: number, digits = places(n)) => `$${n.toFixed(digits)}`;
 
 // Owner only: totals and averages across accounts, never anyone's records.
 // AI cost and usage limits are shown per account, under the start of its id.
@@ -22,6 +24,10 @@ export function UsageReport({ accountId }: { accountId: string }) {
   // Missing from a server older than the cost ledger or the limits.
   const aiCost: Report["aiCost"] | undefined = report?.aiCost;
   const limits: Report["limits"] | undefined = report?.limits;
+  const costPlaces = aiCost && {
+    today: places(aiCost.total.today, ...aiCost.accounts.map((a) => a.today)),
+    month: places(aiCost.total.month, ...aiCost.accounts.map((a) => a.month)),
+  };
   const [error, setError] = useState("");
   useEffect(() => {
     const abort = new AbortController();
@@ -193,8 +199,8 @@ export function UsageReport({ accountId }: { accountId: string }) {
                             <code>{a.account}</code>
                             {a.you ? " (you)" : ""}
                           </th>
-                          <td>{dollars(a.today)}</td>
-                          <td>{dollars(a.month)}</td>
+                          <td>{dollars(a.today, costPlaces?.today)}</td>
+                          <td>{dollars(a.month, costPlaces?.month)}</td>
                           <td>{a.calls}</td>
                         </tr>
                       ))}
@@ -202,8 +208,12 @@ export function UsageReport({ accountId }: { accountId: string }) {
                     <tfoot>
                       <tr>
                         <th>Everyone</th>
-                        <td>{dollars(aiCost.total.today)}</td>
-                        <td>{dollars(aiCost.total.month)}</td>
+                        <td>
+                          {dollars(aiCost.total.today, costPlaces?.today)}
+                        </td>
+                        <td>
+                          {dollars(aiCost.total.month, costPlaces?.month)}
+                        </td>
                         <td>{aiCost.total.calls}</td>
                       </tr>
                     </tfoot>

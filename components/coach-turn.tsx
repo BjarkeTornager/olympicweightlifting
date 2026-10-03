@@ -3,6 +3,7 @@ import { displayMessage } from "@/lib/coach-tasks";
 import { LoaderCircle, Square } from "@/components/ui/icons";
 import type { Turn } from "@/lib/coach-turns";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
+import { danishOrNothing } from "@/lib/text-language";
 import { FoodPhotoImage } from "./food-photo";
 import { AssistantText } from "./assistant-text";
 import { AguiVisuals } from "./agui-components";
@@ -28,6 +29,8 @@ export function CoachTurn({
     "proposal" | "accountId"
   >;
 }) {
+  // Coach answers in the language you write in; its cards follow the reply.
+  const lang = danishOrNothing(t.reply || displayMessage(t.question).text);
   return (
     <article className="conversation-turn">
       <div className="chat-user">
@@ -54,7 +57,9 @@ export function CoachTurn({
           </span>
           {t.reply && <AssistantText text={t.reply} />}
           {Boolean(t.visuals?.length) && (
-            <AguiVisuals visuals={t.visuals!} accountId={accountId} />
+            <div lang={lang}>
+              <AguiVisuals visuals={t.visuals!} accountId={accountId} />
+            </div>
           )}
         </div>
       )}
@@ -101,10 +106,11 @@ export function MessageText({
 }) {
   if (video) return <>{video}</>;
   const { label, text } = displayMessage(message);
+  const lang = danishOrNothing(text);
   return (
     <>
       {label && <span className="chat-task">{label}</span>}
-      {text}
+      {lang ? <span lang={lang}>{text}</span> : text}
     </>
   );
 }

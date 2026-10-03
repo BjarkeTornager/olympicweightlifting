@@ -34,6 +34,17 @@ export const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+// A journal date as it reads in a sentence, like the masthead: "30
+// September", with the year only when it is not this year. Day and month
+// never part at a line break.
+export const dateInProse = (date: string, now = today()) =>
+  new Date(`${date}T12:00:00`)
+    .toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      ...(date.slice(0, 4) === now.slice(0, 4) ? {} : { year: "numeric" }),
+    })
+    .replaceAll(" ", "\u00a0");
 export const uid = () => crypto.randomUUID();
 export const exerciseName = (id: string) =>
   EXERCISES.find((e) => e.id === id)?.name ??

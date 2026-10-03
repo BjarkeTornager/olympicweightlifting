@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { BrandMark } from "./brand-mark";
 import { Button } from "./ui/button";
 export default function MobileSignIn({ review }: { review: boolean }) {
   const [user, setUser] = useState<{ id: string; name: string } | null>(null),
@@ -134,7 +135,12 @@ export default function MobileSignIn({ review }: { review: boolean }) {
   }
   return (
     <main className="mx-auto max-w-md px-6 py-20">
-      <p className="eyebrow">Lift Journal for iPhone</p>
+      <p className="brand">
+        <span className="brand-icon">
+          <BrandMark />
+        </span>
+        Lift Journal
+      </p>
       <h1 className="mt-4">Your health, with you.</h1>
       <p className="lead mt-4">
         Connect the iPhone app to your private journal. Access is limited to the

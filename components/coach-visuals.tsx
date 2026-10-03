@@ -28,6 +28,7 @@ import {
   type CoachVisual,
   type SavedVisual,
 } from "@/lib/coach-visuals";
+import { siteLanguage } from "@/lib/text-language";
 
 const number = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 function Diagram({
@@ -215,7 +216,7 @@ export const CoachVisuals = memo(function CoachVisuals({
             key={saved.id}
           >
             <figcaption>
-              <span className="coach-visual-label">
+              <span className="coach-visual-label" lang={siteLanguage}>
                 <Icon size={15} aria-hidden="true" />
                 {visual.kind === "table" || visual.kind === "comparison"
                   ? "Comparison"

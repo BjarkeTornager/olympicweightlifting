@@ -4,13 +4,15 @@ import {
   recipeMeta,
   type CoachVisual,
 } from "@/lib/coach-visuals";
+import { siteLanguage } from "@/lib/text-language";
 import { CoachPicture } from "./coach-picture";
 
 // The visual kinds Coach composes from journal numbers: trends, targets,
 // headline numbers, comparisons, splits and calendars, and recipe cards with
 // an AI picture of the dish when one was asked for.
 // Drawn from validated data only; the iPhone app draws the same kinds
-// natively.
+// natively. Coach's words take the reply's language (coach-turn.tsx); the
+// card's own English labels are marked English inside a Danish reply.
 type Kind<K extends CoachVisual["kind"]> = Extract<CoachVisual, { kind: K }>;
 
 const number = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
@@ -80,7 +82,8 @@ export function LineChart({ visual }: { visual: Kind<"line_chart"> }) {
         {visual.target != null && (
           <li>
             <span className="coach-swatch coach-line-target" />
-            Target <strong>{withUnit(visual.target, visual.unit)}</strong>
+            <span lang={siteLanguage}>Target</span>{" "}
+            <strong>{withUnit(visual.target, visual.unit)}</strong>
           </li>
         )}
       </ul>
@@ -152,7 +155,9 @@ export function Comparison({ visual }: { visual: Kind<"comparison"> }) {
             <th scope="col"></th>
             <th scope="col">{visual.beforeLabel}</th>
             <th scope="col">{visual.afterLabel}</th>
-            <th scope="col">Change</th>
+            <th scope="col" lang={siteLanguage}>
+              Change
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -279,9 +284,11 @@ export function RecipeCard({
           title={visual.title}
         />
       )}
-      <p className="coach-recipe-meta">{recipeMeta(visual)}</p>
+      <p className="coach-recipe-meta" lang={siteLanguage}>
+        {recipeMeta(visual)}
+      </p>
       <div>
-        <h4>Ingredients</h4>
+        <h4 lang={siteLanguage}>Ingredients</h4>
         <ul className="coach-recipe-ingredients">
           {visual.ingredients.map((ingredient, i) => (
             <li key={i}>
@@ -293,7 +300,7 @@ export function RecipeCard({
       </div>
       {visual.steps?.length ? (
         <div>
-          <h4>Method</h4>
+          <h4 lang={siteLanguage}>Method</h4>
           <ol className="coach-recipe-steps">
             {visual.steps.map((step, i) => (
               <li key={i}>{step}</li>
@@ -302,7 +309,7 @@ export function RecipeCard({
         </div>
       ) : null}
       {nutrition.length > 0 && (
-        <div>
+        <div lang={siteLanguage}>
           <h4>Estimate per serving</h4>
           <dl className="coach-recipe-nutrition">
             {nutrition.map((n) => (

@@ -43,14 +43,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
   }
 }
 
+/// The ink cover: the launch screen's colour with the mark, while the app
+/// starts and in the app switcher. Always dark, as the icon is.
 struct PrivacyCover: View {
   var body: some View {
     ZStack {
-      Theme.background.ignoresSafeArea()
-      Image(systemName: "heart.text.clipboard")
-        .font(.system(size: 44))
-        .foregroundStyle(.tint)
-        .accessibilityLabel("Lift Journal")
+      Color(ColorResource.launchBackground).ignoresSafeArea()
+      BrandMark().frame(width: 120)
     }
+    .environment(\.colorScheme, .dark)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Lift Journal")
   }
 }

@@ -4,14 +4,12 @@ import SwiftUI
 
 struct SignInView: View {
   @Environment(AppModel.self) private var model
+  @ScaledMetric(relativeTo: .largeTitle) private var markSize: CGFloat = 64
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       Spacer()
-      Image(systemName: "heart.text.clipboard.fill")
-        .font(.system(size: 52))
-        .foregroundStyle(.tint)
-        .accessibilityHidden(true)
+      BrandMark().frame(width: markSize)
       Text("Lift Journal")
         .font(.largeTitle.bold())
       Text("A private health journal you can talk to. Tell Coach how you slept, what you ate and how you moved, and it keeps the record and tells you what it means.")
@@ -21,23 +19,20 @@ struct SignInView: View {
       if let error = model.signInError {
         Label(error, systemImage: "exclamationmark.circle")
           .font(.footnote)
-          .foregroundStyle(.red)
+          .foregroundStyle(Theme.danger)
       }
       Button {
         Task { await model.signIn() }
       } label: {
         Group {
           if model.signingIn {
-            ProgressView().tint(Theme.onAccent)
+            ProgressView().tint(Theme.onAccentFill)
           } else {
-            Text("Continue with Google").fontWeight(.semibold)
+            Text("Continue with Google")
           }
         }
-        .frame(maxWidth: .infinity, minHeight: 32)
       }
-      .buttonStyle(.glassProminent)
-      .foregroundStyle(Theme.onAccent)
-      .controlSize(.large)
+      .buttonStyle(PrimaryButtonStyle())
       .disabled(model.signingIn)
       Text("For the owner and invited members. Each person's journal is private to their account.")
         .font(.footnote)

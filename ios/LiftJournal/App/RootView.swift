@@ -13,8 +13,8 @@ struct RootView: View {
       case .signedOut:
         SignInView()
       case .signedIn:
-        // Line icons that fill in when chosen, as on Airbnb, drawn for the
-        // app rather than borrowed.
+        // Solid glyphs drawn for the app rather than borrowed; the chosen
+        // tab takes the accent. Today's is the split-disc mark.
         TabView(selection: $model.tab) {
           Tab("Today", image: icon("today", .today), value: AppModel.Tab.today) {
             NavigationStack { TodayView() }

@@ -145,6 +145,28 @@ const withoutCoordinates = (visual: SavedVisual) =>
 // and the same message may be retried.
 export const STALE_TURN_MS = 3 * 60000;
 
+// Marks turns cut off mid-run as failed, so the apps stop showing them as
+// still being answered and offer to ask again. Sending the same message
+// again takes the turn over, as it does for any failed turn. `userId` limits
+// it to one account (tests share a database).
+export async function failStaleTurns(
+  options: { now?: Date; userId?: string } = {},
+) {
+  const now = options.now ?? new Date();
+  const swept = await getDb()
+    .update(agentTurns)
+    .set({ status: "failed" })
+    .where(
+      and(
+        sql`${agentTurns.status} = 'running'`,
+        sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(now.getTime() - STALE_TURN_MS)}`,
+        options.userId ? eq(agentTurns.userId, options.userId) : undefined,
+      ),
+    )
+    .returning({ id: agentTurns.id });
+  return swept.length;
+}
+
 // The iPhone uploads Coach photos without waiting for them to be sorted into
 // Food, Activity and so on; the server sorts them just after. Wait for that
 // here (on the server, not the phone's connection) so a meal photo is a Food
@@ -401,10 +423,18 @@ async function turn(
   );
   // Skills the message clearly needs; the model can load others.
   const loaded = skillsFor(request, photoIds.length);
+  // Marks this attempt, so a cut-off attempt can't save over a newer one.
+  const attemptStarted = new Date();
+  const thisAttempt = and(
+    eq(agentTurns.id, input.id),
+    eq(agentTurns.userId, userId),
+    eq(agentTurns.status, "running"),
+    eq(agentTurns.startedAt, attemptStarted),
+  );
   const inserted = existing[0]
     ? await db
         .update(agentTurns)
-        .set({ status: "running", startedAt: new Date() })
+        .set({ status: "running", startedAt: attemptStarted })
         .where(retryable())
         .returning({ id: agentTurns.id })
     : await db
@@ -415,7 +445,7 @@ async function turn(
           question: input.message,
           photoIds,
           createdAt: requestAt,
-          startedAt: new Date(),
+          startedAt: attemptStarted,
         })
         .onConflictDoNothing()
         .returning({ id: agentTurns.id });
@@ -1226,10 +1256,17 @@ async function turn(
             tx,
           );
       }
-      await tx
+      const saved = await tx
         .update(agentTurns)
         .set({ status: "done", response, metrics: finished() })
-        .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+        .where(thisAttempt)
+        .returning({ id: agentTurns.id });
+      // Swept as cut off, or taken over by a retry: that one answers.
+      if (!saved.length)
+        throw new ApiError(
+          "That request took too long and was stopped. Ask again.",
+          409,
+        );
       signal.throwIfAborted();
     });
     commit.end({ "lift.ms": Date.now() - commitStarted });
@@ -1240,13 +1277,7 @@ async function turn(
     await db
       .update(agentTurns)
       .set({ status: "failed", metrics: finished() })
-      .where(
-        and(
-          eq(agentTurns.id, input.id),
-          eq(agentTurns.userId, userId),
-          eq(agentTurns.status, "running"),
-        ),
-      );
+      .where(thisAttempt);
     logMetrics("failed");
     throw e;
   }

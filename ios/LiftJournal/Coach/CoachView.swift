@@ -9,16 +9,22 @@ import SwiftUI
 /// with a microphone that turns into a send button once there is text.
 struct CoachView: View {
   @Environment(AppModel.self) private var app
-  @State private var coach = CoachModel()
   @State private var picked: [PhotosPickerItem] = []
+  /// The app keeps Coach for the session, so the queue carries on when
+  /// this screen goes (AI sharing turned off, say) and comes back.
+  private var coach: CoachModel { app.coach }
   @State private var showingPhotos = false
   @State private var showingCamera = false
+  /// The thread opens at the newest message (the default anchor) and
+  /// returns there when the athlete sends, and only then: a reader of older
+  /// messages stays where they are.
+  @State private var position = ScrollPosition(edge: .bottom)
   @FocusState private var composing: Bool
 
   var body: some View {
     ScrollView {
       LazyVStack(spacing: 4) {
-        if coach.loaded && coach.items.isEmpty && coach.asking == nil {
+        if coach.loaded && coach.items.isEmpty && coach.asking == nil && coach.queue.isEmpty {
           ContentUnavailableView {
             Label("Coach", systemImage: "bubble.left.and.text.bubble.right")
           } description: {
@@ -40,7 +46,7 @@ struct CoachView: View {
           VStack(spacing: 6) {
             SentMessage(
               text: coach.sendingPreviews.isEmpty || asking != CoachModel.photoOnly ? asking : "",
-              previews: coach.sendingPreviews)
+              previews: coach.sendingPreviews, previewLabel: "Photo you sent")
             if coach.reply.isEmpty {
               TypingBubble(step: coach.step)
             } else {
@@ -57,7 +63,26 @@ struct CoachView: View {
             }
             .padding(.leading, 34)
             .animation(.snappy, value: coach.liveVisuals.count)
+            // Stop is always here, even with a draft in the text field, and
+            // last, so a tall chart never pushes it out of view.
+            if coach.sending {
+              Button { coach.cancel() } label: {
+                Label("Stop", systemImage: "stop.fill")
+                  .font(.caption.weight(.semibold))
+                  .frame(minHeight: 44)
+                  .contentShape(.rect)
+              }
+              .buttonStyle(.borderless)
+              .tint(.secondary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.leading, 40)
+              .accessibilityLabel("Stop Coach's reply")
+            }
           }
+        }
+        // Messages sent while Coach answers another wait their turn here.
+        ForEach(coach.waiting) { item in
+          QueuedMessage(item: item, coach: coach)
         }
         if let error = coach.error {
           Label(error, systemImage: "exclamationmark.circle")
@@ -71,6 +96,7 @@ struct CoachView: View {
       .padding(.vertical, 8)
     }
     .defaultScrollAnchor(.bottom)
+    .scrollPosition($position)
     // The keyboard covers the tab bar: any scroll or tap on the thread puts
     // it away, so the rest of the app is always one tap from here.
     .scrollDismissesKeyboard(.immediately)
@@ -87,6 +113,10 @@ struct CoachView: View {
     }
     .safeAreaInset(edge: .bottom) { composer }
     .task { if !coach.loaded { await coach.load(app) } }
+    // Clearing the field after Edit lets the messages behind it go.
+    .onChange(of: coach.hasDraft) { _, has in
+      if !has { coach.draftCleared(app) }
+    }
     // Today's first steps open Coach for a meal photo or a goals message.
     .onChange(of: app.coachIntent, initial: true) { _, intent in
       guard let intent else { return }
@@ -136,17 +166,32 @@ struct CoachView: View {
       ?? (try? Date(text, strategy: .iso8601)) ?? .now
   }
 
-  /// Sending puts the keyboard away, as the reply is what comes next.
+  /// Sending puts the keyboard away, as the reply is what comes next, and
+  /// shows the message just sent.
   private func send() {
-    guard coach.canSend else { return }
+    guard coach.canSend else {
+      if coach.queueFull && coach.hasDraft {
+        UIAccessibility.post(notification: .announcement, argument: CoachModel.queueFullText)
+      }
+      return
+    }
     composing = false
     coach.send(app)
+    position.scrollTo(edge: .bottom)
   }
 
   // MARK: Composer
 
   private var composer: some View {
     VStack(spacing: 8) {
+      if coach.queueFull && coach.hasDraft {
+        Text(CoachModel.queueFullText)
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: .infinity)
+          .padding(.horizontal, 8)
+      }
       if !coach.attachments.isEmpty {
         ScrollView(.horizontal) {
           HStack(spacing: 8) {
@@ -182,11 +227,11 @@ struct CoachView: View {
             .frame(width: 40, height: 40)
         }
         .glassEffect(.regular.interactive(), in: .circle)
-        .disabled(coach.sending || coach.attachments.count >= 4)
+        .disabled(coach.attachments.count >= 4)
         .accessibilityLabel("Add photo")
 
         HStack(alignment: .bottom, spacing: 4) {
-          TextField("Message", text: $coach.draft, axis: .vertical)
+          TextField("Message", text: Bindable(coach).draft, axis: .vertical)
             .lineLimit(1...6)
             .focused($composing)
             .padding(.leading, 14)
@@ -211,23 +256,27 @@ struct CoachView: View {
     .padding(.bottom, 6)
   }
 
+  /// Send whenever there's a draft, even while Coach answers another
+  /// message (it waits its turn), held back only by a full queue; Stop when
+  /// the field is empty and Coach is answering; otherwise the microphone.
   @ViewBuilder
   private var trailingButton: some View {
-    if coach.sending {
-      Button("Stop", systemImage: "stop.fill") { coach.cancel() }
-        .labelStyle(.iconOnly)
-        .font(.system(size: 14, weight: .bold))
-        .frame(width: 32, height: 32)
-        .background(Color.secondary.opacity(0.25), in: .circle)
-    } else if coach.canSend {
+    if coach.hasDraft {
       Button(action: send) {
         Image(systemName: "arrow.up")
           .font(.system(size: 15, weight: .bold))
           .foregroundStyle(Theme.onAccent)
           .frame(width: 32, height: 32)
-          .background(Theme.accent, in: .circle)
+          .background(Theme.accent.opacity(coach.queueFull ? 0.35 : 1), in: .circle)
       }
+      .disabled(coach.queueFull)
       .accessibilityLabel("Send")
+    } else if coach.sending {
+      Button("Stop", systemImage: "stop.fill") { coach.cancel() }
+        .labelStyle(.iconOnly)
+        .font(.system(size: 14, weight: .bold))
+        .frame(width: 32, height: 32)
+        .background(Color.secondary.opacity(0.25), in: .circle)
     } else if app.voiceEnabled {
       Button {
         composing = false

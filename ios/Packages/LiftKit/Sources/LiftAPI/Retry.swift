@@ -12,6 +12,14 @@ public enum Retry {
     return nil
   }
 
+  /// A request stopped on purpose (Stop, or a screen closing), however the
+  /// generated client wraps it: not a failure to show.
+  public static func isCancellation(_ error: any Error) -> Bool {
+    if error is CancellationError { return true }
+    if let client = error as? ClientError { return isCancellation(client.underlyingError) }
+    return (error as? URLError)?.code == .cancelled
+  }
+
   /// A connection that dropped or stalled, which is worth trying again.
   public static func isDroppedConnection(_ error: any Error) -> Bool {
     guard let code = urlError(error)?.code else { return false }

@@ -82,7 +82,8 @@ export async function history(userId: string) {
     .select()
     .from(agentTurns)
     .where(eq(agentTurns.userId, userId))
-    .orderBy(desc(agentTurns.createdAt))
+    // Two messages queued in the same moment keep the order they ran in.
+    .orderBy(desc(agentTurns.createdAt), desc(agentTurns.startedAt))
     .limit(40);
   return rows.reverse().map((r) => ({
     id: r.id,

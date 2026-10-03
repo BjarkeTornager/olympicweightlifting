@@ -103,6 +103,56 @@ struct ContractTests {
     #expect(!CoachFailure.isInterruption(CancellationError()))
   }
 
+  @Test("A request that never left the phone is an ordinary failure, not a dropped reply")
+  func coachUnreachable() {
+    let offline = CoachFailure(message: "", status: 0, connection: .notConnectedToInternet)
+    #expect(CoachFailure.isUnreachable(offline))
+    #expect(CoachFailure.isOffline(offline))
+    #expect(!CoachFailure.isInterruption(offline))
+    let serverDown = CoachFailure(message: "", status: 0, connection: .cannotConnectToHost)
+    #expect(CoachFailure.isUnreachable(serverDown))
+    #expect(!CoachFailure.isOffline(serverDown))
+    // A photo upload's failure, unwrapped from the generated client.
+    #expect(CoachFailure.isOffline(URLError(.notConnectedToInternet)))
+    #expect(CoachFailure.isUnreachable(URLError(.cannotFindHost)))
+    // The server may already have these.
+    #expect(!CoachFailure.isUnreachable(URLError(.networkConnectionLost)))
+    #expect(!CoachFailure.isUnreachable(URLError(.timedOut)))
+    #expect(!CoachFailure.isUnreachable(CoachFailure(message: "", status: 0, interrupted: true)))
+  }
+
+  @Test("RUN_ERROR carries the server's status code, so a 409 or 429 is told apart")
+  func coachRunError() throws {
+    var reader = CoachStream.Reader()
+    #expect(try reader.read(#"data: {"type":"STEP_STARTED","stepName":"Reading your journal"}"#) == .step("Reading your journal"))
+    #expect(try reader.read(": keep-alive") == nil)
+    do {
+      _ = try reader.read(#"data: {"type":"RUN_ERROR","message":"Sync your latest journal changes","code":"409"}"#)
+      Issue.record("RUN_ERROR should throw")
+    } catch let failure as CoachFailure {
+      #expect(failure.status == 409)
+      #expect(failure.message == "Sync your latest journal changes")
+      #expect(!failure.interrupted)
+    }
+    var old = CoachStream.Reader()
+    do {
+      _ = try old.read(#"data: {"type":"RUN_ERROR","message":"Coach failed"}"#)
+      Issue.record("RUN_ERROR should throw")
+    } catch let failure as CoachFailure {
+      #expect(failure.status == 0)
+    }
+  }
+
+  @Test("A stream that ends without RUN_FINISHED is a dropped reply")
+  func coachStreamEnd() throws {
+    var reader = CoachStream.Reader()
+    #expect(try reader.read(#"data: {"type":"TEXT_MESSAGE_START"}"#) == .step("Writing"))
+    #expect(try reader.read(#"data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hi"}"#) == .reply("Hi"))
+    #expect(throws: CoachFailure.self) { try reader.end() }
+    #expect(try reader.read(#"data: {"type":"RUN_FINISHED"}"#) == .finished)
+    try reader.end()
+  }
+
   @Test func journalDays() {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "Europe/Copenhagen")!

@@ -29,6 +29,15 @@ struct RetryTests {
     #expect(APIFailure.client(wrapped(.networkConnectionLost)))
   }
 
+  @Test("A stopped request is told apart from a failed one, however it's wrapped")
+  func recognisesCancellation() {
+    #expect(Retry.isCancellation(CancellationError()))
+    #expect(Retry.isCancellation(wrapped(.cancelled)))
+    #expect(Retry.isCancellation(URLError(.cancelled)))
+    #expect(!Retry.isCancellation(wrapped(.notConnectedToInternet)))
+    #expect(!Retry.isCancellation(APIFailure(status: 429, message: "Wait")))
+  }
+
   @Test func retriesADroppedConnection() async throws {
     let counter = Counter()
     let failure = wrapped(.networkConnectionLost)

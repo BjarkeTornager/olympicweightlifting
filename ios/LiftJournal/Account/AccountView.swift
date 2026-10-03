@@ -133,6 +133,10 @@ struct AccountView: View {
           Toggle(isOn: $aiAllowed) {
             Label("Share with Coach's AI provider", systemImage: "sparkles")
           }
+          // Photos still uploading for Coach's waiting messages stop too.
+          .onChange(of: aiAllowed) { _, allowed in
+            if !allowed { model.coach.consentWithdrawn() }
+          }
         } footer: {
           Text("Coach and voice check-ins send your messages, photos and relevant journal and Apple Health records to a third-party AI provider. Turn this off to stop sharing; Coach stays off until you allow it again.")
         }

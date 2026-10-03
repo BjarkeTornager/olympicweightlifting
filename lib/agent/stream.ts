@@ -109,10 +109,12 @@ function eventStream(body: ReadableStream<Uint8Array>, encoder: EventEncoder) {
 }
 
 // Sends SSE frames as `frames` gives them, with the same keep-alive as
-// coachStream, until it ends or the connection closes.
+// coachStream, until it ends or the connection closes. `onClose` is told
+// when the app closes the connection.
 function framedStream(
   encoder: EventEncoder,
   frames: (send: (frame: string) => void, signal: AbortSignal) => Promise<void>,
+  onClose?: () => void,
 ) {
   const utf8 = new TextEncoder();
   const reading = new AbortController();
@@ -145,6 +147,7 @@ function framedStream(
     cancel() {
       reading.abort();
       clearInterval(heartbeat);
+      onClose?.();
     },
   });
   return eventStream(body, encoder);
@@ -154,11 +157,13 @@ function framedStream(
 // Postgres (lib/agent/turn-events.ts) and this stream sends them from there,
 // each with its SSE id, so an app that loses the connection can read on
 // from where it was with resumeCoachStream. The events are the same as
-// coachStream's, the reply's pieces merged about every 250 ms. A closed
-// connection never stops the run, as in the background mode: only
-// cancelRun or the time limit does, and `waitUntil` (after() in the route)
-// keeps a release's shutdown waiting for it.
+// coachStream's, the reply's pieces merged about every 250 ms. As with
+// coachStream, a closed connection cancels the run: that is the website's
+// Stop until it calls /api/agent/run/cancel. With `background` it doesn't:
+// only cancelRun or the time limit does, and `waitUntil` (after() in the
+// route) keeps a release's shutdown waiting for it.
 export function storedCoachStream(
+  request: Request,
   threadId: string,
   runId: string,
   run: (
@@ -166,7 +171,11 @@ export function storedCoachStream(
     signal: AbortSignal,
     onAttempt: (attempt: number) => void,
   ) => Promise<CoachResponse>,
-  options: { key: string; waitUntil?: (work: Promise<unknown>) => void },
+  options: {
+    key: string;
+    background?: boolean;
+    waitUntil?: (work: Promise<unknown>) => void;
+  },
 ) {
   const encoder = new EventEncoder({ accept: "text/event-stream" });
   const cancelled = new AbortController();
@@ -174,6 +183,7 @@ export function storedCoachStream(
   // the one that takes the turn does.
   if (!detachedRuns.has(options.key)) detachedRuns.set(options.key, cancelled);
   const signal = AbortSignal.any([
+    ...(options.background ? [] : [request.signal]),
     cancelled.signal,
     AbortSignal.timeout(100000),
   ]);
@@ -201,22 +211,28 @@ export function storedCoachStream(
     if (!(await writer.finish(lastEvent))) unwritten = lastEvent;
   })();
   options.waitUntil?.(finished);
-  return framedStream(encoder, async (send, reading) => {
-    send(encoder.encode({ type: EventType.RUN_STARTED, threadId, runId }));
-    await Promise.race([writer.claimed, finished]);
-    if (reading.aborted) return;
-    if (writer.position)
-      for await (const frame of readTurnEvents({
-        turnId: runId,
-        ...writer.position,
-        signal: reading,
-        writer,
-      }))
-        send(frame);
-    if (reading.aborted) return;
-    await finished;
-    if (unwritten) send(encoder.encode(unwritten));
-  });
+  return framedStream(
+    encoder,
+    async (send, reading) => {
+      send(encoder.encode({ type: EventType.RUN_STARTED, threadId, runId }));
+      await Promise.race([writer.claimed, finished]);
+      if (reading.aborted) return;
+      if (writer.position)
+        for await (const frame of readTurnEvents({
+          turnId: runId,
+          ...writer.position,
+          signal: reading,
+          writer,
+        }))
+          send(frame);
+      if (reading.aborted) return;
+      await finished;
+      if (unwritten) send(encoder.encode(unwritten));
+    },
+    () => {
+      if (!options.background) cancelled.abort();
+    },
+  );
 }
 
 // Picks up a turn's events where a dropped connection left them: those

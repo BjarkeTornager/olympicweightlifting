@@ -293,6 +293,7 @@ test(
       (emit, signal) => runTurn(user, inMemory, model, { emit, signal }),
     ).text();
     const response = storedCoachStream(
+      new Request("http://localhost"),
       "coach",
       stored.id,
       (emit, signal, onAttempt) =>
@@ -337,7 +338,7 @@ test(
 );
 
 test(
-  "a dropped connection doesn't stop the turn, and reconnecting with ?after reads on without gaps or repeats",
+  "a dropped connection doesn't stop a background turn, and reconnecting with ?after reads on without gaps or repeats",
   { skip },
   async (t) => {
     const { pool, user, headers, cleanUp, rows } = await setup();
@@ -352,6 +353,7 @@ test(
     const second = gate();
     const turn = input();
     const response = storedCoachStream(
+      new Request("http://localhost"),
       "coach",
       turn.id,
       (emit, signal, onAttempt) =>
@@ -369,7 +371,8 @@ test(
           },
           { emit, signal, onAttempt },
         ),
-      { key: `${user}:${turn.id}` },
+      // As the iPhone sends it.
+      { key: `${user}:${turn.id}`, background: true },
     );
     const first = await readUntil(response, (frames) =>
       frames.some((f) => f.data.includes('"delta":"First part. "')),
@@ -470,6 +473,7 @@ test(
     const key = `${user}:${turn.id}`;
     // The first attempt gets half a reply out, then its server goes away.
     const cutOff = storedCoachStream(
+      new Request("http://localhost"),
       "coach",
       turn.id,
       (emit, signal, onAttempt) =>
@@ -487,7 +491,7 @@ test(
           },
           { emit, signal, onAttempt },
         ),
-      { key },
+      { key, background: true },
     );
     const reader = cutOff.body!.getReader();
     const decoder = new TextDecoder();
@@ -532,6 +536,7 @@ test(
     const resumed = reconnected.text();
     const retried = framesOf(
       await storedCoachStream(
+        new Request("http://localhost"),
         "coach",
         turn.id,
         (emit, signal, onAttempt) =>
@@ -544,7 +549,7 @@ test(
             },
             { emit, signal, onAttempt },
           ),
-        { key },
+        { key, background: true },
       ).text(),
     );
     const saved = await rows(turn.id);
@@ -711,5 +716,105 @@ test(
     const ended = Date.now();
     assert.equal(await nextStopped(), undefined);
     assert.ok(Date.now() - ended < 6000, `${Date.now() - ended} ms`);
+  },
+);
+
+test(
+  "a closed connection still stops a run that isn't a background one, as the website's Stop does",
+  { skip },
+  async (t) => {
+    const { pool, user, cleanUp, rows } = await setup();
+    t.after(cleanUp);
+    const { runTurn } = await import("../lib/agent/engine");
+    const { storedCoachStream } = await import("../lib/agent/stream");
+    const { stopTurnEventListener } = await import("../lib/agent/turn-events");
+    t.after(stopTurnEventListener);
+    const go = gate();
+    // Model calls stopped before their reply was done.
+    let stopped = 0;
+    const send = (
+      turn: ReturnType<typeof input>,
+      options: { background?: boolean; connection?: AbortSignal } = {},
+    ) =>
+      storedCoachStream(
+        new Request("http://localhost", { signal: options.connection }),
+        "coach",
+        turn.id,
+        (emit, signal, onAttempt) =>
+          runTurn(
+            user,
+            turn,
+            async (_messages, _tools, signal, onText) => {
+              onText?.("Logging ");
+              await Promise.race([
+                go.opened,
+                new Promise((resolve) =>
+                  signal.addEventListener("abort", resolve),
+                ),
+              ]);
+              if (signal.aborted) {
+                stopped++;
+                throw signal.reason;
+              }
+              onText?.("two eggs.");
+              return { role: "assistant", content: "Logging two eggs." };
+            },
+            { emit, signal, onAttempt },
+          ),
+        { key: `${user}:${turn.id}`, background: options.background },
+      );
+    const drafting = (frames: Frame[]) =>
+      frames.some((f) => f.data.includes('"delta":"Logging "'));
+    const status = async (turnId: string) =>
+      (await pool.query("SELECT status FROM agent_turns WHERE id=$1", [turnId]))
+        .rows[0].status as string;
+    const until = async (check: () => Promise<boolean> | boolean) => {
+      const end = Date.now() + 5000;
+      while (!(await check())) {
+        assert.ok(Date.now() < end, "in time");
+        await sleep(20);
+      }
+    };
+    const lastEvents = async (turnId: string) =>
+      (await rows(turnId)).filter((r) =>
+        /"RUN_(FINISHED|ERROR)"/.test(r.event),
+      );
+
+    // The website's Stop cancels the response it is reading.
+    const cancelled = input();
+    await readUntil(send(cancelled), drafting);
+    await until(async () => (await status(cancelled.id)) === "failed");
+    assert.equal(stopped, 1);
+    assert.deepEqual(await lastEvents(cancelled.id), []);
+
+    // So does the page going away, which ends the request.
+    const connection = new AbortController();
+    const left = input();
+    const next = frameReader(send(left, { connection: connection.signal }));
+    while (true) {
+      const frame = await next();
+      assert.ok(frame);
+      if (drafting([frame])) break;
+    }
+    connection.abort();
+    const rest: Frame[] = [];
+    for (let frame = await next(); frame; frame = await next())
+      rest.push(frame);
+    assert.ok(
+      rest.every((f) => !["RUN_FINISHED", "RUN_ERROR"].includes(typeOf(f))),
+    );
+    assert.equal(await status(left.id), "failed");
+    assert.equal(stopped, 2);
+
+    // The iPhone's background mode carries on to the saved reply.
+    const background = input();
+    await readUntil(send(background, { background: true }), drafting);
+    await sleep(200);
+    assert.equal(await status(background.id), "running");
+    go.open();
+    await until(async () => (await status(background.id)) === "done");
+    assert.equal(stopped, 2);
+    const [finished] = await lastEvents(background.id);
+    assert.equal(JSON.parse(finished.event).result.reply, "Logging two eggs.");
   },
 );

@@ -50,10 +50,13 @@ export async function POST(request: Request) {
       waitUntil: after,
       background,
     };
-    // With COACH_TURN_EVENTS on, every run carries on when its connection
-    // closes, and the app can read on with GET below.
+    // With COACH_TURN_EVENTS on, the reply streams from Postgres, so an app
+    // whose connection drops can read on with GET below. Closing the
+    // connection still stops a run that isn't a background one: that is the
+    // website's Stop.
     if (turnEventsEnabled())
       return storedCoachStream(
+        request,
         threadId,
         input.id,
         (emit, signal, onAttempt) =>
@@ -63,7 +66,7 @@ export async function POST(request: Request) {
             signal,
             onAttempt,
           }),
-        { key: `${user.id}:${input.id}`, waitUntil: after },
+        { key: `${user.id}:${input.id}`, background, waitUntil: after },
       );
     return coachStream(
       request,

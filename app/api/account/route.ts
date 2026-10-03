@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 // Permanently deletes the signed-in member's account (App Store guideline
 // 5.1.1(v)). Every table holding personal data cascades from users: journal,
-// workouts, photos, videos, voice transcripts, Coach turns, Apple Health
+// workouts, photos, videos, voice transcripts, Coach turns and their
+// pictures, Apple Health
 // imports, reminders, sessions and sign-in accounts. The member's invitation
 // goes too, so coming back needs a new one. The owner's account holds every
 // invitation, so it cannot be deleted this way.

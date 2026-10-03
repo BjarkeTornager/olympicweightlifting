@@ -15,6 +15,7 @@ import {
 } from "./images";
 import { classifyImage } from "./image-classifier";
 import { callModel } from "./agent/provider";
+import { withAiUsage } from "./ai-usage";
 import { logFailure } from "./error-log";
 
 export const imageUploadSchema = z
@@ -321,7 +322,10 @@ export async function tagUserImage(
     );
   let result: { category: ImageCategory; classification: ImageClassification };
   try {
-    result = await classifyImage(photo.data, model);
+    result = await withAiUsage(
+      { userId, feature: "image-tag", sourceId: id },
+      () => classifyImage(photo.data, model),
+    );
   } catch {
     // Failure never loses a saved image or defaults it to food. Failed retags keep the prior category.
     result = {

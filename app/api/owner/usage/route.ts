@@ -13,7 +13,7 @@ export async function GET(request: Request) {
       throw new ApiError("Only the owner can see usage.", 403);
     if (!(await allowRequest(user.id, "owner-usage", 20)))
       throw new ApiError("Please wait a minute before refreshing.", 429);
-    return Response.json(await loadUsageReport(), {
+    return Response.json(await loadUsageReport(new Date(), user.id), {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

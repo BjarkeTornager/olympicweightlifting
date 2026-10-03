@@ -8,6 +8,7 @@ import {
 import { after } from "next/server";
 import { saveVoiceTranscript, tidyVoiceCall } from "@/lib/conversation-memory";
 import { allowRequest } from "@/lib/server";
+import { recordVoiceEnd } from "@/lib/ai-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,11 @@ export async function POST(request: Request) {
       .strict()
       .parse(await readJson(request, 400000));
     await saveVoiceTranscript(user.id, call);
-    if (call.final)
+    if (call.final) {
+      // The call's estimated voice cost, from its minutes (lib/ai-usage.ts).
+      await recordVoiceEnd(user.id, call.id);
       after(() => tidyVoiceCall(user.id, call.id).catch(() => {}));
+    }
     return Response.json(
       { saved: true },
       { headers: { "Cache-Control": "no-store" } },

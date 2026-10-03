@@ -133,7 +133,30 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // request ("we should never use em dashes"): the two em dashes in the
     // route-planning paragraph become semicolons, so the base prompt models
     // the no-em-dash rule coachStyle already states. Wording is unchanged.
-    "aef4e3f58d4f863d603cbb7c2d67f558f454e4eb0454afa44b631356e1d7db7a",
+    // Revised 2026-10-03, deliberate and reviewed: one added paragraph, the
+    // new recipes skill's (loaded only for recipes and meal ideas). Coach
+    // shows a recipe or meal idea as a show_visual recipe card fitted to
+    // the request and, when relevant, the athlete's targets and known food
+    // preferences: every ingredient with its amount, short steps, and
+    // estimated kcal and protein per serving (carbs and fat when useful),
+    // then a sentence or two without repeating the card. A suggested recipe
+    // is not a meal eaten and is logged only when the athlete says they ate
+    // it. Removing that one paragraph reproduces the previous hash
+    // (aef4e3f5…); coach-visual-kinds.test.ts and skills.test.ts cover the
+    // card and the skill. Health, privacy and evidence text is unchanged.
+    // Revised 2026-10-03, deliberate and reviewed: pictures of dishes. The
+    // recipes paragraph gains one sentence: only when the athlete asks to
+    // see the dish, show_visual's picture is set, an AI picture of the food
+    // follows on the card, Coach never describes it as if it could see it,
+    // and says plainly when none is available. The skill list's recipes
+    // summary adds "with an optional picture of the dish". Only the dish
+    // name and up to five ingredient names reach the image model
+    // (coach-pictures.test.ts); pictures are kept apart from the photo
+    // library and never count as a meal (coach-pictures-database.test.ts).
+    // Removing that sentence and restoring the old summary reproduces the
+    // previous hash (f44bfc11…). Health, privacy and evidence text is
+    // unchanged.
+    "4d2133d0274d4dccb23e1038ccebdc74ea60ef95a193d8756f10c9586a74afe8",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

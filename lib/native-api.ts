@@ -1365,6 +1365,7 @@ const coachVisual = z
       "comparison",
       "split",
       "calendar",
+      "recipe",
     ]),
     title: z.string(),
     caption: z.string().optional(),
@@ -1498,6 +1499,31 @@ const coachVisual = z
       )
       .optional(),
     legend: z.string().optional(),
+    // recipe: servings, time, every ingredient with its amount, steps (none
+    // for a quick idea) and estimated nutrition per serving.
+    servings: int.optional(),
+    minutes: int.optional(),
+    ingredients: z
+      .array(
+        z
+          .object({ item: z.string(), amount: z.string().optional() })
+          .strict()
+          .register(nativeResponses, { id: "RecipeIngredient" }),
+      )
+      .optional(),
+    steps: z.array(z.string()).optional(),
+    nutrition: z
+      .object({
+        kcal: z.number().optional(),
+        protein: z.number().optional(),
+        carbs: z.number().optional(),
+        fat: z.number().optional(),
+      })
+      .strict()
+      .register(nativeResponses, { id: "RecipeNutrition" })
+      .optional(),
+    // A picture of the dish the server drew, once there is one.
+    pictureId: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "CoachVisual" });

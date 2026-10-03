@@ -120,6 +120,27 @@
       "when": 1790927370722,
       "tag": "0016_feature_use",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790992689857,
+      "tag": "0017_coach_pictures",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790995758683,
+      "tag": "0018_coach_picture_usage",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791008966875,
+      "tag": "0019_ai_usage",
+      "breakpoints": true
     }
   ]
 }

@@ -64,6 +64,30 @@ const calendarFields = {
   days: z.array(calendarDay).min(1).max(42),
   legend: z.string().max(120).optional(),
 };
+const recipeIngredient = z
+  .object({
+    item: z.string().trim().min(1).max(80),
+    amount: z.string().trim().min(1).max(40).optional(),
+  })
+  .strict();
+// Per serving, and always shown as an estimate.
+const recipeNutrition = z
+  .object({
+    kcal: amount.max(5000).optional(),
+    protein: amount.max(500).optional(),
+    carbs: amount.max(500).optional(),
+    fat: amount.max(500).optional(),
+  })
+  .strict();
+const recipeFields = {
+  servings: z.number().int().min(1).max(12),
+  minutes: z.number().int().min(1).max(600).optional(),
+  // Every ingredient, with its amount for all the servings.
+  ingredients: z.array(recipeIngredient).min(1).max(20),
+  // Left out for a quick meal idea.
+  steps: z.array(z.string().trim().min(1).max(300)).max(12).optional(),
+  nutrition: recipeNutrition.optional(),
+};
 
 export const galleryIdsSchema = z
   .array(z.string().uuid())
@@ -180,6 +204,16 @@ export const visualSchema = z
     z
       .object({ ...base, kind: z.literal("calendar"), ...calendarFields })
       .strict(),
+    z
+      .object({
+        ...base,
+        kind: z.literal("recipe"),
+        ...recipeFields,
+        // A picture of the dish, set only by the server and never through
+        // Coach's tool, so a card can't point at a photo in the library.
+        pictureId: z.string().uuid().optional(),
+      })
+      .strict(),
   ])
   .superRefine((visual, ctx) => {
     if (
@@ -194,6 +228,16 @@ export const visualSchema = z
       ctx.addIssue({
         code: "custom",
         message: "A split needs a part above zero.",
+      });
+    if (
+      visual.kind === "recipe" &&
+      visual.nutrition &&
+      Object.values(visual.nutrition).every((value) => value === undefined)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["nutrition"],
+        message: "Give at least one nutrition value, or leave nutrition out.",
       });
     if (visual.kind === "calendar") {
       const times = visual.days.map((d) => Date.parse(`${d.date}T00:00:00Z`));
@@ -249,6 +293,7 @@ export const visualToolSchema = z
       "comparison",
       "split",
       "calendar",
+      "recipe",
     ]),
     columns: table.shape.columns.optional(),
     rows: table.shape.rows.optional(),
@@ -262,6 +307,10 @@ export const visualToolSchema = z
     ...optional(comparisonFields),
     parts: splitFields.parts.optional(),
     ...optional(calendarFields),
+    ...optional(recipeFields),
+    // recipe: draw a picture of the dish. The engine takes it out before the
+    // strict check and keeps the picture's id on the card (pictureId).
+    picture: z.boolean().optional(),
   })
   .strict();
 export type SavedVisual = { id: string; content: CoachVisual };
@@ -272,6 +321,8 @@ export type CoachResponse = {
   reply: string;
   proposals: import("./agent/actions").ActionPreview[];
   visuals?: SavedVisual[];
+  // A card the voice coach showed: the call it was shown in.
+  voiceCallId?: string;
 };
 
 /** Every day from the first given to the last (at most six weeks), each with
@@ -290,4 +341,23 @@ export function calendarDays(
   }
   // Monday first, as the rest of the journal.
   return { offset: (new Date(start).getUTCDay() + 6) % 7, days };
+}
+
+/** The line under a recipe's title, such as "2 servings · 1 h 15 min". */
+export function recipeMeta({
+  servings,
+  minutes,
+}: {
+  servings: number;
+  minutes?: number;
+}) {
+  const time =
+    minutes === undefined
+      ? undefined
+      : minutes < 60
+        ? `${minutes} min`
+        : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
+  return [`${servings} ${servings === 1 ? "serving" : "servings"}`, time]
+    .filter(Boolean)
+    .join(" · ");
 }

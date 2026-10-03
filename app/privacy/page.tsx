@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">YOUR JOURNAL, YOUR DATA</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 2 October 2026.</p>
+        <p className="lead">Last updated 3 October 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -115,12 +115,13 @@ export default function PrivacyPage() {
         </p>
         <p>
           Conversation is stored with your account. The app removes conversation
-          older than 90 days when you next use the assistant. Proposals
-          temporarily include journal snapshots for safe save and undo; they
-          expire after 24 hours and are removed on subsequent assistant use.
-          Clear conversation removes its messages and proposals immediately,
-          while keeping saved workouts. Journal backup exports do not include
-          chat; use your browser to copy any conversation you want to keep.
+          older than 90 days when you next use the assistant, by typing or by
+          voice. Proposals temporarily include journal snapshots for safe save
+          and undo; they expire after 24 hours and are removed on subsequent
+          assistant use. Clear conversation removes its messages and proposals
+          immediately, while keeping saved workouts. Journal backup exports do
+          not include chat; use your browser to copy any conversation you want
+          to keep.
         </p>
         <p>
           Your optional coaching focus, approved memories, agreed plans,
@@ -287,6 +288,22 @@ export default function PrivacyPage() {
           </a>
           .
         </p>
+        <p>
+          During a voice call or in chat, Coach can put recipe cards, tables and
+          charts on your screen; they are kept with the conversation in your
+          Coach thread. If you ask to see a dish, Coach can draw a picture of
+          it: only the dish name and up to five ingredient names are sent,
+          through OpenRouter with no data collection and zero data retention
+          routing, to Google’s Gemini image model. Your name, journal records,
+          photos and health data are never sent. The picture is AI-generated and
+          marked as such. It is stored with that conversation in your account,
+          is not added to your photo library and is never used as a record of
+          what you ate. It is deleted with that conversation: when you clear the
+          chat, when conversation older than 90 days is removed, or when you
+          delete your account. Pictures are limited per day and per month; to
+          keep to the limits, when you asked for each picture and what it cost
+          (never the dish) is kept for 30 days, even after you clear the chat.
+        </p>
       </section>
       <section className="space-y-3">
         <h2>Food journal and private images</h2>
@@ -360,12 +377,26 @@ export default function PrivacyPage() {
           counts how often each feature is used: for each account and day, a
           feature name such as &ldquo;Coach message&rdquo; or &ldquo;voice
           call&rdquo; and a number. The counts never include what you said,
-          wrote, ate, photographed or recorded. The owner sees only totals and
-          averages across everyone, such as how many people used a feature or
-          how many days a week people record sleep, food and movement, worked
-          out from your journal&apos;s dates inside the database. Nothing is
-          shared with an analytics service, and the counts are deleted with your
-          account.
+          wrote, ate, photographed or recorded. For these counts the owner sees
+          only totals and averages across everyone, such as how many people used
+          a feature or how many days a week people record sleep, food and
+          movement, worked out from your journal&apos;s dates inside the
+          database. Nothing is shared with an analytics service, and the counts
+          are deleted with your account.
+        </p>
+        <p>
+          To keep AI costs in check, each paid AI request made for your account
+          is also recorded: Coach replies with the routing and web searches they
+          use, image tagging, video reviews, transcript tidying, dish pictures
+          and voice call minutes. A record holds the feature, the model, token
+          counts, the cost in US dollars (estimated for voice calls from their
+          minutes) and which message, image, video, picture or call it was for,
+          never what was said, asked or shown. The owner sees each
+          account&apos;s AI cost today and this month and how many requests it
+          made, listed under the first eight characters of its account
+          identifier, never a name or email. These records are kept for 13
+          months: older ones are removed when you next use Coach, by typing or
+          by voice, and all of them are deleted with your account.
         </p>
       </section>
       <section className="space-y-3">
@@ -383,11 +414,12 @@ export default function PrivacyPage() {
           You can edit your profile and workouts, and export a journal backup
           from Settings. In the iPhone app, Account › Delete account permanently
           deletes your account straight away: your journal, photos, videos,
-          voice transcripts, Coach conversations, Apple Health imports,
-          reminders, usage counts, sessions and invitation. Signing in again
-          then needs a new invitation. To request an export, correction or
-          deletion another way, contact the person who invited you to Lift
-          Journal. We will verify the account before acting on a request.
+          voice transcripts, Coach conversations and their pictures, Apple
+          Health imports, reminders, usage counts, AI cost records, sessions and
+          invitation. Signing in again then needs a new invitation. To request
+          an export, correction or deletion another way, contact the person who
+          invited you to Lift Journal. We will verify the account before acting
+          on a request.
         </p>
         <p>
           Account data is retained while your account is active. Deleted data

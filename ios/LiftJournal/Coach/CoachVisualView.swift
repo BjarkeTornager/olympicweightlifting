@@ -7,16 +7,21 @@ import SwiftUI
 
 /// A visual Coach attached to a reply, drawn with native components: tables,
 /// charts, diagrams, photos and routes here, and the kinds it composes from
-/// journal numbers in CoachVisualKinds.swift.
+/// journal numbers, and recipes, in CoachVisualKinds.swift.
 struct CoachVisualView: View {
   let visual: Components.Schemas.CoachVisual
+  /// On the call screen: a recipe's first ingredients and a table's first
+  /// rows; the whole card opens in a sheet.
+  var compact = false
+  static let compactRows = 6
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(visual.title).font(.subheadline.weight(.semibold))
       switch visual.kind {
       case "table":
-        DataTable(columns: visual.columns ?? [], rows: visual.rows ?? [])
+        let rows = visual.rows ?? []
+        DataTable(columns: visual.columns ?? [], rows: compact ? Array(rows.prefix(Self.compactRows)) : rows)
       case "bar_chart":
         chart
       case "diagram":
@@ -37,6 +42,8 @@ struct CoachVisualView: View {
         VisualSplit(visual: visual)
       case "calendar":
         VisualCalendar(visual: visual)
+      case "recipe":
+        VisualRecipe(visual: visual, compact: compact)
       default:
         EmptyView()
       }
@@ -45,6 +52,22 @@ struct CoachVisualView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  /// The button that opens what a compact card leaves out ("Full recipe",
+  /// "Show all"), or nil when it already shows everything.
+  static func more(_ visual: Components.Schemas.CoachVisual) -> String? {
+    switch visual.kind {
+    case "recipe":
+      let hidden =
+        (visual.ingredients?.count ?? 0) > VisualRecipe.compactIngredients
+        || !(visual.steps ?? []).isEmpty || !VisualRecipe.nutrition(visual.nutrition).isEmpty
+      return hidden ? "Full recipe" : nil
+    case "table":
+      return (visual.rows?.count ?? 0) > compactRows ? "Show all" : nil
+    default:
+      return nil
+    }
   }
 
   // MARK: Bar chart

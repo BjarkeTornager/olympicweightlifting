@@ -2895,6 +2895,26 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-day-3 { background: var(--success-solid); color: white; }
 .coach-day-none { color: var(--ink-3); }
 .coach-calendar-legend { font-size: 12px; color: var(--ink-2); margin: 10px 0 0; }
+.coach-recipe { display: grid; gap: 16px; padding: 16px 20px 18px; font-size: 13px; line-height: 1.55; }
+.coach-recipe > .coach-recipe-meta { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-2); white-space: normal; }
+.coach-recipe h4 { margin: 0 0 8px; font-size: 11px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.coach-recipe-ingredients { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.coach-recipe-ingredients li { display: grid; grid-template-columns: 6.5em 1fr; gap: 12px; overflow-wrap: anywhere; }
+.coach-recipe-ingredients li > span { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.coach-recipe-steps { display: grid; gap: 8px; margin: 0; padding-left: 1.4em; overflow-wrap: anywhere; }
+.coach-recipe-steps li::marker { color: var(--success); font-weight: 600; }
+.coach-recipe-nutrition { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.coach-recipe-nutrition > div { flex: 1 1 64px; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+/* An AI picture of the dish, drawn after the card appears. */
+.coach-picture { position: relative; }
+.coach-picture .photo-thumbnail img, .coach-picture-drawing { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 16px; }
+.coach-picture-drawing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; animation: coach-picture-drawing 1.4s ease-in-out infinite alternate; }
+.coach-picture-badge { position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 1px 4px #00000014; pointer-events: none; }
+.coach-picture-unavailable { margin: 0; font-size: 12px; color: var(--ink-2); }
+@keyframes coach-picture-drawing { from { opacity: 0.55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .coach-picture-drawing { animation: none; } }
+.coach-recipe-nutrition dt { font-size: 11px; color: var(--ink-2); }
+.coach-recipe-nutrition dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .coach-diagram-scroll { overflow: auto; max-height: 450px; padding: 10px 0; overscroll-behavior: contain; }
 .coach-diagram-scroll svg { display: block; width: 100%; min-width: 350px; max-width: 480px; margin: auto; font: 13px var(--font-sans), sans-serif; fill: var(--success); }
 .coach-diagram-scroll .coach-diagram-number { font-size: 11px; font-weight: 600; }
@@ -2922,6 +2942,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
   .coach-visual figcaption { padding: 14px; }
   .coach-table-scroll :is(th, td) { padding: 10px 12px; }
   .coach-bar-chart { padding: 16px 14px; gap: 16px; }
+  .coach-recipe { padding: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .coach-run-activity p svg { animation: none; } }
 .coach-diagram-scroll .coach-diagram-edge { font-size: 10px; fill: var(--inverse); }

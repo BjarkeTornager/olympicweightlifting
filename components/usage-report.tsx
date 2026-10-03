@@ -11,10 +11,16 @@ const shortDate = (day: string) =>
   });
 const percent = (part: number, whole: number) =>
   whole ? `${Math.round((part / whole) * 100)}%` : "–";
+// Cents for a dollar or more; small amounts keep four decimals.
+const dollars = (n: number) =>
+  n === 0 ? "$0" : `$${n.toFixed(n < 1 ? 4 : 2)}`;
 
 // Owner only: totals and averages across accounts, never anyone's records.
+// AI cost is shown per account, under the start of its id.
 export function UsageReport({ accountId }: { accountId: string }) {
   const [report, setReport] = useState<Report>();
+  // Missing from a server older than the cost ledger.
+  const aiCost: Report["aiCost"] | undefined = report?.aiCost;
   const [error, setError] = useState("");
   useEffect(() => {
     const abort = new AbortController();
@@ -147,6 +153,65 @@ export function UsageReport({ accountId }: { accountId: string }) {
             </div>
           ) : (
             <p>Feature use appears here from the day this release went live.</p>
+          )}
+          {/* A server from before the ledger (during a release's
+              overlap) sends no costs: the rest of the report still shows. */}
+          {aiCost && (
+            <>
+              <h3>AI cost</h3>
+              <p>
+                What each account&apos;s AI calls cost today and this month
+                (UTC): model calls and dish pictures as the provider reported
+                them, routing and web searches at list price, and voice calls
+                estimated from their minutes
+                {aiCost.total.estimated
+                  ? ` (${dollars(aiCost.total.estimated)} this month)`
+                  : ""}
+                . Accounts are shown by the start of their id.
+              </p>
+              {aiCost.accounts.length ? (
+                <div
+                  className="table-scroll"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="AI cost per account"
+                >
+                  <table className="training-table">
+                    <thead>
+                      <tr>
+                        <th>Account</th>
+                        <th>Today</th>
+                        <th>This month</th>
+                        <th>Calls</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiCost.accounts.map((a) => (
+                        <tr key={a.account}>
+                          <th>
+                            <code>{a.account}</code>
+                            {a.you ? " (you)" : ""}
+                          </th>
+                          <td>{dollars(a.today)}</td>
+                          <td>{dollars(a.month)}</td>
+                          <td>{a.calls}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <th>Everyone</th>
+                        <td>{dollars(aiCost.total.today)}</td>
+                        <td>{dollars(aiCost.total.month)}</td>
+                        <td>{aiCost.total.calls}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <p>No AI calls recorded this month yet.</p>
+              )}
+            </>
           )}
         </>
       )}

@@ -35,6 +35,39 @@ struct CoachVisualTests {
     #expect(VisualCalendar.layout([]).cells.isEmpty)
   }
 
+  @Test("A recipe decodes, with its servings, time and nutrition read as on the website")
+  func recipe() throws {
+    let json = #"""
+      {"id":"v","kind":"recipe","title":"Skyr bowl","servings":1,
+       "ingredients":[{"item":"Skyr","amount":"200 g"},{"item":"Honey"}],
+       "nutrition":{"kcal":240,"protein":22,"fat":4},"pictureId":"0d4e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a40"}
+      """#
+    let visual = try JSONDecoder().decode(Visual.self, from: Data(json.utf8))
+    #expect(visual.kind == "recipe" && visual.steps == nil && visual.minutes == nil)
+    #expect(visual.ingredients?.map(\.item) == ["Skyr", "Honey"])
+    #expect(visual.pictureId == "0d4e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a40")
+    #expect(VisualRecipe.meta(servings: visual.servings ?? 1, minutes: visual.minutes) == "1 serving")
+    #expect(VisualRecipe.meta(servings: 2, minutes: 25) == "2 servings · 25 min")
+    #expect(VisualRecipe.meta(servings: 4, minutes: 60) == "4 servings · 1 h")
+    #expect(VisualRecipe.meta(servings: 4, minutes: 75) == "4 servings · 1 h 15 min")
+    // Only the values Coach gave, in a fixed order.
+    #expect(
+      VisualRecipe.nutrition(visual.nutrition) == [
+        .init(label: "Calories", value: "240 kcal"), .init(label: "Protein", value: "22 g"),
+        .init(label: "Fat", value: "4 g"),
+      ])
+    #expect(VisualRecipe.nutrition(nil).isEmpty)
+  }
+
+  @Test("A dish's picture is shown at 200, asked for again while drawn or the server is busy, and gone at 404")
+  func pictureOutcome() {
+    #expect(CoachPicture.outcome(status: 200) == .ready)
+    for status in [202, 0, 429, 502, 503] { #expect(CoachPicture.outcome(status: status) == .drawing) }
+    for status in [404, 401, 400] { #expect(CoachPicture.outcome(status: status) == .gone) }
+    #expect(CoachPicture.interval == .milliseconds(1500))
+    #expect(CoachPicture.patience == .seconds(45))
+  }
+
   @Test("Line chart labels thin to four, keeping the first and last")
   func sparseLabels() {
     let labels = (1...14).map { "Sep \($0)" }

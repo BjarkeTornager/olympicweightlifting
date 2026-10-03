@@ -21,6 +21,7 @@ import {
   buildJournal,
   buildToday,
   buildTrends,
+  flattenVisual,
   nativeAction,
   receiptView,
 } from "../lib/native-api";
@@ -332,6 +333,54 @@ test("Coach history shows voice turns and each save's state", () => {
     view.turns[0].receipts.map((r) => r.state),
     ["saved", "expired"],
   );
+});
+
+test("a recipe card reaches the app whole, also from a voice call", () => {
+  const pictureId = crypto.randomUUID();
+  const recipe = {
+    kind: "recipe" as const,
+    title: "Salmon rice bowl",
+    servings: 2,
+    minutes: 25,
+    ingredients: [
+      { item: "Salmon fillet", amount: "250 g" },
+      { item: "Sesame seeds" },
+    ],
+    steps: ["Cook the rice.", "Roast the salmon."],
+    nutrition: { kcal: 625, protein: 37 },
+    pictureId,
+  };
+  assert.deepEqual(flattenVisual({ id: "v", content: recipe }), {
+    id: "v",
+    ...recipe,
+  });
+  // A card shown in a call is its own turn, with no written reply.
+  const view = buildCoach(
+    [
+      {
+        id: "a",
+        question: "[voice] A high-protein dinner with salmon",
+        photoIds: [],
+        createdAt: now.toISOString(),
+        status: "done",
+        reply: "",
+        proposals: [],
+        visuals: [{ id: crypto.randomUUID(), content: recipe }],
+      },
+    ],
+    now,
+  );
+  const [turn] = view.turns;
+  assert.equal(turn.fromVoice, true);
+  assert.equal(turn.question, "A high-protein dinner with salmon");
+  assert.equal(turn.reply, "");
+  assert.deepEqual(turn.receipts, []);
+  const visual = turn.visuals?.[0];
+  assert.equal(visual?.kind, "recipe");
+  assert.deepEqual(visual?.ingredients, recipe.ingredients);
+  assert.deepEqual(visual?.nutrition, { kcal: 625, protein: 37 });
+  assert.equal(visual?.servings, 2);
+  assert.equal(visual?.pictureId, pictureId);
 });
 
 test("a receipt opens to show what was saved, item by item", () => {

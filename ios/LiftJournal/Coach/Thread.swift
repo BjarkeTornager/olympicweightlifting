@@ -76,12 +76,16 @@ struct SentMessage: View {
   let text: String
   var photoIDs: [String] = []
   var previews: [UIImage] = []
+  /// What VoiceOver calls a photo not yet saved in the thread.
+  var previewLabel = "Photo you sent"
   var voice = false
 
   var body: some View {
     VStack(alignment: .trailing, spacing: 3) {
       if !photoIDs.isEmpty || !previews.isEmpty {
-        MessageRow(speaker: .athlete) { PhotoTiles(ids: photoIDs, previews: previews) }
+        MessageRow(speaker: .athlete) {
+          PhotoTiles(ids: photoIDs, previews: previews, previewLabel: previewLabel)
+        }
       }
       if !text.isEmpty {
         MessageRow(speaker: .athlete) {
@@ -100,40 +104,109 @@ struct SentMessage: View {
   }
 }
 
+/// A message waiting for Coach to finish the one before, or one that
+/// couldn't be sent: it waits there, with Retry, Edit and Remove, and the
+/// messages after it wait too.
+struct QueuedMessage: View {
+  @Environment(AppModel.self) private var app
+  let item: CoachModel.Outgoing
+  let coach: CoachModel
+
+  var body: some View {
+    VStack(alignment: .trailing, spacing: 2) {
+      SentMessage(
+        text: item.text, previews: item.photos.map(\.preview),
+        previewLabel: item.failure == nil ? "Photo waiting to send" : "Photo not sent")
+      if let failure = item.failure {
+        Label(failure, systemImage: "exclamationmark.circle")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.trailing)
+          .padding(.top, 2)
+        // Edit needs the text field: a message that can only be edited
+        // says how to free it.
+        if item.expired && coach.hasDraft {
+          Text("Empty the text field to edit it.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        HStack(spacing: 4) {
+          action("Remove", label: "Remove message", role: .destructive) { coach.remove(item.id, app: app) }
+          if !coach.hasDraft {
+            action("Edit", label: "Edit message") { coach.edit(item.id, app: app) }
+          } else if item.expired {
+            action("Edit", label: "Edit message") {}
+              .disabled(true)
+          }
+          // A message that waited over a day can only be edited or removed.
+          if !item.expired {
+            action("Retry", label: "Retry sending") { coach.retry(item.id, app: app) }
+              .fontWeight(.semibold)
+          }
+        }
+        .font(.footnote)
+      } else {
+        HStack(spacing: 4) {
+          Label(status, systemImage: "clock")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          action("Remove", label: "Remove message") { coach.remove(item.id, app: app) }
+            .font(.caption)
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .trailing)
+    .padding(.top, 4)
+    .accessibilityElement(children: .contain)
+  }
+
+  /// A small text button with a full-size target, named for VoiceOver
+  /// with the message it acts on.
+  private func action(
+    _ title: String, label: String, role: ButtonRole? = nil, perform: @escaping () -> Void
+  ) -> some View {
+    Button(role: role, action: perform) {
+      Text(title)
+        .padding(.horizontal, 6)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(.rect)
+    }
+    .buttonStyle(.borderless)
+    .accessibilityLabel(label)
+    .accessibilityHint(item.summary)
+  }
+
+  private var status: String {
+    if coach.heldForEdit { return "Waits for your edit" }
+    // A message ahead of this one failed: this waits until that's sorted.
+    if coach.queue.prefix(while: { $0.id != item.id }).contains(where: { $0.failure != nil }) {
+      return "Waits for the message above"
+    }
+    return "Waiting for Coach"
+  }
+}
+
 /// Photos in the thread: one large, or up to four in a square grid.
 struct PhotoTiles: View {
   let ids: [String]
   var previews: [UIImage] = []
+  var previewLabel = "Photo you sent"
   @State private var viewing: String?
 
   var body: some View {
     let count = ids.count + previews.count
     let side: CGFloat = count == 1 ? 210 : 118
-    LazyVGrid(
-      columns: Array(repeating: GridItem(.fixed(side), spacing: 4), count: count == 1 ? 1 : 2),
-      alignment: .trailing, spacing: 4
-    ) {
-      ForEach(ids, id: \.self) { id in
-        Button {
-          viewing = id
-        } label: {
-          PrivateImage(id: id)
-            .frame(width: side, height: side)
-            .clipShape(.rect(cornerRadius: 18, style: .continuous))
+    // A plain grid of fixed-size tiles: at most four, so nothing lazy to
+    // measure inside the thread's own lazy list.
+    Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+      ForEach(rows(count: count), id: \.self) { row in
+        GridRow {
+          ForEach(row, id: \.self) { index in
+            tile(index, side: side)
+          }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Photo you sent")
-      }
-      ForEach(Array(previews.enumerated()), id: \.offset) { _, image in
-        Image(uiImage: image)
-          .resizable()
-          .scaledToFill()
-          .frame(width: side, height: side)
-          .clipShape(.rect(cornerRadius: 18, style: .continuous))
-          .opacity(0.8)
       }
     }
-    .fixedSize()
     .fullScreenCover(item: Binding(get: { viewing.map(PhotoID.init) }, set: { viewing = $0?.id })) { photo in
       PhotoViewer(id: photo.id)
     }
@@ -141,6 +214,37 @@ struct PhotoTiles: View {
 
   struct PhotoID: Identifiable {
     let id: String
+  }
+
+  /// Tile indexes in rows: one on its own, otherwise two to a row.
+  private func rows(count: Int) -> [[Int]] {
+    let perRow = count == 1 ? 1 : 2
+    return stride(from: 0, to: count, by: perRow).map { Array($0..<min($0 + perRow, count)) }
+  }
+
+  /// Saved photos first, then photos still being sent.
+  @ViewBuilder
+  private func tile(_ index: Int, side: CGFloat) -> some View {
+    if index < ids.count {
+      let id = ids[index]
+      Button {
+        viewing = id
+      } label: {
+        PrivateImage(id: id)
+          .frame(width: side, height: side)
+          .clipShape(.rect(cornerRadius: 18, style: .continuous))
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Photo you sent")
+    } else {
+      Image(uiImage: previews[index - ids.count])
+        .resizable()
+        .scaledToFill()
+        .frame(width: side, height: side)
+        .clipShape(.rect(cornerRadius: 18, style: .continuous))
+        .opacity(0.8)
+        .accessibilityLabel(previewLabel)
+    }
   }
 }
 

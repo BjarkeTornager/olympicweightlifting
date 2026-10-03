@@ -920,7 +920,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "One of: table, bar_chart, diagram, photo_gallery, route_map, line_chart, progress, stats, comparison, split, calendar. Treat others as unknown."
+            "description": "One of: table, bar_chart, diagram, photo_gallery, route_map, line_chart, progress, stats, comparison, split, calendar, recipe. Treat others as unknown."
           },
           "title": {
             "type": "string"
@@ -1046,6 +1046,30 @@
             }
           },
           "legend": {
+            "type": "string"
+          },
+          "servings": {
+            "type": "integer"
+          },
+          "minutes": {
+            "type": "integer"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeIngredient"
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nutrition": {
+            "$ref": "#/components/schemas/RecipeNutrition"
+          },
+          "pictureId": {
             "type": "string"
           }
         },
@@ -2435,6 +2459,37 @@
           "id",
           "undo"
         ]
+      },
+      "RecipeIngredient": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item"
+        ]
+      },
+      "RecipeNutrition": {
+        "type": "object",
+        "properties": {
+          "kcal": {
+            "type": "number"
+          },
+          "protein": {
+            "type": "number"
+          },
+          "carbs": {
+            "type": "number"
+          },
+          "fat": {
+            "type": "number"
+          }
+        }
       },
       "RecordBodyFatAction": {
         "type": "object",

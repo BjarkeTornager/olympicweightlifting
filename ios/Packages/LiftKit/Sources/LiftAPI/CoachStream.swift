@@ -19,12 +19,23 @@ public struct CoachFailure: LocalizedError, Sendable {
   /// The connection ended before the reply, as when the app is suspended:
   /// Coach may still be working, and the saved turn tells.
   public var interrupted = false
+  /// The connection error that kept the request from leaving the phone (no
+  /// connection, or the server couldn't be found): nothing reached Coach,
+  /// so sending it again is safe.
+  public var connection: URLError.Code?
+  /// How long the server asked the app to wait before trying again (429).
+  public var retryAfter: Double?
   public var errorDescription: String? { message }
 
-  public init(message: String, status: Int, interrupted: Bool = false) {
+  public init(
+    message: String, status: Int, interrupted: Bool = false, connection: URLError.Code? = nil,
+    retryAfter: Double? = nil
+  ) {
     self.message = message
     self.status = status
     self.interrupted = interrupted
+    self.connection = connection
+    self.retryAfter = retryAfter
   }
 
   /// Whether an error means the connection was lost rather than Coach or
@@ -36,6 +47,32 @@ public struct CoachFailure: LocalizedError, Sendable {
       .networkConnectionLost, .notConnectedToInternet, .timedOut, .cannotConnectToHost,
       .dataNotAllowed, .internationalRoamingOff, .callIsActive, .backgroundSessionWasDisconnected,
     ].contains(url.code)
+  }
+
+  /// Connection errors that mean a request never reached the server. Lost
+  /// connections and timeouts aren't among them: the server may have it.
+  public static let unreachableCodes: Set<URLError.Code> = [
+    .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .dataNotAllowed,
+    .internationalRoamingOff, .callIsActive,
+  ]
+
+  /// Whether an error means the request never reached the server, for a
+  /// Coach run or any other request (such as a photo upload).
+  public static func isUnreachable(_ error: any Error) -> Bool {
+    guard let code = connectionCode(error) else { return false }
+    return unreachableCodes.contains(code)
+  }
+
+  /// Whether the phone itself has no connection, rather than the server
+  /// being out of reach.
+  public static func isOffline(_ error: any Error) -> Bool {
+    guard let code = connectionCode(error) else { return false }
+    return [.notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff, .callIsActive].contains(code)
+  }
+
+  private static func connectionCode(_ error: any Error) -> URLError.Code? {
+    if let failure = error as? CoachFailure { return failure.connection }
+    return Retry.urlError(error)?.code
   }
 }
 
@@ -56,14 +93,18 @@ public struct CoachStream: Sendable {
 
   /// `language` ("en" or "da") is the one chosen in Profile; Coach writes
   /// every reply in it.
+  /// `submittedAt` is when the athlete sent it, so a message that waited in
+  /// the app's queue keeps the day and time it was meant for.
   public func run(
-    id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String? = nil
+    id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String? = nil,
+    submittedAt: Date = .now
   ) -> AsyncThrowingStream<CoachEvent, any Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
           try await stream(
-            id: id, message: message, revision: revision, photoIDs: photoIDs, language: language
+            id: id, message: message, revision: revision, photoIDs: photoIDs, language: language,
+            submittedAt: submittedAt
           ) {
             continuation.yield($0)
           }
@@ -90,7 +131,7 @@ public struct CoachStream: Sendable {
 
   private func stream(
     id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String?,
-    emit: (CoachEvent) -> Void
+    submittedAt: Date, emit: (CoachEvent) -> Void
   ) async throws {
     let runID = id.uuidString.lowercased()
     var body: [String: Any] = [
@@ -104,7 +145,9 @@ public struct CoachStream: Sendable {
         "revision": revision,
         "timezone": TimeZone.current.identifier,
         "photoIds": photoIDs.map { $0.uuidString.lowercased() },
-        "submittedAt": ISO8601DateFormatter().string(from: .now),
+        // To the millisecond: two messages queued in the same second keep
+        // their order in the thread.
+        "submittedAt": Date.ISO8601FormatStyle(includingFractionalSeconds: true).format(submittedAt),
       ],
     ]
     if let language, var props = body["forwardedProps"] as? [String: Any] {
@@ -121,49 +164,78 @@ public struct CoachStream: Sendable {
     LiftHeaders.apply(to: &request, token: token, account: account)
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-    let (bytes, response) = try await LiftServer.session().bytes(for: request)
-    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+    let bytes: URLSession.AsyncBytes
+    let response: URLResponse
+    do {
+      (bytes, response) = try await LiftServer.session().bytes(for: request)
+    } catch let url as URLError where CoachFailure.unreachableCodes.contains(url.code) {
+      // Nothing reached the server: an ordinary failure, not a dropped reply.
+      throw CoachFailure(
+        message: "Coach couldn't be reached. Your message is kept.", status: 0, connection: url.code)
+    }
+    let http = response as? HTTPURLResponse
+    let status = http?.statusCode ?? 0
     guard status == 200 else {
       var data = Data()
       for try await byte in bytes.prefix(20_000) { data.append(byte) }
       let error = (try? JSONDecoder().decode(ErrorMessage.self, from: data))?.error
       throw CoachFailure(
-        message: error ?? "Coach could not connect. Your message is kept.", status: status)
+        message: error ?? "Coach could not connect. Your message is kept.", status: status,
+        retryAfter: http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init))
     }
-    var reply = ""
-    var finished = false
+    var reader = Reader()
     for try await line in bytes.lines {
       try Task.checkCancellation()
-      guard line.hasPrefix("data:") else { continue }
+      if let event = try reader.read(line) { emit(event) }
+    }
+    try reader.end()
+  }
+
+  /// Reads the AG-UI event stream line by line.
+  struct Reader {
+    private var reply = ""
+    private var finished = false
+
+    /// The event a `data:` line carries, if the app shows it. Throws the
+    /// run's failure, with the server's status code, on RUN_ERROR.
+    mutating func read(_ line: String) throws -> CoachEvent? {
+      guard line.hasPrefix("data:") else { return nil }
       let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
       guard payload.utf8.count < 2_000_000,
         let event = try? JSONDecoder().decode(AGUIEvent.self, from: Data(payload.utf8))
-      else { continue }
+      else { return nil }
       switch event.type {
       case "STEP_STARTED":
-        if let step = event.stepName { emit(.step(step)) }
+        return event.stepName.map(CoachEvent.step)
       case "TEXT_MESSAGE_START":
         reply = ""
-        emit(.step("Writing"))
+        return .step("Writing")
       case "TEXT_MESSAGE_CONTENT":
         reply += event.delta ?? ""
-        emit(.reply(reply))
+        return .reply(reply)
       case "CUSTOM":
-        if let visual = Self.visual(fromCustom: payload) { emit(.visual(visual)) }
+        return CoachStream.visual(fromCustom: payload).map(CoachEvent.visual)
       case "RUN_ERROR":
+        // `code` is the HTTP status the server would have answered with,
+        // such as "409" when the journal changed or "429" for too many.
         throw CoachFailure(
-          message: event.message ?? "Coach could not finish. Your message is kept.", status: 0)
+          message: event.message ?? "Coach could not finish. Your message is kept.",
+          status: event.code.flatMap { Int($0) } ?? 0)
       case "RUN_FINISHED":
         finished = true
-        emit(.finished)
+        return .finished
       default:
-        continue
+        return nil
       }
     }
-    if !finished {
-      throw CoachFailure(
-        message: "The connection ended before Coach finished. Refresh to see what was saved.",
-        status: 0, interrupted: true)
+
+    /// Throws if the stream ended before the run finished.
+    func end() throws {
+      if !finished {
+        throw CoachFailure(
+          message: "The connection ended before Coach finished. Refresh to see what was saved.",
+          status: 0, interrupted: true)
+      }
     }
   }
 }
@@ -191,6 +263,7 @@ private struct AGUIEvent: Decodable {
   let stepName: String?
   let delta: String?
   let message: String?
+  let code: String?
 }
 
 private struct ErrorMessage: Decodable {

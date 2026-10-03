@@ -55,6 +55,19 @@ struct ContractTests {
     #expect(visuals[5].days?.first?.level == 3 && visuals[5].legend == "Darker is more training")
   }
 
+  @Test("A recipe card decodes with its ingredients, steps and nutrition")
+  func coachRecipe() throws {
+    let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
+    let recipe = try #require(history.turns.last?.visuals?.first)
+    #expect(recipe.kind == "recipe" && recipe.servings == 2 && recipe.minutes == 25)
+    #expect(recipe.ingredients?.first?.item == "Salmon fillet" && recipe.ingredients?.first?.amount == "250 g")
+    // An ingredient may come without an amount.
+    #expect(recipe.ingredients?.last?.item == "Spring onion" && recipe.ingredients?.last?.amount == nil)
+    #expect(recipe.steps?.count == 4)
+    #expect(recipe.nutrition?.kcal == 625 && recipe.nutrition?.protein == 37 && recipe.nutrition?.fat == 21)
+    #expect(recipe.pictureId == "5a0c9e1d-7b3f-4e62-8d14-2f6a9c3b7e58")
+  }
+
   @Test("A visual streamed mid-reply reads as the saved one will")
   func streamedVisual() throws {
     let event = #"""
@@ -101,6 +114,56 @@ struct ContractTests {
     #expect(!CoachFailure.isInterruption(CoachFailure(message: "Please wait a minute", status: 429)))
     #expect(!CoachFailure.isInterruption(URLError(.badServerResponse)))
     #expect(!CoachFailure.isInterruption(CancellationError()))
+  }
+
+  @Test("A request that never left the phone is an ordinary failure, not a dropped reply")
+  func coachUnreachable() {
+    let offline = CoachFailure(message: "", status: 0, connection: .notConnectedToInternet)
+    #expect(CoachFailure.isUnreachable(offline))
+    #expect(CoachFailure.isOffline(offline))
+    #expect(!CoachFailure.isInterruption(offline))
+    let serverDown = CoachFailure(message: "", status: 0, connection: .cannotConnectToHost)
+    #expect(CoachFailure.isUnreachable(serverDown))
+    #expect(!CoachFailure.isOffline(serverDown))
+    // A photo upload's failure, unwrapped from the generated client.
+    #expect(CoachFailure.isOffline(URLError(.notConnectedToInternet)))
+    #expect(CoachFailure.isUnreachable(URLError(.cannotFindHost)))
+    // The server may already have these.
+    #expect(!CoachFailure.isUnreachable(URLError(.networkConnectionLost)))
+    #expect(!CoachFailure.isUnreachable(URLError(.timedOut)))
+    #expect(!CoachFailure.isUnreachable(CoachFailure(message: "", status: 0, interrupted: true)))
+  }
+
+  @Test("RUN_ERROR carries the server's status code, so a 409 or 429 is told apart")
+  func coachRunError() throws {
+    var reader = CoachStream.Reader()
+    #expect(try reader.read(#"data: {"type":"STEP_STARTED","stepName":"Reading your journal"}"#) == .step("Reading your journal"))
+    #expect(try reader.read(": keep-alive") == nil)
+    do {
+      _ = try reader.read(#"data: {"type":"RUN_ERROR","message":"Sync your latest journal changes","code":"409"}"#)
+      Issue.record("RUN_ERROR should throw")
+    } catch let failure as CoachFailure {
+      #expect(failure.status == 409)
+      #expect(failure.message == "Sync your latest journal changes")
+      #expect(!failure.interrupted)
+    }
+    var old = CoachStream.Reader()
+    do {
+      _ = try old.read(#"data: {"type":"RUN_ERROR","message":"Coach failed"}"#)
+      Issue.record("RUN_ERROR should throw")
+    } catch let failure as CoachFailure {
+      #expect(failure.status == 0)
+    }
+  }
+
+  @Test("A stream that ends without RUN_FINISHED is a dropped reply")
+  func coachStreamEnd() throws {
+    var reader = CoachStream.Reader()
+    #expect(try reader.read(#"data: {"type":"TEXT_MESSAGE_START"}"#) == .step("Writing"))
+    #expect(try reader.read(#"data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hi"}"#) == .reply("Hi"))
+    #expect(throws: CoachFailure.self) { try reader.end() }
+    #expect(try reader.read(#"data: {"type":"RUN_FINISHED"}"#) == .finished)
+    try reader.end()
   }
 
   @Test func journalDays() {

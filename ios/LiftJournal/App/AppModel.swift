@@ -9,7 +9,8 @@ typealias NativeAction = Components.Schemas.NativeAction
 
 /// The app's shared state: who is signed in, today's view of the journal,
 /// changes waiting to be sent, and Apple Health sync. Feature screens own
-/// their own models and use this one for the client and session.
+/// their own models and use this one for the client and session; Coach's
+/// lives here, as its queue outlasts the screen.
 @Observable
 final class AppModel {
   enum Phase: Equatable { case launching, signedOut, signedIn }
@@ -48,6 +49,13 @@ final class AppModel {
   /// What Coach should do when it next appears: open the camera for a meal,
   /// or start a message the athlete can edit before sending.
   var coachIntent: CoachIntent?
+  /// Messages to Coach held up by one that failed, shown on the Coach tab
+  /// so it's noticed from anywhere in the app.
+  var coachNeedsAttention = 0
+  /// Coach's thread and queue, for the whole session rather than the
+  /// tab: waiting messages go on being sent, and one that needs the
+  /// athlete shows on the tab, before Coach is ever opened.
+  private(set) var coach = CoachModel()
   var queued = 0
   var refused: [Outbox.Item] = []
 
@@ -124,6 +132,7 @@ final class AppModel {
     phase = .signedIn
     listenForHealth()
     Reminders.shared.model = self
+    coach.bind(self)
   }
 
   private var healthUpdates: Task<Void, Never>?
@@ -149,6 +158,8 @@ final class AppModel {
 
   func becameActive() async {
     guard phase == .signedIn else { return }
+    // A message to Coach that failed offline goes again.
+    coach.resume(self)
     await refresh()
   }
 
@@ -183,6 +194,8 @@ final class AppModel {
   }
 
   func signOut() async {
+    // Nothing more goes to Coach with a session about to be revoked.
+    coach.close()
     if let saved = session {
       // Revoke this device's session only; the website stays signed in.
       var request = URLRequest(url: LiftServer.origin.appending(path: "api/auth/sign-out"))
@@ -222,11 +235,14 @@ final class AppModel {
   }
 
   private func expire(message: String?) async {
+    coach.close()
+    coach = CoachModel()
     AIConsent.reset()
     Reminders.shared.reset()
     UserDefaults.standard.removeObject(forKey: FirstStepsCard.hiddenKey)
     await Credentials.shared.clear()
     await HealthSync.shared.markConnected(false)
+    // Today, the outbox and Coach's queue of unsent messages and photos.
     Storage.removeAll()
     healthUpdates?.cancel()
     healthUpdates = nil
@@ -235,6 +251,7 @@ final class AppModel {
     today = nil
     queued = 0
     refused = []
+    coachNeedsAttention = 0
     health = HealthState()
     signInError = message
     phase = .signedOut
@@ -288,6 +305,8 @@ final class AppModel {
       todayError = nil
       todayCache.save(value, account: account)
       await Reminders.shared.update(today: value)
+    } catch where Retry.isCancellation(error) {
+      // Stopped on purpose (Stop in Coach, say): Today hasn't failed.
     } catch {
       todayError = await handle(error)
     }

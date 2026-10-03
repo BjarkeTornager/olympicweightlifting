@@ -15,6 +15,7 @@ export const skillNames = [
   "review",
   "goals",
   "memory",
+  "recipes",
 ] as const;
 export type SkillName = (typeof skillNames)[number];
 
@@ -213,13 +214,33 @@ export const skills: Record<SkillName, Skill> = {
       "planerne",
     ),
   },
+  recipes: {
+    summary:
+      "recipes and meal ideas as recipe cards, with an optional picture of the dish",
+    paragraphs: ["When the athlete asks for a recipe"],
+    tools: ["show_visual"],
+    fields: [],
+    signal: words(
+      "recipes?",
+      "(meal|dinner|lunch|breakfast|snack) ideas?",
+      "meal plan",
+      "what (should|can) i (cook|eat|make)",
+      "opskrift(en|er|erne)?",
+      "madplan(en)?",
+      "hvad skal jeg (spise|lave (til )?(mad|aftensmad|frokost|morgenmad))",
+      // Not "photo of the meal", which is usually the athlete's own.
+      "(picture|photo|image) of (the|that|this) (dish|recipe)",
+      "billede af (retten|opskriften)",
+    ),
+  },
 };
 
-export const skillTools = new Map(
-  skillNames.flatMap((name) =>
-    skills[name].tools.map((tool) => [tool, name] as const),
-  ),
-);
+// Each skill tool and the skills that offer it: show_visual comes with both
+// review and recipes.
+export const skillTools = new Map<string, SkillName[]>();
+for (const name of skillNames)
+  for (const tool of skills[name].tools)
+    skillTools.set(tool, [...(skillTools.get(tool) ?? []), name]);
 
 // Skills a message clearly needs before the model is asked. Photos attached
 // to the message always need the photos skill.

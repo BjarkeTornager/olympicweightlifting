@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   calendarDays,
+  recipeMeta,
   visualSchema,
   visualToolSchema,
 } from "../lib/coach-visuals";
@@ -82,6 +83,20 @@ const examples = {
     ],
     legend: "Darker is more training",
   },
+  recipe: {
+    kind: "recipe",
+    title: "Salmon rice bowl",
+    caption: "Fits today's protein target.",
+    servings: 2,
+    minutes: 25,
+    ingredients: [
+      { item: "Salmon fillet", amount: "250 g" },
+      { item: "Jasmine rice", amount: "150 g" },
+      { item: "Sesame seeds" },
+    ],
+    steps: ["Cook the rice.", "Roast the salmon for 12 to 15 minutes."],
+    nutrition: { kcal: 625, protein: 37 },
+  },
 };
 
 test("the new visual kinds validate, also through Coach's flat tool schema", () => {
@@ -148,6 +163,89 @@ test("the app receives the new kinds with the same field names", () => {
       ...content,
     });
   }
+});
+
+test("a recipe card is bounded, strict and fits the app and the website", () => {
+  const recipe = examples.recipe;
+  const valid = (visual: object) => visualSchema.safeParse(visual).success;
+  const long = (n: number) => "x".repeat(n);
+  // A quick meal idea needs no steps, time or nutrition.
+  assert.ok(
+    valid({
+      kind: "recipe",
+      title: "Skyr with berries",
+      servings: 1,
+      ingredients: [{ item: "Skyr", amount: "200 g" }],
+    }),
+  );
+  // The largest card there is room for.
+  assert.ok(
+    valid({
+      ...recipe,
+      servings: 12,
+      minutes: 600,
+      ingredients: Array.from({ length: 20 }, () => ({
+        item: long(80),
+        amount: long(40),
+      })),
+      steps: Array.from({ length: 12 }, () => long(300)),
+      nutrition: { kcal: 5000, protein: 500, carbs: 500, fat: 500 },
+      pictureId: crypto.randomUUID(),
+    }),
+  );
+  const bad = [
+    { ...recipe, servings: 0 },
+    { ...recipe, servings: 13 },
+    { ...recipe, servings: 1.5 },
+    { ...recipe, minutes: 0 },
+    { ...recipe, minutes: 601 },
+    { ...recipe, ingredients: [] },
+    {
+      ...recipe,
+      ingredients: Array.from({ length: 21 }, () => ({ item: "Egg" })),
+    },
+    { ...recipe, ingredients: [{ item: long(81) }] },
+    { ...recipe, ingredients: [{ item: "Egg", amount: long(41) }] },
+    { ...recipe, ingredients: [{ item: " ", amount: "2" }] },
+    { ...recipe, ingredients: [{ item: "Egg", amount: "" }] },
+    { ...recipe, ingredients: [{ item: "Egg", note: "free range" }] },
+    { ...recipe, steps: Array.from({ length: 13 }, () => "Stir.") },
+    { ...recipe, steps: [long(301)] },
+    { ...recipe, steps: [""] },
+    { ...recipe, nutrition: {} },
+    { ...recipe, nutrition: { kcal: 5001 } },
+    { ...recipe, nutrition: { protein: 501 } },
+    { ...recipe, nutrition: { fat: -1 } },
+    { ...recipe, nutrition: { kcal: 600, sugar: 12 } },
+    { ...recipe, pictureId: "not-a-uuid" },
+    { ...recipe, pictureId: "../api/images/1" },
+    // Only the server attaches a picture; there is no picture flag yet.
+    { ...recipe, picture: true },
+    { ...recipe, imageIds: [crypto.randomUUID()] },
+    { ...examples.stats, servings: 2 },
+    { ...examples.split, ingredients: recipe.ingredients },
+  ];
+  for (const visual of bad)
+    assert.equal(valid(visual), false, JSON.stringify(visual));
+  // An empty nutrition object says why, on the field.
+  const empty = visualSchema.safeParse({ ...recipe, nutrition: {} });
+  assert.deepEqual(
+    !empty.success && empty.error.issues.map((issue) => issue.path),
+    [["nutrition"]],
+  );
+  // Coach's tool can't point a card at a picture; the server sets that.
+  assert.equal(
+    visualToolSchema.safeParse({ ...recipe, pictureId: crypto.randomUUID() })
+      .success,
+    false,
+  );
+  assert.equal(recipeMeta({ servings: 2, minutes: 25 }), "2 servings · 25 min");
+  assert.equal(recipeMeta({ servings: 1 }), "1 serving");
+  assert.equal(recipeMeta({ servings: 4, minutes: 60 }), "4 servings · 1 h");
+  assert.equal(
+    recipeMeta({ servings: 4, minutes: 75 }),
+    "4 servings · 1 h 15 min",
+  );
 });
 
 test("calendar days fall on their weekday, with the days Coach left out blank", () => {

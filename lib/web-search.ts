@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiPrices, recordFixedPrice } from "./ai-usage";
 
 // Coach can look up public facts it does not hold, such as the ingredients on a
 // packaged food. Everything here is bounded: the query that leaves this server,
@@ -110,7 +111,10 @@ export async function searchWeb(
     redirect: "error",
     signal: deps.signal ?? AbortSignal.timeout(TIMEOUT_MS),
   });
-  const body = responseSchema.safeParse(await readJson(response));
+  const raw = await readJson(response);
+  // Billed per search, charged to the Coach turn that asked for it.
+  await recordFixedPrice("web-search", "exa-search", aiPrices().exaSearch);
+  const body = responseSchema.safeParse(raw);
   if (!body.success) throw Error("Web search returned an unexpected response.");
   const seen = new Set<string>();
   const results: WebSearchResult[] = [];

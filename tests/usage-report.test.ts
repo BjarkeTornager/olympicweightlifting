@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { usageReport, weekStart } from "../lib/usage-report";
+import { aiCostReport, usageReport, weekStart } from "../lib/usage-report";
 
 const now = new Date("2026-10-02T12:00:00Z"); // a Friday
 
@@ -74,4 +74,70 @@ test("The usage report counts full days, retention and features without identiti
     { feature: "voice.call.google", people: 1, uses: 1, last: "2026-10-02" },
   ]);
   assert.doesNotMatch(JSON.stringify(report), /"(a|b|c)"/);
+});
+
+test("AI cost is totalled per account for today and this month, under a short id", () => {
+  const owner = "0wner000-1111-2222-3333-444444444444",
+    athlete = "athlete0-5555-6666-7777-888888888888";
+  const cost = aiCostReport(
+    [
+      {
+        userId: owner,
+        day: "2026-10-02",
+        costUsd: 0.4,
+        calls: 6,
+        estimatedUsd: 0,
+      },
+      {
+        userId: owner,
+        day: "2026-10-01",
+        costUsd: 0.1,
+        calls: 2,
+        estimatedUsd: 0.1,
+      },
+      {
+        userId: athlete,
+        day: "2026-10-02",
+        costUsd: 0.25,
+        calls: 3,
+        estimatedUsd: 0.2,
+      },
+      // Last month: not counted.
+      {
+        userId: athlete,
+        day: "2026-09-30",
+        costUsd: 2.5,
+        calls: 40,
+        estimatedUsd: 0,
+      },
+    ],
+    now,
+    owner,
+  );
+  assert.deepEqual(cost, {
+    day: "2026-10-02",
+    month: "2026-10",
+    accounts: [
+      {
+        account: "0wner000",
+        you: true,
+        today: 0.4,
+        month: 0.5,
+        calls: 8,
+        estimated: 0.1,
+      },
+      {
+        account: "athlete0",
+        you: false,
+        today: 0.25,
+        month: 0.25,
+        calls: 3,
+        estimated: 0.2,
+      },
+    ],
+    total: { today: 0.65, month: 0.75, calls: 11, estimated: 0.3 },
+  });
+  assert.doesNotMatch(JSON.stringify(cost), /5555|1111/);
+  // With no ledger rows the report still has an empty AI cost section.
+  assert.deepEqual(usageReport([], new Map(), [], now).aiCost.accounts, []);
 });

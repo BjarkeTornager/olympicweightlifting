@@ -13,6 +13,7 @@ import {
   check,
   date,
   customType,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { JournalState, Workout, Entry } from "../model";
@@ -388,6 +389,38 @@ export const featureUse = pgTable(
   ],
 );
 
+// What each AI call cost, per account: one row per model call, Jev routing
+// request, web search or voice connection, with no content (lib/ai-usage.ts).
+// A call that is retried is billed again, so it gets another row.
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // coach, routing, image-tag, video, transcript-tidy, web-search,
+    // coach-picture, voice-gemini or voice-elevenlabs.
+    feature: text("feature").notNull(),
+    // The Coach turn, image, video, picture or voice call the call was for.
+    sourceId: text("source_id"),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costUsd: numeric("cost_usd", { precision: 10, scale: 6, mode: "number" })
+      .notNull()
+      .default(0),
+    // Not reported by the provider for the call: worked out from call
+    // minutes and a configured rate, or a call that ended before its cost
+    // arrived, at no cost.
+    estimated: boolean("estimated").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("ai_usage_user_date_idx").on(t.userId, t.createdAt)],
+);
+
 export const agentTurns = pgTable(
   "agent_turns",
   {
@@ -433,6 +466,78 @@ export const agentProposals = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("agent_proposals_user_idx").on(t.userId)],
+);
+
+// Pictures of dishes Coach drew for a recipe card (lib/coach-pictures.ts).
+// Kept apart from the photo library, so a picture is never a meal's evidence
+// and never counts toward the photo quota; it goes with its card's turn when
+// the chat is cleared, after 90 days, or with the account. The limits count
+// from coach_picture_usage.
+export const coachPictures = pgTable(
+  "coach_pictures",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    turnId: text("turn_id")
+      .notNull()
+      .references(() => agentTurns.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<"drawing" | "ready" | "failed">()
+      .notNull()
+      .default("drawing"),
+    // Why a picture failed, as a code (refused, timeout, http_503…).
+    reason: text("reason"),
+    // A hash of what the model was asked, so the same dish asked for again
+    // in a turn (a retried message) shows the picture already drawn.
+    promptHash: text("prompt_hash"),
+    model: text("model"),
+    costUsd: doublePrecision("cost_usd"),
+    durationMs: integer("duration_ms"),
+    bytes: integer("bytes"),
+    // A JPEG, once ready.
+    data: bytea("data"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.id] }),
+    index("coach_pictures_user_date_idx").on(t.userId, t.createdAt),
+    // The daily spending ceiling counts every account's pictures.
+    index("coach_pictures_date_idx").on(t.createdAt),
+    index("coach_pictures_turn_idx").on(t.turnId),
+  ],
+);
+
+// One row for each picture asked for, kept apart from the picture so the
+// limits still count it after the chat is cleared: when, and what it cost,
+// never the dish. Rows older than 30 days go as the athlete asks for more,
+// and all of them with the account.
+export const coachPictureUsage = pgTable(
+  "coach_picture_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    pictureId: text("picture_id").notNull(),
+    costUsd: doublePrecision("cost_usd"),
+    // Set once the picture is drawn or has failed.
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.pictureId] }),
+    index("coach_picture_usage_user_date_idx").on(t.userId, t.createdAt),
+    // The daily spending ceiling counts every account's pictures.
+    index("coach_picture_usage_date_idx").on(t.createdAt),
+  ],
 );
 
 export const liftingVideos = pgTable(

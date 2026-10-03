@@ -62,6 +62,35 @@ struct VoiceProtocolTests {
     #expect(LiveProtocol.promisesAction("Super. Lad mig lige tjekke din søvn."))
     #expect(LiveProtocol.promisesAction("Et øjeblik, jeg gemmer det"))
     #expect(!LiveProtocol.promisesAction("Hvordan gik træningen?"))
+    // A card promised and then silence is nudged too.
+    #expect(LiveProtocol.promisesAction("Sure, a quick salmon rice bowl. I'll put it on your screen."))
+    #expect(LiveProtocol.promisesAction("Let me show you the week"))
+    #expect(LiveProtocol.promisesAction("I'll draw that up for you."))
+    #expect(LiveProtocol.promisesAction("Klart. Jeg skal lige vise dig opskriften."))
+    #expect(LiveProtocol.promisesAction("Lad mig lægge den på din skærm."))
+    #expect(!LiveProtocol.promisesAction("I'll put it on your screen. It's about twenty minutes."))
+    // A card takes longer to write than a save, so the nudge waits longer.
+    #expect(LiveProtocol.nudgeAfter("Sure. I'll put it on your screen.") == .seconds(6))
+    #expect(LiveProtocol.nudgeAfter("Lad mig lægge den på din skærm.") == .seconds(6))
+    #expect(LiveProtocol.nudgeAfter("Let me check your sleep.") == .milliseconds(2500))
+  }
+
+  @Test("An offer waits for the athlete's answer and is never nudged")
+  func offers() {
+    for offer in [
+      "Here it is. Let me know if you'd like me to draw it.",
+      "Let me know if you want me to show you a picture.",
+      "I'll put a picture on it if you want.",
+      "If you'd like, I'll draw it for you.",
+      "Would you like me to show you the week?",
+      "Sig til, hvis du vil se den.",
+      "Jeg kan vise dig et billede, hvis du har lyst.",
+    ] {
+      #expect(!LiveProtocol.promisesAction(offer), "\(offer)")
+      #expect(!LiveProtocol.promisesCard(offer), "\(offer)")
+    }
+    // Checking whether the athlete did something is still a promise.
+    #expect(LiveProtocol.promisesAction("Let me check if you logged your sleep."))
   }
 
   @Test("Background noise is silenced while the coach speaks; real speech gets through whole")

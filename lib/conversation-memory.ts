@@ -1,9 +1,11 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { agentTurns, voiceCalls } from "./db/schema";
-import { displayMessage } from "./coach-tasks";
+import { agentProposals, agentTurns, voiceCalls } from "./db/schema";
+import { displayMessage, VOICE_PREFIX } from "./coach-tasks";
+import type { SavedVisual } from "./coach-visuals";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
 import { withoutEmDashes } from "./agent/coach-style";
+import { pruneAiUsage, withAiUsage } from "./ai-usage";
 
 // Coach's memory of conversations: typed Coach messages (agent_turns) and
 // spoken calls (voice_calls), both private to the account. Search is
@@ -12,10 +14,36 @@ import { withoutEmDashes } from "./agent/coach-style";
 
 export type Exchange = {
   at: string;
-  kind: "chat" | "voice";
+  // A card is one the voice coach put on screen during a call.
+  kind: "chat" | "voice" | "card";
   // What the athlete said, and Coach's reply or the call transcript.
   text: string;
 };
+
+/** Removes Coach conversation older than 90 days, with the cards and
+ * pictures in it, expired proposals (they hold recovery snapshots) and AI
+ * cost records older than 13 months. Runs whenever the athlete uses the
+ * assistant, typed or by voice. */
+export async function pruneConversations(userId: string) {
+  const db = getDb();
+  await db
+    .delete(agentProposals)
+    .where(
+      and(
+        eq(agentProposals.userId, userId),
+        lt(agentProposals.expiresAt, new Date()),
+      ),
+    );
+  await db
+    .delete(agentTurns)
+    .where(
+      and(
+        eq(agentTurns.userId, userId),
+        lt(agentTurns.createdAt, new Date(Date.now() - 90 * 86400000)),
+      ),
+    );
+  await pruneAiUsage(userId);
+}
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -24,6 +52,22 @@ const chatText = (question: string, reply: string | undefined) => {
   const { label, text } = displayMessage(question);
   return `Athlete: ${[label, text].filter(Boolean).join(" · ")}\nCoach: ${reply ?? ""}`;
 };
+
+// What a card held, so the next call knows what the athlete was shown.
+const cardText = (question: string, visuals: SavedVisual[]) =>
+  [
+    `Athlete: ${displayMessage(question).text}`,
+    ...visuals.map(({ content: card }) =>
+      [
+        `Card shown: ${card.title} (${card.kind})`,
+        ...(card.kind === "recipe"
+          ? [
+              `ingredients: ${card.ingredients.map((i) => [i.amount, i.item].filter(Boolean).join(" ")).join(", ")}`,
+            ]
+          : []),
+      ].join("; "),
+    ),
+  ].join("\n");
 
 const voiceText = (transcript: { role: string; text: string }[]) =>
   transcript
@@ -58,7 +102,9 @@ export async function saveVoiceTranscript(
     })
     .onConflictDoUpdate({
       target: voiceCalls.id,
-      set: { transcript: entries, content, updatedAt: new Date() },
+      // The database's clock, as for the first save and the tidy stamp, so
+      // a call that goes on just after a tidy is never taken as tidied.
+      set: { transcript: entries, content, updatedAt: sql`now()` },
       // A call id belongs to the account that started it.
       where: eq(voiceCalls.userId, userId),
     });
@@ -78,7 +124,10 @@ export async function tidyVoiceCall(
     .from(voiceCalls)
     .where(and(eq(voiceCalls.id, id), eq(voiceCalls.userId, userId)));
   if (!call || (call.tidiedAt && call.tidiedAt >= call.updatedAt)) return;
-  const tidy = await tidyWith(call.transcript);
+  const tidy = await withAiUsage(
+    { userId, feature: "transcript-tidy", sourceId: id },
+    () => tidyWith(call.transcript),
+  );
   if (!tidy) return;
   await db
     .update(voiceCalls)
@@ -160,7 +209,7 @@ export async function recentConversations(
           since ? gte(agentTurns.createdAt, since) : undefined,
         ),
       )
-      .orderBy(desc(agentTurns.createdAt))
+      .orderBy(desc(agentTurns.createdAt), desc(agentTurns.startedAt))
       .limit(limit),
     db
       .select()
@@ -175,14 +224,29 @@ export async function recentConversations(
       .limit(limit),
   ]);
   return [
-    ...chats
-      // Saves from a voice call are part of that call's transcript.
-      .filter((t) => !t.question.startsWith("[voice] "))
-      .map((t) => ({
-        at: t.createdAt.toISOString(),
-        kind: "chat" as const,
-        text: clip(chatText(t.question, t.response?.reply), 1500),
-      })),
+    ...chats.flatMap((t): Exchange[] => {
+      const at = t.createdAt.toISOString();
+      if (!t.question.startsWith(VOICE_PREFIX))
+        return [
+          {
+            at,
+            kind: "chat",
+            text: clip(chatText(t.question, t.response?.reply), 1500),
+          },
+        ];
+      // Saves from a voice call are part of that call's transcript; a card
+      // it showed is not, so it is remembered here.
+      const visuals = t.response?.visuals ?? [];
+      return visuals.length
+        ? [
+            {
+              at,
+              kind: "card",
+              text: clip(cardText(t.question, visuals), 1500),
+            },
+          ]
+        : [];
+    }),
     ...calls.map((c) => ({
       at: c.startedAt.toISOString(),
       kind: "voice" as const,

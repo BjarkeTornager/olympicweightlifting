@@ -182,12 +182,14 @@ async function backendFor(config: TracingConfig) {
   }
 }
 
+type Who = { userId: string; session?: () => string | undefined };
+
 // Starts a trace for one unit of work, such as a Coach turn. The account is
 // recorded only as its HMAC code; `session` is a key such as the account and
 // local date, hashed the same way, and is only computed when tracing is on.
 export async function startTrace(
   name: RootName,
-  who: { userId: string; session?: () => string | undefined },
+  who: Who,
   attributes: SpanAttributes = {},
 ): Promise<TraceSpan> {
   try {
@@ -213,5 +215,60 @@ export async function startTrace(
     );
   } catch {
     return noTrace;
+  }
+}
+
+// A failure as its category and, for an HTTP error such as ApiError, its
+// status. Never the message.
+function failed(span: TraceSpan, error: unknown) {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status === "number") span.set({ "lift.http_status": status });
+  span.fail(error);
+}
+
+// Runs one unit of work, such as a photo's tagging or a voice tool call, as
+// a trace of its own. A throw sets lift.ok false and is recorded by its
+// category; the root ends with the work and, while a deploy drains, the work
+// waits briefly for its trace to be sent (settle). The work sets lift.ok
+// itself when it succeeds.
+export async function traced<T>(
+  name: RootName,
+  who: Who,
+  attributes: SpanAttributes,
+  work: (trace: TraceSpan) => Promise<T>,
+): Promise<T> {
+  const trace = await startTrace(name, who, attributes);
+  try {
+    return await work(trace);
+  } catch (error) {
+    trace.set({ "lift.ok": false });
+    failed(trace, error);
+    throw error;
+  } finally {
+    trace.end();
+    await trace.settle();
+  }
+}
+
+// Times one step as a child span, recording a throw by its category. A throw
+// that `paused` accepts only pauses the work, such as a GPU job still
+// running that a later attempt resumes: the step is marked lift.waiting, not
+// failed.
+export async function timed<T>(
+  parent: TraceSpan,
+  name: SpanName,
+  work: (span: TraceSpan) => Promise<T>,
+  paused?: (error: unknown) => boolean,
+): Promise<T> {
+  const span = parent.child(name);
+  const started = Date.now();
+  try {
+    return await work(span);
+  } catch (error) {
+    if (paused?.(error)) span.set({ "lift.waiting": true });
+    else failed(span, error);
+    throw error;
+  } finally {
+    span.end({ "lift.ms": Date.now() - started });
   }
 }

@@ -35,15 +35,17 @@ The matched lookups have difficulty scores of 0.15 at most. The closest controls
 
 Luna's one miss among the lookups wrote one sentence of a Danish reply in English. Luna also reached its first text sooner: a median of 2.8 s against 3.9 s.
 
-**Hard benchmark, held-out split with production routing** (`npm run bench:coach -- --live --routing --split heldout`, 20 conversations):
+**Hard benchmark, held-out split with production routing** (`npm run bench:coach -- --live --routing --split heldout`, 20 conversations of one turn each):
 
-| | Passed | Rounds per turn | Cost per turn | Median time per turn |
+| | Passed | Rounds per turn | Cost per turn, as measured | Median time per turn |
 | --- | --- | --- | --- | --- |
 | Before (main at 223fbee) | 20/20 | 1.90 | $0.0110 | 8.5 s |
 | After | 20/20 | 1.90 | $0.0037 | 8.3 s |
 
+The measured drop from $0.0110 to $0.0037 is not the effect of routing. Like for like:
 - **Moved turns:** four turns moved to Luna, "How many calories have I eaten so far today?" and "What did I have for lunch today?" (whose lunch note holds an instruction Coach must ignore), in English and Danish. Together they went from $0.0378 to $0.0042 and still passed.
-- **The rest of the drop:** most of it is a warmer Terra cache on the calorie-target turns, which stay on Terra.
+- **Per turn:** the "before" run with only those four turns at their "after" cost comes to $0.0093 a turn. So routing took the benchmark from $0.0110 to $0.0093 a turn, about 15%.
+- **The rest of the drop**, $0.0093 to $0.0037, was a warmer Terra prompt cache, not routing. Most of it is the two calorie-target turns, which stay on Terra: about 47,500 of their 71,700 input tokens came from the cache before and over 71,000 after, so together they went from $0.1435 to $0.0336.
 - **Against the 27 September report:** that report ran Luna only and got 91/96 on validation and held-out together, so it isn't a like-for-like comparison. This run has no failures.
 
 ## Expected saving

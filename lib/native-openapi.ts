@@ -152,7 +152,7 @@ export function buildOpenApi() {
       "/api/v1/today": {
         get: {
           operationId: "getToday",
-          parameters: [query("date", true)],
+          parameters: [query("date", true), query("timezone", false)],
           responses: ok("Today"),
         },
       },

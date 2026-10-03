@@ -20,8 +20,8 @@ const tz = "Europe/Copenhagen";
 
 export function nativeFixtures() {
   const state = emptyJournal();
-  // A journal started the day before, so Today includes its first steps.
-  state.createdAt = "2026-09-25T18:00:00.000Z";
+  // A journal started two days before, so Today includes its first steps.
+  state.createdAt = "2026-09-24T07:00:00.000Z";
   state.profile.name = "Alex";
   addDrink(state, { date, ml: 500, kind: "water" }, now).id =
     "1d9e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a14";

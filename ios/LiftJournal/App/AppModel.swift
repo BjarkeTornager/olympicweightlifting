@@ -318,7 +318,10 @@ final class AppModel {
     loadingToday = true
     defer { loadingToday = false }
     do {
-      let value = try await client.getToday(query: .init(date: JournalDay.string(.now))).value()
+      // The time zone places the day the journal began, for the issue number.
+      let value = try await client.getToday(
+        query: .init(date: JournalDay.string(.now), timezone: TimeZone.current.identifier)
+      ).value()
       today = value
       todayUpdated = .now
       // A workout finished or discarded elsewhere leaves the lock screen too.

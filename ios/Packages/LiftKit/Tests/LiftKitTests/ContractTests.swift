@@ -23,18 +23,18 @@ struct ContractTests {
     let run = try #require(today.activities.first)
     #expect(run.fromAppleHealth && run.averageHeartRate == 148 && run.distanceKm == 10)
     #expect(today.nutrition.meals.first?.name == "Oats with berries")
-    // The day of the journal's first record, for the issue number.
-    #expect(today.firstRecordDate == "2026-09-24")
+    // The day the journal began, for the issue number.
+    #expect(today.journalStartDate == "2026-09-24")
   }
 
-  @Test("Today decodes from a server that doesn't send the day of the first record yet")
+  @Test("Today decodes from a server that doesn't send the day the journal began yet")
   func todayFromOlderServer() throws {
     let url = try #require(Bundle.module.url(forResource: "Fixtures/today", withExtension: "json"))
     var json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
-    json["firstRecordDate"] = nil
+    json["journalStartDate"] = nil
     let older = try JSONDecoder().decode(
       Components.Schemas.Today.self, from: JSONSerialization.data(withJSONObject: json))
-    #expect(older.firstRecordDate == nil && older.date == "2026-09-26")
+    #expect(older.journalStartDate == nil && older.date == "2026-09-26")
   }
 
   @Test func journal() throws {

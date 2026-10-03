@@ -5,6 +5,7 @@ import { actionSchema } from "../lib/agent/action-schema";
 import { requireCurrentCoach } from "../lib/agent/http";
 import { createWorkout, days, emptyJournal } from "../lib/domain";
 import {
+  applyBodyFatImport,
   applyVitals,
   applyWorkout,
   cardioFromWorkout,
@@ -744,35 +745,74 @@ test("Today suggests a programme session only to someone who follows one", () =>
   assert.equal(buildToday(state, 2, date, new Set()).nextSession?.position, 2);
 });
 
-test("Today names the day of the journal's first record, which the issue number counts from", () => {
+test("Today names the day the journal began, which the issue number counts from", () => {
   const state = emptyJournal();
-  state.createdAt = "2026-10-01T09:00:00.000Z";
+  // Created at half past midnight on 3 October, Copenhagen time.
+  state.createdAt = "2026-10-02T22:30:00.000Z";
   const date = "2026-10-03";
-  const first = () => buildToday(state, 1, date, new Set()).firstRecordDate;
-  // Nothing recorded yet: the app counts from its own first day.
-  assert.equal(first(), undefined);
-  addDrink(state, { date, ml: 250, kind: "water" }, now);
-  assert.equal(first(), date);
-  // A workout logged for an earlier day, or Apple Health's heart rate from
-  // before the journal began, is an earlier record.
-  state.sessions.push({ ...createWorkout(state, days[0], "2026-10-02") });
-  assert.equal(first(), "2026-10-02");
-  state.health.vitals = [
-    {
-      date: "2026-09-28",
-      restingHeartRate: 54,
-      heartRateVariabilityMs: null,
-      averageHeartRate: null,
-      steps: null,
-      activeEnergyKcal: null,
-      source: "apple-health",
-      updatedAt: now.toISOString(),
+  const imported = new Set<string>();
+  const start = (timezone?: string) =>
+    buildToday(state, 1, date, imported, new Map(), timezone).journalStartDate;
+  // An empty journal began the day it was created, on the athlete's clock.
+  assert.equal(start("Europe/Copenhagen"), date);
+  assert.equal(start("America/New_York"), "2026-10-02");
+  // Without a time zone from the iPhone, the profile's, then Copenhagen's.
+  assert.equal(start(), date);
+  assert.equal(start("Somewhere/Else"), date);
+  state.profile.timezone = "America/New_York";
+  assert.equal(start(), "2026-10-02");
+  state.profile.timezone = undefined;
+  // Apple Health's first sync fills in the steps, sleep and body fat of the
+  // two weeks before, and the workouts of the two months before; none of it
+  // is when the journal began.
+  assert.equal(
+    applyVitals(state, { date: "2026-09-20", steps: 4200 }, now),
+    true,
+  );
+  const run = cardioFromWorkout(
+    workout({
+      start: "2026-08-04T06:30:00+02:00",
+      end: "2026-08-04T07:20:00+02:00",
+    }),
+    tz,
+    now,
+  );
+  state.cardio.sessions.push(run);
+  imported.add(run.id);
+  state.health.checkins.push({
+    date: "2026-09-30",
+    sleepHours: 7.5,
+    energy: null,
+    soreness: null,
+    waterMl: null,
+    bodyweight: null,
+    notes: "",
+    updatedAt: now.toISOString(),
+    sleepImport: {
+      provider: "apple-health",
+      digest: "0".repeat(64),
+      start: "2026-09-29T21:10:00.000Z",
+      end: "2026-09-30T04:40:00.000Z",
+      importedAt: now.toISOString(),
     },
-  ];
-  assert.equal(first(), "2026-09-28");
-  // A later record changes nothing, and a date that can't be read is left
-  // out rather than failing Today.
+  });
+  assert.equal(
+    applyBodyFatImport(
+      state,
+      { date: "2026-09-25", bodyFatPercent: 18.2 },
+      date,
+      now,
+    ),
+    true,
+  );
+  assert.equal(start(), date);
+  // A later record changes nothing; one logged by hand for an earlier day,
+  // from a backup brought in, say, is where the journal began.
   addDrink(state, { date: "2026-10-04", ml: 250, kind: "water" }, now);
+  assert.equal(start(), date);
+  state.sessions.push(createWorkout(state, days[0], "2026-09-12"));
+  assert.equal(start(), "2026-09-12");
+  // A date that can't be read is left out rather than failing Today.
   state.health.checkins.push({
     date: "someday",
     sleepHours: null,
@@ -783,10 +823,7 @@ test("Today names the day of the journal's first record, which the issue number 
     notes: "",
     updatedAt: now.toISOString(),
   });
-  assert.equal(first(), "2026-09-28");
-  // Only what the journal holds counts, not when it was created.
-  state.createdAt = "2026-09-01T09:00:00.000Z";
-  assert.equal(first(), "2026-09-28");
+  assert.equal(start(), "2026-09-12");
 });
 
 test("A new journal's first steps show until all are done, for two weeks", () => {

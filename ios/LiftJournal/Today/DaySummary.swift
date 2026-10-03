@@ -134,8 +134,8 @@ struct DaySummary: Equatable {
 
 /// The issue line over Today's masthead: the wordmark, then "Nº 13 · Week
 /// 40".
-/// Each day of the journal is an issue, counted from the day of its first
-/// record, which the server sends, so the count carries on across installs.
+/// Each day of the journal is an issue, counted from the day the journal
+/// began, which the server sends, so the count carries on across installs.
 /// From a server that doesn't send it yet, it counts from the first day the
 /// journal was opened on this iPhone.
 enum Issue {
@@ -146,11 +146,11 @@ enum Issue {
     return max(1, (days.day ?? 0) + 1)
   }
 
-  /// The day the issues count from: that of the journal's first record
-  /// (Today's `firstRecordDate`), or the first day on this iPhone when the
-  /// server doesn't say.
-  static func first(record: String?, device: Date?, calendar: Calendar = .current) -> Date? {
-    record.flatMap { JournalDay.date($0, calendar: calendar) } ?? device
+  /// The day the issues count from: the day the journal began (Today's
+  /// `journalStartDate`), or the first day on this iPhone when the server
+  /// doesn't say.
+  static func first(journal: String?, device: Date?, calendar: Calendar = .current) -> Date? {
+    journal.flatMap { JournalDay.date($0, calendar: calendar) } ?? device
   }
 
   /// The ISO 8601 week, as diaries and planners number them.

@@ -15,7 +15,7 @@ struct TodayView: View {
   /// The last seven days, for the small charts and the weekly sleep average.
   @State private var week: Components.Schemas.Trends?
   /// The first day of this journal on this iPhone, for the issue number
-  /// when the server doesn't send the day of its first record.
+  /// when the server doesn't send the day the journal began.
   @State private var firstDay: Date?
   /// Scrolled past the masthead: the inline title takes over from it.
   @State private var scrolled = false
@@ -95,7 +95,7 @@ struct TodayView: View {
 
   /// Which issue of the journal this day is.
   private var issue: Int? {
-    Issue.first(record: model.today?.firstRecordDate, device: firstDay).map { Issue.number(first: $0, day: day) }
+    Issue.first(journal: model.today?.journalStartDate, device: firstDay).map { Issue.number(first: $0, day: day) }
   }
 
   /// The running head beside the system's + button: the wordmark, then

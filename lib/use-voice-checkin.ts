@@ -174,16 +174,20 @@ export function useVoiceCheckin({
   }, [lines, persist]);
 
   // Connection problems are reported (codes only, never content) so a
-  // dropped call can be diagnosed on the server. A plain fetch: a report
-  // must never sign the athlete out.
+  // dropped call can be diagnosed on the server, with the call they
+  // happened in. A plain fetch: a report must never sign the athlete out.
   const report = useCallback(
-    (event: string, details: Record<string, string | number> = {}) =>
+    (
+      s: Session,
+      event: string,
+      details: Record<string, string | number> = {},
+    ) =>
       void fetch("/api/voice/event", {
         method: "POST",
         headers: privateRequestHeaders(headers()),
         cache: "no-store",
         keepalive: true,
-        body: JSON.stringify({ event, ...details }),
+        body: JSON.stringify({ event, ...details, callId: s.id }),
       }).catch(() => {}),
     [headers],
   );
@@ -252,6 +256,9 @@ export function useVoiceCheckin({
         timezone: timezone(),
         purpose: s.purpose,
         ...(resume && s.handle ? { resumeHandle: s.handle } : {}),
+        // Every request in a call names it (the transcript's id), so the
+        // server groups the call's diagnostic traces.
+        callId: s.id,
       }),
       signal: AbortSignal.timeout(15000),
     });
@@ -272,7 +279,7 @@ export function useVoiceCheckin({
       socket.onclose = (event) => {
         fail(Error(event.reason || "The voice connection closed."));
         if (!s.closed && s.socket === socket) {
-          report("socket_closed", {
+          report(s, "socket_closed", {
             code: event.code,
             reason: event.reason.slice(0, 200),
           });
@@ -342,7 +349,7 @@ export function useVoiceCheckin({
           }
           // The connection is about to end: continue on a fresh one.
           else if (e.type === "goAway") {
-            report("go_away");
+            report(s, "go_away");
             void recover(s);
           }
         }
@@ -377,7 +384,7 @@ export function useVoiceCheckin({
               },
             });
           }
-          report("reconnected", {
+          report(s, "reconnected", {
             attempts: s.failures + 1,
             resumed: Number(resumed),
           });
@@ -394,7 +401,7 @@ export function useVoiceCheckin({
         }
       }
     } catch (e) {
-      report("reconnect_failed", {
+      report(s, "reconnect_failed", {
         reason: e instanceof Error ? e.message.slice(0, 200) : "unknown",
       });
       stop(
@@ -776,6 +783,7 @@ export function useVoiceCheckin({
             args: call.args ?? {},
             timezone: timezone(),
             seenPhotoIds: s.photos,
+            callId: s.id,
           }),
           signal: AbortSignal.timeout(20000),
         });

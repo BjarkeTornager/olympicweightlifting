@@ -58,10 +58,13 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     args: Record<string, unknown>;
     seenPhotoIds: string[];
   }[] = [];
+  // The call each voice request names: every one names the same call.
+  const callIds: string[] = [];
   let releaseRead!: () => void;
   const readHeld = new Promise<void>((resolve) => (releaseRead = resolve));
   await context.route("**/api/voice/action", async (r) => {
     const body = r.request().postDataJSON();
+    callIds.push(body.callId);
     // A slow journal read, to check the call never ends in the middle of it.
     if (body.name === "read_journal") {
       await readHeld;
@@ -117,8 +120,17 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
       },
     });
   });
+  // Connection reports, for diagnosing a dropped call.
+  const events: Record<string, unknown>[] = [];
+  await context.route("**/api/voice/event", (r) => {
+    events.push(r.request().postDataJSON());
+    return r.fulfill({ json: { logged: true } });
+  });
   // Transcripts are kept on the server for Coach's memory.
-  const transcripts: { entries: { role: string; text: string }[] }[] = [];
+  const transcripts: {
+    id: string;
+    entries: { role: string; text: string }[];
+  }[] = [];
   await context.route("**/api/voice/transcript", (r) => {
     transcripts.push(r.request().postDataJSON());
     return r.fulfill({ json: { saved: true } });
@@ -232,7 +244,9 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   expect(sessionBody).toEqual({
     timezone: expect.any(String),
     purpose: "checkin",
+    callId: expect.stringMatching(/^[0-9a-f-]{36}$/),
   });
+  const callId = sessionBodies[0].callId;
   // The synthetic microphone reaches Google as 16 kHz PCM chunks.
   await expect.poll(() => audioChunks).toBeGreaterThan(3);
 
@@ -391,7 +405,16 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
     ).length;
   server.send(JSON.stringify({ goAway: { timeLeft: "5s" } }));
   await expect.poll(setups).toBe(2);
-  expect(sessionBodies.at(-1)).toMatchObject({ resumeHandle: "resume-1" });
+  expect(sessionBodies.at(-1)).toMatchObject({
+    resumeHandle: "resume-1",
+    callId,
+  });
+  await expect
+    .poll(() => events)
+    .toEqual([
+      { event: "go_away", callId },
+      { event: "reconnected", attempts: 1, resumed: 1, callId },
+    ]);
   await expect(dialog.getByRole("status")).toHaveText(
     /Listening|Coach is speaking/,
   );
@@ -454,6 +477,12 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   await expect(
     dialog.getByText("Call ended. Everything saved is in Coach, with Undo."),
   ).toBeVisible({ timeout: 20000 });
+  // Every request in the call named it: each session, action and report,
+  // and the transcript, whose id it is.
+  expect(sessionBodies.map((b) => b.callId)).toEqual([callId, callId]);
+  expect(callIds.length).toBeGreaterThanOrEqual(3);
+  expect(new Set(callIds)).toEqual(new Set([callId]));
+  expect(new Set(transcripts.map((t) => t.id))).toEqual(new Set([callId]));
   await dialog.getByRole("button", { name: "Review in Coach" }).click();
   // Both saves from the call appear in Coach with Undo, labelled as voice.
   await expect(

@@ -118,6 +118,16 @@ test("streamed updates replace the reply, keep earlier fields and show at most t
     t.visuals!.map((v) => v.id),
     ["1", "2", "3"],
   );
+  // A turn the server runs again after a crash starts its reply afresh.
+  t = applyStreamUpdate(t, { reset: true });
+  assert.equal(t.reply, "");
+  assert.deepEqual(t.visuals, []);
+  assert.equal(t.activity, "Reading");
+  t = applyStreamUpdate(t, { visual: visual("1") });
+  assert.deepEqual(
+    t.visuals!.map((v) => v.id),
+    ["1"],
+  );
 });
 
 test("undoing a directly saved entry replaces its reply; a reviewed save keeps it", () => {

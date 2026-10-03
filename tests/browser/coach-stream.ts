@@ -1,8 +1,14 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
 export type StreamWindow = Window & {
-  coachEvents: (event: Record<string, unknown>) => void;
+  // Sends an event on the latest stream, with an SSE id when given, as the
+  // server does with COACH_TURN_EVENTS on.
+  coachEvents: (event: Record<string, unknown>, id?: number) => void;
+  // Sends raw text, such as part of a frame.
+  coachText: (text: string) => void;
   closeCoachStream: () => void;
+  // Fails the latest stream as a dropped connection does.
+  dropCoachStream: () => void;
   coachRequests: {
     body: {
       runId: string;
@@ -12,6 +18,10 @@ export type StreamWindow = Window & {
     account: string | null;
     cache?: RequestCache;
   }[];
+  // The query of each GET /api/agent/run that resumes a reply.
+  coachResumes: string[];
+  // The status a resume gets instead of a stream, when set.
+  resumeStatus?: number;
   coachAborted: boolean;
 };
 
@@ -22,30 +32,47 @@ export async function streamingFixture(page: Page) {
     const state = window as unknown as StreamWindow;
     const original = window.fetch.bind(window);
     state.coachRequests = [];
+    state.coachResumes = [];
     window.fetch = async (input, init) => {
-      if (new URL(String(input), location.href).pathname !== "/api/agent/run")
-        return original(input, init);
-      const body = JSON.parse(String(init?.body));
-      state.coachRequests.push({
-        body,
-        account: new Headers(init?.headers).get("X-Journal-Account"),
-        cache: init?.cache,
-      });
+      const url = new URL(String(input), location.href);
+      if (url.pathname !== "/api/agent/run") return original(input, init);
+      const resuming = (init?.method ?? "GET") === "GET";
+      const body = resuming ? undefined : JSON.parse(String(init?.body));
+      if (resuming) {
+        state.coachResumes.push(url.search);
+        if (state.resumeStatus)
+          return Response.json(
+            { error: "This reply can't be resumed." },
+            { status: state.resumeStatus },
+          );
+      } else
+        state.coachRequests.push({
+          body,
+          account: new Headers(init?.headers).get("X-Journal-Account"),
+          cache: init?.cache,
+        });
       const encoder = new TextEncoder();
       let ended = false;
       return new Response(
         new ReadableStream({
           start(controller) {
-            state.coachEvents = (event) => {
-              if (!ended)
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
-                );
+            state.coachText = (text) => {
+              if (!ended) controller.enqueue(encoder.encode(text));
             };
+            state.coachEvents = (event, id) =>
+              state.coachText(
+                `${id === undefined ? "" : `id: ${id}\n`}data: ${JSON.stringify(event)}\n\n`,
+              );
             state.closeCoachStream = () => {
               if (!ended) {
                 ended = true;
                 controller.close();
+              }
+            };
+            state.dropCoachStream = () => {
+              if (!ended) {
+                ended = true;
+                controller.error(new TypeError("network error"));
               }
             };
             init?.signal?.addEventListener("abort", () => {
@@ -55,6 +82,8 @@ export async function streamingFixture(page: Page) {
                 controller.error(new DOMException("Aborted", "AbortError"));
               }
             });
+            // A resumed reply carries on from where it was.
+            if (resuming) return;
             state.coachEvents({
               type: "RUN_STARTED",
               threadId: body.threadId,
@@ -76,11 +105,22 @@ export async function streamingFixture(page: Page) {
     };
   });
 }
-export const emit = (page: Page, events: Record<string, unknown>[]) =>
-  page.evaluate((events) => {
-    for (const event of events)
-      (window as unknown as StreamWindow).coachEvents(event);
-  }, events);
+// Sends events; with `firstId`, numbered on from it as stored events are.
+export const emit = (
+  page: Page,
+  events: Record<string, unknown>[],
+  firstId?: number,
+) =>
+  page.evaluate(
+    ({ events, firstId }) =>
+      events.forEach((event, i) =>
+        (window as unknown as StreamWindow).coachEvents(
+          event,
+          firstId === undefined ? undefined : firstId + i,
+        ),
+      ),
+    { events, firstId },
+  );
 export const startReply = [
   { type: "STEP_FINISHED", stepName: "Checking your sleep and recovery" },
   { type: "TEXT_MESSAGE_START", messageId: "answer", role: "assistant" },

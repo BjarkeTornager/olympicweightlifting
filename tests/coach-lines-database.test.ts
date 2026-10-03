@@ -139,6 +139,18 @@ test(
         ).reply,
         coachLines("da").saved,
       );
+      // A log whose words don't tell takes the conversation's language; an
+      // English log that names a Danish dish keeps English.
+      for (const [message, language] of [
+        ["Sov 7 timer i nat", "da"],
+        ["Lunch: rugbrød med leverpostej og agurk", "en"],
+        ["Breakfast: havregryn med mælk og banan", "en"],
+      ] as const)
+        assert.equal(
+          (await ask(website, message, undefined, model("log_entry", 7))).reply,
+          coachLines(language).saved,
+          message,
+        );
       assert.equal(
         (
           await ask(

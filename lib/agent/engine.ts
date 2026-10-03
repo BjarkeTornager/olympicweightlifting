@@ -52,7 +52,12 @@ import { skillsFor, skillTools } from "./skills";
 import { turnTotals, type TurnMetrics } from "./turn-metrics";
 import { imageTiming, localClock } from "./time-context";
 import type { CoachLanguage } from "../coach-language";
-import { coachLines, linesLanguage, undoneReply } from "../coach-lines";
+import {
+  coachLines,
+  earlierWords,
+  linesLanguage,
+  undoneReply,
+} from "../coach-lines";
 import { displayMessage } from "../coach-tasks";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
@@ -406,10 +411,13 @@ async function turn(
         ),
       ),
     );
-  // The athlete's own words, without a task's instruction. The lines the
+  // The athlete's own words, without a task's instruction, and when they
+  // don't tell the language, the conversation before them. The lines the
   // server writes into the reply take its language (lib/coach-lines.ts).
-  const words = displayMessage(input.message).text;
-  const language = linesLanguage(input.language, words);
+  const words = displayMessage(input.message).text,
+    recent = await history(userId),
+    earlier = earlierWords(recent);
+  const language = linesLanguage(input.language, words, ...earlier);
   // Usage limits (lib/usage-limits.ts), checked before anything is paid for.
   const limits = coachLimits(userId, {
     id: input.id,
@@ -453,8 +461,7 @@ async function turn(
     return response;
   }
   const requestClock = localClock(requestAt, input.timezone),
-    currentDate = requestClock.date,
-    recent = await history(userId);
+    currentDate = requestClock.date;
   // What the athlete said to the voice coach recently, so typed Coach knows.
   const recentCalls = (
     await recentConversations(userId, {
@@ -1242,9 +1249,10 @@ async function turn(
       retrievedImageIds.forEach((id) => viewedImageIds.add(id));
       if (proposals.length) {
         // Coach's answer to a question in the same message decides the
-        // language when the athlete's words alone don't.
+        // language when the athlete's words alone don't, then the
+        // conversation before it.
         const receipt = coachLines(
-          linesLanguage(input.language, words, changeAnswer),
+          linesLanguage(input.language, words, changeAnswer, ...earlier),
         );
         reply = directSave ? receipt.saved : receipt.review;
         if (changeAnswer) reply += `\n\n${changeAnswer}`;

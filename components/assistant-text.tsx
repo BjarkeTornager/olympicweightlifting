@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { danishOrNothing } from "@/lib/text-language";
 function Inline({ text }: { text: string }) {
   return text
     .split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g)
@@ -184,6 +185,11 @@ function blocks(lines: string[]): ReactNode[] {
   }
   return result;
 }
+// A Danish reply is marked so it hyphenates with Danish rules.
 export function AssistantText({ text }: { text: string }) {
-  return <div className="assistant-response">{blocks(text.split("\n"))}</div>;
+  return (
+    <div className="assistant-response" lang={danishOrNothing(text)}>
+      {blocks(text.split("\n"))}
+    </div>
+  );
 }

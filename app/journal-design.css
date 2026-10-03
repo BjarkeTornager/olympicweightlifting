@@ -23,7 +23,22 @@
 h2,
 h3 {
   color: inherit;
+}/* Line breaks. Titles balance their lines and never break inside a word;
+   paragraphs avoid leaving one word on their last line. In a phone's narrow
+   column, long words in running text may hyphenate by the rules of the
+   text's lang: English for the site, Danish for a reply marked lang="da". */
+:is(h1, h2, h3, h4, .dialog-title, .coach-opening-toggle strong, .exercise-toggle strong) {
   text-wrap: balance;
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}:is(p, li, dd, figcaption, .chat-user) {
+  text-wrap: pretty;
+}@media (max-width: 600px) {
+  :is(p, li, .chat-user) {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    hyphenate-limit-chars: 8 3 3;
+  }
 }h1 {
   /* A large title in the style of a native health app: bold and tight, and
      the only big type on a screen so the records under it still lead. */

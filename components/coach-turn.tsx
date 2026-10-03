@@ -3,6 +3,7 @@ import { displayMessage } from "@/lib/coach-tasks";
 import { LoaderCircle, Square } from "@/components/ui/icons";
 import type { Turn } from "@/lib/coach-turns";
 import { videoFeedbackLabel } from "@/lib/lifting-video";
+import { danishOrNothing } from "@/lib/text-language";
 import { FoodPhotoImage } from "./food-photo";
 import { AssistantText } from "./assistant-text";
 import { AguiVisuals } from "./agui-components";
@@ -101,10 +102,11 @@ export function MessageText({
 }) {
   if (video) return <>{video}</>;
   const { label, text } = displayMessage(message);
+  const lang = danishOrNothing(text);
   return (
     <>
       {label && <span className="chat-task">{label}</span>}
-      {text}
+      {lang ? <span lang={lang}>{text}</span> : text}
     </>
   );
 }

@@ -147,6 +147,11 @@ export function tracingBackend(config: TracingConfig): Backend {
           if (alone) process.kill(process.pid, "SIGTERM");
         });
     });
+    // The export timer doesn't keep a process alive, so a script that ends
+    // on its own (a benchmark, an eval) flushes before it exits.
+    process.once("beforeExit", () => {
+      void provider.forceFlush({ timeoutMillis: 2000 }).catch(() => {});
+    });
   }
   return backend(state);
 }

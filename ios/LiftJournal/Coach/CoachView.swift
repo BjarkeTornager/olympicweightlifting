@@ -3,10 +3,10 @@ import LiftTheme
 import PhotosUI
 import SwiftUI
 
-/// Coach as a conversation, in the style of Messages: the athlete's
-/// messages on the right in the accent colour, Coach's replies on the left,
-/// what Coach saved shown under its reply with Undo, and a round text field
-/// with a microphone that turns into a send button once there is text.
+/// Coach as correspondence: the athlete's messages on the right in an ink
+/// capsule, Coach's replies as letters with their figures, what Coach saved
+/// shown in its letter with Undo, and a glass text field with a voice button
+/// that turns into a send button once there is text.
 struct CoachView: View {
   @Environment(AppModel.self) private var app
   @State private var picked: [PhotosPickerItem] = []
@@ -20,17 +20,24 @@ struct CoachView: View {
   /// messages stays where they are.
   @State private var position = ScrollPosition(edge: .bottom)
   @FocusState private var composing: Bool
+  /// The round controls beside the text field, and the button in it. They
+  /// grow with the text, up to a size that leaves the field room.
+  @ScaledMetric(relativeTo: .body) private var controlSize: CGFloat = 50
+  @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 36
+  private var control: CGFloat { min(controlSize, 64) }
+  private var button: CGFloat { min(buttonSize, 46) }
 
   var body: some View {
     ScrollView {
-      LazyVStack(spacing: 4) {
+      LazyVStack(alignment: .leading, spacing: 0) {
         if coach.loaded && coach.items.isEmpty && coach.asking == nil && coach.queue.isEmpty {
-          ContentUnavailableView {
-            Label("Coach", systemImage: "bubble.left.and.text.bubble.right")
-          } description: {
+          CoachLetter {
             Text("Log a meal from a photo, describe a workout, or ask how your week is going. Tap the microphone to talk instead.")
+              .folio(.coach)
+              .foregroundStyle(Theme.ink)
+              .fixedSize(horizontal: false, vertical: true)
           }
-          .padding(.top, 80)
+          .padding(.top, 24)
         }
         let items = coach.items
         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -43,56 +50,49 @@ struct CoachView: View {
           }
         }
         if let asking = coach.asking {
-          VStack(spacing: 6) {
+          VStack(alignment: .leading, spacing: 18) {
             SentMessage(
               text: coach.sendingPreviews.isEmpty || asking != CoachModel.photoOnly ? asking : "",
               previews: coach.sendingPreviews, previewLabel: "Photo you sent")
-            if coach.reply.isEmpty {
-              TypingBubble(step: coach.step)
-            } else {
-              CoachMessages(text: coach.reply)
-            }
-            // Visuals appear as Coach makes them, before the reply is done.
-            VStack(spacing: 8) {
-              ForEach(coach.liveVisuals, id: \.id) { visual in
-                CoachVisualView(visual: visual)
-                  .padding(12)
-                  .background(Theme.surface, in: .rect(cornerRadius: 18))
-                  .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+            let topic = VisualTint.topic(visuals: coach.liveVisuals)
+            CoachLetter(topic: topic) {
+              if coach.reply.isEmpty {
+                CoachWriting(step: coach.step)
+              } else {
+                CoachText(text: coach.reply)
               }
-            }
-            .padding(.leading, 34)
-            .animation(.snappy, value: coach.liveVisuals.count)
-            // Stop is always here, even with a draft in the text field, and
-            // last, so a tall chart never pushes it out of view.
-            if coach.sending {
-              Button { coach.cancel() } label: {
-                Label("Stop", systemImage: "stop.fill")
-                  .font(.caption.weight(.semibold))
-                  .frame(minHeight: 44)
-                  .contentShape(.rect)
+              // Visuals appear as Coach makes them, before the reply is done.
+              Figures(visuals: coach.liveVisuals, topic: topic)
+                .animation(.snappy, value: coach.liveVisuals.count)
+              // Stop is always here, even with a draft in the text field, and
+              // last, so a tall chart never pushes it out of view.
+              if coach.sending {
+                Button { coach.cancel() } label: {
+                  Label("Stop", systemImage: "stop.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityLabel("Stop Coach's reply")
               }
-              .buttonStyle(.borderless)
-              .tint(.secondary)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.leading, 40)
-              .accessibilityLabel("Stop Coach's reply")
             }
           }
+          .padding(.bottom, 26)
         }
         // Messages sent while Coach answers another wait their turn here.
         ForEach(coach.waiting) { item in
-          QueuedMessage(item: item, coach: coach)
+          QueuedMessage(item: item, coach: coach).padding(.bottom, 18)
         }
         if let error = coach.error {
           Label(error, systemImage: "exclamationmark.circle")
             .font(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Theme.fill, in: .capsule)
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
         }
       }
-      .padding(.horizontal, 12)
+      .padding(.horizontal, Theme.Space.gutter)
       .padding(.vertical, 8)
     }
     .defaultScrollAnchor(.bottom)
@@ -187,7 +187,7 @@ struct CoachView: View {
       if coach.queueFull && coach.hasDraft {
         Text(CoachModel.queueFullText)
           .font(.footnote)
-          .foregroundStyle(.secondary)
+          .foregroundStyle(Theme.inkSecondary)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .padding(.horizontal, 8)
@@ -200,7 +200,7 @@ struct CoachView: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 64, height: 64)
-                .clipShape(.rect(cornerRadius: 12))
+                .clipShape(.rect(cornerRadius: Theme.Radius.badge, style: .continuous))
                 .overlay(alignment: .topTrailing) {
                   Button("Remove photo", systemImage: "xmark.circle.fill") {
                     coach.attachments.removeAll { $0.id == photo.id }
@@ -223,68 +223,82 @@ struct CoachView: View {
           Button("Photos", systemImage: "photo.on.rectangle") { showingPhotos = true }
         } label: {
           Image(systemName: "plus")
-            .font(.system(size: 17, weight: .semibold))
-            .frame(width: 40, height: 40)
+            .font(.title3.weight(.medium))
+            .foregroundStyle(Theme.ink)
+            .frame(width: control, height: control)
         }
         .glassEffect(.regular.interactive(), in: .circle)
         .disabled(coach.attachments.count >= 4)
         .accessibilityLabel("Add photo")
 
-        HStack(alignment: .bottom, spacing: 4) {
-          TextField("Message", text: Bindable(coach).draft, axis: .vertical)
-            .lineLimit(1...6)
-            .focused($composing)
-            .padding(.leading, 14)
-            .padding(.vertical, 10)
-            .submitLabel(.send)
-            // A multi-line field puts a line break where the Send key is
-            // pressed: treat that as sending, as the key says.
-            .onChange(of: coach.draft) { old, new in
-              if new.hasSuffix("\n"), !old.hasSuffix("\n") {
-                coach.draft = String(new.dropLast())
-                send()
-              }
+        HStack(alignment: .bottom, spacing: 6) {
+          TextField(
+            "Write to Coach", text: Bindable(coach).draft,
+            prompt: Text("Write to Coach").font(.system(.body, design: .serif)).italic()
+              .foregroundStyle(Theme.inkSecondary),
+            axis: .vertical
+          )
+          .font(.body)
+          .foregroundStyle(Theme.ink)
+          .lineLimit(1...6)
+          .focused($composing)
+          .padding(.leading, 18)
+          .padding(.vertical, 14)
+          .submitLabel(.send)
+          // A multi-line field puts a line break where the Send key is
+          // pressed: treat that as sending, as the key says.
+          .onChange(of: coach.draft) { old, new in
+            if new.hasSuffix("\n"), !old.hasSuffix("\n") {
+              coach.draft = String(new.dropLast())
+              send()
             }
+          }
           trailingButton
-            .padding(.trailing, 4)
-            .padding(.bottom, 4)
+            .padding(.trailing, (control - button) / 2)
+            .padding(.bottom, (control - button) / 2)
         }
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .frame(minHeight: control)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: control / 2))
       }
+      // Large, but never so large that the field has no room to write in.
+      .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
-    .padding(.horizontal, 12)
+    .padding(.horizontal, 16)
     .padding(.bottom, 6)
   }
 
   /// Send whenever there's a draft, even while Coach answers another
   /// message (it waits its turn), held back only by a full queue; Stop when
-  /// the field is empty and Coach is answering; otherwise the microphone.
+  /// the field is empty and Coach is answering; otherwise the voice button.
   @ViewBuilder
   private var trailingButton: some View {
     if coach.hasDraft {
       Button(action: send) {
         Image(systemName: "arrow.up")
-          .font(.system(size: 15, weight: .bold))
-          .foregroundStyle(Theme.onAccent)
-          .frame(width: 32, height: 32)
-          .background(Theme.accent.opacity(coach.queueFull ? 0.35 : 1), in: .circle)
+          .font(.body.weight(.bold))
+          .foregroundStyle(Theme.onAccentFill)
+          .frame(width: button, height: button)
+          .background(Theme.accentFill.opacity(coach.queueFull ? 0.35 : 1), in: .circle)
       }
       .disabled(coach.queueFull)
       .accessibilityLabel("Send")
     } else if coach.sending {
       Button("Stop", systemImage: "stop.fill") { coach.cancel() }
         .labelStyle(.iconOnly)
-        .font(.system(size: 14, weight: .bold))
-        .frame(width: 32, height: 32)
-        .background(Color.secondary.opacity(0.25), in: .circle)
+        .font(.subheadline.weight(.bold))
+        .foregroundStyle(Theme.ink)
+        .frame(width: button, height: button)
+        .background(Theme.fill, in: .circle)
     } else if app.voiceEnabled {
       Button {
         composing = false
         app.startVoice()
       } label: {
         Image(systemName: "waveform")
-          .font(.system(size: 16, weight: .semibold))
-          .frame(width: 32, height: 32)
+          .font(.body.weight(.semibold))
+          .foregroundStyle(Theme.onAccentFill)
+          .frame(width: button, height: button)
+          .background(Theme.accentFill, in: .circle)
       }
       .accessibilityLabel("Talk to Coach")
     }
@@ -293,22 +307,28 @@ struct CoachView: View {
 
 // MARK: Messages
 
+/// The day between hairlines: "Today · 21:45", "Yesterday", "Friday 2
+/// October".
 private struct DayStamp: View {
   let date: Date
 
   var body: some View {
-    Text(label)
-      .font(.caption.weight(.medium))
-      .foregroundStyle(.secondary)
-      .frame(maxWidth: .infinity)
-      .padding(.top, 14)
-      .padding(.bottom, 4)
+    HStack(spacing: 12) {
+      Rectangle().fill(Theme.rule).frame(height: 1)
+      Text(label).kicker().fixedSize()
+      Rectangle().fill(Theme.rule).frame(height: 1)
+    }
+    .padding(.top, 20)
+    .padding(.bottom, 16)
+    .accessibilityElement(children: .combine)
   }
 
   private var label: String {
-    if Calendar.current.isDateInToday(date) { return "Today " + date.formatted(date: .omitted, time: .shortened) }
+    if Calendar.current.isDateInToday(date) {
+      return "Today · " + date.formatted(date: .omitted, time: .shortened)
+    }
     if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
-    return date.formatted(.dateTime.weekday(.wide).day().month())
+    return date.formatted(.dateTime.weekday(.wide).day().month(.wide))
   }
 }
 
@@ -318,77 +338,85 @@ private struct TurnView: View {
   let coach: CoachModel
 
   var body: some View {
-    VStack(spacing: 6) {
+    let visuals = turn.visuals ?? []
+    let reply = turn.reply ?? ""
+    VStack(alignment: .leading, spacing: 18) {
       SentMessage(
         text: !turn.photoIds.isEmpty && turn.question == CoachModel.photoOnly ? "" : turn.question,
         photoIDs: turn.photoIds, voice: turn.fromVoice)
-      if let reply = turn.reply, !reply.isEmpty {
-        CoachMessages(text: reply)
-      } else if turn.status == "failed" {
-        CoachMessages(text: "Sorry, I couldn't finish that one. Try asking again.")
-      } else if turn.status == "running" {
-        // Still being answered, as after the app was closed mid-reply.
-        TypingBubble(step: "Still working")
-      }
-      // Charts, maps and saved entries sit in the coach's column.
-      VStack(spacing: 8) {
-        ForEach(turn.visuals ?? [], id: \.id) { visual in
-          CoachVisualView(visual: visual)
-            .padding(12)
-            .background(Theme.surface, in: .rect(cornerRadius: 18))
-        }
-        ForEach(turn.receipts, id: \.id) { receipt in
-          ReceiptCard(receipt: receipt, busy: coach.busyReceipt == receipt.id) { undo in
-            Task { await coach.resolve(receipt, undo: undo, app: app) }
+      if !reply.isEmpty || turn.status == "failed" || turn.status == "running" || !visuals.isEmpty
+        || !turn.receipts.isEmpty
+      {
+        let topic = VisualTint.topic(visuals: visuals, receipts: turn.receipts.map(\.title))
+        CoachLetter(topic: topic) {
+          if !reply.isEmpty {
+            CoachText(text: reply)
+          } else if turn.status == "failed" {
+            CoachText(text: "Sorry, I couldn't finish that one. Try asking again.")
+          } else if turn.status == "running" {
+            // Still being answered, as after the app was closed mid-reply.
+            CoachWriting(step: "Still working")
+          }
+          // Charts, maps and saved entries sit in the letter's margin.
+          Figures(visuals: visuals, topic: topic)
+          ForEach(turn.receipts, id: \.id) { receipt in
+            ReceiptCard(receipt: receipt, busy: coach.busyReceipt == receipt.id) { undo in
+              Task { await coach.resolve(receipt, undo: undo, app: app) }
+            }
           }
         }
       }
-      .padding(.leading, 34)
     }
-    .padding(.bottom, 12)
+    .padding(.bottom, 26)
   }
 }
 
-/// A voice call in the thread: when and how long, and what was said, in
-/// the same sides as typed messages. Long calls start folded.
+/// A reply's figures, each on its sheet, numbered in order and lit in the
+/// colour of the reply's topic.
+struct Figures: View {
+  let visuals: [Components.Schemas.CoachVisual]
+  var topic: Category?
+
+  var body: some View {
+    let numbers = CoachVisualView.numbers(visuals)
+    let tint = topic?.tint
+    ForEach(Array(visuals.enumerated()), id: \.element.id) { index, visual in
+      CoachVisualView(visual: visual, number: numbers[index], tint: tint)
+        .card(padding: 14)
+        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+    }
+  }
+}
+
+/// A voice call in the thread: when and how long, and what was said, set as
+/// on the call screen. Long calls start folded.
 private struct VoiceCallCard: View {
   let call: VoiceCallRecord
   @State private var expanded = false
   private let folded = 4
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Label {
-        Text("Voice call").font(.subheadline.weight(.semibold))
-          + Text(" · \(duration)").font(.subheadline).foregroundStyle(.secondary)
-      } icon: {
-        Image(systemName: "waveform").foregroundStyle(.tint)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 8) {
+        Image(systemName: "waveform").foregroundStyle(Theme.accent).accessibilityHidden(true)
+        Text("Voice call").foregroundStyle(Theme.ink).kicker()
+        Text(duration).kicker()
       }
+      .padding(.bottom, 8)
+      .accessibilityElement(children: .combine)
       ForEach(Array(shown.enumerated()), id: \.offset) { _, line in
-        HStack {
-          if line.role == "you" { Spacer(minLength: 40) }
-          Text(line.text)
-            .font(.subheadline)
-            .textSelection(.enabled)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .foregroundStyle(line.role == "you" ? Theme.onAccent : Color.primary)
-            .background(
-              line.role == "you" ? Theme.accent : Theme.fill,
-              in: .rect(cornerRadius: 16))
-          if line.role == "coach" { Spacer(minLength: 40) }
-        }
+        TranscriptLine(coach: line.role == "coach", text: line.text)
       }
       if call.lines.count > folded {
         Button(expanded ? "Show less" : "Show the whole call (\(call.lines.count) lines)") {
           withAnimation { expanded.toggle() }
         }
-        .font(.footnote.weight(.medium))
+        .buttonStyle(SecondaryButtonStyle())
+        .padding(.top, 10)
       }
     }
-    .padding(12)
-    .background(Theme.surface, in: .rect(cornerRadius: 20))
-    .padding(.bottom, 12)
+    .card(padding: 14)
+    .padding(.bottom, 26)
     .accessibilityElement(children: .contain)
   }
 
@@ -402,36 +430,42 @@ private struct VoiceCallCard: View {
   }
 }
 
-private struct ReceiptCard: View {
+/// What Coach saved, or offers to save: a sheet with the entry's name in the
+/// serif, Undo or Save, and the details on request.
+struct ReceiptCard: View {
   let receipt: Components.Schemas.CoachReceipt
   let busy: Bool
   let resolve: (_ undo: Bool) -> Void
   /// A receipt waiting to be saved opens by itself, so the athlete can
   /// check the entries first; a saved one opens on tap.
   @State private var expanded: Bool?
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   private var entries: [Components.Schemas.CoachReceiptEntry] { receipt.entries ?? [] }
   private var isOpen: Bool { expanded ?? (receipt.state == "pending") }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack(alignment: .top, spacing: 10) {
-        IconBadge(symbol: symbol, tint: tint, size: 28)
+      HStack(alignment: .firstTextBaseline, spacing: 10) {
+        Image(systemName: symbol)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(receipt.state == "pending" ? Theme.accent : Theme.ink)
+          .accessibilityHidden(true)
         Button {
           withAnimation(.snappy) { expanded = !isOpen }
         } label: {
-          VStack(alignment: .leading, spacing: 2) {
-            Text(receipt.title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.primary)
+          VStack(alignment: .leading, spacing: 3) {
+            Text(receipt.title).folio(.entry).foregroundStyle(Theme.ink)
             Text(receipt.detail)
               .font(.footnote)
-              .foregroundStyle(.secondary)
+              .foregroundStyle(Theme.inkSecondary)
               .lineLimit(isOpen ? nil : 2)
             if receipt.state == "undone" {
-              Text("Undone").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+              Text("Undone").font(.footnote.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
             }
             if !entries.isEmpty {
               Label(isOpen ? "Hide details" : "Show details", systemImage: isOpen ? "chevron.up" : "chevron.down")
-                .font(.caption.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(Theme.accent)
                 .padding(.top, 4)
             }
@@ -443,35 +477,35 @@ private struct ReceiptCard: View {
         .buttonStyle(.plain)
         .disabled(entries.isEmpty && receipt.detail.count < 90)
         .accessibilityHint(entries.isEmpty ? "" : isOpen ? "Hides what was saved" : "Shows what was saved")
-        if busy {
-          ProgressView()
-        } else if receipt.state == "saved" {
-          Button("Undo") { resolve(true) }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        } else if receipt.state == "pending" {
-          Button("Save") { resolve(false) }
-            .buttonStyle(.borderedProminent)
-            .foregroundStyle(Theme.onAccent)
-            .controlSize(.small)
-        }
+        if !typeSize.isAccessibilitySize { action }
       }
+      if typeSize.isAccessibilitySize { action }
       if isOpen, !entries.isEmpty {
         VStack(alignment: .leading, spacing: 12) {
           ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
-            if index > 0 { Divider() }
+            if index > 0 { Rectangle().fill(Theme.rule).frame(height: 1) }
             EntryDetails(entry: entry)
           }
         }
         .padding(12)
-        .background(Theme.fill, in: .rect(cornerRadius: 12, style: .continuous))
+        .background(Theme.fill, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
         .transition(.opacity.combined(with: .move(edge: .top)))
       }
     }
-    .padding(12)
-    .background(Theme.surface, in: .rect(cornerRadius: 16))
-    .frame(maxWidth: 340, alignment: .leading)
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .card(padding: 14)
+  }
+
+  @ViewBuilder
+  private var action: some View {
+    if busy {
+      ProgressView().frame(minWidth: 44, minHeight: 44)
+    } else if receipt.state == "saved" {
+      Button("Undo") { resolve(true) }
+        .buttonStyle(SecondaryButtonStyle())
+    } else if receipt.state == "pending" {
+      Button("Save") { resolve(false) }
+        .buttonStyle(PrimaryButtonStyle(height: 44, fullWidth: false))
+    }
   }
 
   private var symbol: String {
@@ -480,14 +514,6 @@ private struct ReceiptCard: View {
     case "undone": "arrow.uturn.backward"
     case "expired": "clock"
     default: "square.and.pencil"
-    }
-  }
-
-  private var tint: Color {
-    switch receipt.state {
-    case "saved": Theme.success
-    case "pending": Theme.accent
-    default: .secondary
     }
   }
 }

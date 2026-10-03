@@ -102,9 +102,9 @@ struct VoiceCallView: View {
           ForEach(call.lines) { line in
             switch line.role {
             case .you:
-              Bubble(text: line.text, mine: true)
+              TranscriptLine(coach: false, text: line.text)
             case .coach:
-              Bubble(text: line.text, mine: false)
+              TranscriptLine(coach: true, text: line.text)
             case .save:
               SaveChip(label: line.text, state: line.state ?? .saving)
             case .card:

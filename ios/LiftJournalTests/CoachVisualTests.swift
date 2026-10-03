@@ -74,4 +74,72 @@ struct CoachVisualTests {
     #expect(VisualLineChart.sparse(labels) == ["Sep 1", "Sep 5", "Sep 10", "Sep 14"])
     #expect(VisualLineChart.sparse(["a", "b"]) == ["a", "b"])
   }
+
+  static func visual(_ json: String) throws -> Visual {
+    try JSONDecoder().decode(Visual.self, from: Data(json.utf8))
+  }
+
+  @Test("A letter's topic comes from its first figure that names an area, then from what Coach saved")
+  func topic() throws {
+    let sleep = try Self.visual(#"{"id":"a","kind":"bar_chart","title":"Sleep this week","unit":"h","points":[]}"#)
+    let recipe = try Self.visual(#"{"id":"b","kind":"recipe","title":"Skyr bowl"}"#)
+    let table = try Self.visual(#"{"id":"c","kind":"table","title":"Your plan","columns":["A"],"rows":[]}"#)
+    #expect(VisualTint.topic(visuals: [table, sleep]) == .sleep)
+    #expect(VisualTint.topic(visuals: [recipe]) == .food)
+    #expect(VisualTint.topic(visuals: [table], receipts: ["Log breakfast"]) == .food)
+    #expect(VisualTint.topic(visuals: [table], receipts: ["Goals updated"]) == nil)
+    #expect(VisualTint.topic("Body fat this month") == .body)
+    #expect(VisualTint.topic("Water today") == .water)
+    #expect(VisualTint.topic("Steps") == .activity)
+    #expect(VisualTint.hatched("Fat") && !VisualTint.hatched("Body fat"))
+  }
+
+  @Test("Bars over days light the latest and label the extremes; bars over items are all lit")
+  func bars() throws {
+    #expect(VisualBars.isDays(["Sa 26", "Su 27", "Mo 28"]))
+    #expect(VisualBars.isDays(["Mon", "Tue"]))
+    #expect(VisualBars.isDays(["26 Sep", "27 Sep"]))
+    #expect(VisualBars.isDays(["Week 39", "Week 40"]))
+    #expect(!VisualBars.isDays(["Breakfast", "Lunch", "Dinner"]))
+    #expect(!VisualBars.isDays(["Snatch", "Clean & jerk"]))
+    #expect(!VisualBars.isDays(["Mon"]))
+    #expect(VisualBars.labelled([7.4, 6.6, 8.1, 7.0, 6.2, 7.8, 7.25]) == [2, 4, 6])
+    let week = try Self.visual(
+      #"{"id":"a","kind":"bar_chart","title":"Sleep","unit":"h","points":[{"label":"Mo","value":7},{"label":"Tu","value":8},{"label":"We","value":6}]}"#
+    )
+    #expect(VisualBars.average(week) == 7)
+    #expect(CoachVisualView.note(week) == "Average 7 h")
+    let meals = try Self.visual(
+      #"{"id":"b","kind":"bar_chart","title":"Protein by meal","unit":"g","points":[{"label":"Breakfast","value":30},{"label":"Lunch","value":42},{"label":"Dinner","value":50}]}"#
+    )
+    #expect(VisualBars.average(meals) == nil)
+    #expect(CoachVisualView.note(meals) == "g")
+  }
+
+  @Test("Figures write hours as hours and minutes, and other amounts as numbers")
+  func amounts() {
+    #expect(VisualAmount.short(7.2, unit: "h") == "7 h 12")
+    #expect(VisualAmount.short(8, unit: "hours") == "8 h")
+    #expect(VisualAmount.short(1234, unit: "kcal") == "1,234")
+    #expect(VisualAmount.long(112.5, unit: "g") == "112.5 g")
+    #expect(VisualAmount.long(3, unit: "") == "3")
+  }
+
+  @Test("A progress meter counts a target in 20 round marks or fewer")
+  func perMark() {
+    #expect(VisualProgress.perMark(130) == 10)
+    #expect(VisualProgress.perMark(1900) == 100)
+    #expect(VisualProgress.perMark(8) == 0.5)
+    #expect(VisualProgress.perMark(10000) == 500)
+    #expect(VisualProgress.perMark(2450) == 200)
+    #expect(VisualProgress.perMark(0) == 1)
+  }
+
+  @Test("A reply's figures are numbered in order; a recipe takes no number")
+  func figureNumbers() throws {
+    let chart = try Self.visual(#"{"id":"a","kind":"bar_chart","title":"Sleep","unit":"h","points":[]}"#)
+    let recipe = try Self.visual(#"{"id":"b","kind":"recipe","title":"Skyr bowl"}"#)
+    let table = try Self.visual(#"{"id":"c","kind":"table","title":"Plan","columns":["A"],"rows":[]}"#)
+    #expect(CoachVisualView.numbers([chart, recipe, table]) == [1, nil, 2])
+  }
 }

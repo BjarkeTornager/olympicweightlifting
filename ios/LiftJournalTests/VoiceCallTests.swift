@@ -150,4 +150,33 @@ struct VoiceCallTests {
       VoiceCallView.ended(saved: 2, cards: 1) == "Call ended · 2 saved · 1 card. Everything is in Coach, with Undo.")
     #expect(VoiceCallView.ended(saved: 0, cards: 2) == "Call ended · 2 cards. Everything is in Coach.")
   }
+
+  @Test("The saves after a line gather in one row, between what was said and the cards")
+  func rows() {
+    let lines = [
+      Line(id: "1", role: .you, text: "Slept seven hours, oats for breakfast."),
+      Line(id: "2", role: .save, text: "Sleep", state: .saved),
+      Line(id: "3", role: .save, text: "Meal", state: .saving),
+      Line(id: "4", role: .coach, text: "Both are in."),
+      Line(id: "5", role: .save, text: "Drink", state: .failed),
+    ]
+    let rows = TranscriptRow.rows(lines)
+    #expect(rows.map(\.id) == ["1", "2", "4", "5"])
+    guard case .saves(let saves) = rows[1] else {
+      Issue.record("expected the saves together")
+      return
+    }
+    #expect(saves.map(\.text) == ["Sleep", "Meal"])
+  }
+
+  @Test("The call shows the question Coach last asked, if its latest line asked one")
+  func question() {
+    let asked = [
+      Line(id: "1", role: .coach, text: "Noted. How did you sleep? And what did you eat?"),
+      Line(id: "2", role: .you, text: "Fine."),
+    ]
+    #expect(VoiceCallView.question(asked) == "And what did you eat?")
+    #expect(VoiceCallView.question([Line(id: "1", role: .coach, text: "Both are in.")]) == nil)
+    #expect(VoiceCallView.question([]) == nil)
+  }
 }

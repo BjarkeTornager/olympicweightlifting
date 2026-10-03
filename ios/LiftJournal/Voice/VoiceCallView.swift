@@ -2,49 +2,44 @@ import LiftAPI
 import LiftTheme
 import SwiftUI
 
-/// The spoken check-in, full screen: a voice that moves with whoever is
-/// talking, the conversation as it happens with each save and card, and the
-/// call controls at the bottom.
+/// The spoken check-in, full screen: the split mark, whose halves move with
+/// whoever is talking, what Coach is asking, the conversation as it happens
+/// with each save and card, and the call controls at the bottom.
 struct VoiceCallView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
   let call: VoiceCall
   /// A card opened in full, or the camera: one at a time over the call.
   @State private var over = CallPresentation()
+  @Environment(\.dynamicTypeSize) private var typeSize
+  /// Saves line up with the words above them.
+  @ScaledMetric(relativeTo: .caption) private var indent: CGFloat = TranscriptLine.indent
 
   var body: some View {
-    // A card needs the room more than the voice does.
-    let small = call.cards > 0
+    // A card, or the largest text, needs the room more than the voice does.
+    let small = call.cards > 0 || typeSize.isAccessibilitySize
     NavigationStack {
       VStack(spacing: 0) {
-        VoiceOrb(level: call.level, active: call.status == .speaking || call.status == .listening)
-          .opacity(call.inCall ? 1 : 0.35)
-          .animation(.easeInOut, value: call.inCall)
-          .scaleEffect(small ? 96 / 220 : 1)
-          .frame(height: small ? 96 : 220)
-          .animation(.smooth, value: small)
-          .padding(.top, 12)
-        Text(statusText)
-          .font(.headline)
-          .foregroundStyle(call.status == .failed ? .red : .secondary)
-          .multilineTextAlignment(.center)
-          .padding(.horizontal)
-          // It changes often (speaking, listening): cross-fading overlapped
-          // the two labels.
-          .contentTransition(.identity)
-        if !app.voiceOptions.isEmpty {
-          Text("\(call.provider.voiceName(in: app.voiceOptions) ?? "Voice") by \(call.provider.title) · change it in Profile")
-            .font(.caption)
-            .foregroundStyle(.tertiary)
-            .padding(.top, 2)
-        }
+        SplitDiscOrb(
+          pose: pose, speaking: call.status == .speaking, coachLevel: Double(call.coachLevel),
+          micLevel: Double(call.micLevel), muted: call.muted
+        )
+        .frame(width: small ? 96 : 224, height: small ? 96 : 224)
+        .animation(.smooth, value: small)
+        .padding(.top, small ? 0 : 4)
+        status
+          .padding(.horizontal, Theme.Space.l)
+          .padding(.top, small ? 6 : 14)
+          // Large, but leaving the conversation room to show.
+          .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         transcript
-        controls
+        controls.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
       }
       .background(Theme.background)
-      .navigationTitle("Voice Check-In")
+      .navigationTitle("Voice check-in")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
+        ToolbarItem(placement: .principal) { header }
         ToolbarItem(placement: .confirmationAction) {
           if !call.inCall {
             Button("Done", role: .confirm) { dismiss() }
@@ -73,14 +68,87 @@ struct VoiceCallView: View {
     .task { if call.status == .idle { await call.start() } }
   }
 
-  private var statusText: String {
+  private var pose: SplitDiscOrb.Pose {
     switch call.status {
-    case .idle, .connecting: "Connecting…"
+    case .idle, .connecting, .reconnecting: .connecting
+    case .listening, .speaking: .live
+    case .ended: .ended
+    case .failed: .failed
+    }
+  }
+
+  /// "Voice check-in · 3:12" while the call runs.
+  private var header: some View {
+    HStack(spacing: 0) {
+      Text("Voice check-in").foregroundStyle(Theme.ink).kicker()
+      if call.inCall, let start = call.connectedAt {
+        TimelineView(.periodic(from: start, by: 1)) { context in
+          let running = Duration.seconds(max(0, context.date.timeIntervalSince(start)))
+          Text(" · " + running.formatted(.time(pattern: .minuteSecond)))
+            .kicker()
+            .monospacedDigit()
+        }
+      }
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityAddTraits(.isHeader)
+  }
+
+  // MARK: Status
+
+  private var status: some View {
+    VStack(spacing: 6) {
+      if let kicker {
+        Text(kicker)
+          .foregroundStyle(call.status == .speaking ? Theme.accent : call.status == .failed ? Theme.danger : Theme.ink)
+          .kicker()
+          // It changes often (speaking, listening): cross-fading overlapped
+          // the two labels.
+          .contentTransition(.identity)
+      }
+      switch call.status {
+      case .ended:
+        Text(Self.ended(saved: call.saved, cards: call.cards))
+          .font(.system(.title3, design: .serif))
+          .italic()
+          .foregroundStyle(Theme.ink)
+      case .failed:
+        Text(call.error ?? "The call could not continue.")
+          .font(.subheadline)
+          .foregroundStyle(Theme.inkSecondary)
+      case .reconnecting:
+        Text("The conversation carries on.").folio(.note).foregroundStyle(Theme.inkSecondary)
+      default:
+        if let question = Self.question(call.lines) {
+          Text("\u{201C}\(question)\u{201D}")
+            .font(.system(.title2, design: .serif))
+            .italic()
+            .foregroundStyle(Theme.ink)
+            .lineLimit(3)
+            .minimumScaleFactor(0.8)
+        }
+      }
+      if !app.voiceOptions.isEmpty, call.status != .ended, call.status != .failed {
+        let voice = call.provider.voiceName(in: app.voiceOptions) ?? "Voice"
+        Text("\(voice), \(call.provider.title) · change the voice in Profile")
+          .font(.footnote)
+          .foregroundStyle(Theme.inkSecondary)
+          .padding(.top, 2)
+      }
+    }
+    .multilineTextAlignment(.center)
+    .fixedSize(horizontal: false, vertical: true)
+    .frame(maxWidth: .infinity)
+  }
+
+  private var kicker: String? {
+    switch call.status {
+    case .idle, .connecting: "Connecting"
     case .listening: call.muted ? "Muted" : "Listening"
     case .speaking: "Coach is speaking"
-    case .reconnecting: "Reconnecting… the conversation carries on"
-    case .ended: Self.ended(saved: call.saved, cards: call.cards)
-    case .failed: call.error ?? "The call could not continue."
+    case .reconnecting: "Reconnecting"
+    case .ended: nil
+    case .failed: "Call stopped"
     }
   }
 
@@ -95,26 +163,42 @@ struct VoiceCallView: View {
       + (saved > 0 ? ". Everything is in Coach, with Undo." : ". Everything is in Coach.")
   }
 
+  /// What Coach last asked: the last question in its latest line, if it
+  /// ended its turn on one.
+  static func question(_ lines: [VoiceCall.Line]) -> String? {
+    guard let last = lines.last(where: { $0.role == .coach }) else { return nil }
+    var sentences: [String] = []
+    last.text.enumerateSubstrings(in: last.text.startIndex..., options: .bySentences) { sentence, _, _, _ in
+      if let sentence { sentences.append(sentence.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+    return sentences.last { $0.hasSuffix("?") }
+  }
+
+  // MARK: Transcript
+
   private var transcript: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        LazyVStack(spacing: 8) {
-          ForEach(call.lines) { line in
-            switch line.role {
-            case .you:
-              TranscriptLine(coach: false, text: line.text)
-            case .coach:
-              TranscriptLine(coach: true, text: line.text)
-            case .save:
-              SaveChip(label: line.text, state: line.state ?? .saving)
-            case .card:
+        LazyVStack(alignment: .leading, spacing: 0) {
+          ForEach(TranscriptRow.rows(call.lines)) { row in
+            switch row {
+            case .spoken(let line):
+              TranscriptLine(coach: line.role == .coach, text: line.text)
+            case .saves(let lines):
+              FlowLayout(spacing: 6, lineSpacing: 6) {
+                ForEach(lines) { SaveChip(label: $0.text, state: $0.state ?? .saving) }
+              }
+              .padding(.leading, typeSize.isAccessibilitySize ? 0 : indent)
+              .padding(.bottom, 10)
+            case .card(let line):
               if let visual = line.visual {
                 VoiceCard(visual: visual) { over.expand(line) }
+                  .padding(.vertical, 8)
               }
             }
           }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.Space.gutter)
         .padding(.vertical, 12)
       }
       .defaultScrollAnchor(.bottom)
@@ -126,31 +210,63 @@ struct VoiceCallView: View {
     }
   }
 
+  // MARK: Controls
+
   @ViewBuilder
   private var controls: some View {
     if call.inCall {
-      HStack(spacing: 28) {
+      HStack(spacing: 30) {
         CallButton(
-          title: call.muted ? "Unmute" : "Mute",
-          symbol: call.muted ? "mic.slash.fill" : "mic.fill",
-          tint: call.muted ? .white : nil
+          title: call.muted ? "Unmute" : "Mute", symbol: call.muted ? "mic.slash.fill" : "mic",
+          kind: call.muted ? .on : .plain
         ) {
           call.muted.toggle()
         }
         .sensoryFeedback(.selection, trigger: call.muted)
-        CallButton(title: "Camera", symbol: "camera.fill") { call.cameraRequested = true }
-        CallButton(title: "End", symbol: "phone.down.fill", tint: .red) {
+        CallButton(title: "Camera", symbol: "camera") { call.cameraRequested = true }
+        CallButton(title: "End", symbol: "phone.down.fill", kind: .end) {
           call.stop()
         }
       }
       .padding(.vertical, 20)
     } else if call.status == .failed {
       Button("Try Again") { Task { await call.start() } }
-        .buttonStyle(.glassProminent)
-        .foregroundStyle(Theme.onAccent)
-        .controlSize(.large)
+        .buttonStyle(PrimaryButtonStyle())
+        .padding(.horizontal, Theme.Space.gutter)
         .padding(.vertical, 20)
     }
+  }
+}
+
+/// The call's lines as they are shown: what was said, the saves after it
+/// gathered in one row of chips, and the cards.
+enum TranscriptRow: Identifiable, Equatable {
+  case spoken(VoiceCall.Line)
+  case saves([VoiceCall.Line])
+  case card(VoiceCall.Line)
+
+  var id: String {
+    switch self {
+    case .spoken(let line), .card(let line): line.id
+    case .saves(let lines): lines.first?.id ?? ""
+    }
+  }
+
+  static func rows(_ lines: [VoiceCall.Line]) -> [TranscriptRow] {
+    var rows: [TranscriptRow] = []
+    for line in lines {
+      switch line.role {
+      case .you, .coach: rows.append(.spoken(line))
+      case .card: rows.append(.card(line))
+      case .save:
+        if case .saves(let saves) = rows.last {
+          rows[rows.count - 1] = .saves(saves + [line])
+        } else {
+          rows.append(.saves([line]))
+        }
+      }
+    }
+    return rows
   }
 }
 
@@ -189,16 +305,13 @@ private struct VoiceCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      CoachVisualView(visual: visual, compact: true)
+      CoachVisualView(visual: visual, compact: true, tint: VisualTint.topic(visuals: [visual])?.tint)
       if let more = CoachVisualView.more(visual) {
         Button(more, action: expand)
-          .buttonStyle(.bordered)
-          .controlSize(.small)
+          .buttonStyle(SecondaryButtonStyle())
       }
     }
-    .padding(14)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Theme.surface, in: .rect(cornerRadius: 18, style: .continuous))
+    .card(padding: 14)
     .environment(\.picturesOpenFullScreen, false)
   }
 }
@@ -211,11 +324,11 @@ private struct CardSheet: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        CoachVisualView(visual: visual)
-          .padding(16)
+        CoachVisualView(visual: visual, tint: VisualTint.topic(visuals: [visual])?.tint)
+          .padding(Theme.Space.gutter)
           .environment(\.picturesOpenFullScreen, false)
       }
-      .background(Theme.background)
+      .background(Theme.surface)
       .navigationTitle(visual.kind == "recipe" ? "Recipe" : "Card")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -228,22 +341,32 @@ private struct CardSheet: View {
   }
 }
 
+/// A 68 pt round call control: glass with an ink symbol, ink when switched
+/// on (muted), or filled with the danger colour to end the call.
 private struct CallButton: View {
+  enum Kind { case plain, on, end }
   let title: String
   let symbol: String
-  var tint: Color?
+  var kind = Kind.plain
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      VStack(spacing: 6) {
+      VStack(spacing: 7) {
         Image(systemName: symbol)
-          .font(.title2)
-          .foregroundStyle(tint == .red ? .white : .primary)
+          .font(.title2.weight(kind == .end ? .semibold : .regular))
+          .foregroundStyle(kind == .plain ? Theme.ink : Theme.surface)
           .frame(width: 68, height: 68)
-          .background(tint == .red ? Color.red : Color.clear, in: .circle)
-          .glassEffect(tint == .red ? .regular.tint(.red).interactive() : .regular.interactive(), in: .circle)
-        Text(title).font(.caption).foregroundStyle(.secondary)
+          .background {
+            switch kind {
+            case .plain: Color.clear
+            case .on: Circle().fill(Theme.ink)
+            case .end:
+              Circle().fill(Theme.danger).shadow(color: Theme.danger.opacity(0.35), radius: 12, y: 8)
+            }
+          }
+          .glassEffect(kind == .plain ? .regular.interactive() : .identity, in: .circle)
+        Text(title).font(.caption.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
       }
     }
     .buttonStyle(.plain)
@@ -251,59 +374,171 @@ private struct CallButton: View {
   }
 }
 
+/// A save during the call: its area's key, a check once saved, on fill.
 private struct SaveChip: View {
   let label: String
   let state: VoiceCall.Line.SaveState
 
   var body: some View {
-    Label {
-      Text(state == .failed ? "\(label) not saved" : label)
-    } icon: {
+    HStack(spacing: 6) {
+      if let topic = VisualTint.topic(label) {
+        Key(tint: topic.tint)
+      }
       switch state {
       case .saving: ProgressView().controlSize(.mini)
-      case .saved: Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success)
-      case .failed: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.attention)
+      case .saved: Image(systemName: "checkmark").fontWeight(.bold)
+      case .failed: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Theme.danger)
       }
+      Text(state == .failed ? "\(label) not saved" : label)
     }
-    .font(.footnote.weight(.medium))
-    .padding(.horizontal, 12)
-    .padding(.vertical, 6)
+    .font(.footnote.weight(.semibold))
+    .foregroundStyle(Theme.ink)
+    .padding(.horizontal, 10)
+    .frame(minHeight: 28)
     .background(Theme.fill, in: .capsule)
-    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(
+      state == .saving ? "Saving \(label)" : state == .saved ? "\(label) saved" : "\(label) not saved")
   }
 }
 
-/// A soft, moving shape in the theme's orb colours that grows with the voice
-/// being heard.
-struct VoiceOrb: View {
-  let level: Float
-  let active: Bool
+/// The voice call's mark: Coach's half on the left, yours on the right, as
+/// in the icon. The speaking half rises with its own voice, the gutter
+/// opens, and echo arcs open on its side, so it's clear whose turn it is.
+/// Connecting, the halves sit close and rock slowly, never frozen; muted,
+/// your half is an outline; when the call ends they close into one disc.
+/// Under Reduce Motion each pose is still and nothing rises with the voice.
+struct SplitDiscOrb: View {
+  enum Pose: Equatable { case connecting, live, ended, failed }
+  let pose: Pose
+  /// Coach is talking, for the still pose under Reduce Motion.
+  var speaking = false
+  /// Each from 0 to 1.
+  var coachLevel: Double = 0
+  var micLevel: Double = 0
+  var muted = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// The halves' place in mark units, where the mark is 716 across.
+  struct Placement: Equatable {
+    var gap: CGFloat = 40
+    var lift: CGFloat = 136
+    var coachRise: CGFloat = 0
+    var youRise: CGFloat = 0
+    var opacity: Double = 1
+    /// The side whose echoes show, and how strongly, from 0 to 1.
+    var echo: MarkHalf.Part?
+    var echoStrength: Double = 0
+  }
+
+  var placement: Placement {
+    switch pose {
+    case .connecting: return Placement(gap: 14, lift: 24, opacity: 0.55)
+    case .ended: return Placement(gap: 0, lift: 0)
+    case .failed: return Placement(opacity: 0.35)
+    case .live:
+      if reduceMotion {
+        return speaking ? Placement(gap: 60, coachRise: 64, echo: .coach, echoStrength: 1) : Placement()
+      }
+      let coach = min(1, max(0, coachLevel))
+      let mic = min(1, max(0, micLevel))
+      let louder: MarkHalf.Part = coach >= mic ? .coach : .you
+      let level = max(coach, mic)
+      return Placement(
+        gap: 40 + 24 * level, coachRise: 96 * coach, youRise: 96 * mic,
+        echo: level > 0.06 ? louder : nil, echoStrength: min(1, level * 2.5))
+    }
+  }
 
   var body: some View {
-    TimelineView(.animation(paused: !active)) { context in
-      let t = context.date.timeIntervalSinceReferenceDate
-      let scale = 1 + CGFloat(level) * 0.35
-      ZStack {
-        ForEach(0..<3) { layer in
-          Circle()
-            .fill(
-              AngularGradient(
-                colors: Theme.orb,
-                center: .center, angle: .degrees(t * 40 + Double(layer) * 120))
-            )
-            .opacity(0.55 - Double(layer) * 0.12)
-            .scaleEffect(scale * (1 - CGFloat(layer) * 0.12) + CGFloat(sin(t * 2 + Double(layer))) * 0.03)
-            .blur(radius: 18 + CGFloat(layer) * 6)
-        }
-        Circle()
-          .fill(.white.opacity(0.25))
-          .frame(width: 80, height: 80)
-          .scaleEffect(scale)
-          .blur(radius: 10)
+    TimelineView(.animation(paused: pose != .connecting || reduceMotion)) { context in
+      // One slow rock every four seconds while connecting.
+      let rock = pose == .connecting && !reduceMotion
+        ? sin(context.date.timeIntervalSinceReferenceDate * .pi / 2) : 0
+      GeometryReader { proxy in
+        let unit = min(proxy.size.width, proxy.size.height) / 944
+        mark(placement, unit: unit)
+          .frame(width: 716 * unit, height: 716 * unit)
+          .rotationEffect(.degrees(rock * 4))
+          .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
       }
-      .frame(width: 180, height: 180)
-      .animation(.easeOut(duration: 0.12), value: level)
     }
+    .aspectRatio(1, contentMode: .fit)
+    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: placement)
     .accessibilityHidden(true)
   }
+
+  private func mark(_ shape: Placement, unit: CGFloat) -> some View {
+    ZStack {
+      if let side = shape.echo {
+        ForEach([1, 2], id: \.self) { n in
+          MarkHalf(
+            side, gap: shape.gap, lift: shape.lift, rise: side == .coach ? shape.coachRise : shape.youRise,
+            spread: CGFloat(n) * 46
+          )
+          .stroke(side == .coach ? Theme.markCoach : Theme.markYou, lineWidth: 9 * unit)
+          .opacity((0.5 - Double(n) * 0.17) * shape.echoStrength)
+        }
+      }
+      MarkHalf(.coach, gap: shape.gap, lift: shape.lift, rise: shape.coachRise)
+        .fill(Theme.markCoach)
+      if muted && pose == .live {
+        MarkHalf(.you, gap: shape.gap, lift: shape.lift, rise: shape.youRise)
+          .stroke(Theme.markYou.opacity(0.7), lineWidth: 10 * unit)
+      } else {
+        MarkHalf(.you, gap: shape.gap, lift: shape.lift, rise: shape.youRise)
+          .fill(Theme.markYou)
+      }
+    }
+    .opacity(shape.opacity)
+  }
 }
+
+#if DEBUG
+  /// The orb's five poses, as the states board draws them.
+  struct OrbStatesPreview: View {
+    var body: some View {
+      let states: [(String, SplitDiscOrb)] = [
+        ("Connecting", SplitDiscOrb(pose: .connecting)),
+        ("You are speaking", SplitDiscOrb(pose: .live, micLevel: 0.8)),
+        ("Coach is speaking", SplitDiscOrb(pose: .live, speaking: true, coachLevel: 0.8)),
+        ("Muted", SplitDiscOrb(pose: .live, muted: true)),
+        ("Call ended", SplitDiscOrb(pose: .ended)),
+      ]
+      ScrollView {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 20)], spacing: 28) {
+          ForEach(states, id: \.0) { title, orb in
+            VStack(spacing: 10) {
+              orb.frame(width: 150, height: 150)
+              Text(title).folio(.note).foregroundStyle(Theme.ink)
+            }
+          }
+        }
+        .padding(20)
+      }
+      .background(Theme.background)
+    }
+  }
+
+  /// A call with Coach speaking, two saves, and Coach's reply.
+  struct VoiceCallPreview: View {
+    var status = VoiceCall.Status.speaking
+    var muted = false
+
+    var body: some View {
+      VoiceCallView(
+        call: .staged(
+          status, lines: PreviewData.callLines, coachLevel: status == .speaking ? 0.7 : 0, muted: muted)
+      )
+      .environment(AppModel())
+    }
+  }
+
+  #Preview("Orb states") { OrbStatesPreview() }
+  #Preview("Orb states, dark") { OrbStatesPreview().preferredColorScheme(.dark) }
+  #Preview("Orb states, AX3") { OrbStatesPreview().dynamicTypeSize(.accessibility3) }
+  #Preview("Voice call") { VoiceCallPreview() }
+  #Preview("Voice call, dark") { VoiceCallPreview().preferredColorScheme(.dark) }
+  #Preview("Voice call, AX3") { VoiceCallPreview().dynamicTypeSize(.accessibility3) }
+  #Preview("Voice call, ended") { VoiceCallPreview(status: .ended) }
+#endif

@@ -16,12 +16,16 @@ nonisolated public struct MarkHalf: Shape {
   public var lift: CGFloat
   /// Extra rise for the speaking half in the voice orb.
   public var rise: CGFloat
+  /// An echo of the half: as much larger and moved as far out from the
+  /// spine, as the voice orb's arcs on the speaking side.
+  public var spread: CGFloat
 
-  public init(_ part: Part, gap: CGFloat = 40, lift: CGFloat = 136, rise: CGFloat = 0) {
+  public init(_ part: Part, gap: CGFloat = 40, lift: CGFloat = 136, rise: CGFloat = 0, spread: CGFloat = 0) {
     self.part = part
     self.gap = gap
     self.lift = lift
     self.rise = rise
+    self.spread = spread
   }
 
   public var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
@@ -35,12 +39,12 @@ nonisolated public struct MarkHalf: Shape {
 
   public func path(in rect: CGRect) -> Path {
     let scale = min(rect.width, rect.height) / 716
-    let radius: CGFloat = 290
+    let radius: CGFloat = 290 + spread
     let fillet: CGFloat = 10
     let left = part == .coach
     let side: CGFloat = left ? -1 : 1
     // The full disc's centre is (358, 358) in the cropped canvas.
-    let cx = 358 + side * gap / 2
+    let cx = 358 + side * (gap / 2 + spread)
     let cy = 358 + (left ? lift / 2 : -lift / 2) - rise
     let dy = ((radius - fillet) * (radius - fillet) - fillet * fillet).squareRoot()
     let k = radius / (radius - fillet)

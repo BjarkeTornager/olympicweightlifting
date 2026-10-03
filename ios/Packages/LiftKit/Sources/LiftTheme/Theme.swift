@@ -89,11 +89,6 @@ public enum Theme {
   /// Soreness should never look like a reward.
   public static let soreness = Palette.ink2
 
-  /// The voice orb's colours. The orb is retired for the split mark
-  /// (`markCoach` and `markYou`) when the voice call is set in the Folio
-  /// style; remove this then.
-  public static let orb = [Palette.markCoach, Palette.ultramarine, Palette.vermilion, Palette.markCoach]
-
   // MARK: Tokens
 
   /// Spacing: 20 is the screen's side gutter, 40 the gap between sections.

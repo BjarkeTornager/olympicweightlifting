@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
+    <main className="privacy-notice mx-auto max-w-3xl space-y-8 px-6 py-12">
       <Link href="/" className="brand w-fit">
         <span className="brand-icon">
           <BrandMark />

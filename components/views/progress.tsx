@@ -72,7 +72,7 @@ export function ProgressView({ state, update, notify }: Props) {
           >
             <span className="eyebrow">{item.label}</span>
             <div className="stat-number">
-              {item.value || "—"}
+              {item.value || "–"}
               <span>kg</span>
             </div>
             <span className="muted">Personal best</span>
@@ -213,7 +213,7 @@ export function ProgressView({ state, update, notify }: Props) {
           <div className="pr-row" key={p.exerciseId}>
             <span>{p.label}</span>
             <strong>
-              {state.prs[p.exerciseId] || "—"}
+              {state.prs[p.exerciseId] || "–"}
               <small> kg</small>
             </strong>
           </div>

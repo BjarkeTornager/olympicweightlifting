@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   backup,
   createWorkout,
+  dateInProse,
   days,
   emptyJournal,
   program,
@@ -13,6 +14,13 @@ import {
 } from "../lib/domain";
 import { journalSchema } from "../lib/model";
 import { canonicalJson } from "../lib/json";
+test("dates in a sentence read like the masthead and stay on one line", () => {
+  assert.equal(dateInProse("2026-09-30", "2026-10-03"), "30\u00a0September");
+  assert.equal(
+    dateInProse("2025-12-30", "2026-01-02"),
+    "30\u00a0December\u00a02025",
+  );
+});
 test("new athletes do not inherit the owner's personal records", () => {
   const s = emptyJournal();
   assert.equal(s.prs.snatch, 0);
@@ -22,7 +30,10 @@ test("new athletes do not inherit the owner's personal records", () => {
   for (const day of days)
     for (const exercise of day.exercises)
       assert.ok(exercise.initialWeight === "" || exercise.initialWeight === 0);
-  assert.doesNotMatch(JSON.stringify(program), /coach Tim|Alfa Omega|70 kg PR|60–65 kg/);
+  assert.doesNotMatch(
+    JSON.stringify(program),
+    /coach Tim|Alfa Omega|70 kg PR|60–65 kg/,
+  );
 });
 test("finishing saves explicit work and keeps the prescription snapshot", () => {
   const s = emptyJournal();

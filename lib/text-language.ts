@@ -1,7 +1,11 @@
-// The website is in English, but Coach answers in the language you write in,
-// so a reply or a message can be Danish. Marking it lang="da" lets browsers
-// hyphenate it with Danish rules and read it with a Danish voice. Only
-// Danish is told apart; anything else keeps the page's English.
+// The website is in British English, but Coach answers in the language you
+// write in, so a reply or a message can be Danish. Marking it lang="da" lets
+// browsers hyphenate it with Danish rules and read it with a Danish voice.
+// Only Danish is told apart; anything else keeps the page's English.
+
+/** The page's language, for the html element and for English labels set
+    inside a Danish passage. */
+export const siteLanguage = "en-GB";
 
 // Common words that are only Danish or only English in writing. Words both
 // languages spell alike (for, i, at, en, men, min, under) are left out.
@@ -26,5 +30,7 @@ export function danishOrNothing(text: string): "da" | undefined {
     // Æ, ø and å alone are a weak sign: English replies name Danish food.
     else if (/[æøå]/.test(word)) da += 0.5;
   }
-  return da >= 1.5 && da > en ? "da" : undefined;
+  // A clear majority: an English sentence naming Danish dishes ("rugbrød
+  // med leverpostej, frikadeller med kartofler og sovs") stays English.
+  return da >= 1.5 && da >= 2 * en ? "da" : undefined;
 }

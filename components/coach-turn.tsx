@@ -29,6 +29,8 @@ export function CoachTurn({
     "proposal" | "accountId"
   >;
 }) {
+  // Coach answers in the language you write in; its cards follow the reply.
+  const lang = danishOrNothing(t.reply || displayMessage(t.question).text);
   return (
     <article className="conversation-turn">
       <div className="chat-user">
@@ -55,7 +57,9 @@ export function CoachTurn({
           </span>
           {t.reply && <AssistantText text={t.reply} />}
           {Boolean(t.visuals?.length) && (
-            <AguiVisuals visuals={t.visuals!} accountId={accountId} />
+            <div lang={lang}>
+              <AguiVisuals visuals={t.visuals!} accountId={accountId} />
+            </div>
           )}
         </div>
       )}

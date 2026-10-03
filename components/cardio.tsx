@@ -285,7 +285,7 @@ export function ActivityForm({
             min="0"
             max="10000000"
             step="any"
-            placeholder="—"
+            placeholder="–"
             defaultValue={entry?.distanceKm ?? ""}
           />
         </label>
@@ -349,7 +349,7 @@ export function ActivityForm({
                   min={min}
                   max={max}
                   step={step}
-                  placeholder="—"
+                  placeholder="–"
                   defaultValue={entry?.[name] ?? ""}
                 />
               </label>
@@ -421,13 +421,13 @@ export function CardioProgress({
         <div>
           <dt>Time logged</dt>
           <dd>
-            {summary.sessions ? formatDuration(summary.durationSeconds) : "—"}
+            {summary.sessions ? formatDuration(summary.durationSeconds) : "–"}
           </dd>
         </div>
         <div>
           <dt>Distance recorded</dt>
           <dd>
-            {summary.distanceKm == null ? "—" : `${summary.distanceKm} km`}
+            {summary.distanceKm == null ? "–" : `${summary.distanceKm} km`}
           </dd>
         </div>
       </dl>
@@ -447,7 +447,7 @@ export function CardioProgress({
                   aria-label={`${date}: ${day ? formatDuration(day.durationSeconds) + " logged" : "No activity logged"}`}
                 >
                   <span>
-                    {day ? Math.round(day.durationSeconds / 60) + " min" : "—"}
+                    {day ? Math.round(day.durationSeconds / 60) + " min" : "–"}
                   </span>
                   <div className="cardio-bar-track" aria-hidden="true">
                     <i

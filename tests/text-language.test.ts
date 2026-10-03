@@ -24,6 +24,12 @@ test("English stays English, even when it names Danish food", () => {
     ),
     undefined,
   );
+  assert.equal(
+    danishOrNothing(
+      "Today you logged rugbrød med leverpostej, frikadeller med kartofler og sovs, and æblekage.",
+    ),
+    undefined,
+  );
   assert.equal(danishOrNothing("7 h 30 min · 80.2 kg"), undefined);
   assert.equal(danishOrNothing(""), undefined);
 });

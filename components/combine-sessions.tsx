@@ -106,8 +106,8 @@ export function CombineSessions({
               value={completion}
               onChange={(e) => setCompletion(e.target.value as WorkoutStatus)}
             >
-              <option value="completed">Completed — keep in History</option>
-              <option value="ongoing">Ongoing — continue in Train</option>
+              <option value="completed">Completed · keep in History</option>
+              <option value="ongoing">Ongoing · continue in Train</option>
             </select>
           </label>
         </div>

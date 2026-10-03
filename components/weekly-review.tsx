@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { today } from "@/lib/domain";
+import { dateInProse, today } from "@/lib/domain";
 import { weeklyReview } from "@/lib/weekly-review";
 import { formatSleepDuration, offsetDate } from "@/lib/health";
 import type { JournalController } from "./journal";
@@ -43,7 +43,7 @@ export function WeeklyReview({
           ←
         </Button>
         <span>
-          {week.from} – {week.to}
+          {dateInProse(week.from)} – {dateInProse(week.to)}
         </span>
         <Button
           variant="ghost"
@@ -108,7 +108,8 @@ export function WeeklyReview({
       <section className="week-changes">
         <h3>What changed</h3>
         <p>
-          Compared with {previous.from} – {previous.to}.
+          Compared with {dateInProse(previous.from)} –{" "}
+          {dateInProse(previous.to)}.
         </p>
         <ul>
           <li>
@@ -142,7 +143,7 @@ export function WeeklyReview({
         <h3>Keep what fits. Change one thing.</h3>
         <p>
           {journal.state?.profile.coaching?.focus
-            ? `Use your focus — ${journal.state.profile.coaching.focus} — to choose one manageable adjustment.`
+            ? `Use your focus (${journal.state.profile.coaching.focus}) to choose one manageable adjustment.`
             : "Pick one part of the week you’d like to make easier. Coach can help you choose a small experiment from your actual entries."}
         </p>
         <Button
@@ -165,7 +166,7 @@ export function WeeklyReview({
         {[week, previous].map((period) => (
           <div key={period.from}>
             <h3>
-              {period.from} – {period.to}
+              {dateInProse(period.from)} – {dateInProse(period.to)}
             </h3>
             {period.days.map((day) => (
               <button

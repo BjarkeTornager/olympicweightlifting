@@ -295,7 +295,7 @@ export function WorkoutExercise({
           <strong>{exerciseName(entry.exerciseId)}</strong>
           <small>
             {entry.prescribed.targetSets ?? entry.sets.length} sets ×{" "}
-            {entry.prescribed.targetReps ?? entry.prescribed.reps ?? "—"} reps ·{" "}
+            {entry.prescribed.targetReps ?? entry.prescribed.reps ?? "–"} reps ·{" "}
             {entry.prescribed.targetWeight !== "" &&
             entry.prescribed.targetWeight != null
               ? `${entry.prescribed.targetWeight} kg`

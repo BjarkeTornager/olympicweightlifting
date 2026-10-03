@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Plus, MessageCircle, Search } from "@/components/ui/icons";
 import type { JournalController } from "../journal";
-import { today, uid } from "@/lib/domain";
+import { dateInProse, today, uid } from "@/lib/domain";
 import {
   mealSchema,
   favouriteFromMeal,
@@ -257,7 +257,7 @@ export function FoodView({
       )}
       <section className="panel food-meals">
         <div className="section-top">
-          <h2>{allDates ? "Your meals" : `Meals · ${date}`}</h2>
+          <h2>{allDates ? "Your meals" : `Meals · ${dateInProse(date)}`}</h2>
           {!searching && (
             <Button variant="ghost" onClick={() => setSearchOpen(true)}>
               <Search size={16} /> Search meals
@@ -399,7 +399,9 @@ export function FoodView({
             <div>
               <strong>{meal.name}</strong>
               <small>
-                {meal.type} · {totalNutrients(meal.items).calories} kcal
+                {meal.type} ·{" "}
+                {totalNutrients(meal.items).calories.toLocaleString("en-GB")}{" "}
+                kcal
                 {meal.estimated ? " · estimated" : ""}
               </small>
             </div>
@@ -438,7 +440,7 @@ export function FoodView({
         <p>
           {week.loggedDays} of 7 days have entries.{" "}
           {week.loggedDays
-            ? `Average on logged days: ${Math.round(week.totals.calories / week.loggedDays)} kcal.`
+            ? `Average on logged days: ${Math.round(week.totals.calories / week.loggedDays).toLocaleString("en-GB")} kcal.`
             : "Log meals to see your pattern."}
         </p>
         <div className="food-week">
@@ -455,7 +457,7 @@ export function FoodView({
                   }}
                 />
               </span>
-              <strong>{day.calories} kcal</strong>
+              <strong>{day.calories.toLocaleString("en-GB")} kcal</strong>
               <small>{day.protein} g protein</small>
               <span>{day.date.slice(5)}</span>
             </button>

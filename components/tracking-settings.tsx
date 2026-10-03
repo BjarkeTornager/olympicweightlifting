@@ -437,7 +437,7 @@ function HealthConnection({ journal }: { journal: JournalController }) {
       {token && step === 2 && (
         <div className="form-stack tracking-key">
           <label>
-            Sleep import key — shown once
+            Sleep import key · shown once
             <input type="password" readOnly value={token} autoComplete="off" />
           </label>
           <Button
@@ -507,7 +507,7 @@ function HealthConnection({ journal }: { journal: JournalController }) {
           read Apple Health directly from the browser or import workout sets.
         </p>
         <Button onClick={() => setStep(3)}>
-          Shortcut ready — test connection
+          Shortcut ready · test connection
         </Button>
       </div>
       {step === 3 && (

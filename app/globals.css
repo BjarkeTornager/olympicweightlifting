@@ -611,7 +611,7 @@ button:disabled {
 }
 .panel h3 {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .empty-inline {
   text-align: center;
@@ -1923,6 +1923,11 @@ summary {
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
+/* The first column names the row; the figures after it align right, under
+   their heading, so their place values line up. */
+.training-table :is(th, td):not(:first-child) {
+  text-align: right;
+}
 .table-scroll {
   overflow-x: auto;
 }
@@ -2266,7 +2271,7 @@ summary {
 @media (max-width: 767px) {
   .food-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mobile-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .mobile-nav > a { min-width: 0; font-size: 10px; padding-inline: 2px; }
+  .mobile-nav > a { min-width: 0; font-size: 11px; padding-inline: 2px; }
 }
 @media (max-width: 500px) { .food-photo-grid { grid-template-columns: 1fr; } }
 
@@ -2338,7 +2343,7 @@ summary {
 .coach-avatar { display: flex; flex-shrink: 0; align-items: center; justify-content: center; }
 .coach-workspace-heading h2 { font-size: 17px; letter-spacing: -.3px; margin: 0 0 3px; }
 .coach-workspace-heading p { font-size: 11px; color: var(--muted); }
-.coach-connection { display: inline-flex; margin-left: auto; font-size: 9px; color: var(--ink-2); background: var(--surface-3); border-radius: 20px; padding: 5px 9px; white-space: nowrap; }
+.coach-connection { display: inline-flex; margin-left: auto; font-size: 11px; color: var(--ink-2); background: var(--surface-3); border-radius: 20px; padding: 5px 9px; white-space: nowrap; }
 .coach-connection.connected { color: var(--success); background: var(--surface-3); }
 .coach-workspace .agent-welcome { border: 0; background: var(--surface-2); box-shadow: none; max-width: none; padding: 26px; border-radius: 12px; }
 .agent-welcome h3 { font-size: 19px; }
@@ -2361,19 +2366,19 @@ summary {
 .checkin-number-grid label > span { display: flex; align-items: center; gap: 6px; }
 .checkin-number { display: flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 9px; min-width: 0; padding-right: 10px; }
 .checkin-number input { border: 0; padding: 10px; }
-.checkin-number > span { white-space: nowrap; font-size: 10px; font-weight: 400; color: var(--muted); }
+.checkin-number > span { white-space: nowrap; font-size: 11px; font-weight: 400; color: var(--muted); }
 .feeling-field { min-width: 0; }
 .feeling-field legend { font-size: 12px; font-weight: 550; margin-bottom: 10px; }
 .feeling-scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
 .feeling-scale button { display: grid; gap: 5px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 3px; text-align: center; background: var(--surface-2); }
 .feeling-scale strong { font-size: 17px; }
-.feeling-scale span { font-size: 9px; color: var(--ink-2); }
+.feeling-scale span { font-size: 11px; color: var(--ink-2); }
 .feeling-scale [aria-pressed="true"] { border-color: var(--health-line); background: var(--surface-3); color: var(--health); box-shadow: inset 0 0 0 1px var(--health-line); }
 .checkin-values { display: flex; gap: 7px; flex-wrap: wrap; }
 .checkin-values span { padding: 7px 10px; border-radius: 7px; background: var(--surface-3); color: var(--health); font-size: 12px; }
 .checkin-details > p { margin-top: 13px; color: var(--muted); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .health-page { display: grid; gap: 22px; }
-.health-page .eyebrow { display: flex; gap: 8px; align-items: center; color: var(--health); font-size: 10px; }
+.health-page .eyebrow { display: flex; gap: 8px; align-items: center; color: var(--health); font-size: 11px; }
 .health-page .page-heading { margin-bottom: 5px; }
 .health-page h1 { font-size: clamp(29px, 3vw, 41px); }
 .health-page .lead { font-size: 14px; }
@@ -2391,7 +2396,7 @@ summary {
 .sleep-bar-track > span { display: block; width: 100%; background: var(--health-solid); border-radius: 4px; min-height: 2px; }
 .sleep-bar-track > span.missing { background: var(--surface-3); }
 .sleep-bars strong { font-size: 11px; color: var(--health); }
-.sleep-bars small { font-size: 10px; color: var(--muted); }
+.sleep-bars small { font-size: 11px; color: var(--muted); }
 .health-records article { border-top: 1px solid var(--line); padding-block: 19px; }
 .health-records h3 { font-size: 14px; margin: 0; }
 .health-records .button { font-size: 11px; }
@@ -2434,8 +2439,6 @@ summary {
   .health-summary-grid { grid-template-columns: 1fr; gap: 12px; }
   .health-summary-grid .panel { padding: 22px; }
   .sleep-bars { gap: 3px; }
-  .sleep-bars strong { font-size: 9px; }
-  .sleep-bars small { font-size: 9px; }
   .sleep-bar-track { height: 100px; }
   .health-records .section-top > .text-link { font-size: 12px; }
 }
@@ -2676,7 +2679,7 @@ summary {
 .coach-opening-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; }
 .coach-opening-actions .button { font-size: 12px; min-height: 44px; padding: 9px 12px; background: var(--surface); }
 .coach-opening-actions > button:not(.button) { font-size: 11px; min-height: 44px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
-.coach-opening-source { display: block; font-size: 10px; color: var(--ink-2); }
+.coach-opening-source { display: block; font-size: 11px; color: var(--ink-2); }
 .coach-opening.compact { flex-shrink: 0; max-height: 35%; overflow-y: auto; }
 .coach-preferences { padding-bottom: 18px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .coach-preferences h3 { font-size: 17px; }
@@ -2732,7 +2735,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-attachment-strip .food-photo-image { width: 48px; font-size: 9px; }
 .coach-attachment-strip .food-photo-image img { height: 48px; object-fit: cover; aspect-ratio: 1; }
 .coach-attachment-strip .image-category { font-size: 11px; gap: 4px; }
-.coach-attachment-strip .image-category small { font-size: 9px; }
+.coach-attachment-strip .image-category small { font-size: 11px; }
 .coach-attachment-strip .button { min-width: 36px; min-height: 36px; padding: 6px; }
 
 /* Signed-out visitors see only the public introduction and sign-in. */
@@ -2757,7 +2760,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .landing-coach li > span { color: var(--muted); font-size: 12px; }
 .landing-private-note { display: flex; align-items: center; gap: 8px; color: var(--success); font-size: 11px; }
 .landing-private-note svg { flex-shrink: 0; }
-.landing-footer { display: flex; justify-content: space-between; gap: 15px; border-top: 1px solid var(--line); padding: 22px 0; color: var(--muted); font-size: 11px; }
+.landing-footer { display: flex; justify-content: space-between; gap: 15px; border-top: 1px solid var(--line); padding: 22px 0; color: var(--muted); font-size: 12px; }
 .landing-footer a { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 768px) {
   .public-landing { padding-inline: 24px; }
@@ -2769,7 +2772,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
   .landing-signin .button { width: 100%; }
   .landing-coach { padding: 26px; border-radius: 18px; }
   .landing-coach h2 { font-size: 23px; }
-  .landing-footer { flex-wrap: wrap; font-size: 10px; }
+  .landing-footer { flex-wrap: wrap; }
 }
 
 /* Coach's generated views share the journal's private, responsive workspace. */
@@ -2836,7 +2839,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-table-scroll { overflow-x: auto; max-width: 100%; min-width: 0; margin: 12px 0; border: 1px solid var(--line); border-radius: 10px; overscroll-behavior-x: contain; }
 .coach-visual .coach-table-scroll { border: 0; border-radius: 0; margin: 0; }
 .coach-table-scroll:focus-visible, .coach-diagram-scroll:focus-visible { outline: 2px solid var(--success); outline-offset: -3px; }
-.coach-table-scroll table { border-collapse: collapse; width: 100%; font-size: 12px; line-height: 1.55; text-align: left; }
+.coach-table-scroll table { border-collapse: collapse; width: 100%; font-family: var(--font-ui); font-size: 12px; line-height: 1.55; text-align: left; }
 .coach-table-scroll :is(th, td) { min-width: 108px; max-width: 260px; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; vertical-align: top; }
 .coach-table-scroll thead th { color: var(--ink-2); background: var(--surface-2); font-size: 11px; font-weight: 600; }
 .coach-table-scroll tbody th { color: var(--success); font-weight: 600; }
@@ -2862,7 +2865,6 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-stats > div { background: var(--surface); padding: 14px 16px; }
 .coach-stats dt { font-size: 12px; color: var(--ink-2); }
 .coach-stats dd { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
-.coach-stats dd strong { font-size: 20px; }
 .coach-stats dd small { display: block; font-size: 11px; margin-top: 2px; color: var(--ink-2); }
 .coach-trend-up { color: var(--success); }
 .coach-good { color: var(--success); font-weight: 600; }
@@ -2890,7 +2892,7 @@ html[data-keyboard-open] .coach-opening.compact { display: none; }
 .coach-recipe h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .coach-recipe-ingredients { display: grid; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .coach-recipe-ingredients li { display: grid; grid-template-columns: 6.5em 1fr; gap: 12px; overflow-wrap: anywhere; }
-.coach-recipe-ingredients li > span { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.coach-recipe-ingredients li > span { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
 .coach-recipe-steps { display: grid; gap: 8px; margin: 0; padding-left: 1.4em; overflow-wrap: anywhere; }
 .coach-recipe-steps li::marker { color: var(--success); font-weight: 600; }
 .coach-recipe-nutrition { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }

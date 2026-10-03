@@ -3,6 +3,7 @@ import { Inter, Newsreader } from "next/font/google";
 import "./globals.css";
 import "./journal-design.css";
 import "./theme.css";
+import { siteLanguage } from "@/lib/text-language";
 // The interface is set in the system face (San Francisco on Apple devices,
 // see --font-ui). Inter (SIL OFL 1.1) stands in only where no system face
 // resolves, so it is not preloaded either.
@@ -49,7 +50,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${newsreader.variable}`}>
+    // British English, as the copy is written ("programme", "favourite"), so
+    // browsers hyphenate it by British rules.
+    <html
+      lang={siteLanguage}
+      className={`${inter.variable} ${newsreader.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

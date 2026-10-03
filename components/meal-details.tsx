@@ -1,4 +1,5 @@
 "use client";
+import { dateInProse } from "@/lib/domain";
 import { totalNutrients, type Meal } from "@/lib/nutrition";
 import { FoodTags } from "./food-tags";
 
@@ -21,8 +22,9 @@ export function MealDetails({ meal }: { meal: Meal }) {
         <span className="meal-type-chip">{meal.type}</span>
       </div>
       <p className="meal-details-summary">
-        <strong>{total.calories}&nbsp;kcal</strong>&nbsp;· {macros(total)}
-        &nbsp;· <span className="whitespace-nowrap">{meal.date}</span>
+        <strong>{total.calories.toLocaleString("en-GB")}&nbsp;kcal</strong>
+        &nbsp;· {macros(total)}
+        &nbsp;· {dateInProse(meal.date)}
       </p>
       <ul className="meal-items">
         {meal.items.map((item, i) => (
@@ -32,7 +34,7 @@ export function MealDetails({ meal }: { meal: Meal }) {
               <small>{item.portion}</small>
             </span>
             <span className="meal-item-energy">
-              {item.calories}&nbsp;kcal
+              {item.calories.toLocaleString("en-GB")}&nbsp;kcal
               <small>{macros(item)}</small>
             </span>
             <FoodTags value={item.classification} />

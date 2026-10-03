@@ -160,7 +160,7 @@ export async function recentConversations(
           since ? gte(agentTurns.createdAt, since) : undefined,
         ),
       )
-      .orderBy(desc(agentTurns.createdAt))
+      .orderBy(desc(agentTurns.createdAt), desc(agentTurns.startedAt))
       .limit(limit),
     db
       .select()

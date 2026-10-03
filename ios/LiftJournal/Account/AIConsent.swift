@@ -10,6 +10,8 @@ import SwiftUI
 enum AIConsent {
   static let key = "aiConsent.v1"
   static func reset() { UserDefaults.standard.removeObject(forKey: key) }
+  /// Whether the athlete has allowed it (and not withdrawn it in Profile).
+  static var granted: Bool { UserDefaults.standard.bool(forKey: key) }
 }
 
 /// Shows the permission screen in place of a feature that needs third-party AI.

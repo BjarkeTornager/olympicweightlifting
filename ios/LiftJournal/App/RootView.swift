@@ -25,6 +25,7 @@ struct RootView: View {
           Tab("Coach", image: icon("coach", .coach), value: AppModel.Tab.coach) {
             NavigationStack { AIConsentGate { CoachView() } }
           }
+          .badge(model.coachNeedsAttention)
           Tab("Journal", image: icon("journal", .journal), value: AppModel.Tab.journal) {
             NavigationStack { JournalView() }
           }

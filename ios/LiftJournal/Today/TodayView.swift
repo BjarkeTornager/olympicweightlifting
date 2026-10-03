@@ -488,7 +488,7 @@ private struct BodySection: View {
           leanMass
           if let goal {
             VStack(alignment: .leading, spacing: 6) {
-              Text("Goal").kicker()
+              Text("Goal").label()
               Measure(value: goal.0, unit: goal.1, role: .inline).foregroundStyle(Theme.ink)
             }
             .accessibilityElement(children: .combine)
@@ -522,7 +522,7 @@ private struct BodySection: View {
     return nil
   }
 
-  /// The kicker over the weight, with the arrow to the chart.
+  /// The label over the weight, with the arrow to the chart.
   private var weightLabel: some View {
     HStack {
       CardLabel(title: "Weight", key: Theme.body)
@@ -566,7 +566,7 @@ private struct BodySection: View {
 
   private var bodyFat: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("Body fat").kicker()
+      Text("Body fat").label()
       if let percent = body_?.bodyFatPercent {
         Measure(value: Format.decimal(percent), unit: "%", role: .inline).foregroundStyle(Theme.ink)
       } else {
@@ -579,7 +579,7 @@ private struct BodySection: View {
 
   private var leanMass: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("Lean mass").kicker()
+      Text("Lean mass").label()
       if let lean = body_?.leanMassKg {
         Measure(value: Format.decimal(lean), unit: "kg", role: .inline).foregroundStyle(Theme.ink)
       } else {
@@ -694,7 +694,7 @@ struct FoodSection: View {
   let hydration: Components.Schemas.Hydration
   /// Absent from servers older than supplement tracking.
   var supplements: Components.Schemas.Supplements?
-  @ScaledMetric(relativeTo: .caption) private var kindColumn: CGFloat = 82
+  @ScaledMetric(relativeTo: .footnote) private var kindColumn: CGFloat = 72
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -746,7 +746,7 @@ struct FoodSection: View {
 
   @ViewBuilder
   private func mealRow(_ meal: Components.Schemas.Meal) -> some View {
-    let kind = Text(meal._type).kicker()
+    let kind = Text(Self.kind(meal._type)).label()
     let dish = Text(meal.name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
     let energy = Text("\(Format.number(meal.calories)) kcal")
       .font(.subheadline.monospacedDigit())
@@ -763,8 +763,7 @@ struct FoodSection: View {
         }
       } else {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-          // One line: "Breakfast" broke as "Break-fast" at the smaller text
-          // sizes, where the letter spacing doesn't shrink with the text.
+          // One line, so a kind is never broken inside the word.
           kind.lineLimit(1).minimumScaleFactor(0.8).frame(width: kindColumn, alignment: .leading)
           dish
           Spacer(minLength: 8)
@@ -773,6 +772,11 @@ struct FoodSection: View {
       }
     }
     .accessibilityElement(children: .combine)
+  }
+
+  /// A meal's kind as the server names it ("breakfast"), in sentence case.
+  static func kind(_ type: String) -> String {
+    type.prefix(1).uppercased() + type.dropFirst()
   }
 
   private var drinks: some View {

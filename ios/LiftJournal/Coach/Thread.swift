@@ -246,7 +246,8 @@ private struct PhotoViewer: View {
 }
 
 /// The head of Coach's letter: the mark, "Coach" in the accent, and what the
-/// reply is about with its key ("■ Sleep"). VoiceOver reads it as a heading,
+/// reply is about with its key ("■ Sleep"), in sentence case, as it heads
+/// every reply. VoiceOver reads it as a heading,
 /// so replies can be skipped through.
 struct CoachByline: View {
   var topic: Category?
@@ -257,12 +258,12 @@ struct CoachByline: View {
     FlowLayout(spacing: 8, lineSpacing: 6) {
       HStack(spacing: 8) {
         BrandMark().frame(width: mark, height: mark)
-        Text("Coach").foregroundStyle(Theme.accent).kicker().fixedSize()
+        Text("Coach").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.accent).fixedSize()
       }
       if let topic {
         HStack(spacing: 6) {
           Key(tint: topic.tint)
-          Text(topic.name).kicker().fixedSize()
+          Text(topic.name).label().fixedSize()
         }
         .padding(.leading, 8)
         .padding(.trailing, 10)
@@ -322,7 +323,7 @@ struct CoachWriting: View {
 }
 
 /// One spoken line of a call, in the thread and on the call screen, below
-/// a hairline: who in small capitals, then what was said, yours in SF and
+/// a hairline: who, then what was said, yours in SF and
 /// Coach's in the serif. At the largest text sizes who stands above the
 /// words.
 struct TranscriptLine: View {
@@ -342,7 +343,7 @@ struct TranscriptLine: View {
     layout {
       Text(coach ? "Coach" : "You")
         .foregroundStyle(coach ? Theme.accent : Theme.inkSecondary)
-        .kicker()
+        .label()
         .frame(width: stacked ? nil : column - 8, alignment: .leading)
       Text(CoachReplyFormat.attributed(text))
         .font(coach ? .system(.body, design: .serif) : .callout)

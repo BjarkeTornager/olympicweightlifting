@@ -81,7 +81,8 @@ struct ProgrammeView: View {
           programme.builtIn ? "Built in" : nil,
         ].compactMap { $0 }.joined(separator: " · ")
       )
-      .kicker()
+      .font(.subheadline)
+      .foregroundStyle(Theme.inkSecondary)
       if let notes = programme.notes, !notes.isEmpty {
         Text(notes).font(.subheadline).foregroundStyle(Theme.ink)
       }
@@ -112,7 +113,7 @@ private struct DaySection: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       Rectangle().fill(Theme.ink).frame(height: 1)
-      Text("Day \(number)").kicker().padding(.top, 10)
+      Text("Day \(number)").label().padding(.top, 10)
       Text(day.name)
         .folio(.heading)
         .foregroundStyle(Theme.ink)

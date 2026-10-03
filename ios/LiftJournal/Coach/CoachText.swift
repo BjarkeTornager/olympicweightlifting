@@ -274,8 +274,8 @@ struct MarkdownBlocksView: View {
   }
 }
 
-/// A table as a native grid: the header in small capitals, the first
-/// column as row labels, hairlines between rows, scrolling sideways when it
+/// A table as a native grid: the header in sentence case, the first column
+/// as row labels, hairlines between rows, scrolling sideways when it
 /// is wider than the screen. It sits on whatever sheet holds it.
 struct DataTable: View {
   let columns: [String]
@@ -289,7 +289,7 @@ struct DataTable: View {
         GridRow {
           ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
             Text(CoachReplyFormat.attributed(column))
-              .kicker()
+              .label()
               .padding(.vertical, 8)
           }
         }

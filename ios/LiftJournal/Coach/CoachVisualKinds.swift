@@ -504,7 +504,7 @@ struct VisualProgress: View {
 }
 
 /// Headline numbers, two to a row in cells divided by hairlines, each with
-/// its kicker, a serif value and how it changed. One to a row at the
+/// its label, a serif value and how it changed. One to a row at the
 /// largest text sizes.
 struct VisualStats: View {
   let visual: Visual
@@ -581,7 +581,7 @@ struct VisualComparison: View {
           Text(after).frame(width: column, alignment: .trailing)
           Text("Change").frame(width: column, alignment: .trailing)
         }
-        .kicker()
+        .label()
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .padding(.bottom, 6)

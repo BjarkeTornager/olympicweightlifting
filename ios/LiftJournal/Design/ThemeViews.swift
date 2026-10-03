@@ -45,13 +45,15 @@ struct Hatch: View {
   }
 }
 
-/// The small spaced capitals that head a column or a cell, with the key of
-/// its data colour. One line, or up to three at the largest text sizes, so
-/// a long name wraps rather than being cut short.
+/// What a column or a cell holds, with the key of its data colour: "Sleep",
+/// "Body fat", in sentence case. The Ledger's areas, the section labels of
+/// Today, take the spaced capitals (`kicker`). One line, or up to three at
+/// the largest text sizes, so a long name wraps rather than being cut short.
 struct CardLabel: View {
   let title: String
   var key: Color?
   var hatched = false
+  var kicker = false
   @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
@@ -60,10 +62,15 @@ struct CardLabel: View {
       if let key {
         Key(tint: key, hatched: hatched)
       }
-      Text(title)
-        .kicker()
-        .lineLimit(wraps ? 3 : 1)
-        .fixedSize(horizontal: false, vertical: true)
+      Group {
+        if kicker {
+          Text(title).kicker()
+        } else {
+          Text(title).label()
+        }
+      }
+      .lineLimit(wraps ? 3 : 1)
+      .fixedSize(horizontal: false, vertical: true)
     }
   }
 }
@@ -147,7 +154,7 @@ private struct ToastPresenter: ViewModifier {
 
 #Preview("Labels") {
   VStack(alignment: .leading, spacing: 16) {
-    CardLabel(title: "Energy", key: Theme.calories)
+    CardLabel(title: "Energy", key: Theme.calories, kicker: true)
     CardLabel(title: "Fat", key: Theme.carbs, hatched: true)
     CardLabel(title: "Body fat")
     HStack {

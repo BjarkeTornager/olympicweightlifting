@@ -315,7 +315,7 @@ private struct DayStamp: View {
   var body: some View {
     HStack(spacing: 12) {
       Rectangle().fill(Theme.rule).frame(height: 1)
-      Text(label).kicker().fixedSize()
+      Text(label).font(.footnote).foregroundStyle(Theme.inkSecondary).fixedSize()
       Rectangle().fill(Theme.rule).frame(height: 1)
     }
     .padding(.top, 20)
@@ -403,8 +403,8 @@ private struct VoiceCallCard: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 8) {
         Image(systemName: "waveform").foregroundStyle(Theme.accent).accessibilityHidden(true)
-        Text("Voice call").foregroundStyle(Theme.ink).kicker()
-        Text(duration).kicker()
+        Text("Voice call").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+        Text(duration).font(.subheadline).foregroundStyle(Theme.inkSecondary)
       }
       .padding(.bottom, 8)
       .accessibilityElement(children: .combine)

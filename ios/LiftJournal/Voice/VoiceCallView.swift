@@ -80,7 +80,7 @@ struct VoiceCallView: View {
     }
   }
 
-  /// "Voice check-in · 3:12" while the call runs.
+  /// The running head, "Voice check-in · 3:12" while the call runs.
   private var header: some View {
     HStack(spacing: 0) {
       Text("Voice check-in").foregroundStyle(Theme.ink).kicker()
@@ -101,10 +101,10 @@ struct VoiceCallView: View {
 
   private var status: some View {
     VStack(spacing: 6) {
-      if let kicker {
-        Text(kicker)
+      if let state {
+        Text(state)
+          .font(.subheadline.weight(.semibold))
           .foregroundStyle(call.status == .speaking ? Theme.accent : call.status == .failed ? Theme.danger : Theme.ink)
-          .kicker()
           // It changes often (speaking, listening): cross-fading overlapped
           // the two labels.
           .contentTransition(.identity)
@@ -144,7 +144,8 @@ struct VoiceCallView: View {
     .frame(maxWidth: .infinity)
   }
 
-  private var kicker: String? {
+  /// Where the call is, as a status line in sentence case.
+  private var state: String? {
     switch call.status {
     case .idle, .connecting: "Connecting"
     case .listening: call.muted ? "Muted" : "Listening"

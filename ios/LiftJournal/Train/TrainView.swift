@@ -54,7 +54,7 @@ struct TrainView: View {
   // MARK: Now
 
   /// The workout in progress or the next session, set like the Ledger: a
-  /// heavy rule, a kicker, the title in the serif, and its sets counted in
+  /// heavy rule, a label, the title in the serif, and its sets counted in
   /// marks.
   @ViewBuilder
   private func hero(_ training: Training) -> some View {
@@ -169,8 +169,9 @@ struct TrainView: View {
         }
         if !bests.isEmpty {
           Text("Personal bests")
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(Theme.ink)
-            .kicker()
+            .accessibilityAddTraits(.isHeader)
             .padding(.top, weeks.isEmpty ? 16 : 28)
           CellGrid {
             ForEach(bests, id: \.exerciseId) { best in

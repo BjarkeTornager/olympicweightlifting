@@ -7,6 +7,8 @@ import UIKit
 /// numbers, Coach's letters, dish and entry titles. San Francisco is
 /// everything you operate: labels, units, buttons, lists and chrome.
 /// New York is never set below 15 pt, and serif numbers start at 22 pt.
+/// Spaced capitals (`kicker()`) are kept for running heads and one level of
+/// section labels; every other label is in sentence case (`label()`).
 public enum Folio {
   public enum Role: Sendable {
     /// The day's date on Today and the Journal: 46 pt.
@@ -117,9 +119,19 @@ extension View {
   /// New York in one of the Folio roles, scaled with Dynamic Type.
   public func folio(_ role: Folio.Role) -> some View { modifier(FolioFont(role)) }
 
-  /// The small spaced capitals that label every column and section.
+  /// Small spaced capitals, only where they help people find their way: the
+  /// running head at the top of a page, and one level of section labels on
+  /// an overview page (the Ledger's areas). Never inside a card that has a
+  /// title, for a status line, a caption or a button, or twice in one card:
+  /// those take `label()`.
   public func kicker() -> some View {
     font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Theme.inkSecondary)
+  }
+
+  /// A label in sentence case, in the interface face: what a value is ("Body
+  /// fat"), a column's head, a speaker's name, a meal's kind.
+  public func label() -> some View {
+    font(.footnote.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
   }
 
   /// The SF unit beside a serif number, as in "980 kcal".

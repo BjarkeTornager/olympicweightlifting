@@ -168,7 +168,7 @@ private struct CoachAsks: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Text("Coach asks").foregroundStyle(Theme.accent).kicker()
+      Text("Coach asks").foregroundStyle(Theme.accent).label()
       Text("\u{201C}\(Self.questions[asked].text)\u{201D}")
         .font(.system(.title2, design: .serif))
         .italic()

@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
 // pictures, Apple Health
 // imports, reminders, sessions and sign-in accounts. The member's invitation
 // goes too, so coming back needs a new one. Its diagnostic traces in MLflow
-// (lib/tracing) are deleted just after the reply. The owner's account holds
-// every invitation, so it cannot be deleted this way.
+// (lib/tracing) are deleted just after the reply, and again 15 minutes later
+// for work that was still running. The owner's account holds every
+// invitation, so it cannot be deleted this way.
 export async function DELETE(request: Request) {
   try {
     const user = await requireAthlete(request, true);

@@ -100,25 +100,66 @@ export async function deleteUserTraces(
   return deleted;
 }
 
-// A deleted account's traces, removed once its deletion has been answered
-// (app/api/account). Best effort: a failure is logged by category, and the
-// retention janitor removes what is left within TRACE_RETENTION_DAYS.
-export async function deleteAccountTraces(
+// Sends the spans this server has ended but not yet exported, so that a
+// search finds their traces. The provider is read from where provider.ts
+// shares it, so OpenTelemetry is never loaded here.
+async function flushEnded() {
+  const state = (
+    globalThis as unknown as Record<
+      symbol,
+      { provider: { forceFlush(): Promise<void> } } | undefined
+    >
+  )[Symbol.for("lift.tracing")];
+  await state?.provider.forceFlush().catch(() => {});
+}
+
+// Work for the account still running when it is deleted, such as a video
+// review or a Coach turn, ends its trace after the first search. A video
+// review notices within ten seconds and runs ten minutes at most, and a
+// Coach turn has 90 seconds, so a second pass this much later finds those
+// traces.
+const SECOND_PASS_MS = 15 * 60000;
+
+async function deletionPass(
   code: string,
-  config: MlflowTarget | null = traceAdminConfig(),
-  transport: typeof fetch = fetch,
+  config: MlflowTarget | null,
+  transport: typeof fetch,
+  later: boolean,
 ) {
+  const pass = later ? { later } : {};
   try {
+    await flushEnded();
     const deleted = await deleteUserTraces(code, config, transport);
-    console.info(JSON.stringify({ event: "account_traces_deleted", deleted }));
+    console.info(
+      JSON.stringify({ event: "account_traces_deleted", deleted, ...pass }),
+    );
   } catch (error) {
     console.warn(
       JSON.stringify({
         event: "account_traces_delete_failed",
         ...deletionFailure(error),
+        ...pass,
       }),
     );
   }
+}
+
+// A deleted account's traces, removed once its deletion has been answered
+// (app/api/account) and again SECOND_PASS_MS later. Best effort: a failure
+// is logged by category, and the retention janitor removes what is left
+// within TRACE_RETENTION_DAYS, as it does when a restart drops the second
+// pass.
+export async function deleteAccountTraces(
+  code: string,
+  config: MlflowTarget | null = traceAdminConfig(),
+  transport: typeof fetch = fetch,
+) {
+  await deletionPass(code, config, transport, false);
+  if (config)
+    setTimeout(
+      () => void deletionPass(code, config, transport, true),
+      SECOND_PASS_MS,
+    ).unref();
 }
 
 // Deletes every trace older than `days`, oldest first, in batches until a

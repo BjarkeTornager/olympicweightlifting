@@ -438,9 +438,10 @@ export default function PrivacyPage() {
           them. They are linked to your account, and to a Coach day, voice call,
           photo or video, only by pseudonymous codes, so that they can be
           deleted with your account. Each trace is deleted after 30 days. When
-          you delete your account, its traces are deleted straight after; if
-          that fails, they still go within those 30 days. Recovery backups may
-          keep traces until those backups expire.
+          you delete your account, its traces are deleted straight after, and
+          again 15 minutes later for work that was still running; if that fails,
+          they still go within those 30 days. Recovery backups may keep traces
+          until those backups expire.
         </p>
       </section>
       <section className="space-y-3">

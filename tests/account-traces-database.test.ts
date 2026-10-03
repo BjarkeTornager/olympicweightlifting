@@ -128,7 +128,20 @@ test(
     );
     const info = mock.method(console, "info", () => {});
     const warn = mock.method(console, "warn", () => {});
+    // The second pass, 15 minutes later, is held here and run by hand.
+    const realTimeout = globalThis.setTimeout;
+    const held: (() => void)[] = [];
+    const timeout = mock.method(globalThis, "setTimeout", ((
+      run: () => void,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms !== 15 * 60000) return realTimeout(run, ms, ...args);
+      held.push(run);
+      return { unref: () => {} };
+    }) as typeof setTimeout);
     t.after(async () => {
+      timeout.mock.restore();
       fetch.mock.restore();
       info.mock.restore();
       warn.mock.restore();
@@ -168,6 +181,25 @@ test(
     assert.deepEqual(lines(info), [
       { event: "account_traces_deleted", deleted: 2 },
     ]);
+    // Then again later, for work that was still running.
+    assert.equal(held.length, 1);
+    held[0]();
+    for (let i = 0; i < 50 && lines(info).length < 2; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      requests
+        .slice(2)
+        .map((r) => [r.url, r.body.filter ?? r.body.request_ids]),
+      [
+        [requests[0].url, requests[0].body.filter],
+        [requests[1].url, ["tr-1", "tr-2"]],
+      ],
+    );
+    assert.deepEqual(lines(info)[1], {
+      event: "account_traces_deleted",
+      deleted: 2,
+      later: true,
+    });
     assert.ok(
       !JSON.stringify(requests).includes(first.id),
       "MLflow never sees the account id",
@@ -199,5 +231,6 @@ test(
     assert.equal((await remove(third)).status, 200);
     assert.equal(await exists(third.id), 0);
     assert.equal(requests.length, 0);
+    assert.equal(held.length, 3, "one second pass per account with MLflow");
   },
 );

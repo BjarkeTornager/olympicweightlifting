@@ -16,7 +16,8 @@ import { coachLimits } from "../usage-limits";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
 import { MAX_EXECUTED_TOOLS } from "./limits";
-import { readJournal, writeJournal } from "../server";
+import { readJournal, writeJournal, RevisionConflict } from "../server";
+import type { Snapshot } from "../model";
 import { coachingContext } from "../coaching";
 import { readUserImage, imageMetadata } from "../user-images";
 import { coachRequest } from "../images";
@@ -26,6 +27,7 @@ import {
   loggingKinds,
   prepareAction,
   type ActionPreview,
+  type RequestedChange,
 } from "./actions";
 import { ApiError } from "./http";
 import {
@@ -165,6 +167,47 @@ export async function failStaleTurns(
     )
     .returning({ id: agentTurns.id });
   return swept.length;
+}
+
+// Prepares a requested change on a journal snapshot: the new journal and
+// the review card. Pure, so a commit can prepare it again on a newer journal.
+function prepareChange(
+  snapshot: Snapshot,
+  change: RequestedChange,
+  id: string,
+  expiresAt: Date,
+) {
+  const prepared = prepareAction(snapshot.state, change.action, change.date);
+  if (Buffer.byteLength(JSON.stringify(prepared.state)) > 5 * 1024 * 1024)
+    throw Error("Your journal is too large for this change.");
+  const preview: ActionPreview = {
+    id,
+    title: prepared.title,
+    detail: prepared.detail,
+    workout: prepared.workout,
+    ...(prepared.meal ? { meal: prepared.meal } : {}),
+    ...(prepared.targets ? { targets: prepared.targets } : {}),
+    ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
+    ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
+    ...(prepared.drink ? { drink: prepared.drink } : {}),
+    ...(prepared.entries ? { entries: prepared.entries } : {}),
+    ...(prepared.memory ? { memory: prepared.memory } : {}),
+    ...(prepared.plan ? { plan: prepared.plan } : {}),
+    ...(prepared.liftingBrief !== undefined
+      ? { liftingBrief: prepared.liftingBrief }
+      : {}),
+    ...(prepared.training ? { training: prepared.training } : {}),
+    ...(prepared.workoutReview
+      ? { workoutReview: prepared.workoutReview }
+      : {}),
+    expiresAt: expiresAt.toISOString(),
+  };
+  return {
+    revision: snapshot.revision,
+    before: snapshot.state,
+    after: prepared.state,
+    preview,
+  };
 }
 
 // The iPhone uploads Coach photos without waiting for them to be sorted into
@@ -1108,49 +1151,21 @@ async function turn(
                 toolSpan.set({ "lift.guard_rejected": true });
                 throw e;
               });
-            const prepared = prepareAction(
-                snapshot.state,
-                requested,
-                currentDate,
-              ),
-              id = uid(),
-              expiresAt = new Date(Date.now() + 86400000);
-            if (
-              Buffer.byteLength(JSON.stringify(prepared.state)) >
-              5 * 1024 * 1024
-            )
-              throw Error("Your journal is too large for this change.");
-            const preview: ActionPreview = {
-              id,
-              title: prepared.title,
-              detail: prepared.detail,
-              workout: prepared.workout,
-              ...(prepared.meal ? { meal: prepared.meal } : {}),
-              ...(prepared.targets ? { targets: prepared.targets } : {}),
-              ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
-              ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
-              ...(prepared.drink ? { drink: prepared.drink } : {}),
-              ...(prepared.entries ? { entries: prepared.entries } : {}),
-              ...(prepared.memory ? { memory: prepared.memory } : {}),
-              ...(prepared.plan ? { plan: prepared.plan } : {}),
-              ...(prepared.liftingBrief !== undefined
-                ? { liftingBrief: prepared.liftingBrief }
-                : {}),
-              ...(prepared.training ? { training: prepared.training } : {}),
-              ...(prepared.workoutReview
-                ? { workoutReview: prepared.workoutReview }
-                : {}),
-              expiresAt: expiresAt.toISOString(),
-            };
+            const id = uid(),
+              expiresAt = new Date(Date.now() + 86400000),
+              change: RequestedChange = {
+                action: requested,
+                date: currentDate,
+              },
+              prepared = prepareChange(snapshot, change, id, expiresAt),
+              preview = prepared.preview;
             signal.throwIfAborted();
             preparedProposal = {
               id,
               userId,
               turnId: input.id,
-              revision: snapshot.revision,
-              before: snapshot.state,
-              after: prepared.state,
-              preview,
+              ...prepared,
+              requested: change,
               undoId: uid(),
               expiresAt,
             };
@@ -1239,23 +1254,57 @@ async function turn(
       commitStarted = Date.now();
     await db.transaction(async (tx) => {
       signal.throwIfAborted();
-      if (preparedProposal) {
+      if (preparedProposal && directSave) {
+        let change = preparedProposal;
+        const save = () =>
+          writeJournal(
+            userId,
+            {
+              state: change.after,
+              revision: change.revision,
+              mutationId: change.id,
+            },
+            tx,
+          );
+        try {
+          await save();
+        } catch (error) {
+          if (!(error instanceof RevisionConflict) || !change.requested)
+            throw error;
+          // Another save (voice, Health, another device) landed while Coach
+          // was answering. Make the same requested change to the newer
+          // journal instead of throwing away a paid-for reply; no model call
+          // is repeated, and Undo goes back to the newer journal. This
+          // transaction holds the journal's row lock from that read, so the
+          // second save can't conflict again.
+          let again: ReturnType<typeof prepareChange>;
+          try {
+            again = prepareChange(
+              error.snapshot,
+              change.requested,
+              change.id,
+              change.expiresAt,
+            );
+          } catch {
+            // It no longer applies, such as a change to an entry deleted
+            // meanwhile: report the conflict as before.
+            throw error;
+          }
+          preparedProposal = change = { ...change, ...again };
+          response.proposals[0] = {
+            ...again.preview,
+            status: "saved",
+            automatic: true,
+          };
+          await save();
+        }
+      }
+      if (preparedProposal)
         await tx.insert(agentProposals).values({
           ...preparedProposal,
           preview: response.proposals[0],
           status: directSave ? "saved" : "pending",
         });
-        if (directSave)
-          await writeJournal(
-            userId,
-            {
-              state: preparedProposal.after,
-              revision: preparedProposal.revision,
-              mutationId: preparedProposal.id,
-            },
-            tx,
-          );
-      }
       const saved = await tx
         .update(agentTurns)
         .set({ status: "done", response, metrics: finished() })

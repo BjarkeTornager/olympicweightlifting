@@ -66,8 +66,7 @@ test(
     const { getPool } = await import("../lib/db");
     const { runTurn, applyProposal, findTurn, history } =
       await import("../lib/agent/engine");
-    const { readJournal, writeJournal, RevisionConflict } =
-      await import("../lib/server");
+    const { readJournal, writeJournal } = await import("../lib/server");
     const { saveUserImage, patchUserImage } =
       await import("../lib/user-images");
     const pool = getPool(),
@@ -647,71 +646,46 @@ test(
         },
       );
       await t.test(
-        "concurrent manual saves roll back the whole log; retrying the failed run is safe",
+        "a manual save during a log lands, the log is made on top of it, and Undo keeps the manual save",
         async () => {
           const a = await user(),
             request = input("I slept 7.5 hours last night");
           let round = 0;
-          await assert.rejects(
-            runTurn(
-              a,
-              request,
-              async () => {
-                if (++round === 1)
-                  return {
-                    role: "assistant",
-                    content: "",
-                    tool_calls: [call("health_overview", { date })],
-                  };
-                const current = await readJournal(a);
-                current.state.profile.bodyweight = 81;
-                await writeJournal(a, {
-                  ...current,
-                  mutationId: crypto.randomUUID(),
-                });
+          const response = await runTurn(
+            a,
+            request,
+            async () => {
+              if (++round === 1)
                 return {
                   role: "assistant",
                   content: "",
-                  tool_calls: [call("log_entry", health)],
+                  tool_calls: [call("health_overview", { date })],
                 };
-              },
-              hooks,
-            ),
-            RevisionConflict,
-          );
-          assert.equal((await readJournal(a)).state.profile.bodyweight, 81);
-          assert.equal((await readJournal(a)).state.health.checkins.length, 0);
-          assert.equal((await findTurn(a, request.id))?.status, "failed");
-          assert.equal(
-            (
-              await pool.query(
-                "SELECT id FROM agent_proposals WHERE user_id=$1",
-                [a],
-              )
-            ).rows.length,
-            0,
-          );
-          const response = await runTurn(
-            a,
-            { ...request, revision: 1 },
-            sequence(
-              [call("health_overview", { date })],
-              [call("log_entry", health)],
-            ),
+              const current = await readJournal(a);
+              current.state.profile.bodyweight = 81;
+              await writeJournal(a, {
+                ...current,
+                mutationId: crypto.randomUUID(),
+              });
+              return {
+                role: "assistant",
+                content: "",
+                tool_calls: [call("log_entry", health)],
+              };
+            },
             hooks,
           );
           assert.equal(response.proposals[0].status, "saved");
-          const current = await readJournal(a);
-          current.state.profile.bodyweight = 82;
-          await writeJournal(a, {
-            ...current,
-            mutationId: crypto.randomUUID(),
-          });
-          await assert.rejects(
-            applyProposal(a, response.proposals[0].id, true),
-            RevisionConflict,
-          );
-          assert.equal((await readJournal(a)).state.profile.bodyweight, 82);
+          let journal = await readJournal(a);
+          assert.equal(journal.revision, 2);
+          assert.equal(journal.state.profile.bodyweight, 81);
+          assert.equal(journal.state.health.checkins[0].sleepHours, 7.5);
+          assert.equal((await findTurn(a, request.id))?.status, "done");
+          // Undo goes back to the manual save, not to before it.
+          await applyProposal(a, response.proposals[0].id, true);
+          journal = await readJournal(a);
+          assert.equal(journal.state.profile.bodyweight, 81);
+          assert.equal(journal.state.health.checkins.length, 0);
         },
       );
       await t.test(

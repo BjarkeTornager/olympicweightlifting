@@ -344,7 +344,7 @@ struct MetricCell<Chart: View>: View {
           .contentTransition(.numericText())
           .padding(.top, 8)
       } else {
-        Text(empty)
+        Paragraph(empty, language: .english)
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .padding(.top, 8)

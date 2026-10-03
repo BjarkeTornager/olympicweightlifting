@@ -336,6 +336,7 @@ struct TranscriptLine: View {
 
   var body: some View {
     let stacked = typeSize.isAccessibilitySize
+    let language = LineBreaks.language(of: text)
     let layout =
       stacked
       ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
@@ -345,9 +346,10 @@ struct TranscriptLine: View {
         .foregroundStyle(coach ? Theme.accent : Theme.inkSecondary)
         .label()
         .frame(width: stacked ? nil : column - 8, alignment: .leading)
-      Text(CoachReplyFormat.attributed(text))
+      Text(CoachReplyFormat.attributed(words(language)))
         .font(coach ? .system(.body, design: .serif) : .callout)
         .foregroundStyle(Theme.ink)
+        .typesettingLanguage(language.typesetting)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -355,6 +357,11 @@ struct TranscriptLine: View {
     .padding(.vertical, 10)
     .overlay(alignment: .top) { Rectangle().fill(Theme.rule).frame(height: 1) }
     .accessibilityElement(children: .combine)
+  }
+
+  /// What was said, with its line breaks set (`LineBreaks.paragraph`).
+  private func words(_ language: LineBreaks.Language) -> String {
+    LineBreaks.paragraph(text, language: language, size: typeSize)
   }
 }
 

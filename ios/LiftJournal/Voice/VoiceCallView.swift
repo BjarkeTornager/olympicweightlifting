@@ -123,7 +123,7 @@ struct VoiceCallView: View {
         Text("The conversation carries on.").folio(.note).foregroundStyle(Theme.inkSecondary)
       default:
         if let question = Self.question(call.lines) {
-          Text("\u{201C}\(question)\u{201D}")
+          Text("\u{201C}\(LineBreaks.title(question, size: typeSize))\u{201D}")
             .font(.system(.title2, design: .serif))
             .italic()
             .foregroundStyle(Theme.ink)

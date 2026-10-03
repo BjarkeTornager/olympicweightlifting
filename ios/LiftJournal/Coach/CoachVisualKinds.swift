@@ -847,7 +847,7 @@ struct VisualRecipe: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.inkSecondary)
                 .frame(minWidth: 18, alignment: .trailing)
-              Text(step)
+              Paragraph(step)
                 .font(.system(.body, design: .serif))
                 .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)

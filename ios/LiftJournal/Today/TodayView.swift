@@ -307,7 +307,7 @@ private struct Masthead: View {
       .accessibilityElement(children: .combine)
       .accessibilityAddTraits(.isHeader)
       if let summary {
-        Text(summary)
+        Paragraph(summary, language: .english)
           .folio(.standfirst)
           .foregroundStyle(Theme.ink)
           // Two lines, as written; at the largest sizes it may run on
@@ -498,7 +498,7 @@ private struct BodySection: View {
         .padding(.top, 16)
       } else {
         VStack(alignment: .leading, spacing: 8) {
-          Text("Add your weight in a check-in to follow your progress.")
+          Paragraph("Add your weight in a check-in to follow your progress.", language: .english)
             .folio(.note)
             .foregroundStyle(Theme.inkSecondary)
           Button(action: checkIn) { ActionText("Check in") }
@@ -727,7 +727,7 @@ struct FoodSection: View {
       MacroSplit(protein: nutrition.protein, carbs: nutrition.carbs, fat: nutrition.fat)
         .padding(.top, 14)
       if nutrition.meals.isEmpty {
-        Text("Nothing logged yet. Tell Coach what you ate, or send a photo.")
+        Paragraph("Nothing logged yet. Tell Coach what you ate, or send a photo.", language: .english)
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -1049,7 +1049,7 @@ struct MovementSection: View {
       }
       .buttonStyle(CardButtonStyle())
       .padding(.top, 4)
-      Text(footnote)
+      Paragraph(footnote, language: .english)
         .folio(.note)
         .foregroundStyle(Theme.inkSecondary)
         .fixedSize(horizontal: false, vertical: true)

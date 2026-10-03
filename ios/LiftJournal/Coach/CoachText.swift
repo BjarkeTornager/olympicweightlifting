@@ -198,12 +198,13 @@ enum CoachReplyFormat {
 }
 
 /// A Coach reply rendered natively, as a letter: New York paragraphs and
-/// lists, tables as small sheets, code in SF Mono.
+/// lists, tables as small sheets, code in SF Mono. Lines break as set in
+/// `LineBreaks`, in the reply's language.
 struct CoachText: View {
   let text: String
 
   var body: some View {
-    MarkdownBlocksView(blocks: MarkdownBlock.parse(text))
+    MarkdownBlocksView(blocks: MarkdownBlock.parse(text), language: LineBreaks.language(of: text))
       .textSelection(.enabled)
       .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -211,6 +212,9 @@ struct CoachText: View {
 
 struct MarkdownBlocksView: View {
   let blocks: [MarkdownBlock]
+  /// The reply's language, for hyphenating its paragraphs.
+  var language: LineBreaks.Language = .english
+  @Environment(\.dynamicTypeSize) private var typeSize
   /// The serif's size for Coach's paragraphs, which runs of strong or
   /// italic text must match.
   @ScaledMetric(relativeTo: .body) private var size: CGFloat = 18
@@ -220,7 +224,8 @@ struct MarkdownBlocksView: View {
       ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
         switch block {
         case .heading(let text):
-          Text(CoachReplyFormat.letter(text, size: size * 20 / 18))
+          // A heading keeps its words whole.
+          Text(CoachReplyFormat.letter(LineBreaks.title(text, size: typeSize), size: size * 20 / 18))
             .folio(.heading)
             .foregroundStyle(Theme.ink)
             .fixedSize(horizontal: false, vertical: true)
@@ -238,7 +243,7 @@ struct MarkdownBlocksView: View {
                   .frame(minWidth: ordered ? 22 : 10, alignment: .trailing)
                 VStack(alignment: .leading, spacing: 8) {
                   paragraph(item.text)
-                  if !item.children.isEmpty { MarkdownBlocksView(blocks: item.children) }
+                  if !item.children.isEmpty { MarkdownBlocksView(blocks: item.children, language: language) }
                 }
               }
             }
@@ -256,9 +261,10 @@ struct MarkdownBlocksView: View {
         case .quote(let text):
           HStack(spacing: 12) {
             Rectangle().fill(Theme.track).frame(width: 2)
-            Text(CoachReplyFormat.letter(text, size: size))
+            Text(CoachReplyFormat.letter(body(text), size: size))
               .folio(.coach)
               .italic()
+              .typesettingLanguage(language.typesetting)
               .foregroundStyle(Theme.inkSecondary)
               .fixedSize(horizontal: false, vertical: true)
           }
@@ -268,10 +274,16 @@ struct MarkdownBlocksView: View {
   }
 
   private func paragraph(_ text: String) -> some View {
-    Text(CoachReplyFormat.letter(text, size: size))
+    Text(CoachReplyFormat.letter(body(text), size: size))
       .folio(.coach)
       .foregroundStyle(Theme.ink)
+      .typesettingLanguage(language.typesetting)
       .fixedSize(horizontal: false, vertical: true)
+  }
+
+  /// A paragraph's text with its line breaks set (`LineBreaks.paragraph`).
+  private func body(_ text: String) -> String {
+    LineBreaks.paragraph(text, language: language, size: typeSize)
   }
 }
 

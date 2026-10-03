@@ -58,7 +58,7 @@ struct CoachVisualView: View {
         EmptyView()
       }
       if let caption = visual.caption, !caption.isEmpty {
-        Text(caption)
+        Paragraph(caption)
           .font(.footnote)
           .foregroundStyle(Theme.inkSecondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -129,7 +129,7 @@ struct FigureCaption: View {
 
   private var caption: some View {
     let figure = number.map { Text("Fig. \($0) · ").foregroundStyle(Theme.inkSecondary) } ?? Text(verbatim: "")
-    return Text("\(figure)\(Text(title).foregroundStyle(Theme.ink))")
+    return Text("\(figure)\(Text(LineBreaks.title(title)).foregroundStyle(Theme.ink))")
       .font(.system(.subheadline, design: .serif))
       .italic()
       .fixedSize(horizontal: false, vertical: true)

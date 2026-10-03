@@ -222,7 +222,7 @@ struct TrainView: View {
     VStack(alignment: .leading, spacing: 0) {
       FolioSection("Recent sessions", meta: training.recent.isEmpty ? nil : "Every set")
       if training.recent.isEmpty {
-        Text("Finished workouts appear here with every set.")
+        Paragraph("Finished workouts appear here with every set.", language: .english)
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .padding(.top, 14)

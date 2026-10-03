@@ -86,7 +86,7 @@ struct JournalView: View {
           if !query.isEmpty {
             ContentUnavailableView.search(text: query).padding(.top, 40)
           } else {
-            Text(error ?? "Training, food and recovery appear here as you log them.")
+            Paragraph(error ?? "Training, food and recovery appear here as you log them.", language: .english)
               .folio(.note)
               .foregroundStyle(Theme.inkSecondary)
               .padding(.top, 32)

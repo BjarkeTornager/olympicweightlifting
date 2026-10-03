@@ -45,7 +45,9 @@ struct SignInView: View {
 
   private var pitch: some View {
     let more = Text(
-      "Tell Coach how you slept, what you ate and how you moved. It keeps the record and tells you what it means."
+      LineBreaks.paragraph(
+        "Tell Coach how you slept, what you ate and how you moved. It keeps the record and tells you what it means.",
+        language: .english, size: typeSize)
     )
     .foregroundStyle(Theme.inkSecondary)
     return Text("A private health journal you can talk to. \(more)")
@@ -169,7 +171,7 @@ private struct CoachAsks: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       Text("Coach asks").foregroundStyle(Theme.accent).label()
-      Text("\u{201C}\(Self.questions[asked].text)\u{201D}")
+      Text("\u{201C}\(LineBreaks.title(Self.questions[asked].text))\u{201D}")
         .font(.system(.title2, design: .serif))
         .italic()
         .foregroundStyle(Theme.ink)

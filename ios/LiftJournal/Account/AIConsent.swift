@@ -97,7 +97,7 @@ struct AIConsentView: View {
         .frame(minWidth: 12, alignment: .leading)
       VStack(alignment: .leading, spacing: 4) {
         Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
-        Text(detail)
+        Paragraph(detail, language: .english)
           .folio(.coach)
           .foregroundStyle(Theme.ink)
           .fixedSize(horizontal: false, vertical: true)

@@ -59,7 +59,7 @@ struct CoachView: View {
               if coach.reply.isEmpty {
                 CoachWriting(step: coach.step)
               } else {
-                CoachText(text: coach.reply)
+                CoachText(text: coach.reply, streaming: coach.sending)
               }
               // Visuals appear as Coach makes them, before the reply is done.
               Figures(visuals: coach.liveVisuals, topic: topic)
@@ -488,7 +488,7 @@ struct ReceiptCard: View {
 
   private var summary: some View {
     VStack(alignment: .leading, spacing: 3) {
-      Text(receipt.title).folio(.entry).foregroundStyle(Theme.ink)
+      Text(LineBreaks.title(receipt.title, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
       Text(receipt.detail)
         .font(.footnote)
         .foregroundStyle(Theme.inkSecondary)

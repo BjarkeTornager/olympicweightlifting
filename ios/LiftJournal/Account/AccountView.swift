@@ -112,14 +112,14 @@ struct AccountView: View {
           }
           Link(destination: LiftServer.origin) {
             Label {
-              Text("Open the Website")
+              Text("Open the website")
             } icon: {
               IconBadge(symbol: "safari.fill", tint: Theme.accent, size: 28)
             }
           }
           Link(destination: LiftServer.origin.appending(path: "privacy")) {
             Label {
-              Text("Privacy Policy")
+              Text("Privacy policy")
             } icon: {
               IconBadge(symbol: "hand.raised.fill", tint: Theme.inkSecondary, size: 28)
             }

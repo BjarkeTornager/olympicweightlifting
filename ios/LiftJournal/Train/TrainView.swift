@@ -131,7 +131,7 @@ struct TrainView: View {
         Button {
           Task { await train.start(next, app) }
         } label: {
-          Label("Start Workout", systemImage: "play.fill")
+          Label("Start workout", systemImage: "play.fill")
         }
         .buttonStyle(PrimaryButtonStyle())
         .disabled(!next.canStart)
@@ -336,6 +336,7 @@ enum WorkoutRoute: Hashable {
 
 private struct ProgrammeCard: View {
   let programme: Programme
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -353,7 +354,7 @@ private struct ProgrammeCard: View {
             .foregroundStyle(Theme.success)
         }
       }
-      Text(programme.name)
+      Text(LineBreaks.title(programme.name, size: typeSize))
         .folio(.entry)
         .foregroundStyle(Theme.ink)
         .lineLimit(2)

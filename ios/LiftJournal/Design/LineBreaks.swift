@@ -1,12 +1,17 @@
 import Foundation
 import NaturalLanguage
 import SwiftUI
+import UIKit
 
 /// Where lines may break in Coach's words and other running text. SwiftUI's
 /// Text breaks greedily: neither it nor UIKit's push-out strategy keeps a
-/// paragraph's last word off a line of its own, and it hyphenates only a
-/// word wider than the line. So the text itself says where not to break,
-/// with non-breaking spaces, and where a long word may, with soft hyphens.
+/// paragraph's last word off a line of its own. So the text itself says
+/// where not to break, with non-breaking spaces. Nor has it a hyphenation
+/// setting: a word is hyphenated only when it holds a soft hyphen, and then
+/// at any of the system dictionary's breaks for the typesetting language,
+/// not only at its soft hyphens. So the soft hyphens choose which words may
+/// break, at the same dictionary's breaks, and the paragraph's language is
+/// set beside them (`typesettingLanguage`) for the dictionary to match.
 enum LineBreaks {
   /// The language a passage is written in, for its hyphenation and line
   /// breaking.
@@ -15,6 +20,9 @@ enum LineBreaks {
 
     var locale: Locale { Locale(identifier: self == .danish ? "da_DK" : "en_GB") }
     var typesetting: Locale.Language { Locale.Language(identifier: self == .danish ? "da" : "en") }
+
+    /// The language Coach was asked to use.
+    static var coach: Language { CoachLanguage.current == .da ? .danish : .english }
   }
 
   /// Coach writes in English or Danish. A passage too short to tell goes
@@ -27,23 +35,45 @@ enum LineBreaks {
     if let best = hypotheses.max(by: { $0.value < $1.value }), best.value >= 0.8 {
       return best.key == .danish ? .danish : .english
     }
-    return CoachLanguage.current == .da ? .danish : .english
+    return .coach
   }
 
   /// A paragraph of body text at a text size: figures kept with their
   /// units, long words hyphenated in its language, and its last two words
   /// kept together and left whole, so the last line never holds a word, or
-  /// the end of one, alone. Markdown passes through: the marks are left as
-  /// they are.
-  static func paragraph(_ text: String, language: Language, size: DynamicTypeSize = .large) -> String {
-    let words = hyphenate(keepFigures(text), language: language, from: size.longWord, last: size.longLastWord)
-    return keepLastWords(words, within: size.wordsTogether)
+  /// the end of one, alone. While Coach is still writing it (not
+  /// `finished`), its end is left alone and every word is treated alike, so
+  /// the lines above don't move as each word arrives. Markdown passes
+  /// through: the marks are left as they are.
+  static func paragraph(
+    _ text: String, language: Language, size: DynamicTypeSize = .large, finished: Bool = true
+  ) -> String {
+    guard finished else {
+      let long = size.longWord
+      return hyphenate(keepFigures(text), language: language, long: long, longLast: long)
+    }
+    // A finished paragraph is set once: a reply is drawn again with every
+    // piece Coach sends, and on every scroll.
+    let key = "\(language) \(size) \(text)" as NSString
+    if let set = paragraphs.object(forKey: key) { return set as String }
+    let long = size.longWord
+    // The last two words break only at the accessibility sizes, and only
+    // when one may not fit a line whole: a paragraph's last line is better
+    // whole.
+    let words = hyphenate(
+      keepFigures(text), language: language, long: long, longLast: size.isAccessibilitySize ? long : { _ in false })
+    let set = keepLastWords(words, within: size.wordsTogether)
+    paragraphs.setObject(set as NSString, forKey: key)
+    return set
   }
 
+  private static let paragraphs = NSCache<NSString, NSString>()
+
   /// A title or a heading: figures and the last two words kept together,
-  /// and no word broken.
-  static func title(_ text: String, size: DynamicTypeSize = .large) -> String {
-    keepLastWords(keepFigures(text), within: size.wordsTogether)
+  /// and no word broken. While it is still being written (not `finished`),
+  /// only its figures.
+  static func title(_ text: String, size: DynamicTypeSize = .large, finished: Bool = true) -> String {
+    finished ? keepLastWords(keepFigures(text), within: size.wordsTogether) : keepFigures(text)
   }
 
   // MARK: Spaces
@@ -65,8 +95,8 @@ enum LineBreaks {
     return result
   }
 
-  /// "8 h 6 min", "250 ml", "1,900 kcal", "28 September" and "28.
-  /// september" never break inside.
+  /// "8 h 6 min", "250 ml", "1,900 kcal", "3 × 5", "10 to 12", "28
+  /// September" and "28. september" never break inside.
   static func keepFigures(_ text: String) -> String {
     var result = text
     for (pattern, template) in figureRules {
@@ -83,11 +113,14 @@ enum LineBreaks {
     + "januar|februar|marts|april|maj|juni|juli|august|september|oktober|november|december|"
     + "Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|jan|feb|mar|apr|jun|jul|aug|sep|okt|nov|dec"
 
-  /// A figure and its unit; an hour and the minutes after it; a day and its
-  /// month, with or without the Danish full stop.
+  /// A figure and its unit; an hour and the minutes after it; sets by reps;
+  /// a range; a day and its month, with or without the Danish full stop.
   private static let figureRules: [(NSRegularExpression, String)] = [
     (#"(\d) (?=(?:\#(units))(?![\p{L}\d]))"#, "$1\u{00A0}"),
     (#"(?<=\d[\x{00A0} ](?:h|t)) (?=\d)"#, "\u{00A0}"),
+    (#"(?<=\d[\x{00A0} ][×x]) (?=\d)"#, "\u{00A0}"),
+    (#"(?<=\d) (?=(?:to|til) \d)"#, "\u{00A0}"),
+    (#"(?<=\d\x{00A0}(?:to|til)) (?=\d)"#, "\u{00A0}"),
     (#"(?<![\d.,])(\d{1,2}\.?) (?=(?:\#(months))(?![\p{L}]))"#, "$1\u{00A0}"),
     (#"(?<=\b(?:\#(months))) (?=\d{1,2}(?![\d:.,]\d))"#, "\u{00A0}"),
   ].map { pattern, template in
@@ -98,13 +131,22 @@ enum LineBreaks {
   // MARK: Hyphens
 
   /// Soft hyphens at the dictionary's breaks in words of `from` letters or
-  /// more, at least three letters from either end and from each other, so a
-  /// long English or Danish word can break in a narrow column instead of
-  /// leaving a short line. The last two words take them only from `last`
-  /// letters: a paragraph's last line is better whole. Links, addresses and
-  /// code are left whole. For body text only: titles never break inside a
-  /// word.
+  /// more, and in the last two words only from `last` letters.
   static func hyphenate(_ text: String, language: Language, from: Int = 12, last: Int = .max) -> String {
+    hyphenate(text, language: language, long: { $0.count >= from }, longLast: { $0.count >= last })
+  }
+
+  /// Soft hyphens at the dictionary's breaks in the `long` words, at least
+  /// two letters from the start and three from the end, so a long English
+  /// or Danish word can break in a narrow column instead of leaving a short
+  /// line. Every break is kept, the joint of a compound ("styrke-træning")
+  /// with the rest: a line uses one at most, and the system breaks such a
+  /// word at any of them anyway. The last two words take them only when
+  /// `longLast`. Links, addresses and code are left whole. For body text
+  /// only: titles never break inside a word.
+  static func hyphenate(
+    _ text: String, language: Language, long: (String) -> Bool, longLast: (String) -> Bool
+  ) -> String {
     let locale = language.locale as CFLocale
     guard CFStringIsHyphenationAvailableForLocale(locale) else { return text }
     // The words, each with the spaces after it.
@@ -119,13 +161,14 @@ enum LineBreaks {
     }
     return words.enumerated().map { index, piece in
       let ending = index >= words.count - 2
-      return hyphenate(token: piece.word, from: ending ? last : from, locale: locale) + piece.space
+      return hyphenate(token: piece.word, long: ending ? longLast : long, locale: locale) + piece.space
     }
     .joined()
   }
 
-  private static func hyphenate(token: String, from: Int, locale: CFLocale) -> String {
-    guard token.count >= from, !token.contains(where: { "/@`=<>\\".contains($0) }), !token.contains("](")
+  private static func hyphenate(token: String, long: (String) -> Bool, locale: CFLocale) -> String {
+    guard !token.contains(where: { "/@`=<>\\".contains($0) }), !token.contains("]("),
+      long(token.filter { !"*_".contains($0) })
     else { return token }
     var result = ""
     var word = ""
@@ -133,17 +176,17 @@ enum LineBreaks {
       if character.isLetter {
         word.append(character)
       } else {
-        result += breaks(word, from: from, locale: locale)
+        result += breaks(word, long: long, locale: locale)
         word = ""
         result.append(character)
       }
     }
-    return result + breaks(word, from: from, locale: locale)
+    return result + breaks(word, long: long, locale: locale)
   }
 
-  private static func breaks(_ word: String, from: Int, locale: CFLocale) -> String {
+  private static func breaks(_ word: String, long: (String) -> Bool, locale: CFLocale) -> String {
     let letters = Array(word)
-    guard letters.count >= from else { return word }
+    guard letters.count >= 5, long(word) else { return word }
     let string = word as CFString
     let length = CFStringGetLength(string)
     var points: [Int] = []
@@ -158,11 +201,7 @@ enum LineBreaks {
     // In UTF-16 offsets; the letters here are all single code units except
     // in rare cases, where the word is left whole.
     guard length == letters.count else { return word }
-    var kept: [Int] = []
-    for point in points.sorted() where point >= 3 && length - point >= 3 {
-      if let previous = kept.last, point - previous < 3 { continue }
-      kept.append(point)
-    }
+    let kept = Set(points.filter { $0 >= 2 && length - $0 >= 3 })
     var result = ""
     for (index, letter) in letters.enumerated() {
       if kept.contains(index) { result.append("\u{00AD}") }
@@ -193,17 +232,47 @@ struct Paragraph: View {
   }
 }
 
-/// At the accessibility sizes a line holds only a few words: fewer letters
-/// are kept together, and shorter words are hyphenated, so a word is broken
-/// at a syllable rather than wherever the line ends.
+/// At the accessibility sizes a line of Coach's serif holds only 13 to 23
+/// letters in a phone's narrowest column: fewer letters are kept together,
+/// and only a word that may not fit a line whole is hyphenated, so it
+/// breaks at a syllable rather than wherever the line ends. A word that
+/// fits is better moved to the next line whole.
 extension DynamicTypeSize {
   /// How many letters the last two words of a paragraph may have to be
-  /// kept together.
-  fileprivate var wordsTogether: Int { isAccessibilitySize ? 12 : 20 }
-  /// The shortest word that is hyphenated.
-  fileprivate var longWord: Int { isAccessibilitySize ? 8 : 12 }
-  /// The shortest of the last two words that is hyphenated: never at the
-  /// default sizes, where any word fits a line, and only a word that may
-  /// not at the largest.
-  fileprivate var longLastWord: Int { isAccessibilitySize ? 12 : .max }
+  /// kept together: about two thirds of a line.
+  fileprivate var wordsTogether: Int {
+    switch self {
+    case .accessibility1: 16
+    case .accessibility2: 14
+    case .accessibility3: 12
+    case .accessibility4: 10
+    case .accessibility5: 9
+    default: 20
+    }
+  }
+
+  /// The words that are hyphenated: at the default sizes, where a line
+  /// holds over 30 letters, those of 12 letters or more; at the
+  /// accessibility sizes, only those wider than a line of Coach's serif in
+  /// the narrowest column, whatever their letters ("restitutionen" fits at
+  /// AX5, "edamamebønner" does not).
+  fileprivate var longWord: (String) -> Bool {
+    guard isAccessibilitySize else { return { $0.count >= 12 } }
+    let font = LineBreaks.serif(self)
+    return { ($0 as NSString).size(withAttributes: [.font: font]).width > LineBreaks.narrowestMeasure }
+  }
+}
+
+extension LineBreaks {
+  /// The narrowest column Coach writes in: a 375 pt phone's, less the
+  /// page's gutters and the letter's margin.
+  fileprivate static let narrowestMeasure: CGFloat = 375 - 2 * 20 - 14
+
+  /// Coach's serif at a text size, as `folio(.coach)` sets it.
+  fileprivate static func serif(_ size: DynamicTypeSize) -> UIFont {
+    let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
+    let points = UIFontMetrics(forTextStyle: .body).scaledValue(for: 18, compatibleWith: traits)
+    let system = UIFont.systemFont(ofSize: points)
+    return UIFont(descriptor: system.fontDescriptor.withDesign(.serif) ?? system.fontDescriptor, size: points)
+  }
 }

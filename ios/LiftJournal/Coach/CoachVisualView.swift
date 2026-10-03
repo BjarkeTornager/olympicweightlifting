@@ -112,6 +112,7 @@ struct FigureCaption: View {
   let number: Int?
   let title: String
   var note: String?
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     ViewThatFits(in: .horizontal) {
@@ -129,7 +130,7 @@ struct FigureCaption: View {
 
   private var caption: some View {
     let figure = number.map { Text("Fig. \($0) · ").foregroundStyle(Theme.inkSecondary) } ?? Text(verbatim: "")
-    return Text("\(figure)\(Text(LineBreaks.title(title)).foregroundStyle(Theme.ink))")
+    return Text("\(figure)\(Text(LineBreaks.title(title, size: typeSize)).foregroundStyle(Theme.ink))")
       .font(.system(.subheadline, design: .serif))
       .italic()
       .fixedSize(horizontal: false, vertical: true)

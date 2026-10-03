@@ -109,12 +109,13 @@ private struct DaySection: View {
   let day: Components.Schemas.ProgrammeDay
   let canStart: Bool
   let start: () -> Void
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       Rectangle().fill(Theme.ink).frame(height: 1)
       Text("Day \(number)").label().padding(.top, 10)
-      Text(day.name)
+      Text(LineBreaks.title(day.name, size: typeSize))
         .folio(.heading)
         .foregroundStyle(Theme.ink)
         .fixedSize(horizontal: false, vertical: true)

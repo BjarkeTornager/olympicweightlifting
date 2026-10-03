@@ -350,9 +350,14 @@ struct TranscriptLine: View {
         .font(coach ? .system(.body, design: .serif) : .callout)
         .foregroundStyle(Theme.ink)
         .typesettingLanguage(language.typesetting)
-        .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // What was said, not how it is typeset.
+        .contextMenu {
+          let plain = CoachReplyFormat.plain(text)
+          Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = plain }
+          ShareLink(item: plain)
+        }
     }
     .padding(.vertical, 10)
     .overlay(alignment: .top) { Rectangle().fill(Theme.rule).frame(height: 1) }

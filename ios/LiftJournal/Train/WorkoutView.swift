@@ -146,6 +146,7 @@ private struct ExerciseCard: View {
 
   @State private var weight: Double = 0
   @State private var reps: Int = 1
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   private var next: Components.Schemas.WorkoutSet? { exercise.sets.first { !$0.logged } }
   private var lastLogged: Components.Schemas.WorkoutSet? { exercise.sets.last(where: \.logged) }
@@ -166,7 +167,7 @@ private struct ExerciseCard: View {
         .background(finished ? Theme.success : Theme.fill, in: .circle)
         .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 2) {
-          Text(exercise.name).folio(.entry).foregroundStyle(Theme.ink)
+          Text(LineBreaks.title(exercise.name, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
           if let target = exercise.target {
             Text(target).font(.subheadline).foregroundStyle(Theme.inkSecondary)
           }

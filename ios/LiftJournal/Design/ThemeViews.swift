@@ -46,31 +46,25 @@ struct Hatch: View {
 }
 
 /// What a column or a cell holds, with the key of its data colour: "Sleep",
-/// "Body fat", in sentence case. The Ledger's areas, the section labels of
-/// Today, take the spaced capitals (`kicker`). One line, or up to three at
-/// the largest text sizes, so a long name wraps rather than being cut short.
+/// "Body fat", "Energy", in sentence case. Up to two lines, or three at the
+/// largest text sizes, with the last two words together, so a long name
+/// ("Gennemsnitlig hvilepuls") wraps rather than being cut short.
 struct CardLabel: View {
   let title: String
   var key: Color?
   var hatched = false
-  var kicker = false
   @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
-    let wraps = typeSize >= .xxxLarge
-    HStack(alignment: wraps ? .firstTextBaseline : .center, spacing: 7) {
+    // The key sits on the first line's baseline, as tall as its capitals.
+    HStack(alignment: .firstTextBaseline, spacing: 7) {
       if let key {
         Key(tint: key, hatched: hatched)
       }
-      Group {
-        if kicker {
-          Text(title).kicker()
-        } else {
-          Text(title).label()
-        }
-      }
-      .lineLimit(wraps ? 3 : 1)
-      .fixedSize(horizontal: false, vertical: true)
+      Text(LineBreaks.title(title, size: typeSize))
+        .label()
+        .lineLimit(typeSize >= .xxxLarge ? 3 : 2)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 }
@@ -154,7 +148,7 @@ private struct ToastPresenter: ViewModifier {
 
 #Preview("Labels") {
   VStack(alignment: .leading, spacing: 16) {
-    CardLabel(title: "Energy", key: Theme.calories, kicker: true)
+    CardLabel(title: "Energy", key: Theme.calories)
     CardLabel(title: "Fat", key: Theme.carbs, hatched: true)
     CardLabel(title: "Body fat")
     HStack {

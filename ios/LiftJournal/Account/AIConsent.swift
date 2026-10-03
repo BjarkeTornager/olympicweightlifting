@@ -93,6 +93,7 @@ struct AIConsentView: View {
     HStack(alignment: .firstTextBaseline, spacing: 12) {
       Text("\(number)")
         .folio(.coach)
+        .monospacedDigit()
         .foregroundStyle(Theme.inkSecondary)
         .frame(minWidth: 12, alignment: .leading)
       VStack(alignment: .leading, spacing: 4) {

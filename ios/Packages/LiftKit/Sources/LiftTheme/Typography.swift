@@ -140,8 +140,9 @@ extension View {
 
   /// Small spaced capitals, only where they help people find their way: the
   /// running head at the top of a page, and one level of section labels on
-  /// an overview page (the Ledger's areas). Never inside a card that has a
-  /// title, for a status line, a caption or a button, or twice in one card:
+  /// an overview page ("Get started" on Today, "This week" in the Journal).
+  /// Never inside a card that has a title, for a value's label (the Ledger's
+  /// areas), a status line, a caption or a button, or twice in one card:
   /// those take `label()`.
   public func kicker() -> some View {
     font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Theme.inkSecondary)

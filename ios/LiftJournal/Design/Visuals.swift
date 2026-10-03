@@ -32,9 +32,9 @@ struct LedgerLine {
   }
 }
 
-/// One column of the Ledger: its area in spaced capitals with its key (the
-/// section labels of Today), the serif number, its target, the isotype meter
-/// and the scale. VoiceOver reads it as one line:
+/// One column of the Ledger: its area in sentence case with its key, as
+/// Recovery's and Body's cells are, the serif number, its target, the
+/// isotype meter and the scale. VoiceOver reads it as one line:
 /// "Energy, 980 of 1,900 kilocalories". With a `link`, the column opens that
 /// chart and shows an arrow; the scale row stays outside the link, so its
 /// "Set a target" button is never a button inside a button.
@@ -82,7 +82,7 @@ struct LedgerColumn<Accessory: View>: View {
   private var reading: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
-        CardLabel(title: line.title, key: line.tint, kicker: true)
+        CardLabel(title: line.title, key: line.tint)
         Spacer(minLength: 0)
         if link != nil { GoArrow() }
       }

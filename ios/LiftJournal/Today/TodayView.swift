@@ -747,7 +747,8 @@ struct FoodSection: View {
   @ViewBuilder
   private func mealRow(_ meal: Components.Schemas.Meal) -> some View {
     let kind = Text(Self.kind(meal._type)).label()
-    let dish = Text(meal.name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+    let dish = Text(LineBreaks.title(meal.name, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
+      .fixedSize(horizontal: false, vertical: true)
     let energy = Text("\(Format.number(meal.calories)) kcal")
       .font(.subheadline.monospacedDigit())
       .foregroundStyle(Theme.inkSecondary)
@@ -868,15 +869,17 @@ private struct LoggedLines<Item, ID: Hashable, Line: View>: View {
 }
 
 /// One line of the ledger, as the meals above it are set: the name in the
-/// serif, which wraps, and the amount, if there is one, aligned on the
-/// right. At the largest text sizes the amount goes under the name.
+/// serif, which wraps with its last two words together, and the amount, if
+/// there is one, aligned on the right. At the largest text sizes the amount
+/// goes under the name.
 private struct LoggedLine: View {
   let name: String
   let amount: String
   @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
-    let title = Text(name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+    let title = Text(LineBreaks.title(name, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
+      .fixedSize(horizontal: false, vertical: true)
     let amount = amount.isEmpty
       ? nil : Text(amount).font(.subheadline.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
     Group {
@@ -1078,19 +1081,23 @@ struct MovementSection: View {
 // MARK: Colophon
 
 /// The foot of the page: the mark and the issue, private to its owner. After
-/// 21:00 the halves meet and the day reads as closed.
+/// 21:00 the halves meet and the day reads as closed. The mark grows with
+/// the text and stands on the first line's baseline, as in the wordmark.
 private struct Colophon: View {
   let issue: Int?
   let name: String?
+  @ScaledMetric(relativeTo: .body) private var side: CGFloat = 20
+  @ScaledMetric(relativeTo: .body) private var closedSide: CGFloat = 26
 
   var body: some View {
     TimelineView(.everyMinute) { context in
       let closed = Calendar.current.component(.hour, from: context.date) >= 21
       VStack(alignment: .leading, spacing: 8) {
         Hairline()
-        HStack(spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
           BrandMark(gap: closed ? 0 : 40, lift: closed ? 0 : 136)
-            .frame(width: closed ? 26 : 20)
+            .frame(width: closed ? closedSide : side, height: closed ? closedSide : side)
+            .alignmentGuide(.firstTextBaseline) { $0[.bottom] - $0.height * 0.1 }
           if closed {
             Text("The day, closed").folio(.standfirst).foregroundStyle(Theme.ink)
           } else {

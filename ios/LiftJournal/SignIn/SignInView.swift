@@ -166,12 +166,13 @@ private struct CoachAsks: View {
 
   @State private var asked = 0
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.dynamicTypeSize) private var typeSize
   @ScaledMetric(relativeTo: .title2) private var width: CGFloat = 156
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       Text("Coach asks").foregroundStyle(Theme.accent).label()
-      Text("\u{201C}\(LineBreaks.title(Self.questions[asked].text))\u{201D}")
+      Text("\u{201C}\(LineBreaks.title(Self.questions[asked].text, size: typeSize))\u{201D}")
         .font(.system(.title2, design: .serif))
         .italic()
         .foregroundStyle(Theme.ink)

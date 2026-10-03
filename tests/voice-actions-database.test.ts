@@ -583,6 +583,12 @@ test(
       "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Voice card test',$2,true)",
       [id, email],
     );
+    // With an owner configured (as in CI) only invited emails sign in; the
+    // invitation goes with the synthetic account.
+    await pool.query(
+      "INSERT INTO journal_invitations(id,email,created_by) VALUES($1,$2,$3)",
+      [crypto.randomUUID(), email, id],
+    );
     try {
       const raw = randomBytes(32).toString("base64url");
       await pool.query(

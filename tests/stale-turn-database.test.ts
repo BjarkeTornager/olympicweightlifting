@@ -95,7 +95,8 @@ test(
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
     const { getPool } = await import("../lib/db"),
       { runTurn, findTurn, failStaleTurns, STALE_TURN_MS } =
-        await import("../lib/agent/engine");
+        await import("../lib/agent/engine"),
+      { readJournal } = await import("../lib/server");
     const pool = getPool(),
       user = crypto.randomUUID();
     await pool.query(
@@ -178,6 +179,80 @@ test(
       const saved = await findTurn(user, id);
       assert.equal(saved?.status, "done");
       assert.equal(saved?.reply, "From the retry.");
+
+      // The same with saves: the cut-off attempt's journal write, made
+      // after the retry's, is rolled back with it, so nothing is saved twice.
+      const date = "2026-09-08",
+        logging = {
+          id: crypto.randomUUID(),
+          message: "I slept 7 hours and drank a glass of water",
+          revision: (await readJournal(user)).revision,
+          timezone: "Europe/Copenhagen",
+        },
+        hooks = { directLogging: true };
+      const tools = (name: string, args: object): ModelResponse => ({
+        role: "assistant",
+        content: "",
+        tool_calls: [{ function: { name, arguments: { ...args } } }],
+      });
+      let wake!: () => void;
+      const woken = new Promise<void>((resolve) => (wake = resolve));
+      let asleep!: () => void;
+      const sleeping = new Promise<void>((resolve) => (asleep = resolve));
+      let round = 0;
+      const late = runTurn(
+        user,
+        logging,
+        async () => {
+          if (++round === 1) return tools("health_overview", { date });
+          asleep();
+          await woken;
+          return tools("log_entry", {
+            kind: "record_checkin",
+            checkin: { date, sleepHours: 7 },
+          });
+        },
+        hooks,
+      );
+      await sleeping;
+      assert.equal(
+        await failStaleTurns({
+          userId: user,
+          now: new Date(Date.now() + STALE_TURN_MS + 1000),
+        }),
+        1,
+      );
+      const retry = await runTurn(
+        user,
+        logging,
+        async () =>
+          tools("log_entry", {
+            kind: "log_drink",
+            drink: { date, ml: 250, kind: "water" },
+          }),
+        hooks,
+      );
+      assert.equal(retry.proposals[0].status, "saved");
+      wake();
+      // It got as far as saving (the retry's drink leaves its check-in's
+      // day alone, so it is made on the newer journal), then lost its turn.
+      await assert.rejects(late, /took too long/);
+      const journal = await readJournal(user);
+      assert.equal(journal.revision, logging.revision + 1);
+      assert.equal(journal.state.health.drinks?.length, 1);
+      assert.equal(journal.state.health.checkins.length, 0);
+      assert.equal(
+        (
+          await pool.query("SELECT id FROM agent_proposals WHERE turn_id=$1", [
+            logging.id,
+          ])
+        ).rows.length,
+        1,
+      );
+      assert.deepEqual(
+        (await findTurn(user, logging.id))?.proposals,
+        retry.proposals,
+      );
     } finally {
       await pool.query("DELETE FROM users WHERE id=$1", [user]);
     }

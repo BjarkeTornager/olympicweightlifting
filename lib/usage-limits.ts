@@ -4,7 +4,7 @@ import { user, userLimits } from "./db/schema";
 import { isOwnerEmail } from "./access";
 import { countUse } from "./feature-use";
 import { MAX_CALL_MINUTES } from "./ai-usage";
-import { providerBudget } from "./provider-budget";
+import { providerBudgetSoon } from "./provider-budget";
 import { localClock } from "./agent/time-context";
 import { VOICE_PREFIX } from "./coach-tasks";
 
@@ -270,11 +270,12 @@ export function coachLimits(
   const seen = new Set<Limit>();
   let caps: Promise<PerLimit> | undefined;
   return {
-    // Before the turn's first paid call.
+    // Before the turn's first paid call. The provider's budget is the last
+    // one read, so the turn never waits on OpenRouter for it.
     async start(now = new Date()) {
       try {
         const [budget, usage, limits] = await Promise.all([
-          turn.provider ? providerBudget() : undefined,
+          turn.provider ? providerBudgetSoon() : undefined,
           usageFor(userId, turn.timezone, turn.id, now),
           (caps ??= capsFor(userId)),
         ]);

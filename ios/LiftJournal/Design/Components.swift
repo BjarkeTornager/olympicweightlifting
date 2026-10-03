@@ -19,6 +19,21 @@ enum Category {
     case .body: Theme.body
     }
   }
+
+  /// What a key of this colour stands for, as Coach's byline names it.
+  var name: String {
+    switch self {
+    case .sleep: "Sleep"
+    case .heart: "Heart"
+    case .activity: "Movement"
+    case .water: "Water"
+    case .food: "Food"
+    case .training: "Training"
+    case .checkin: "Check-in"
+    case .coach: "Coach"
+    case .body: "Body"
+    }
+  }
 }
 
 /// A large serif number with its unit in SF beside it.
@@ -254,25 +269,28 @@ extension FolioSection where Trailing == EmptyView {
 }
 
 /// The one primary action on a screen: a full-width capsule in the deep
-/// accent.
+/// accent. Inside a sheet, such as a receipt waiting to be saved, it is as
+/// wide as its label.
 struct PrimaryButtonStyle: ButtonStyle {
   var height: CGFloat = 54
+  var fullWidth = true
 
   func makeBody(configuration: Configuration) -> some View {
-    Filled(configuration: configuration, height: height)
+    Filled(configuration: configuration, height: height, fullWidth: fullWidth)
   }
 
   private struct Filled: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
+    let fullWidth: Bool
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
       configuration.label
-        .font(.headline)
+        .font(fullWidth ? .headline : .subheadline.weight(.semibold))
         .foregroundStyle(Theme.onAccentFill)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, minHeight: height)
+        .padding(.horizontal, fullWidth ? 20 : 16)
+        .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
         .background(Theme.accentFill, in: .capsule)
         .contentShape(.capsule)
         .opacity(enabled ? (configuration.isPressed ? 0.85 : 1) : 0.4)

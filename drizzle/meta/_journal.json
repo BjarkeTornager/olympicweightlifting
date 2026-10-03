@@ -141,6 +141,20 @@
       "when": 1791008966875,
       "tag": "0019_ai_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791008988441,
+      "tag": "0020_user_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791012665087,
+      "tag": "0021_sweepers_and_commit_retry",
+      "breakpoints": true
     }
   ]
 }

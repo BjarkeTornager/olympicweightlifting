@@ -80,6 +80,18 @@ test("Owner can invite a Google account and revoke or restore access on mobile",
           ],
           total: { today: 0.0637, month: 1.25, calls: 12, estimated: 0 },
         },
+        limits: {
+          mode: "log",
+          rows: [
+            {
+              account: "a1b2c3d4",
+              you: true,
+              limit: "coach-messages-day",
+              logged: 2,
+              refused: 0,
+            },
+          ],
+        },
       },
     });
   });
@@ -100,6 +112,13 @@ test("Owner can invite a Google account and revoke or restore access on mobile",
     cost
       .getByRole("row", { name: /a1b2c3d4/ })
       .getByRole("cell", { name: "$1.25" }),
+  ).toBeVisible();
+  // While limits only log, how often an account would have been refused.
+  await expect(page.getByText("Limits only log for now")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Usage limits reached per account" })
+      .getByRole("row", { name: /coach-messages-day/ }),
   ).toBeVisible();
   await page.getByLabel("Google account email").fill(email);
   await page.getByRole("button", { name: "Grant access" }).click();

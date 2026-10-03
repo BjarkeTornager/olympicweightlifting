@@ -145,6 +145,9 @@ function fakeProviders(script: Scripted[]) {
       const href = String(url);
       if (href === "https://api.typesafe.ai/v1/systemone")
         return Response.json(jevReply);
+      // The key's budget, read by the usage limits before a turn.
+      if (href === "https://openrouter.ai/api/v1/key")
+        return Response.json({ data: { limit: null, limit_remaining: null } });
       if (href === "https://api.exa.ai/search")
         return Response.json({
           results: [

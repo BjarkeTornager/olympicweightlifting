@@ -18,6 +18,7 @@ export default defineConfig({
     env: {
       VIDEO_ANALYSIS_WORKER: "0",
       DAILY_REMINDERS_WORKER: "0",
+      SWEEPER_WORKER: "0",
       BETTER_AUTH_SECRET: "synthetic-browser-tests-only-secret-123456789",
       BETTER_AUTH_URL: "http://127.0.0.1:34173",
       OWNER_EMAIL: "ci@example.test",

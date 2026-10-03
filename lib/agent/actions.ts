@@ -85,6 +85,10 @@ export type ActionPreview = {
   status?: "saved" | "undone";
   automatic?: boolean;
 };
+// A change as the model asked for it (after the change guards), and the
+// athlete's date it was asked on: enough to prepare it again, without a
+// model call, against a journal that changed in the meantime.
+export type RequestedChange = { action: AgentAction; date: string };
 export type PreviewEntry = Pick<
   ActionPreview,
   | "title"

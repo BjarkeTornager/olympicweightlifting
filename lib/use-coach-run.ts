@@ -146,7 +146,12 @@ export function useCoachRun({
           },
         );
         const data = await recovered.json();
-        if (recovered.ok && data.turn?.status === "done" && data.turn.reply) {
+        // A usage limit's reply is saved as "limited" (lib/usage-limits.ts).
+        if (
+          recovered.ok &&
+          ["done", "limited"].includes(data.turn?.status) &&
+          data.turn.reply
+        ) {
           setTurns((old) => old.map((t) => (t.id === id ? data.turn : t)));
           setFailedMessage(null);
           setBackgroundResult("ready");

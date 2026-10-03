@@ -132,6 +132,11 @@ export const foodPhotos = pgTable(
       .notNull()
       .default(unclassifiedImage),
     version: integer("version").notNull().default(0),
+    // Automatic tagging runs started for this image, and when the latest
+    // began. An image still pending after a while was cut off (a restart
+    // mid-call) and is tagged again, up to IMAGE_TAG_TRIES times.
+    tagAttempts: integer("tag_attempts").notNull().default(0),
+    tagStartedAt: timestamp("tag_started_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -140,6 +145,10 @@ export const foodPhotos = pgTable(
     primaryKey({ columns: [t.userId, t.id] }),
     index("food_photos_user_date_idx").on(t.userId, t.date),
     index("images_user_category_idx").on(t.userId, t.category),
+    // Keeps the sweeper's look for pending images small.
+    index("images_tag_pending_idx")
+      .on(t.createdAt)
+      .where(sql`classification->>'status' = 'pending'`),
   ],
 );
 export const journalInvitations = pgTable(
@@ -421,6 +430,30 @@ export const aiUsage = pgTable(
   (t) => [index("ai_usage_user_date_idx").on(t.userId, t.createdAt)],
 );
 
+// An account's own value for a usage limit, where it differs from the
+// default (lib/usage-limits.ts). Set by the owner; deleted with the account.
+export const userLimits = pgTable(
+  "user_limits",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // coach-messages-day, spend-day-usd, spend-month-usd, spend-turn-usd or
+    // voice-minutes-day.
+    key: text("key").notNull(),
+    // Messages, US dollars or minutes, as the key says.
+    value: numeric("value", {
+      precision: 12,
+      scale: 4,
+      mode: "number",
+    }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.key] }),
+    check("user_limits_value_nonnegative", sql`${t.value} >= 0`),
+  ],
+);
+
 export const agentTurns = pgTable(
   "agent_turns",
   {
@@ -432,6 +465,8 @@ export const agentTurns = pgTable(
     photoIds: jsonb("photo_ids").$type<string[]>().notNull().default([]),
     response:
       jsonb("response").$type<import("../coach-visuals").CoachResponse>(),
+    // running, done, failed, or limited: refused by a usage limit before
+    // any AI call, with the limit's reply (lib/usage-limits.ts).
     status: text("status").notNull().default("running"),
     // When the current attempt began; a "running" turn older than
     // STALE_TURN_MS was cut off and may be retried.
@@ -443,7 +478,13 @@ export const agentTurns = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("agent_turns_user_date_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("agent_turns_user_date_idx").on(t.userId, t.createdAt),
+    // Keeps the sweeper's look for cut-off turns small.
+    index("agent_turns_running_idx")
+      .on(t.createdAt)
+      .where(sql`status = 'running'`),
+  ],
 );
 export const agentProposals = pgTable(
   "agent_proposals",
@@ -464,6 +505,11 @@ export const agentProposals = pgTable(
     undoId: text("undo_id").notNull(),
     status: text("status").notNull().default("pending"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    // The change as Coach asked for it, so it can be prepared again against
+    // a newer journal when another save lands first. Absent on voice saves
+    // and on proposals from before it was kept.
+    requested:
+      jsonb("requested").$type<import("../agent/actions").RequestedChange>(),
   },
   (t) => [index("agent_proposals_user_idx").on(t.userId)],
 );

@@ -2,16 +2,22 @@ import { mealLoggingPolicy, shouldResumeMealLogging } from "./meal-logging";
 import { z } from "zod";
 import { EventType } from "@ag-ui/core";
 import { searchWeb, webSearchEnabled } from "../web-search";
-import { visualSchema, type SavedVisual } from "../coach-visuals";
+import {
+  visualSchema,
+  type CoachResponse,
+  type SavedVisual,
+} from "../coach-visuals";
 import type { EmitCoachEvent } from "./stream";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { countUse } from "../feature-use";
 import { withAiUsage } from "../ai-usage";
+import { coachLimits } from "../usage-limits";
 import { agentProposals, agentTurns } from "../db/schema";
 import { uid } from "../domain";
 import { MAX_EXECUTED_TOOLS } from "./limits";
-import { readJournal, writeJournal } from "../server";
+import { readJournal, writeJournal, RevisionConflict } from "../server";
+import type { Snapshot } from "../model";
 import { coachingContext } from "../coaching";
 import { readUserImage, imageMetadata } from "../user-images";
 import { coachRequest } from "../images";
@@ -21,6 +27,7 @@ import {
   loggingKinds,
   prepareAction,
   type ActionPreview,
+  type RequestedChange,
 } from "./actions";
 import { ApiError } from "./http";
 import {
@@ -48,6 +55,7 @@ import type { CoachLanguage } from "../coach-language";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
 import { guardChange } from "./change-guards";
+import { unchangedFor } from "./change-scope";
 import {
   pruneConversations,
   recentConversations,
@@ -139,6 +147,69 @@ const withoutCoordinates = (visual: SavedVisual) =>
 // so one still "running" after this was cut off (a crash or a forced stop)
 // and the same message may be retried.
 export const STALE_TURN_MS = 3 * 60000;
+
+// Marks turns cut off mid-run as failed, so the apps stop showing them as
+// still being answered and offer to ask again. Sending the same message
+// again takes the turn over, as it does for any failed turn. `userId` limits
+// it to one account (tests share a database).
+export async function failStaleTurns(
+  options: { now?: Date; userId?: string } = {},
+) {
+  const now = options.now ?? new Date();
+  const swept = await getDb()
+    .update(agentTurns)
+    .set({ status: "failed" })
+    .where(
+      and(
+        sql`${agentTurns.status} = 'running'`,
+        sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(now.getTime() - STALE_TURN_MS)}`,
+        options.userId ? eq(agentTurns.userId, options.userId) : undefined,
+      ),
+    )
+    .returning({ id: agentTurns.id });
+  return swept.length;
+}
+
+// Prepares a requested change on a journal snapshot: the new journal and
+// the review card. Pure, so a commit can prepare it again on a newer journal.
+function prepareChange(
+  snapshot: Snapshot,
+  change: RequestedChange,
+  id: string,
+  expiresAt: Date,
+) {
+  const prepared = prepareAction(snapshot.state, change.action, change.date);
+  if (Buffer.byteLength(JSON.stringify(prepared.state)) > 5 * 1024 * 1024)
+    throw Error("Your journal is too large for this change.");
+  const preview: ActionPreview = {
+    id,
+    title: prepared.title,
+    detail: prepared.detail,
+    workout: prepared.workout,
+    ...(prepared.meal ? { meal: prepared.meal } : {}),
+    ...(prepared.targets ? { targets: prepared.targets } : {}),
+    ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
+    ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
+    ...(prepared.drink ? { drink: prepared.drink } : {}),
+    ...(prepared.entries ? { entries: prepared.entries } : {}),
+    ...(prepared.memory ? { memory: prepared.memory } : {}),
+    ...(prepared.plan ? { plan: prepared.plan } : {}),
+    ...(prepared.liftingBrief !== undefined
+      ? { liftingBrief: prepared.liftingBrief }
+      : {}),
+    ...(prepared.training ? { training: prepared.training } : {}),
+    ...(prepared.workoutReview
+      ? { workoutReview: prepared.workoutReview }
+      : {}),
+    expiresAt: expiresAt.toISOString(),
+  };
+  return {
+    revision: snapshot.revision,
+    before: snapshot.state,
+    after: prepared.state,
+    preview,
+  };
+}
 
 // The iPhone uploads Coach photos without waiting for them to be sorted into
 // Food, Activity and so on; the server sorts them just after. Wait for that
@@ -316,6 +387,55 @@ async function turn(
       409,
     );
   const requestAt = existing[0]?.createdAt ?? submittedAt;
+  const photoIds = [...new Set(input.photoIds ?? [])];
+  // Only one retry can take over a failed or cut-off turn.
+  const retryable = () =>
+    and(
+      eq(agentTurns.id, input.id),
+      eq(agentTurns.userId, userId),
+      or(
+        eq(agentTurns.status, "failed"),
+        and(
+          eq(agentTurns.status, "running"),
+          sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(Date.now() - STALE_TURN_MS)}`,
+        ),
+      ),
+    );
+  // Usage limits (lib/usage-limits.ts), checked before anything is paid for.
+  const limits = coachLimits(userId, {
+    id: input.id,
+    timezone: input.timezone,
+    provider: model === callModel,
+  });
+  const limitReply = await limits.start();
+  if (limitReply) {
+    // Coach's reply, not an error. Kept out of Coach's memory and of the
+    // day's message count.
+    const response: CoachResponse = { reply: limitReply, proposals: [] };
+    const saved = existing[0]
+      ? await db
+          .update(agentTurns)
+          .set({ status: "limited", response, startedAt: new Date() })
+          .where(retryable())
+          .returning({ id: agentTurns.id })
+      : await db
+          .insert(agentTurns)
+          .values({
+            id: input.id,
+            userId,
+            question: input.message,
+            photoIds,
+            createdAt: requestAt,
+            startedAt: new Date(),
+            status: "limited",
+            response,
+          })
+          .onConflictDoNothing()
+          .returning({ id: agentTurns.id });
+    if (!saved.length)
+      throw new ApiError("That request is already being processed.", 409);
+    return response;
+  }
   const requestClock = localClock(requestAt, input.timezone),
     currentDate = requestClock.date,
     recent = await history(userId);
@@ -326,7 +446,6 @@ async function turn(
       since: new Date(Date.now() - 7 * 86400000),
     })
   ).filter((c) => c.kind === "voice");
-  const photoIds = [...new Set(input.photoIds ?? [])];
   if (photoIds.length) {
     const sorting = prepare.child("photos_sorted"),
       sortStarted = Date.now(),
@@ -348,24 +467,19 @@ async function turn(
   );
   // Skills the message clearly needs; the model can load others.
   const loaded = skillsFor(request, photoIds.length);
+  // Marks this attempt, so a cut-off attempt can't save over a newer one.
+  const attemptStarted = new Date();
+  const thisAttempt = and(
+    eq(agentTurns.id, input.id),
+    eq(agentTurns.userId, userId),
+    eq(agentTurns.status, "running"),
+    eq(agentTurns.startedAt, attemptStarted),
+  );
   const inserted = existing[0]
     ? await db
         .update(agentTurns)
-        .set({ status: "running", startedAt: new Date() })
-        .where(
-          and(
-            eq(agentTurns.id, input.id),
-            eq(agentTurns.userId, userId),
-            // Only one retry can take over a failed or cut-off turn.
-            or(
-              eq(agentTurns.status, "failed"),
-              and(
-                eq(agentTurns.status, "running"),
-                sql`coalesce(${agentTurns.startedAt}, ${agentTurns.createdAt}) < ${new Date(Date.now() - STALE_TURN_MS)}`,
-              ),
-            ),
-          ),
-        )
+        .set({ status: "running", startedAt: attemptStarted })
+        .where(retryable())
         .returning({ id: agentTurns.id })
     : await db
         .insert(agentTurns)
@@ -375,7 +489,7 @@ async function turn(
           question: input.message,
           photoIds,
           createdAt: requestAt,
-          startedAt: new Date(),
+          startedAt: attemptStarted,
         })
         .onConflictDoNothing()
         .returning({ id: agentTurns.id });
@@ -627,6 +741,15 @@ async function turn(
       });
       roundKind = "normal";
       signal.throwIfAborted();
+      // Over a spend limit between rounds, the turn finishes with what it
+      // has: a change's receipt, or the limit's reply.
+      if (round > 0) {
+        const stop = await limits.round();
+        if (stop) {
+          reply = answering ?? stop;
+          break;
+        }
+      }
       const messageId = `${input.id}-${round}`;
       let started = false;
       emit?.({
@@ -1029,49 +1152,21 @@ async function turn(
                 toolSpan.set({ "lift.guard_rejected": true });
                 throw e;
               });
-            const prepared = prepareAction(
-                snapshot.state,
-                requested,
-                currentDate,
-              ),
-              id = uid(),
-              expiresAt = new Date(Date.now() + 86400000);
-            if (
-              Buffer.byteLength(JSON.stringify(prepared.state)) >
-              5 * 1024 * 1024
-            )
-              throw Error("Your journal is too large for this change.");
-            const preview: ActionPreview = {
-              id,
-              title: prepared.title,
-              detail: prepared.detail,
-              workout: prepared.workout,
-              ...(prepared.meal ? { meal: prepared.meal } : {}),
-              ...(prepared.targets ? { targets: prepared.targets } : {}),
-              ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
-              ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
-              ...(prepared.drink ? { drink: prepared.drink } : {}),
-              ...(prepared.entries ? { entries: prepared.entries } : {}),
-              ...(prepared.memory ? { memory: prepared.memory } : {}),
-              ...(prepared.plan ? { plan: prepared.plan } : {}),
-              ...(prepared.liftingBrief !== undefined
-                ? { liftingBrief: prepared.liftingBrief }
-                : {}),
-              ...(prepared.training ? { training: prepared.training } : {}),
-              ...(prepared.workoutReview
-                ? { workoutReview: prepared.workoutReview }
-                : {}),
-              expiresAt: expiresAt.toISOString(),
-            };
+            const id = uid(),
+              expiresAt = new Date(Date.now() + 86400000),
+              change: RequestedChange = {
+                action: requested,
+                date: currentDate,
+              },
+              prepared = prepareChange(snapshot, change, id, expiresAt),
+              preview = prepared.preview;
             signal.throwIfAborted();
             preparedProposal = {
               id,
               userId,
               turnId: input.id,
-              revision: snapshot.revision,
-              before: snapshot.state,
-              after: prepared.state,
-              preview,
+              ...prepared,
+              requested: change,
               undoId: uid(),
               expiresAt,
             };
@@ -1160,27 +1255,81 @@ async function turn(
       commitStarted = Date.now();
     await db.transaction(async (tx) => {
       signal.throwIfAborted();
-      if (preparedProposal) {
+      if (preparedProposal && directSave) {
+        let change = preparedProposal;
+        const save = () =>
+          writeJournal(
+            userId,
+            {
+              state: change.after,
+              revision: change.revision,
+              mutationId: change.id,
+            },
+            tx,
+          );
+        try {
+          await save();
+        } catch (error) {
+          // Another save (voice, Health, another device) landed while Coach
+          // was answering. If it left alone every entry this change depends
+          // on, make the same requested change to the newer journal instead
+          // of throwing away a paid-for reply; no model call is repeated, and
+          // Undo goes back to the newer journal. This transaction holds the
+          // journal's row lock from that read, so the second save can't
+          // conflict again. Otherwise report the conflict as before, and the
+          // message is asked again on the latest records: a run Health just
+          // imported isn't logged twice, and a meal edited on the phone isn't
+          // overwritten. COACH_SAVE_RETRY=0 switches this off.
+          if (
+            !(error instanceof RevisionConflict) ||
+            !change.requested ||
+            process.env.COACH_SAVE_RETRY === "0" ||
+            !unchangedFor(
+              change.requested.action,
+              change.before,
+              error.snapshot.state,
+            )
+          )
+            throw error;
+          let again: ReturnType<typeof prepareChange>;
+          try {
+            again = prepareChange(
+              error.snapshot,
+              change.requested,
+              change.id,
+              change.expiresAt,
+            );
+          } catch {
+            // It no longer applies, such as a change to an entry deleted
+            // meanwhile: report the conflict as before.
+            throw error;
+          }
+          preparedProposal = change = { ...change, ...again };
+          response.proposals[0] = {
+            ...again.preview,
+            status: "saved",
+            automatic: true,
+          };
+          await save();
+        }
+      }
+      if (preparedProposal)
         await tx.insert(agentProposals).values({
           ...preparedProposal,
           preview: response.proposals[0],
           status: directSave ? "saved" : "pending",
         });
-        if (directSave)
-          await writeJournal(
-            userId,
-            {
-              state: preparedProposal.after,
-              revision: preparedProposal.revision,
-              mutationId: preparedProposal.id,
-            },
-            tx,
-          );
-      }
-      await tx
+      const saved = await tx
         .update(agentTurns)
         .set({ status: "done", response, metrics: finished() })
-        .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+        .where(thisAttempt)
+        .returning({ id: agentTurns.id });
+      // Swept as cut off, or taken over by a retry: that one answers.
+      if (!saved.length)
+        throw new ApiError(
+          "That request took too long and was stopped. Ask again.",
+          409,
+        );
       signal.throwIfAborted();
     });
     commit.end({ "lift.ms": Date.now() - commitStarted });
@@ -1191,13 +1340,7 @@ async function turn(
     await db
       .update(agentTurns)
       .set({ status: "failed", metrics: finished() })
-      .where(
-        and(
-          eq(agentTurns.id, input.id),
-          eq(agentTurns.userId, userId),
-          eq(agentTurns.status, "running"),
-        ),
-      );
+      .where(thisAttempt);
     logMetrics("failed");
     throw e;
   }

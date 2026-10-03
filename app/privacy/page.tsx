@@ -398,6 +398,13 @@ export default function PrivacyPage() {
           months: older ones are removed when you next use Coach, by typing or
           by voice, and all of them are deleted with your account.
         </p>
+        <p>
+          Coach and voice calls also have daily and monthly usage limits. Each
+          time your account reaches one is counted like a feature, under the
+          limit&apos;s name, and the owner sees how often each account reached
+          each limit this month, under the same short identifier. Logging in
+          Train and Food is never limited.
+        </p>
       </section>
       <section className="space-y-3">
         <h2>Cookies and other services</h2>

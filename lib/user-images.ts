@@ -2,8 +2,9 @@ import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getDb } from "./db";
-import { foodPhotos, journals } from "./db/schema";
+import { getDb, getPool } from "./db";
+import { foodPhotos, journals, user } from "./db/schema";
+import { userAllowed } from "./access";
 import { ApiError } from "./agent/http";
 import { readJournal } from "./server";
 import { foodDate } from "./nutrition";
@@ -196,6 +197,8 @@ export async function saveUserImage(
           : input.autoTag
             ? { ...unclassifiedImage, source: "automatic", status: "pending" }
             : unclassifiedImage,
+        // Tagging starts just after this; it counts as the first try.
+        ...(input.autoTag ? { tagAttempts: 1, tagStartedAt: new Date() } : {}),
       })
       .returning(fields);
     return { fresh: true, photo };
@@ -348,4 +351,83 @@ export async function tagUserImage(
     }
     throw error;
   }
+}
+
+// A tagging run takes at most 20 seconds (classifyImage's limit), so an image
+// still pending this long after its run began was cut off, as by a restart
+// mid-call, and is tagged again. After IMAGE_TAG_TRIES runs it is marked
+// failed: the library shows "Tagging unavailable", and the athlete can sort
+// it or tag it again from there.
+export const IMAGE_TAG_RETRY_MS = 2 * 60000;
+export const IMAGE_TAG_TRIES = 3;
+
+// Tags again, one at a time, images whose tagging was cut off. Several
+// servers can run this at once (two do during a deploy): a claim records
+// when its own run began, before the model call, so the same image isn't
+// taken again for IMAGE_TAG_RETRY_MS. `now` fixes the time in tests.
+// `userId` limits it to one account (tests share a database).
+export async function retagStalledImages(
+  options: {
+    model?: typeof callModel;
+    now?: Date;
+    limit?: number;
+    userId?: string;
+  } = {},
+) {
+  const { model = callModel, now = new Date(), limit = 5 } = options;
+  const pool = getPool();
+  const cutoff = new Date(now.getTime() - IMAGE_TAG_RETRY_MS);
+  const account = options.userId ?? null;
+  // Out of tries. The version changes so a late result can't land on top.
+  const outOfTries = await pool.query(
+    `UPDATE food_photos SET classification=classification||'{"status":"failed"}'::jsonb,version=version+1
+    WHERE classification->>'status'='pending' AND tag_attempts>=$1 AND coalesce(tag_started_at,created_at)<$2
+    AND ($3::text IS NULL OR user_id=$3)`,
+    [IMAGE_TAG_TRIES, cutoff, account],
+  );
+  let retagged = 0,
+    failed = outOfTries.rowCount ?? 0;
+  for (let i = 0; i < limit; i++) {
+    const { rows } = await pool.query<{
+      user_id: string;
+      id: string;
+      version: number;
+    }>(
+      `WITH next AS (
+      SELECT user_id,id FROM food_photos
+      WHERE classification->>'status'='pending' AND tag_attempts<$1 AND coalesce(tag_started_at,created_at)<$2
+      AND ($4::text IS NULL OR user_id=$4)
+      ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+      UPDATE food_photos p SET tag_attempts=p.tag_attempts+1,tag_started_at=$3
+      FROM next WHERE p.user_id=next.user_id AND p.id=next.id RETURNING p.user_id,p.id,p.version`,
+      // The claim's own time, not the sweep's: runs follow one another, so
+      // the sweep's start would make a later one look cut off too soon.
+      [IMAGE_TAG_TRIES, cutoff, options.now ?? new Date(), account],
+    );
+    const job = rows[0];
+    if (!job) break;
+    try {
+      // Never send a photo to the provider for an account that has since
+      // lost access or been removed.
+      const [owner] = await getDb()
+        .select()
+        .from(user)
+        .where(eq(user.id, job.user_id));
+      if (!owner || !(await userAllowed(owner))) {
+        await pool.query(
+          `UPDATE food_photos SET classification=classification||'{"status":"failed"}'::jsonb,version=version+1
+          WHERE user_id=$1 AND id=$2 AND version=$3`,
+          [job.user_id, job.id, job.version],
+        );
+        failed++;
+        continue;
+      }
+      await tagUserImage(job.user_id, job.id, job.version, model);
+      retagged++;
+    } catch (error) {
+      // Left pending: the next sweep tries again while tries remain.
+      logFailure("image_retag_failed", error, {}, "warn");
+    }
+  }
+  return { retagged, failed };
 }

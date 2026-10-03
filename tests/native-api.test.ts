@@ -744,6 +744,51 @@ test("Today suggests a programme session only to someone who follows one", () =>
   assert.equal(buildToday(state, 2, date, new Set()).nextSession?.position, 2);
 });
 
+test("Today names the day of the journal's first record, which the issue number counts from", () => {
+  const state = emptyJournal();
+  state.createdAt = "2026-10-01T09:00:00.000Z";
+  const date = "2026-10-03";
+  const first = () => buildToday(state, 1, date, new Set()).firstRecordDate;
+  // Nothing recorded yet: the app counts from its own first day.
+  assert.equal(first(), undefined);
+  addDrink(state, { date, ml: 250, kind: "water" }, now);
+  assert.equal(first(), date);
+  // A workout logged for an earlier day, or Apple Health's heart rate from
+  // before the journal began, is an earlier record.
+  state.sessions.push({ ...createWorkout(state, days[0], "2026-10-02") });
+  assert.equal(first(), "2026-10-02");
+  state.health.vitals = [
+    {
+      date: "2026-09-28",
+      restingHeartRate: 54,
+      heartRateVariabilityMs: null,
+      averageHeartRate: null,
+      steps: null,
+      activeEnergyKcal: null,
+      source: "apple-health",
+      updatedAt: now.toISOString(),
+    },
+  ];
+  assert.equal(first(), "2026-09-28");
+  // A later record changes nothing, and a date that can't be read is left
+  // out rather than failing Today.
+  addDrink(state, { date: "2026-10-04", ml: 250, kind: "water" }, now);
+  state.health.checkins.push({
+    date: "someday",
+    sleepHours: null,
+    energy: 4,
+    soreness: null,
+    waterMl: null,
+    bodyweight: null,
+    notes: "",
+    updatedAt: now.toISOString(),
+  });
+  assert.equal(first(), "2026-09-28");
+  // Only what the journal holds counts, not when it was created.
+  state.createdAt = "2026-09-01T09:00:00.000Z";
+  assert.equal(first(), "2026-09-28");
+});
+
 test("A new journal's first steps show until all are done, for two weeks", () => {
   const state = emptyJournal();
   state.createdAt = "2026-10-01T09:00:00.000Z";

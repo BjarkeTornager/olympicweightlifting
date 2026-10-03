@@ -14,7 +14,8 @@ struct TodayView: View {
   @AppStorage(FirstStepsCard.hiddenKey) private var firstStepsHidden = false
   /// The last seven days, for the small charts and the weekly sleep average.
   @State private var week: Components.Schemas.Trends?
-  /// The first day of this journal on this iPhone, for the issue number.
+  /// The first day of this journal on this iPhone, for the issue number
+  /// when the server doesn't send the day of its first record.
   @State private var firstDay: Date?
   /// Scrolled past the masthead: the inline title takes over from it.
   @State private var scrolled = false
@@ -92,15 +93,20 @@ struct TodayView: View {
 
   private var day: Date { model.today.flatMap { JournalDay.date($0.date) } ?? .now }
 
+  /// Which issue of the journal this day is.
+  private var issue: Int? {
+    Issue.first(record: model.today?.firstRecordDate, device: firstDay).map { Issue.number(first: $0, day: day) }
+  }
+
   /// The running head beside the system's + button: the wordmark, then
   /// "Nº 13 · Week 40". The wordmark names the page, so the issue beside it
   /// is in sentence case rather than spaced capitals.
   private var issueLine: some View {
-    let number = firstDay.map { Issue.number(first: $0, day: day) }
-    let issue = number.map { "Nº \($0) · " } ?? ""
+    let number = issue
+    let prefix = number.map { "Nº \($0) · " } ?? ""
     return HStack(alignment: .firstTextBaseline, spacing: 9) {
       Wordmark()
-      Text("\(issue)Week \(Issue.week(day))").font(.footnote).foregroundStyle(Theme.inkSecondary)
+      Text("\(prefix)Week \(Issue.week(day))").font(.footnote).foregroundStyle(Theme.inkSecondary)
     }
     .lineLimit(1)
     .fixedSize()
@@ -175,7 +181,7 @@ struct TodayView: View {
       FoodSection(nutrition: today.nutrition, hydration: today.hydration, supplements: today.supplements)
         .padding(.top, Theme.Space.section)
       MovementSection(today: today).padding(.top, Theme.Space.section)
-      Colophon(issue: firstDay.map { Issue.number(first: $0, day: day) }, name: firstName)
+      Colophon(issue: issue, name: firstName)
         .padding(.top, Theme.Space.section)
     }
     .padding(.horizontal, Theme.Space.gutter)

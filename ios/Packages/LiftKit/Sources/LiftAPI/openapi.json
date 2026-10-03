@@ -2912,6 +2912,9 @@
           },
           "firstSteps": {
             "$ref": "#/components/schemas/FirstSteps"
+          },
+          "firstRecordDate": {
+            "type": "string"
           }
         },
         "required": [

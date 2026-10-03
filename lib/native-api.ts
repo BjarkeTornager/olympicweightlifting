@@ -297,6 +297,11 @@ export const todayView = z
     priorities: z.array(priorityView),
     // Only in a journal's first two weeks, until all three are done.
     firstSteps: firstStepsView.optional(),
+    // The day of the journal's earliest record, which Today's issue number
+    // counts from, so it carries on across installs. Absent while the
+    // journal holds nothing; optional, as builds must still decode a server
+    // from before it.
+    firstRecordDate: day.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Today" });
@@ -760,6 +765,25 @@ export function firstSteps(state: JournalState, date: string) {
   return Object.values(steps).every(Boolean) ? undefined : steps;
 }
 
+// The day of the journal's earliest record: a workout, a meal, a drink or
+// supplement, a check-in, or what Apple Health brought (sleep, heart rate,
+// body fat). Undefined while it holds none.
+export function firstRecordDate(state: JournalState) {
+  let first: string | undefined;
+  for (const date of [
+    ...state.sessions.map((s) => s.date),
+    ...state.cardio.sessions.map((s) => s.date),
+    ...state.nutrition.meals.map((m) => m.date),
+    ...state.health.checkins.map((c) => c.date),
+    ...(state.health.drinks ?? []).map((d) => d.date),
+    ...(state.health.supplements ?? []).map((s) => s.date),
+    ...(state.health.vitals ?? []).map((v) => v.date),
+    ...(state.health.bodyFat ?? []).map((b) => b.date),
+  ])
+    if (day.safeParse(date).success && (!first || date < first)) first = date;
+  return first;
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
@@ -888,6 +912,7 @@ export function buildToday(
         action: p.action,
       })),
       firstSteps: firstSteps(state, date),
+      firstRecordDate: firstRecordDate(state),
     }),
   );
 }

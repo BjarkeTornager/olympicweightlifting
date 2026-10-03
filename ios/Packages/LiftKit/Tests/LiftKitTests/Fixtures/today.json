@@ -125,5 +125,6 @@
     "appleHealth": true,
     "meal": true,
     "goals": false
-  }
+  },
+  "firstRecordDate": "2026-09-24"
 }

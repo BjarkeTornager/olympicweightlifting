@@ -162,6 +162,25 @@ struct TodayTests {
     #expect(Issue.week(newYear) == 53)
   }
 
+  @Test("The issue number counts from the journal's first record, or this iPhone's first day from an older server")
+  func issueStart() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .gmt
+    let installed = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 1, hour: 9)))
+    let day = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 3, hour: 7)))
+    // A new install doesn't start the count again: the journal began earlier.
+    let first = try #require(Issue.first(record: "2026-09-20", device: installed, calendar: calendar))
+    #expect(Issue.number(first: first, day: day, calendar: calendar) == 14)
+    // A server from before the field, or one that can't read it.
+    #expect(Issue.first(record: nil, device: installed, calendar: calendar) == installed)
+    #expect(Issue.first(record: "soon", device: installed, calendar: calendar) == installed)
+    #expect(Issue.first(record: nil, device: nil) == nil)
+    // From Today's response.
+    var today = try #require(PreviewData.today)
+    today.firstRecordDate = "2026-09-20"
+    #expect(Issue.first(record: today.firstRecordDate, device: installed, calendar: calendar) == first)
+  }
+
   @Test("The Journal's register fills a mark when something in that area was logged that day")
   func register() {
     let day = Components.Schemas.TrendDay(

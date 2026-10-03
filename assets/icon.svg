@@ -1,8 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
   <title id="title">Lift Journal</title>
-  <rect width="512" height="512" rx="104" fill="#f4f3ef"/>
-  <rect x="76" y="76" width="360" height="360" rx="84" fill="#ffffff" stroke="#c5cac4" stroke-width="8"/>
-  <path d="M150 256h212" fill="none" stroke="#18201c" stroke-width="22" stroke-linecap="round"/>
-  <path d="M174 204v104M203 222v68M338 204v104M309 222v68" fill="none" stroke="#23664e" stroke-width="22" stroke-linecap="round"/>
-  <circle cx="256" cy="256" r="11" fill="#18201c"/>
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#27262c"/>
+      <stop offset="1" stop-color="#0e0e11"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#ink)"/>
+  <path d="M492.00,300.18 A10,10 0 0 0 481.64,290.19 A290,290 0 0 0 481.64,869.81 A10,10 0 0 0 492.00,859.82 Z" fill="#4a66f2"/>
+  <path d="M532.00,164.18 A10,10 0 0 1 542.36,154.19 A290,290 0 0 1 542.36,733.81 A10,10 0 0 1 532.00,723.82 Z" fill="#ff5f2e"/>
 </svg>

@@ -452,9 +452,15 @@ textarea {
 }.assistant-mark svg {
   color: var(--blue);
 }.assistant-response {
-  font-size: 15px;
-  line-height: 1.8;
+  /* Coach writes in the serif, like a letter; code stays monospaced. */
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.6;
   color: var(--ink);
+}.large-text .assistant-response {
+  font-size: 19px;
+}.assistant-response code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }.coach-workspace .agent-composer {
   width: calc(100% - 12px);
   max-width: 768px;
@@ -1925,9 +1931,9 @@ textarea {
 .today-record > span:nth-child(2) small { font-size: 13px; font-weight: 400; color: var(--ink-2); }
 .today-record-value {
   flex: 0 0 auto;
-  font-family: var(--font-display), var(--font-journal), sans-serif;
+  font-family: var(--font-serif);
   font-size: 24px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: right;
   white-space: nowrap;
 }
@@ -1974,7 +1980,6 @@ textarea {
 .week-strip-mark { color: var(--line-strong); line-height: 0; }
 .week-strip-mark[data-on] { color: var(--accent); }
 .week-strip-sleep {
-  font-family: var(--font-display), var(--font-journal), sans-serif;
   font-size: 17px;
   font-weight: 600;
   color: var(--ink);
@@ -2308,31 +2313,39 @@ textarea {
 .pr-list.list-card .pr-row > span { font-weight: 560; }
 .pr-list.list-card .pr-row > strong { font-size: 17px; }
 
-/* Identity: Barlow Condensed for titles and numbers, like plate markings and
-   scoreboards; normal tracking, never crushed. Radii step down from panels
-   to controls to chips instead of one radius on everything. */
+/* Identity: the serif sets titles and the large figures, like a printed
+   journal, as New York does in the iPhone app. Barlow sets everything you
+   operate, so inputs, timers and small numbers stay in it. Radii step down
+   from panels to controls to chips instead of one radius on everything. */
 h1,
 .dialog-title,
 .training-quick-start h2,
 .food-calories p strong,
 .food-macros strong,
 .stat-number,
-.timer-digits,
 .health-summary-grid strong,
 .focused-workout .expanded .exercise-toggle strong,
-.focused-workout .focus-set .set-row input,
-.focused-workout .workout-dock > span strong,
 .date-tile strong {
-  font-family: var(--font-display), var(--font-journal), Arial, sans-serif;
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+/* Units beside a serif figure stay in Barlow, as they do in the app. */
+.stat-number > span,
+.food-macros strong small,
+.health-summary-grid strong small {
+  font-family: var(--font-journal), sans-serif;
   letter-spacing: 0;
 }
-h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 700; }
+h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 400; }
 .page-heading h1,
-.page-heading.compact h1 { font-size: clamp(32px, 2.8vw, 38px); letter-spacing: 0; }
-.training-quick-start h2 { font-size: clamp(25px, 4.5vw, 30px); font-weight: 700; margin: 0 0 4px; }
-.focused-workout .expanded .exercise-toggle strong { font-size: 30px; font-weight: 700; }
+.page-heading.compact h1 { font-size: clamp(32px, 2.8vw, 38px); letter-spacing: -0.01em; }
+.coach-title h1 { font-weight: 400; letter-spacing: -0.01em; }
+.landing-intro h1 { letter-spacing: -0.02em; }
+.training-quick-start h2 { font-size: clamp(25px, 4.5vw, 30px); margin: 0 0 4px; }
+.focused-workout .expanded .exercise-toggle strong { font-size: 30px; }
 .focused-workout .focus-set .set-row input { font-size: 36px; font-weight: 600; }
-.food-calories p strong { font-size: 46px; font-weight: 600; }
+.food-calories p strong { font-size: 46px; font-weight: 400; }
 .panel,
 .stat-card,
 .program-card,

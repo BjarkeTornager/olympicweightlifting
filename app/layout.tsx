@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Newsreader } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import "./journal-design.css";
@@ -14,28 +15,16 @@ const barlow = localFont({
   display: "swap",
   adjustFontFallback: "Arial",
 });
-// Titles, weights and reps: condensed like plate markings and scoreboards.
-const barlowCondensed = localFont({
-  src: [
-    {
-      path: "./fonts/BarlowCondensed-500.woff2",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "./fonts/BarlowCondensed-600.woff2",
-      weight: "600",
-      style: "normal",
-    },
-    {
-      path: "./fonts/BarlowCondensed-700.woff2",
-      weight: "700",
-      style: "normal",
-    },
-  ],
-  variable: "--font-display",
+// Titles and Coach's replies are set in a serif. Safari shows Apple's New
+// York through ui-serif (see --font-serif), so Newsreader (SIL OFL 1.1) is
+// not preloaded: other browsers fetch it when a title first needs it.
+// next/font downloads it at build time and serves it from this application.
+const newsreader = Newsreader({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  variable: "--font-newsreader",
   display: "swap",
-  adjustFontFallback: "Arial",
+  preload: false,
 });
 export const metadata: Metadata = {
   title: "Lift Journal",
@@ -54,18 +43,15 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f2f3f7" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d0f13" },
+    { media: "(prefers-color-scheme: light)", color: "#efeeea" },
+    { media: "(prefers-color-scheme: dark)", color: "#121214" },
   ],
 };
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      className={`${barlow.variable} ${barlowCondensed.variable}`}
-    >
+    <html lang="en" className={`${barlow.variable} ${newsreader.variable}`}>
       <body>{children}</body>
     </html>
   );

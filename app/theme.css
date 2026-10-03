@@ -1,108 +1,131 @@
 /* Colour tokens for the light and dark themes. Unlayered so they define the
    palette for every layer; components only ever reference these names.
-   Each family has a readable foreground (base), a fill that carries white
-   text (solid), a soft tint for backgrounds, and a border (line).
-   The accent is the blue of the 20 kg competition plate. */
+   Each family has a readable foreground (base), a fill (solid), a soft tint
+   for backgrounds, and a border (line). Solids carry --on-solid text, except
+   the saffron warning fill, which carries ink.
+   The palette is shared with the iPhone app: a cool newsprint paper, ink for
+   text, ultramarine for Coach and every action, and one pigment for each
+   area of the journal. */
 :root {
   color-scheme: light dark;
 
-  --canvas: #f2f3f7;
-  --surface: #ffffff;
-  --surface-2: #f6f7f9;
-  --surface-3: #eceef2;
-  --line: #e4e6eb;
-  --line-strong: #cdd1d8;
-  --card-border: transparent;
-  --ink: #15171c;
-  --ink-2: #555b66;
-  --ink-3: #60666f;
-  --on-solid: #ffffff;
+  /* Paper for the page, a lighter sheet for cards, and fill for chips. */
+  --canvas: #efeeea;
+  --surface: #f9f8f5;
+  --surface-2: #f3f2ee;
+  --surface-3: #e4e2db;
+  --line: #dedcd5;
+  --line-strong: #cac7be;
+  --card-border: #e1dfd8;
+  --ink: #17171a;
+  --ink-2: #5d5a54;
+  --ink-3: #625f59;
+  --on-solid: #f9f8f5;
   /* Knock-out lines inside filled icons match the surface behind them. */
   --nav-cut: var(--surface);
   /* Dark panels with white text, e.g. the video stage. Stays dark in both themes. */
-  --inverse: #1d2129;
-  --inverse-hover: #2c313b;
-  --scrim: #0d0f1366;
-  --shadow-float: 0 8px 28px #15171c14, 0 1px 3px #15171c0f;
-  --shadow-dialog: 0 24px 72px #15171c2e;
+  --inverse: #1c1c1f;
+  --inverse-hover: #27272b;
+  --scrim: #17171a66;
+  --shadow-float: 0 8px 28px #17171a14, 0 1px 3px #17171a0f;
+  --shadow-dialog: 0 24px 72px #17171a2e;
 
-  --accent: #1649b8;
-  --accent-solid: #1649b8;
-  --accent-hover: #113d9c;
-  --accent-soft: #e8eefb;
-  --accent-line: #c3d2f2;
+  /* Ultramarine: Coach and every action. */
+  --accent: #1e3caa;
+  --accent-solid: #1e3caa;
+  --accent-hover: #19318b;
+  --accent-soft: #e4e8f6;
+  --accent-line: #bec7e6;
 
-  --success: #18703f;
-  --success-solid: #1a7843;
-  --success-soft: #e5f4ea;
-  --success-line: #bfe3cc;
+  /* Moss: made lifts, saved work and records. */
+  --success: #476b2c;
+  --success-solid: #4c7230;
+  --success-soft: #e8ece0;
+  --success-line: #c6d2ba;
 
-  --danger: #c23434;
-  --danger-solid: #c23434;
-  --danger-soft: #fcebea;
-  --danger-line: #f3c7c5;
+  /* Cinnabar. */
+  --danger: #b3261e;
+  --danger-solid: #b3261e;
+  --danger-soft: #f5e3e0;
+  --danger-line: #e7beb9;
 
-  --warning: #8a5d00;
-  --warning-solid: #9a6a06;
-  --warning-soft: #fdf3dc;
-  --warning-line: #f0dca6;
-  /* Areas of the journal share the one accent; colour is kept for state
-     (made, missed, warnings), not decoration. */
-  --train: var(--accent);
-  --train-soft: var(--accent-soft);
-  --food: var(--accent);
-  --food-soft: var(--accent-soft);
-  --sleep: var(--accent);
-  --sleep-soft: var(--accent-soft);
-  --sleep-solid: var(--accent-solid);
-  --sleep-line: var(--accent-line);
-  --cardio: var(--accent);
-  --cardio-soft: var(--accent-soft);
-  --health: var(--accent);
-  --health-soft: var(--accent-soft);
-  --health-solid: var(--accent-solid);
-  --health-line: var(--accent-line);
+  /* Saffron. */
+  --warning: #85590a;
+  --warning-solid: #e0a940;
+  --warning-soft: #f4ebd9;
+  --warning-line: #e2cfa6;
+
+  /* One pigment per area, as in the app: Moss for training and cardio,
+     Madder for food, Nocturne for sleep and Slate for body and heart.
+     Coach keeps the accent. */
+  --train: var(--success);
+  --train-soft: var(--success-soft);
+  --food: #a9375e;
+  --food-soft: #f4e4e9;
+  --sleep: #5b3f94;
+  --sleep-soft: #ece6f3;
+  --sleep-solid: #5b3f94;
+  --sleep-line: #cfc4e2;
+  --cardio: var(--success);
+  --cardio-soft: var(--success-soft);
+  --health: #4d6476;
+  --health-soft: #e5e9ec;
+  --health-solid: #4d6476;
+  --health-line: #c6cfd6;
   --coach: var(--accent);
   --coach-soft: var(--accent-soft);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #0d0f13;
-    --surface: #171a20;
-    --surface-2: #1d2027;
-    --surface-3: #262a32;
-    --line: #2a2e37;
-    --line-strong: #3a3f4a;
-    --card-border: #262a33;
-    --ink: #eef0f4;
-    --ink-2: #a8aeb9;
-    --ink-3: #8f96a1;
+    --canvas: #121214;
+    --surface: #1c1c1f;
+    --surface-2: #222226;
+    --surface-3: #27272b;
+    --line: #2e2e33;
+    --line-strong: #3e3e44;
+    --card-border: #2a2a2e;
+    --ink: #eeede8;
+    --ink-2: #a4a29c;
+    --ink-3: #93918b;
+    --on-solid: #f5f6ff;
     --scrim: #000000a6;
-    --inverse: #262b35;
-    --inverse-hover: #323845;
+    --inverse: #2a2a2e;
+    --inverse-hover: #36363b;
     --shadow-float: 0 8px 28px #00000066, 0 1px 3px #0000004d;
     --shadow-dialog: 0 24px 72px #000000a6;
 
-    --accent: #8eaefc;
-    --accent-solid: #2d5fd6;
-    --accent-hover: #3a6be0;
-    --accent-soft: #1b2540;
-    --accent-line: #2f3f6a;
+    /* Large fills stay deep so they never glare. */
+    --accent: #9db0ff;
+    --accent-solid: #3653cf;
+    --accent-hover: #4a64d4;
+    --accent-soft: #212742;
+    --accent-line: #2f3c78;
 
-    --success: #6fd29a;
-    --success-solid: #1f7a45;
-    --success-soft: #13291d;
-    --success-line: #21492f;
+    --success: #a7cf84;
+    --success-solid: #4c7230;
+    --success-soft: #232b1e;
+    --success-line: #3a4d2c;
 
-    --danger: #ff8a8a;
-    --danger-solid: #c23a3a;
-    --danger-soft: #331a1b;
-    --danger-line: #5a2b2b;
+    --danger: #ff8a80;
+    --danger-solid: #b3261e;
+    --danger-soft: #3a1f1f;
+    --danger-line: #65302b;
 
-    --warning: #e8bb5f;
-    --warning-solid: #9a6a06;
-    --warning-soft: #2d2413;
-    --warning-line: #54431f;
+    --warning: #f2c255;
+    --warning-solid: #8c5f08;
+    --warning-soft: #33291a;
+    --warning-line: #5a4519;
+
+    --food: #dc6a8e;
+    --food-soft: #3a222c;
+    --sleep: #c2a8f0;
+    --sleep-soft: #2a2336;
+    --sleep-solid: #5b3f94;
+    --sleep-line: #45366a;
+    --health: #a3b9ca;
+    --health-soft: #252a30;
+    --health-solid: #4d6476;
+    --health-line: #3b4753;
   }
 }

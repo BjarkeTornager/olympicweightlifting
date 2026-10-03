@@ -7,6 +7,7 @@ import { MAX_CALL_MINUTES } from "./ai-usage";
 import { providerBudgetSoon } from "./provider-budget";
 import { localClock } from "./agent/time-context";
 import { VOICE_PREFIX } from "./coach-tasks";
+import type { CoachLanguage } from "./coach-language";
 
 // Per-account usage limits on Coach and voice, read from the AI cost ledger
 // (lib/ai-usage.ts), the account's Coach messages and its voice calls. Daily
@@ -63,6 +64,19 @@ export const LIMIT_REPLIES: Record<Limit, string> = {
     "That needed more steps than one reply allows, so I stopped here. Ask about one part at a time.",
   "voice-minutes-day":
     "Voice time for today is used up; it resets at midnight.",
+};
+const COACH_DAY_DA =
+  "Du har nået dagens grænse for Coach; den nulstilles ved midnat. Du kan stadig logge i Train og Food.";
+// Coach's replies in Danish, when that is the reply's language.
+const LIMIT_REPLIES_DA: Partial<Record<Limit, string>> = {
+  provider:
+    "Coach er sat på pause for alle lige nu. Du kan stadig logge i Train og Food.",
+  "coach-messages-day": COACH_DAY_DA,
+  "spend-day-usd": COACH_DAY_DA,
+  "spend-month-usd":
+    "Du har nået månedens grænse for Coach; den nulstilles den 1. Du kan stadig logge i Train og Food.",
+  "spend-turn-usd":
+    "Det krævede flere trin, end ét svar kan rumme, så jeg stoppede her. Spørg om én ting ad gangen.",
 };
 
 export function limitsMode(): "log" | "enforce" {
@@ -227,19 +241,22 @@ function failed(check: LimitCheck, error: unknown) {
 }
 
 // Reports each limit reached once, and returns the reply of the first one
-// that refuses.
+// that refuses, in `language`.
 async function report(
   userId: string,
   limits: Limit[],
   check: LimitCheck,
   seen: Set<Limit>,
+  language: CoachLanguage = "en",
 ) {
   let reply: string | undefined;
   for (const limit of limits) {
     if (seen.has(limit)) continue;
     seen.add(limit);
     if ((await reached(userId, limit, check)) && !reply)
-      reply = LIMIT_REPLIES[limit];
+      reply =
+        (language === "da" ? LIMIT_REPLIES_DA[limit] : undefined) ??
+        LIMIT_REPLIES[limit];
   }
   return reply;
 }
@@ -265,6 +282,8 @@ export function coachLimits(
     // Whether the turn uses the configured provider, whose key can run out
     // (not a model passed in by a test or an eval).
     provider: boolean;
+    // The reply's language, for the limit's reply.
+    language?: CoachLanguage;
   },
 ) {
   const seen = new Set<Limit>();
@@ -287,6 +306,7 @@ export function coachLimits(
           ],
           "turn-start",
           seen,
+          turn.language,
         );
       } catch (error) {
         failed("turn-start", error);
@@ -304,6 +324,7 @@ export function coachLimits(
           reachedLimits(usage, limits, ROUND_LIMITS),
           "round",
           seen,
+          turn.language,
         );
       } catch (error) {
         failed("round", error);

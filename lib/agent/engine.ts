@@ -52,6 +52,8 @@ import { skillsFor, skillTools } from "./skills";
 import { turnTotals, type TurnMetrics } from "./turn-metrics";
 import { imageTiming, localClock } from "./time-context";
 import type { CoachLanguage } from "../coach-language";
+import { coachLines, linesLanguage, undoneReply } from "../coach-lines";
+import { displayMessage } from "../coach-tasks";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
 import { guardChange } from "./change-guards";
@@ -404,11 +406,16 @@ async function turn(
         ),
       ),
     );
+  // The athlete's own words, without a task's instruction. The lines the
+  // server writes into the reply take its language (lib/coach-lines.ts).
+  const words = displayMessage(input.message).text;
+  const language = linesLanguage(input.language, words);
   // Usage limits (lib/usage-limits.ts), checked before anything is paid for.
   const limits = coachLimits(userId, {
     id: input.id,
     timezone: input.timezone,
     provider: model === callModel,
+    language,
   });
   const limitReply = await limits.start();
   if (limitReply) {
@@ -695,8 +702,7 @@ async function turn(
   try {
     // Short-lived proposals contain recovery snapshots. Conversation is retained for 90 days.
     await pruneConversations(userId);
-    let reply =
-      "I couldn’t finish that request. Try a shorter question or use Train to log your session.";
+    let reply = coachLines(language).unfinished;
     let mealReminderUsed = false;
     const routeStarted = Date.now();
     metrics.prepMs = routeStarted - turnStarted;
@@ -1235,9 +1241,12 @@ async function turn(
       messages.push(...retrievedImages);
       retrievedImageIds.forEach((id) => viewedImageIds.add(id));
       if (proposals.length) {
-        reply = directSave
-          ? "Saved to your journal. You can check the details, tell me a correction, or undo below."
-          : "Ready for your review. Check the details below, then save when they look right. Tell me any corrections before saving.";
+        // Coach's answer to a question in the same message decides the
+        // language when the athlete's words alone don't.
+        const receipt = coachLines(
+          linesLanguage(input.language, words, changeAnswer),
+        );
+        reply = directSave ? receipt.saved : receipt.review;
         if (changeAnswer) reply += `\n\n${changeAnswer}`;
         else if (round < 4 && request.includes("?")) {
           // The rules ask for the answer in the change's answer field, but
@@ -1423,10 +1432,7 @@ export async function applyProposal(
             ...turn.response,
             ...(undo &&
             turn.response.proposals.some((p) => p.id === id && p.automatic)
-              ? {
-                  reply:
-                    "Undone. Your journal has been restored to before this change.",
-                }
+              ? { reply: undoneReply(turn.response.reply) }
               : {}),
             proposals: turn.response.proposals.map((p) =>
               p.id === id ? { ...p, status } : p,

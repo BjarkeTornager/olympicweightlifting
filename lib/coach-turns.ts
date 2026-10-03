@@ -1,6 +1,7 @@
 import type { ActionPreview } from "./agent/actions";
 import type { SavedVisual } from "./coach-visuals";
 import type { CoachUpdate } from "./coach-client";
+import { undoneReply } from "./coach-lines";
 
 export type Turn = {
   id: string;
@@ -55,10 +56,7 @@ export function markProposal(
   return turns.map((t) => ({
     ...t,
     ...(undo && t.proposals?.some((v) => v.id === proposalId && v.automatic)
-      ? {
-          reply:
-            "Undone. Your journal has been restored to before this change.",
-        }
+      ? { reply: undoneReply(t.reply) }
       : {}),
     proposals: t.proposals?.map((v) =>
       v.id === proposalId ? { ...v, status } : v,

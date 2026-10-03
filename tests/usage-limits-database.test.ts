@@ -227,6 +227,24 @@ test(
       const native = buildCoach(saved).turns[0];
       assert.equal(native.status, "done");
       assert.equal(native.reply, LIMIT_REPLIES["spend-day-usd"]);
+      // In Danish when that is the reply's language: chosen in the app, or
+      // the one the athlete writes in.
+      const dansk = await db.user();
+      await db.spend(dansk, new Date(), 1.2);
+      for (const asked of [
+        { ...input("Plan my week"), language: "da" as const },
+        input("Hvad skal jeg træne i morgen, og hvor meget skal jeg sove"),
+      ])
+        assert.equal(
+          (await runTurn(dansk, asked, never)).reply,
+          "Du har nået dagens grænse for Coach; den nulstilles ved midnat. Du kan stadig logge i Train og Food.",
+        );
+      assert.deepEqual(
+        buildCoach(await history(dansk)).turns.map((t) => t.reply),
+        Array(2).fill(
+          "Du har nået dagens grænse for Coach; den nulstilles ved midnat. Du kan stadig logge i Train og Food.",
+        ),
+      );
       // Nothing new in the ledger.
       const { rows } = await db.pool.query(
         "SELECT count(*)::int AS n FROM ai_usage WHERE user_id=$1",

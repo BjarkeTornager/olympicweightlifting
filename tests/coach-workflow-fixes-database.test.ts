@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { config } from "dotenv";
 import { prepareAction } from "../lib/agent/actions";
 import { saveCardio } from "../lib/cardio";
+import { coachLines } from "../lib/coach-lines";
 import type { ModelMessage } from "../lib/agent/provider";
 
 config({ path: ".env.local", quiet: true });
@@ -277,8 +278,12 @@ test(
             );
             assert.equal((await readJournal(a)).revision, 0);
             assert.equal(result.proposals[0].status, undefined);
-            assert.match(result.reply, /^Ready for your review/);
-            assert.ok(result.reply.endsWith(answer));
+            // The receipt takes the reply's language: the message and
+            // answer are Danish.
+            assert.equal(
+              result.reply,
+              `${coachLines("da").review}\n\n${answer}`,
+            );
           }
         },
       );

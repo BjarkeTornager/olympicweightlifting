@@ -32,7 +32,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    MainActor.assumeIsolated { Reminders.shared.register() }
+    MainActor.assumeIsolated {
+      Reminders.shared.register()
+      // The serif navigation titles. Not in the App's init: set that early,
+      // they kept SwiftUI from tinting with the AccentColor asset.
+      FolioChrome.apply()
+    }
     Task { await AppModel.observeHealth() }
     return true
   }

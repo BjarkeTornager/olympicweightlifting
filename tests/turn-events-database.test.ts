@@ -917,3 +917,90 @@ test(
     );
   },
 );
+
+test(
+  "read from the start, a retry answered with a limit's reply doesn't replay the failed attempt's error",
+  { skip },
+  async (t) => {
+    const { pool, user, headers, cleanUp, rows } = await setup();
+    t.after(cleanUp);
+    process.env.COACH_TURN_EVENTS = "1";
+    const mode = process.env.LIMITS_MODE;
+    t.after(() => {
+      delete process.env.COACH_TURN_EVENTS;
+      if (mode === undefined) delete process.env.LIMITS_MODE;
+      else process.env.LIMITS_MODE = mode;
+    });
+    const { runTurn } = await import("../lib/agent/engine");
+    const { storedCoachStream } = await import("../lib/agent/stream");
+    const { stopTurnEventListener } = await import("../lib/agent/turn-events");
+    const { LIMIT_REPLIES } = await import("../lib/usage-limits");
+    const { GET } = await import("../app/api/agent/run/route");
+    t.after(stopTurnEventListener);
+    const turn = input();
+    const send = async (
+      model: (
+        messages: unknown,
+        tools: unknown,
+        signal: AbortSignal,
+        onText?: (delta: string) => void,
+      ) => Promise<ModelResponse>,
+    ) =>
+      framesOf(
+        await storedCoachStream(
+          new Request("http://localhost"),
+          "coach",
+          turn.id,
+          (emit, signal, onAttempt) =>
+            runTurn(user, turn, model, { emit, signal, onAttempt }),
+          { key: `${user}:${turn.id}`, background: true },
+        ).text(),
+      );
+
+    // The provider fails the first attempt; its error is the last event.
+    const failed = await send(async (_messages, _tools, _signal, onText) => {
+      onText?.("Let me ");
+      throw Error("The provider is down");
+    });
+    assert.equal(typeOf(failed.at(-1)!), "RUN_ERROR");
+    assert.match((await rows(turn.id)).at(-1)!.event, /"RUN_ERROR"/);
+
+    // The retry is over the day's messages: Coach answers with the limit,
+    // which isn't in the table.
+    process.env.LIMITS_MODE = "enforce";
+    await pool.query(
+      "INSERT INTO user_limits(user_id,key,value) VALUES ($1,'coach-messages-day',0)",
+      [user],
+    );
+    const limited = await send(async () => {
+      throw Error("No model call expected");
+    });
+    assert.deepEqual(limited.map(typeOf), ["RUN_STARTED", "RUN_FINISHED"]);
+    assert.equal(
+      JSON.parse(limited[1].data).result.reply,
+      LIMIT_REPLIES["coach-messages-day"],
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          "SELECT status, attempt FROM agent_turns WHERE id=$1",
+          [turn.id],
+        )
+      ).rows[0],
+      { status: "limited", attempt: 2 },
+    );
+
+    // An app that missed the reply reads from the start: not the first
+    // attempt's error, but nothing, so it reads the saved reply.
+    const resumed = framesOf(
+      await (
+        await GET(
+          new Request(`${headers.Origin}/api/agent/run?turnId=${turn.id}`, {
+            headers,
+          }),
+        )
+      ).text(),
+    );
+    assert.deepEqual(resumed.map(typeOf), ["RUN_STARTED"]);
+  },
+);

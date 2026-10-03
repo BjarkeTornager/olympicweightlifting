@@ -483,7 +483,8 @@ export const agentTurns = pgTable(
     // nothing reads it yet.
     seq: bigint("seq", { mode: "number" }).generatedAlwaysAsIdentity(),
     // How many times the turn was taken to run: 1, and one more for each
-    // retry of a failed or cut-off turn. Its progress events carry it.
+    // retry of a failed or cut-off turn, also one answered with a limit's
+    // reply. Its progress events carry it.
     attempt: integer("attempt").notNull().default(1),
   },
   (t) => [

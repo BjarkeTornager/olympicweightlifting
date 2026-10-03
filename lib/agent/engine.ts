@@ -418,7 +418,13 @@ async function turn(
     const saved = existing[0]
       ? await db
           .update(agentTurns)
-          .set({ status: "limited", response, startedAt: new Date() })
+          .set({
+            status: "limited",
+            response,
+            startedAt: new Date(),
+            // A reader from the start then skips an earlier attempt's events.
+            attempt: sql`${agentTurns.attempt} + 1`,
+          })
           .where(retryable())
           .returning({ id: agentTurns.id })
       : await db

@@ -41,6 +41,7 @@ import { coachLanguageSchema } from "@/lib/coach-language";
 import { countUse } from "@/lib/feature-use";
 import { picturesEnabled } from "@/lib/coach-pictures";
 import { recordVoiceStart } from "@/lib/ai-usage";
+import { voiceLimit } from "@/lib/usage-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,14 @@ export async function POST(request: Request) {
         "Please wait a minute before starting another call.",
         429,
       );
+    // Today's voice minutes, at the start and at every resume
+    // (lib/usage-limits.ts).
+    const limited = await voiceLimit(
+      user.id,
+      timezone,
+      resumeHandle ? "voice-resume" : "voice-start",
+    );
+    if (limited) throw new ApiError(limited, 429);
     const clock = localClock(new Date(), timezone);
     // Conversation older than 90 days goes, cards and pictures with it, as
     // when typing to Coach; a call that can't prune still starts.

@@ -208,7 +208,7 @@ export async function recordVoiceStart(
 const VOICE_START_SLACK_MS = 5 * 60000;
 // The phone ends a call after 30 minutes, so an end that arrives later (the
 // app was suspended mid-call) is not charged beyond that.
-const MAX_CALL_MINUTES = 30;
+export const MAX_CALL_MINUTES = 30;
 
 // The call has ended. Each connection opened for it is costed at its
 // provider's rate, for the minutes from its start to the next connection or

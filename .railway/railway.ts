@@ -53,6 +53,9 @@ export default defineRailway(() => {
       AI_PRICE_EXA_SEARCH: preserve(),
       AI_PRICE_VOICE_GEMINI_MINUTE: preserve(),
       AI_PRICE_VOICE_ELEVENLABS_MINUTE: preserve(),
+      // Usage limits (lib/usage-limits.ts): "enforce" refuses, anything else
+      // only logs, so losing it would quietly stop enforcement.
+      LIMITS_MODE: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

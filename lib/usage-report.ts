@@ -1,11 +1,12 @@
 import { getPool } from "./db";
 import { utcDay } from "./feature-use";
+import { limitsMode } from "./usage-limits";
 
 // The owner's usage page: the main measure and retention from
-// docs/product-principles.md, per-feature counts and AI cost. Only totals
-// and averages leave this module, never a person's records or identity; AI
-// cost per account is shown under the start of its opaque id, never a name
-// or email.
+// docs/product-principles.md, per-feature counts, AI cost and usage limits.
+// Only totals and averages leave this module, never a person's records or
+// identity; AI cost and limits per account are shown under the start of its
+// opaque id, never a name or email.
 
 export type RecordedDates = {
   sleep: string[];
@@ -46,6 +47,20 @@ export type AiCost = {
   accounts: (AiCostTotals & { account: string; you: boolean })[];
   total: AiCostTotals;
 };
+// How often each account was over a usage limit this month (UTC), from the
+// counts the checks keep (lib/usage-limits.ts): would-be refusals while
+// limits only log, refusals once they're enforced.
+export type LimitHits = {
+  mode: "log" | "enforce";
+  // Most first.
+  rows: {
+    account: string;
+    you: boolean;
+    limit: string;
+    logged: number;
+    refused: number;
+  }[];
+};
 export type UsageReport = {
   generatedAt: string;
   people: { total: number; active7: number; active28: number };
@@ -64,6 +79,7 @@ export type UsageReport = {
   // The last 28 days, most-used first.
   features: { feature: string; people: number; uses: number; last: string }[];
   aiCost: AiCost;
+  limits: LimitHits;
 };
 
 const DAY = 86400000;
@@ -128,12 +144,60 @@ export function aiCostReport(
   };
 }
 
+const limitFeature = /^limit\.(log|enforce)\.(.+)$/;
+
+export function limitHits(
+  features: FeatureRow[],
+  now = new Date(),
+  viewerId?: string,
+  mode: LimitHits["mode"] = "log",
+): LimitHits {
+  const month = utcDay(now).slice(0, 7);
+  const byLimit = new Map<
+    string,
+    { userId: string; limit: string; logged: number; refused: number }
+  >();
+  for (const row of features) {
+    const match = limitFeature.exec(row.feature);
+    if (!match || row.day.slice(0, 7) !== month) continue;
+    const key = `${row.userId} ${match[2]}`;
+    const entry = byLimit.get(key) ?? {
+      userId: row.userId,
+      limit: match[2],
+      logged: 0,
+      refused: 0,
+    };
+    if (match[1] === "log") entry.logged += row.count;
+    else entry.refused += row.count;
+    byLimit.set(key, entry);
+  }
+  return {
+    mode,
+    rows: [...byLimit.values()]
+      .map(({ userId, ...e }) => ({
+        account: userId.slice(0, 8),
+        you: userId === viewerId,
+        ...e,
+      }))
+      .sort(
+        (a, b) =>
+          b.logged + b.refused - (a.logged + a.refused) ||
+          a.account.localeCompare(b.account) ||
+          a.limit.localeCompare(b.limit),
+      ),
+  };
+}
+
 export function usageReport(
   people: { id: string; joined: string }[],
   recorded: Map<string, RecordedDates>,
   features: FeatureRow[],
   now = new Date(),
-  ai: { rows: AiCostRow[]; viewerId?: string } = { rows: [] },
+  ai: {
+    rows: AiCostRow[];
+    viewerId?: string;
+    limitsMode?: LimitHits["mode"];
+  } = { rows: [] },
 ): UsageReport {
   const today = utcDay(now);
   // Days on which each person recorded something, and recorded everything.
@@ -210,7 +274,8 @@ export function usageReport(
     { people: Set<string>; uses: number; last: string }
   >();
   for (const row of features) {
-    if (row.day < since) continue;
+    // Limit counts have their own table.
+    if (row.day < since || limitFeature.test(row.feature)) continue;
     const entry = byFeature.get(row.feature) ?? {
       people: new Set<string>(),
       uses: 0,
@@ -247,6 +312,7 @@ export function usageReport(
           a.feature.localeCompare(b.feature),
       ),
     aiCost: aiCostReport(ai.rows, now, ai.viewerId),
+    limits: limitHits(features, now, ai.viewerId, ai.limitsMode),
   };
 }
 
@@ -337,5 +403,6 @@ export async function loadUsageReport(now = new Date(), viewerId?: string) {
   return usageReport(people.rows, recorded, features.rows, now, {
     rows: ai.rows,
     viewerId,
+    limitsMode: limitsMode(),
   });
 }

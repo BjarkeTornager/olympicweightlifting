@@ -7,6 +7,8 @@ import {
 } from "./model-stream";
 import { MAX_PROVIDER_TOOL_CALLS } from "./limits";
 import { recordModelCall } from "../ai-usage";
+import type { SpanAttributes } from "../tracing/attributes";
+import type { TraceSpan } from "../tracing/spans";
 export class ProviderError extends Error {
   constructor(
     message: string,
@@ -81,6 +83,8 @@ export type ModelResponse = ModelMessage & {
   filtered?: boolean;
   // Which model answered and what the call used, for Coach's turn metrics.
   served?: ModelUsage;
+  // The call the content filter blocked before this reply was retried.
+  blocked?: ModelUsage & { ms: number };
 };
 export type ModelUsage = {
   model?: string;
@@ -114,7 +118,12 @@ function servedBy(
 // filtered reply is retried once on a model served outside Azure, with the
 // same zero-retention, no-collection routing.
 export const FILTER_FALLBACK_MODEL = "google/gemini-3.8-flash";
-export type ModelOptions = { purpose?: "video_review"; model?: string };
+export type ModelOptions = {
+  purpose?: "video_review";
+  model?: string;
+  // Each call to the provider becomes a chat span under this one.
+  span?: TraceSpan;
+};
 
 function openAiChatModel(model: string) {
   return /^openai\/gpt-(5\.6|6)-/.test(model);
@@ -393,34 +402,108 @@ export async function callModel(
   onText?: (delta: string) => void,
   options: ModelOptions = {},
 ): Promise<ModelResponse> {
-  const retry = () => {
-    console.warn(
-      JSON.stringify({
-        event: "coach_content_filter_fallback",
-        from: options.model ?? providerConfig()?.model ?? null,
-        to: FILTER_FALLBACK_MODEL,
-      }),
-    );
-    return requestModel(messages, tools, signal, onText, {
-      ...options,
-      model: FILTER_FALLBACK_MODEL,
-    });
-  };
+  const config = providerConfig();
   const canRetry =
-    providerConfig()?.kind === "openrouter" &&
-    (options.model ?? providerConfig()?.model) !== FILTER_FALLBACK_MODEL;
+    config?.kind === "openrouter" &&
+    (options.model ?? config.model) !== FILTER_FALLBACK_MODEL;
+  const started = Date.now();
+  let blocked: ModelUsage | undefined;
+  try {
+    const response = await attempt(messages, tools, signal, onText, options);
+    if (!response.filtered || !canRetry) return response;
+    blocked = response.served;
+  } catch (e) {
+    if (!(e instanceof ContentFiltered) || !canRetry) throw e;
+  }
+  console.warn(
+    JSON.stringify({
+      event: "coach_content_filter_fallback",
+      from: options.model ?? config?.model ?? null,
+      to: FILTER_FALLBACK_MODEL,
+    }),
+  );
+  const ms = Date.now() - started;
+  const response = await attempt(
+    messages,
+    tools,
+    signal,
+    onText,
+    { ...options, model: FILTER_FALLBACK_MODEL },
+    true,
+  );
+  return {
+    ...response,
+    blocked: { model: options.model ?? config?.model, ...blocked, ms },
+  };
+}
+
+// Usage as trace attributes: counts, cost and the model that answered.
+function usageAttributes(served?: ModelUsage): SpanAttributes {
+  return {
+    "gen_ai.response.model": served?.model,
+    "gen_ai.usage.input_tokens": served?.inputTokens,
+    "gen_ai.usage.output_tokens": served?.outputTokens,
+    "gen_ai.usage.cache_read.input_tokens": served?.cachedTokens,
+    "lift.cache_write_tokens": served?.cacheWriteTokens,
+    "lift.cost_usd": served?.costUsd,
+  };
+}
+
+// One call to the provider, traced as one chat span when the caller passed
+// a span: model, tokens, cost and timings, never the messages.
+async function attempt(
+  messages: ModelMessage[],
+  tools: ToolDefinition[],
+  signal: AbortSignal,
+  onText: ((delta: string) => void) | undefined,
+  options: ModelOptions,
+  fallback = false,
+) {
+  if (!options.span?.recording)
+    return requestModel(messages, tools, signal, onText, options);
+  const config = providerConfig();
+  const started = Date.now();
+  let firstToken: number | undefined;
+  const span = options.span.child("chat", "chat", {
+    "gen_ai.provider.name": config?.kind,
+    "gen_ai.request.model":
+      config?.kind === "ollama"
+        ? config.model
+        : (options.model ?? config?.model),
+    "lift.streaming": Boolean(onText),
+    "lift.image_count": messages.reduce(
+      (n, m) => n + (m.images?.length ?? 0),
+      0,
+    ),
+    ...(fallback ? { "lift.fallback": true } : {}),
+  });
   try {
     const response = await requestModel(
       messages,
       tools,
       signal,
-      onText,
+      onText &&
+        ((delta) => {
+          firstToken ??= Date.now() - started;
+          onText(delta);
+        }),
       options,
     );
-    return response.filtered && canRetry ? await retry() : response;
+    span.set({
+      ...usageAttributes(response.served),
+      "lift.filtered": response.filtered === true,
+      "lift.truncated": response.truncated === true,
+      "lift.tool_calls_returned": response.tool_calls?.length ?? 0,
+      "lift.first_token_ms": firstToken,
+    });
+    span.content(messages, response);
+    return response;
   } catch (e) {
-    if (e instanceof ContentFiltered && canRetry) return retry();
+    if (e instanceof ContentFiltered) span.set({ "lift.filtered": true });
+    else span.fail(e);
     throw e;
+  } finally {
+    span.end({ "lift.ms": Date.now() - started });
   }
 }
 

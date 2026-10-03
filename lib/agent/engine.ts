@@ -30,7 +30,7 @@ import {
   type ModelResponse,
   type ToolDefinition,
 } from "./provider";
-import { routeCoachTurn } from "./routing";
+import { JEV_MODEL, routeCoachTurn } from "./routing";
 import { planRoute } from "../route-plan";
 import { recordedRouteVisual } from "../route-summary";
 import { recordedRoute, routeNotesFor } from "../workout-routes";
@@ -61,7 +61,8 @@ import {
   pictureGate,
   reservePicture,
 } from "../coach-pictures";
-import { logFailure } from "../error-log";
+import { errorCategory, logFailure } from "../error-log";
+import { startTrace, type TraceSpan } from "../tracing/spans";
 
 export { toolDefinitions };
 type SavedImage = Awaited<ReturnType<typeof readUserImage>>;
@@ -143,61 +144,129 @@ export const STALE_TURN_MS = 3 * 60000;
 // Food, Activity and so on; the server sorts them just after. Wait for that
 // here (on the server, not the phone's connection) so a meal photo is a Food
 // photo by the time Coach links it to a meal. After 20 seconds, go on.
+// Returns how many were still being sorted at first, and whether the wait
+// ran out.
 async function photosSorted(userId: string, ids: string[]) {
   const deadline = Date.now() + 20000;
+  let pending: number | undefined;
   while (ids.length && Date.now() < deadline) {
     const images = await Promise.all(
       ids.map((id) => imageMetadata(userId, id)),
     );
-    if (!images.some((i) => i.classification.status === "pending")) return;
+    const waiting = images.filter(
+      (i) => i.classification.status === "pending",
+    ).length;
+    pending ??= waiting;
+    if (!waiting) return { pending, timedOut: false };
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
+  return { pending: pending ?? 0, timedOut: ids.length > 0 };
 }
 
-// Every AI call the turn makes is charged to the athlete and the turn in the
-// AI cost ledger (lib/ai-usage.ts).
-export function runTurn(...args: Parameters<typeof coachTurn>) {
-  const [userId, input] = args;
+type TurnInput = {
+  id: string;
+  message: string;
+  revision: number;
+  timezone: string;
+  photoIds?: string[];
+  submittedAt?: string;
+  language?: CoachLanguage;
+};
+type TurnModel = (
+  messages: ModelMessage[],
+  tools: ToolDefinition[],
+  signal: AbortSignal,
+  onText?: (delta: string) => void,
+  options?: ModelOptions,
+) => Promise<ModelResponse>;
+type TurnHooks = {
+  emit?: EmitCoachEvent;
+  signal?: AbortSignal;
+  directLogging?: boolean;
+  liftingBriefReview?: boolean;
+  // The iPhone app's run that carries on in the background; for the trace.
+  background?: boolean;
+  // Observes each executed tool call; used by offline evals.
+  onToolCall?: (name: string, args: unknown, ok: boolean) => void;
+  // False for an app that can't draw a recipe card (an older iPhone build,
+  // or a website not yet reloaded): the recipe is written out instead.
+  recipeCards?: boolean;
+  // Keeps work that outlives the reply, a picture being drawn, running
+  // through a release's shutdown: after() in the routes.
+  waitUntil?: (work: Promise<unknown>) => void;
+};
+
+// One Coach turn, traced as one diagnostic trace (lib/tracing) when tracing
+// is on. The trace ends with the turn, not the connection, so a background
+// run is traced to its saved result. While a deploy shuts the server down,
+// the turn waits briefly for its trace to be sent, since the process exits
+// as soon as the last request closes. Every AI call the turn makes is
+// charged to the athlete and the turn in the AI cost ledger (lib/ai-usage.ts).
+export function runTurn(
+  userId: string,
+  input: TurnInput,
+  model: TurnModel = callModel,
+  hooks: TurnHooks = {},
+) {
   return withAiUsage({ userId, feature: "coach", sourceId: input.id }, () =>
-    coachTurn(...args),
+    tracedTurn(userId, input, model, hooks),
   );
 }
 
-async function coachTurn(
+async function tracedTurn(
   userId: string,
-  input: {
-    id: string;
-    message: string;
-    revision: number;
-    timezone: string;
-    photoIds?: string[];
-    submittedAt?: string;
-    language?: CoachLanguage;
-  },
-  model: (
-    messages: ModelMessage[],
-    tools: ToolDefinition[],
-    signal: AbortSignal,
-    onText?: (delta: string) => void,
-    options?: ModelOptions,
-  ) => Promise<ModelResponse> = callModel,
-  hooks: {
-    emit?: EmitCoachEvent;
-    signal?: AbortSignal;
-    directLogging?: boolean;
-    liftingBriefReview?: boolean;
-    // Observes each executed tool call; used by offline evals.
-    onToolCall?: (name: string, args: unknown, ok: boolean) => void;
-    // False for an app that can't draw a recipe card (an older iPhone build,
-    // or a website not yet reloaded): the recipe is written out instead.
-    recipeCards?: boolean;
-    // Keeps work that outlives the reply, a picture being drawn, running
-    // through a release's shutdown: after() in the routes.
-    waitUntil?: (work: Promise<unknown>) => void;
-  } = {},
+  input: TurnInput,
+  model: TurnModel,
+  hooks: TurnHooks,
+) {
+  const trace = await startTrace(
+    "coach_turn",
+    {
+      userId,
+      // A Coach day: the account and the athlete's local date.
+      session: () =>
+        `coach:${userId}:${athleteDate(input.timezone, input.submittedAt ? new Date(input.submittedAt) : new Date())}`,
+    },
+    {
+      "gen_ai.operation.name": "invoke_agent",
+      "lift.streaming": Boolean(hooks.emit),
+      "lift.background": hooks.background === true,
+      "lift.language": input.language,
+      "lift.photo_count": new Set(input.photoIds ?? []).size,
+      "lift.direct_logging": hooks.directLogging === true,
+    },
+  );
+  try {
+    return await turn(trace, userId, input, model, hooks);
+  } catch (e) {
+    // The athlete's Stop or a closed page cancels; a time limit times out.
+    const aborted = hooks.signal?.aborted === true,
+      timedOut = aborted
+        ? (hooks.signal?.reason as { name?: unknown })?.name === "TimeoutError"
+        : errorCategory(e) === "timeout";
+    const status = timedOut ? "timeout" : aborted ? "cancelled" : "failed";
+    trace.set({ "lift.status": status });
+    if (status !== "cancelled") trace.fail(e);
+    throw e;
+  } finally {
+    trace.end();
+    await trace.settle();
+  }
+}
+
+async function turn(
+  trace: TraceSpan,
+  userId: string,
+  input: TurnInput,
+  model: TurnModel,
+  hooks: TurnHooks,
 ) {
   const turnStarted = Date.now();
-  const metrics: TurnMetrics = { rounds: [] };
+  const metrics: TurnMetrics = {
+    rounds: [],
+    ...(trace.traceId ? { traceId: trace.traceId } : {}),
+  };
+  const prepare = trace.child("prepare");
   const db = getDb();
   const existing = await db
     .select()
@@ -210,7 +279,10 @@ async function coachTurn(
         JSON.stringify(input.photoIds ?? [])
     )
       throw new ApiError("That message identifier was already used.", 409);
-    if (existing[0].response) return existing[0].response;
+    if (existing[0].response) {
+      trace.set({ "lift.status": "replay" });
+      return existing[0].response;
+    }
     const startedAt = existing[0].startedAt ?? existing[0].createdAt;
     if (
       existing[0].status !== "failed" &&
@@ -222,6 +294,7 @@ async function coachTurn(
       );
   }
   const snapshot = await readJournal(userId);
+  trace.set({ "lift.workout_open": Boolean(snapshot.state.activeWorkout) });
   if (snapshot.revision !== input.revision)
     throw new ApiError(
       "Sync your latest journal changes before asking the assistant.",
@@ -254,7 +327,16 @@ async function coachTurn(
     })
   ).filter((c) => c.kind === "voice");
   const photoIds = [...new Set(input.photoIds ?? [])];
-  await photosSorted(userId, photoIds);
+  if (photoIds.length) {
+    const sorting = prepare.child("photos_sorted"),
+      sortStarted = Date.now(),
+      sorted = await photosSorted(userId, photoIds);
+    sorting.end({
+      "lift.wait_ms": Date.now() - sortStarted,
+      "lift.pending_photos": sorted.pending,
+      "lift.timed_out": sorted.timedOut,
+    });
+  }
   const photos = await Promise.all(
     photoIds.map((id) => readUserImage(userId, id)),
   );
@@ -388,6 +470,13 @@ async function coachTurn(
       images: photos.map((p) => p.data.toString("base64")),
     },
   ];
+  if (trace.recording)
+    prepare.set({
+      "lift.history_turns": messages.filter((m) => m.role === "assistant")
+        .length,
+      "lift.voice_transcripts": recentCalls.length,
+      "lift.context_chars": messages.reduce((n, m) => n + m.content.length, 0),
+    });
   const proposals: ActionPreview[] = [];
   const visuals: SavedVisual[] = [];
   let searches = 0;
@@ -445,8 +534,22 @@ async function coachTurn(
     if (loaded.size) metrics.skills = [...loaded];
     return metrics;
   };
-  // One line per turn for the host's logs: no ids, no text.
-  const logMetrics = (status: "done" | "failed") =>
+  // Change kinds of the prepared or saved change, for the trace.
+  let savedKinds: string[] = [];
+  // One line per turn for the host's logs: no ids, no text. The trace gets
+  // the same summary.
+  const logMetrics = (status: "done" | "failed") => {
+    trace.set({
+      "lift.total_ms": metrics.totalMs ?? Date.now() - turnStarted,
+      "lift.first_text_ms": metrics.firstTextMs,
+      "lift.rounds": turnTotals(metrics).rounds,
+      "lift.tools_called": calls,
+      "lift.skills": [...loaded],
+      "lift.proposal": proposals.length > 0,
+      "lift.direct_save": directSave,
+      "lift.change_kinds": savedKinds,
+      "lift.cost_usd_total": turnTotals(metrics).costUsd,
+    });
     console.info(
       JSON.stringify({
         event: "coach_turn_metrics",
@@ -459,12 +562,17 @@ async function coachTurn(
         ...turnTotals(metrics),
       }),
     );
+  };
   try {
     // Short-lived proposals contain recovery snapshots. Conversation is retained for 90 days.
     await pruneConversations(userId);
     let reply =
       "I couldn’t finish that request. Try a shorter question or use Train to log your session.";
     let mealReminderUsed = false;
+    const routeStarted = Date.now();
+    metrics.prepMs = routeStarted - turnStarted;
+    prepare.end();
+    const routeSpan = model === callModel ? trace.child("route") : undefined;
     const routed =
       model === callModel
         ? await routeCoachTurn({
@@ -481,8 +589,43 @@ async function coachTurn(
       metrics.tier = routed.tier;
       metrics.route = routed.source;
       metrics.routingMs = Date.now() - turnStarted;
+      metrics.routeMs = Date.now() - routeStarted;
+      if (
+        routed.jev?.inputTokens !== undefined ||
+        routed.jev?.outputTokens !== undefined
+      )
+        metrics.routeTokens = {
+          input: routed.jev.inputTokens,
+          output: routed.jev.outputTokens,
+        };
+      routeSpan?.end({
+        "lift.tier": routed.tier,
+        "lift.route": routed.source,
+        "lift.ms": metrics.routeMs,
+        ...(routed.jev
+          ? {
+              "gen_ai.operation.name": "chat",
+              "gen_ai.provider.name": "typesafe",
+              "gen_ai.request.model": JEV_MODEL,
+              "gen_ai.usage.input_tokens": routed.jev.inputTokens,
+              "gen_ai.usage.output_tokens": routed.jev.outputTokens,
+            }
+          : {}),
+        "lift.fallback":
+          routed.source === "fallback"
+            ? (routed.jev?.fallback ?? "no_key")
+            : undefined,
+      });
     }
+    let roundSpan: TraceSpan | undefined;
+    let roundKind: "normal" | "meal_reminder" = "normal";
     for (let round = 0; round < 5; round++) {
+      roundSpan?.end();
+      roundSpan = trace.child("round", undefined, {
+        "lift.round": round,
+        "lift.round_kind": answering !== undefined ? "answering" : roundKind,
+      });
+      roundKind = "normal";
       signal.throwIfAborted();
       const messageId = `${input.id}-${round}`;
       let started = false;
@@ -491,9 +634,11 @@ async function coachTurn(
         stepName: "Preparing your response",
       });
       const roundStarted = Date.now();
+      const offered = answering !== undefined ? [] : availableTools();
+      roundSpan.set({ "lift.tools_offered": offered.length });
       const result = await model(
         messages,
-        answering !== undefined ? [] : availableTools(),
+        offered,
         signal,
         emit
           ? (delta) => {
@@ -513,16 +658,24 @@ async function coachTurn(
               });
             }
           : undefined,
-        modelOptions,
+        // Only with tracing on, so evals' models see the options unchanged.
+        roundSpan.recording
+          ? { ...modelOptions, span: roundSpan }
+          : modelOptions,
       );
+      roundSpan.set({ "lift.tool_calls": result.tool_calls?.length ?? 0 });
       signal.throwIfAborted();
       if (started) emit?.({ type: EventType.TEXT_MESSAGE_END, messageId });
       emit?.({
         type: EventType.STEP_FINISHED,
         stepName: "Preparing your response",
       });
-      const { served, ...message } = result;
-      metrics.rounds.push({ ...served, ms: Date.now() - roundStarted });
+      const { served, blocked, ...message } = result;
+      if (blocked) metrics.rounds.push({ ...blocked, filtered: true });
+      metrics.rounds.push({
+        ...served,
+        ms: Date.now() - roundStarted - (blocked?.ms ?? 0),
+      });
       messages.push(message);
       if (answering !== undefined) {
         reply = [answering, result.content.trim()].filter(Boolean).join("\n\n");
@@ -536,6 +689,7 @@ async function coachTurn(
           shouldResumeMealLogging(request, result.content)
         ) {
           mealReminderUsed = true;
+          roundKind = "meal_reminder";
           messages.push({
             role: "system",
             content: `The last response held a reported meal for confirmation of an estimate. Recheck the current request and existing meal, then finish the authorised save in this turn. Do not require another message merely to confirm the whole serving or meat type. ${mealLoggingPolicy(true)}`,
@@ -548,6 +702,7 @@ async function coachTurn(
       if (result.tool_calls.length > MAX_EXECUTED_TOOLS - calls) {
         // Keep every provider call ID paired with a result. Execute none of an
         // oversized batch, leaving budget for a corrected batched lookup.
+        roundSpan.event("batch_guard", { "lift.reason": "too_many_tools" });
         for (const call of result.tool_calls)
           messages.push({
             role: "tool",
@@ -566,6 +721,7 @@ async function coachTurn(
       ) {
         // A turn commits one change. Reject the whole batch instead of saving
         // the first meal and silently abandoning the other photos/meals.
+        roundSpan.event("batch_guard", { "lift.reason": "multiple_changes" });
         for (const call of result.tool_calls)
           messages.push({
             role: "tool",
@@ -590,6 +746,12 @@ async function coachTurn(
         const stepName = toolStep(name);
         signal.throwIfAborted();
         emit?.({ type: EventType.STEP_STARTED, stepName });
+        // Named only for a tool Coach has: the model can invent any name.
+        const known = Object.hasOwn(specifications, name) ? name : "unknown";
+        const toolSpan = roundSpan.child(`tool.${known}`, "execute_tool", {
+            "gen_ai.tool.name": known,
+          }),
+          toolStarted = Date.now();
         let output: unknown;
         // Change kinds for the usage counts; never their content.
         let changeKinds: string[] = [];
@@ -611,6 +773,7 @@ async function coachTurn(
               specifications.load_skills.schema.parse(args);
             const added = wanted.filter((skill) => !loaded.has(skill));
             added.forEach((skill) => loaded.add(skill));
+            toolSpan.set({ "lift.skills_loaded": added.length });
             output = {
               loaded: wanted,
               instructions: skillInstructions(
@@ -628,6 +791,7 @@ async function coachTurn(
                 "Use one photo gallery and at most three visuals per reply. Explain any remaining matches.",
               );
             const a = specifications.show_images.schema.parse(args);
+            toolSpan.set({ "lift.image_count": a.imageIds.length });
             // All-or-nothing ownership check before emitting or persisting IDs.
             await Promise.all(
               a.imageIds.map((id) => imageMetadata(userId, id)),
@@ -660,6 +824,7 @@ async function coachTurn(
             const selected = await Promise.all(
               ids.map((id) => readUserImage(userId, id)),
             );
+            toolSpan.set({ "lift.image_count": selected.length });
             // Pixels are transient model context, never persisted in chat or SSE.
             if (selected.length)
               retrievedImages.push({
@@ -682,6 +847,7 @@ async function coachTurn(
             searches++;
             const a = specifications.search_web.schema.parse(args);
             const found = await searchWeb(a, { signal });
+            toolSpan.set({ "lift.result_count": found.length });
             output = {
               query: a.query,
               results: found,
@@ -820,6 +986,8 @@ async function coachTurn(
             };
           } else if (isReadTool(key)) {
             output = await runReadTool(key, args, readContext);
+            if (Array.isArray(output))
+              toolSpan.set({ "lift.rows": output.length });
           } else if (key === "prepare_change" || key === "log_entry") {
             if (proposals.length)
               throw Error("Only one proposal can be prepared at a time.");
@@ -844,6 +1012,7 @@ async function coachTurn(
               throw Error(
                 "Read current_workout first and use its workout, entry and set IDs for the correction.",
               );
+            toolSpan.set({ "lift.change_kinds": changeKinds });
             for (const action of requested.kind === "record_bundle"
               ? requested.entries
               : [requested])
@@ -856,6 +1025,9 @@ async function coachTurn(
                 recent,
                 saving,
                 liftingBriefReview: hooks.liftingBriefReview,
+              }).catch((e) => {
+                toolSpan.set({ "lift.guard_rejected": true });
+                throw e;
               });
             const prepared = prepareAction(
                 snapshot.state,
@@ -905,11 +1077,13 @@ async function coachTurn(
             };
             directSave = saving;
             changeAnswer = answer;
+            savedKinds = changeKinds;
             proposals.push(preview);
             output = { prepared: true, saved: false, review: preview };
           }
         } catch (e) {
           output = { error: toolError(name, e) };
+          toolSpan.fail(e);
         }
         const succeeded = !(
           output &&
@@ -925,6 +1099,12 @@ async function coachTurn(
         signal.throwIfAborted();
         emit?.({ type: EventType.STEP_FINISHED, stepName });
         const encoded = JSON.stringify(output);
+        toolSpan.end({
+          "lift.ok": succeeded,
+          "lift.ms": Date.now() - toolStarted,
+          "lift.result_chars": encoded.length,
+          "lift.result_too_large": encoded.length > 60000,
+        });
         messages.push({
           role: "tool",
           tool_name: name,
@@ -961,6 +1141,7 @@ async function coachTurn(
         break;
       }
     }
+    roundSpan?.end();
     signal.throwIfAborted();
     const response = {
       reply: withoutEmDashes(reply),
@@ -972,6 +1153,11 @@ async function coachTurn(
     // Commit the entry, its Undo snapshot and the durable chat receipt together.
     // Cancellation before this transaction rolls back everything. Once committed,
     // reconnecting or retrying this run ID retrieves the same saved receipt.
+    const commit = trace.child("commit", undefined, {
+        "lift.proposal": Boolean(preparedProposal),
+        "lift.direct_save": directSave,
+      }),
+      commitStarted = Date.now();
     await db.transaction(async (tx) => {
       signal.throwIfAborted();
       if (preparedProposal) {
@@ -997,7 +1183,9 @@ async function coachTurn(
         .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
       signal.throwIfAborted();
     });
+    commit.end({ "lift.ms": Date.now() - commitStarted });
     logMetrics("done");
+    trace.set({ "lift.status": "done" });
     return response;
   } catch (e) {
     await db

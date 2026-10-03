@@ -45,6 +45,8 @@ export default defineRailway(() => {
       VOICE_NAME: preserve(),
       VOICE_MODEL: preserve(),
       ELEVENLABS_API_KEY: preserve(),
+      // Dish pictures on recipe cards; empty or missing switches them off.
+      COACH_PICTURE_MODEL: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

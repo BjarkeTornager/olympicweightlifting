@@ -20,6 +20,8 @@ import {
 import { flattenVisual } from "@/lib/native-api";
 import { countUse } from "@/lib/feature-use";
 import { drawPicture } from "@/lib/coach-pictures";
+import { traced } from "@/lib/tracing/spans";
+import { callSession } from "@/lib/tracing/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -58,39 +60,61 @@ export async function POST(request: Request) {
       })
       .strict()
       .parse(await readJson(request, 32000));
-    // An app that can't draw cards gets an answer the coach can act on.
-    const refused = cardRefusal(input.name, request.headers);
-    if (refused)
-      return Response.json(
-        { ok: false, error: refused },
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    const today = localClock(new Date(), input.timezone).date;
-    try {
-      const outcome = await runVoiceTool(user.id, { ...input, today });
-      // The picture to draw stays on the server.
-      const { job, ...result } = { job: undefined, ...outcome };
-      if (result.ok) void countUse(user.id, `voice.tool.${input.name}`);
-      // A picture of the dish is drawn once the card is on screen; the apps
-      // fetch it when it is ready.
-      if (job) after(() => drawPicture(job));
-      // The website draws the stored visual; the iPhone the flat shape it
-      // decodes everywhere else (CoachVisual).
-      return Response.json(
-        "visual" in result && result.visual
-          ? { ...result, card: flattenVisual(result.visual) }
-          : result,
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    } catch (error) {
-      if (!(error instanceof Error) || error instanceof ApiError) throw error;
-      if (!(error instanceof z.ZodError) && error.constructor !== Error)
-        logFailure("voice_action_failed", error);
-      return Response.json(
-        { ok: false, error: voiceFailure(error) },
-        { headers: { "Cache-Control": "no-store" } },
-      );
-    }
+    // Traced as voice_tool (lib/tracing): the tool's name, whether it
+    // worked and saved, and a failure's category, never its arguments or
+    // result.
+    return await traced(
+      "voice_tool",
+      { userId: user.id, session: () => callSession(user.id, input.callId) },
+      {
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.name": input.name,
+      },
+      async (trace) => {
+        // An app that can't draw cards gets an answer the coach can act on.
+        const refused = cardRefusal(input.name, request.headers);
+        if (refused) {
+          trace.set({ "lift.ok": false });
+          return Response.json(
+            { ok: false, error: refused },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        }
+        const today = localClock(new Date(), input.timezone).date;
+        try {
+          const outcome = await runVoiceTool(user.id, { ...input, today });
+          // The picture to draw stays on the server.
+          const { job, ...result } = { job: undefined, ...outcome };
+          trace.set({
+            "lift.ok": result.ok,
+            "lift.saved": "saveId" in result && Boolean(result.saveId),
+          });
+          if (result.ok) void countUse(user.id, `voice.tool.${input.name}`);
+          // A picture of the dish is drawn once the card is on screen; the
+          // apps fetch it when it is ready.
+          if (job) after(() => drawPicture(job));
+          // The website draws the stored visual; the iPhone the flat shape it
+          // decodes everywhere else (CoachVisual).
+          return Response.json(
+            "visual" in result && result.visual
+              ? { ...result, card: flattenVisual(result.visual) }
+              : result,
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        } catch (error) {
+          if (!(error instanceof Error) || error instanceof ApiError)
+            throw error;
+          if (!(error instanceof z.ZodError) && error.constructor !== Error)
+            logFailure("voice_action_failed", error);
+          trace.set({ "lift.ok": false });
+          trace.fail(error);
+          return Response.json(
+            { ok: false, error: voiceFailure(error) },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        }
+      },
+    );
   } catch (e) {
     return apiFailure(e);
   }

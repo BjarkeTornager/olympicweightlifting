@@ -7,9 +7,12 @@
 import { EXERCISES } from "./domain";
 import {
   modelRequest,
+  ProviderError,
   providerConfig,
   readModelResponse,
+  usageAttributes,
 } from "./agent/provider";
+import { noTrace, type TraceSpan } from "./tracing/spans";
 
 export type Line = { role: "you" | "coach"; text: string };
 export const TIDY_MODEL = "openai/gpt-5.6-luna";
@@ -63,16 +66,19 @@ type Fetch = typeof fetch;
 const CHUNK = 80;
 
 // Tidies a whole call, 80 lines at a time; a chunk that fails keeps its raw
-// lines. Null when nothing could be tidied.
+// lines. Null when nothing could be tidied. Each chunk's model call is a
+// chat span under `span` (lib/tracing), with a failure's category.
 export async function tidyTranscript(
   raw: Line[],
   transport: Fetch = fetch,
+  span: TraceSpan = noTrace,
 ): Promise<Line[] | null> {
   const chunks: Line[][] = [];
   let tidied = false;
+  span.set({ "lift.chunks": Math.ceil(raw.length / CHUNK) });
   for (let i = 0; i < raw.length; i += CHUNK) {
     const part = raw.slice(i, i + CHUNK);
-    const done = await tidyChunk(part, transport).catch(() => null);
+    const done = await tidyChunk(part, transport, span).catch(() => null);
     tidied ||= Boolean(done);
     chunks.push(done ?? part);
   }
@@ -82,9 +88,34 @@ export async function tidyTranscript(
 async function tidyChunk(
   raw: Line[],
   transport: Fetch,
+  span: TraceSpan,
 ): Promise<Line[] | null> {
   const config = providerConfig();
   if (!config || config.kind !== "openrouter" || !raw.length) return null;
+  const chat = span.child("chat", "chat", {
+    "gen_ai.provider.name": "openrouter",
+    "gen_ai.request.model": TIDY_MODEL,
+    "lift.lines": raw.length,
+  });
+  const started = Date.now();
+  try {
+    const tidy = await requestTidy(raw, transport, config, chat);
+    chat.set({ "lift.ok": Boolean(tidy) });
+    return tidy;
+  } catch (error) {
+    chat.fail(error);
+    throw error;
+  } finally {
+    chat.end({ "lift.ms": Date.now() - started });
+  }
+}
+
+async function requestTidy(
+  raw: Line[],
+  transport: Fetch,
+  config: NonNullable<ReturnType<typeof providerConfig>>,
+  chat: TraceSpan,
+): Promise<Line[] | null> {
   const request = modelRequest(
     [
       { role: "system", content: tidyInstructions },
@@ -115,6 +146,8 @@ async function tidyChunk(
   });
   if (!response.ok) {
     await response.body?.cancel();
+    chat.set({ "lift.http_status": response.status });
+    chat.fail(new ProviderError("Tidying failed.", response.status));
     return null;
   }
   const reply = await readModelResponse(
@@ -122,6 +155,10 @@ async function tidyChunk(
     "openrouter",
     TIDY_MODEL,
   );
+  chat.set({
+    ...usageAttributes(reply.served),
+    "lift.truncated": reply.truncated === true,
+  });
   if (reply.truncated) return null;
   const json = reply.content.slice(
     reply.content.indexOf("{"),

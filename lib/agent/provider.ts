@@ -438,7 +438,7 @@ export async function callModel(
 }
 
 // Usage as trace attributes: counts, cost and the model that answered.
-function usageAttributes(served?: ModelUsage): SpanAttributes {
+export function usageAttributes(served?: ModelUsage): SpanAttributes {
   return {
     "gen_ai.response.model": served?.model,
     "gen_ai.usage.input_tokens": served?.inputTokens,

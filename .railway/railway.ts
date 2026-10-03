@@ -47,6 +47,12 @@ export default defineRailway(() => {
       ELEVENLABS_API_KEY: preserve(),
       // Dish pictures on recipe cards; empty or missing switches them off.
       COACH_PICTURE_MODEL: preserve(),
+      // AI cost ledger prices (lib/ai-usage.ts); unset keeps the built-in
+      // price for Jev routing, Exa searches and each provider's voice minute.
+      AI_PRICE_JEV_REQUEST: preserve(),
+      AI_PRICE_EXA_SEARCH: preserve(),
+      AI_PRICE_VOICE_GEMINI_MINUTE: preserve(),
+      AI_PRICE_VOICE_ELEVENLABS_MINUTE: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

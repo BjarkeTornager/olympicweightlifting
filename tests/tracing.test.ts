@@ -708,15 +708,18 @@ test("with TRACING off the janitor still starts and sweeps, and accounts still h
     );
     const before = Date.now();
     await sweepTraces();
+    const after = Date.now();
     assert.equal(sent.length, 1);
     assert.equal(
       sent[0].url,
       "http://127.0.0.1:5999/api/2.0/mlflow/traces/delete-traces",
     );
     assert.equal(sent[0].body.experiment_id, "7");
-    assert.ok(
-      Number(sent[0].body.max_timestamp_millis) <= before - 30 * 86400000,
-    );
+    // The cutoff is 30 days before the sweep ran, which was some time
+    // between the two clock readings.
+    const cutoff = Number(sent[0].body.max_timestamp_millis);
+    assert.ok(cutoff >= before - 30 * 86400000, `${cutoff} before ${before}`);
+    assert.ok(cutoff <= after - 30 * 86400000, `${cutoff} after ${after}`);
     assert.deepEqual(JSON.parse(String(info.mock.calls[0].arguments[0])), {
       event: "trace_retention",
       deleted: 4,

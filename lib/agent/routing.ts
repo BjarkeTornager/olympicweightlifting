@@ -8,14 +8,23 @@ export const COACH_MODELS = {
 } as const;
 export type CoachTier = keyof typeof COACH_MODELS;
 export type RouteSource = "off" | "rules" | "jev" | "fallback";
+// How the call to Jev went, for Coach's metrics and trace: time, tokens and,
+// when the rules decided instead, why. Never the message.
+export type JevCall = {
+  ms: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  fallback?: "timeout" | "error";
+};
 export type CoachRoute = {
   model: string;
   tier: CoachTier;
   reason: string;
   source: RouteSource;
+  jev?: JevCall;
 };
 
-const MODEL = "jev-1.13.0";
+export const JEV_MODEL = "jev-1.13.0";
 const ACCEPT = 0.85;
 const HARD_MASS = 0.6;
 const JEV_TIMEOUT_MS = 2500;
@@ -59,17 +68,11 @@ const routingQuestions = {
 
 const probability = z.number().finite().min(0).max(1);
 const responseSchema = z.object({
-  model: z.literal(MODEL),
+  model: z.literal(JEV_MODEL),
   answers: z.object({
     work_kind: z.object({
       type: z.literal("choice"),
-      choice: z.enum([
-        "log",
-        "correct",
-        "explain",
-        "plan",
-        "mixed_or_unclear",
-      ]),
+      choice: z.enum(["log", "correct", "explain", "plan", "mixed_or_unclear"]),
       probabilities: z.record(z.string(), probability),
       confidence: probability,
     }),
@@ -132,7 +135,9 @@ export function rulesRoute(input: {
   return { tier: "luna", reason: input.photoCount ? "vision-log" : "routine" };
 }
 
-export function policyFromJev(raw: unknown): Omit<CoachRoute, "source" | "model"> {
+export function policyFromJev(
+  raw: unknown,
+): Omit<CoachRoute, "source" | "model"> {
   const data = responseSchema.parse(raw);
   const kind = data.answers.work_kind;
   const difficulty = data.answers.difficulty;
@@ -185,11 +190,42 @@ export async function routeCoachTurn(
   const key = process.env.TYPESAFE_API_KEY?.trim();
   if (!key)
     return { ...rules, model: COACH_MODELS[rules.tier], source: "fallback" };
+  const started = Date.now();
   try {
-    const decided = await askJev(input, key, transport, input.signal);
-    return { ...decided, model: COACH_MODELS[decided.tier], source: "jev" };
-  } catch {
-    return { ...rules, model: COACH_MODELS[rules.tier], source: "fallback" };
+    const { usage, ...decided } = await askJev(
+      input,
+      key,
+      transport,
+      input.signal,
+    );
+    return {
+      ...decided,
+      model: COACH_MODELS[decided.tier],
+      source: "jev",
+      jev: {
+        ms: Date.now() - started,
+        ...(usage?.input_tokens !== undefined
+          ? { inputTokens: usage.input_tokens }
+          : {}),
+        ...(usage?.output_tokens !== undefined
+          ? { outputTokens: usage.output_tokens }
+          : {}),
+      },
+    };
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "";
+    return {
+      ...rules,
+      model: COACH_MODELS[rules.tier],
+      source: "fallback",
+      jev: {
+        ms: Date.now() - started,
+        fallback:
+          name === "TimeoutError" || name === "AbortError"
+            ? "timeout"
+            : "error",
+      },
+    };
   }
 }
 
@@ -204,7 +240,7 @@ async function askJev(
   signal?: AbortSignal,
 ) {
   const body = JSON.stringify({
-    model: MODEL,
+    model: JEV_MODEL,
     state: {
       latest_message: input.message.slice(0, 1500),
       photo_count: input.photoCount,
@@ -230,5 +266,5 @@ async function askJev(
     throw Error("Jev routing unavailable.");
   }
   const raw: unknown = await response.json();
-  return policyFromJev(raw);
+  return { ...policyFromJev(raw), usage: responseSchema.parse(raw).usage };
 }

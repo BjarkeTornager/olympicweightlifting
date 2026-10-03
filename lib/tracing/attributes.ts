@@ -108,7 +108,7 @@ export const attributes = {
   // Tools: outcome, timing and counts only.
   "lift.ok": flag,
   "lift.ms": amount,
-  "lift.result_bytes": count,
+  "lift.result_chars": count,
   "lift.result_too_large": flag,
   "lift.result_count": count,
   "lift.skills_loaded": count,

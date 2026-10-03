@@ -13,4 +13,12 @@ export async function register() {
     const { startVideoWorker } = await import("./lib/video/worker");
     startVideoWorker();
   }
+  // Deletes diagnostic traces past their retention (lib/tracing).
+  if (
+    process.env.NEXT_RUNTIME === "nodejs" &&
+    process.env.TRACING === "metadata"
+  ) {
+    const { startTraceJanitor } = await import("./lib/tracing/janitor");
+    startTraceJanitor();
+  }
 }

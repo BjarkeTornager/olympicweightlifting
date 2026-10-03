@@ -2,7 +2,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Dumbbell, LockKeyhole, LogIn } from "@/components/ui/icons";
+import { LockKeyhole, LogIn } from "@/components/ui/icons";
+import { BrandMark } from "@/components/brand-mark";
 import type { Identity } from "@/lib/model";
 import { Button } from "./ui/button";
 import { WhistleIcon } from "./ui/journal-icons";
@@ -87,7 +88,7 @@ function Landing({
       <header className="landing-header">
         <Link className="brand" href="/">
           <span className="brand-icon">
-            <Dumbbell size={22} />
+            <BrandMark />
           </span>{" "}
           Lift Journal
         </Link>
@@ -104,9 +105,9 @@ function Landing({
             <em>Your private space.</em>
           </h1>
           <p className="lead">
-            A private health journal you can talk to. Tell Coach how you
-            slept, what you ate and how you moved, and it keeps the record and
-            tells you what it means.
+            A private health journal you can talk to. Tell Coach how you slept,
+            what you ate and how you moved, and it keeps the record and tells
+            you what it means.
           </p>
           <div className="landing-signin">
             {phase === "checking" ? (

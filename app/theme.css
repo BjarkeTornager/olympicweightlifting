@@ -30,6 +30,10 @@
   --shadow-float: 0 8px 28px #17171a14, 0 1px 3px #17171a0f;
   --shadow-dialog: 0 24px 72px #17171a2e;
 
+  /* The split-disc mark: Coach's ultramarine half and your vermilion one. */
+  --mark-coach: #1e3caa;
+  --mark-you: #ef5b2c;
+
   /* Ultramarine: Coach and every action. */
   --accent: #1e3caa;
   --accent-solid: #1e3caa;
@@ -94,6 +98,9 @@
     --inverse-hover: #36363b;
     --shadow-float: 0 8px 28px #00000066, 0 1px 3px #0000004d;
     --shadow-dialog: 0 24px 72px #000000a6;
+
+    --mark-coach: #5c76ff;
+    --mark-you: #ff6b3d;
 
     /* Large fills stay deep so they never glare. */
     --accent: #9db0ff;

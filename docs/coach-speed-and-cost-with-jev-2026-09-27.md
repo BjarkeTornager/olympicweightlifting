@@ -2,6 +2,8 @@
 
 **Status, 27 September:** measurement shipped in #30 (`npm run coach:metrics`), and step 1 in #31. Step 1 needed a cache breakpoint as well as moving the date: on six test turns, routine Luna turns went from about $0.009 to $0.002 each once the cache was warm. A GEPA run on the logging rules ([report](gepa-logging-rules-2026-09-27.md)) found no better wording and confirmed that step 4 is the way to cut the extra read round. Step 4 then shipped for today's check-ins, activities and new meals. On the workflow benchmark (60 conversations each), one-fact logs went from two model calls to one; overall, rounds per turn fell from 1.88 to 1.44, cost per turn by 22% and median time per turn from 7.3 to 5.3 seconds, while passes rose from 57 to 60.
 
+**Status, 3 October:** questions about the athlete's own records that Jev splits between `log` and `explain` now go to Luna instead of Terra. On the same messages Luna passed 45 of 46 turns and Terra 40 of 40, at a ninth or less of the cost per turn ([note](coach-cheaper-lookups-2026-10-03.md)).
+
 A proposal, not a change. It builds on the [Jev assessment](jev-assessment-2026-09-19.md), the [classifier benchmark](jev-benchmark-2026-09-19.md) and the [workflow benchmark](jev-workflow-benchmark-2026-09-19.md), and on today's code.
 
 ## Where the time and money go today

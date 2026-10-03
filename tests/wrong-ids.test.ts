@@ -4,7 +4,7 @@ import { emptyJournal } from "../lib/domain";
 import { saveCardio } from "../lib/cardio";
 import { prepareSetCorrection } from "../lib/agent/prepare-workouts";
 import { guardChange } from "../lib/agent/change-guards";
-import { newTurnReads } from "../lib/agent/read-tools";
+import { newTurnReads, runReadTool } from "../lib/agent/read-tools";
 import type { JournalState } from "../lib/model";
 
 const today = "2026-09-24";
@@ -93,4 +93,56 @@ test("a cardio correction with an unknown id says the id is wrong, not unread", 
     /No activity with that cardioId/,
   );
   await assert.rejects(guard(run.id), /Read the full original cardio activity/);
+});
+
+test("an exercise name used as a filter id reads that exercise; an unknown one is refused", async () => {
+  const state = withWorkout();
+  const history = structuredClone(state.activeWorkout!);
+  history.id = "h1";
+  history.date = "2026-09-17";
+  history.exercises = [
+    { ...history.exercises[0], id: "e2", exerciseId: "clean_and_jerk" },
+    { ...history.exercises[0], id: "e3", exerciseId: "custom:Zercher squat" },
+  ];
+  state.sessions.push(history);
+  const ctx = {
+    userId: "u",
+    state,
+    currentDate: today,
+    timezone: "UTC",
+    reads: newTurnReads(),
+  };
+  const summary = async (exerciseId: string) =>
+    (await runReadTool(
+      "training_summary",
+      { from: "2026-09-14", exerciseId },
+      ctx,
+    )) as { sessions: number; records: { exerciseId: string }[] };
+  // Before, "clean and jerk" matched nothing and read as "no sessions".
+  for (const name of ["clean_and_jerk", "clean and jerk", "Clean & Jerk"]) {
+    const read = await summary(name);
+    assert.equal(read.sessions, 1, name);
+    assert.equal(read.records[0].exerciseId, "clean_and_jerk");
+  }
+  const custom = (await runReadTool(
+    "find_sessions",
+    { exerciseId: "zercher squat" },
+    ctx,
+  )) as { sessions: { id: string }[] };
+  assert.deepEqual(
+    custom.sessions.map((s) => s.id),
+    ["h1"],
+  );
+  // A catalogue exercise the athlete never did is a real empty answer.
+  assert.equal((await summary("front squat")).sessions, 0);
+  await assert.rejects(
+    summary("squats"),
+    /No exercise has the id "squats"\. Use an exact exerciseId such as .*back_squat/,
+  );
+  await assert.rejects(
+    runReadTool("lifting_review", { exerciseId: "clean and jerks" }, ctx),
+    /No exercise has the id/,
+  );
+  // A filtered read still doesn't count as reading every session of the dates.
+  assert.deepEqual(ctx.reads.trainingRanges, []);
 });

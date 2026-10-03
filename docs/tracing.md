@@ -12,7 +12,7 @@ Each unit of work is one trace, with a root span and children:
 
 | Root | When | Children and what the root records |
 |---|---|---|
-| `coach_turn` | Each Coach turn, typed or from the iPhone in the background | `prepare` (and `photos_sorted`), `route` (Jev's tokens), one `round` per model round, one `chat` per provider call (including a call the content filter blocked), one `tool.<name>` per tool, `commit`. Status, rounds, tools, skills, change kinds, total cost. The trace id is saved in the turn's metrics as `traceId` |
+| `coach_turn` | Each Coach turn, typed or from the iPhone in the background | `prepare` (and `photos_sorted`), `route` (the tier, how it was chosen, the reason code such as `lookup` in `lift.route_reason`, and Jev's tokens), one `round` per model round, one `chat` per provider call (including a call the content filter blocked), one `tool.<name>` per tool, `commit`. Status, rounds, tools, skills, change kinds, total cost. The trace id is saved in the turn's metrics as `traceId` |
 | `image_tag` | Each tagging run of a photo | One `chat`. What started it (`upload`, `upload_background`, `retag`, or `retry` by the sweeper), whether it worked, how many tags and whether it was confident. Never the category or the tags |
 | `voice_setup` | Each `voice/session` request, a call's start or resume | `context` and `mint_token` (Gemini) or `signed_url` (ElevenLabs). Provider, purpose, language, resumed, whether the app draws cards, the instruction's length, and the HTTP status of a refusal (429 for a limit) |
 | `voice_tool` | Each `voice/action` request | The tool's name, whether it worked and saved |

@@ -90,6 +90,21 @@ export const attributes = {
   // Routing, rounds and model calls.
   "lift.tier": oneOf("luna", "terra", "astra"),
   "lift.route": oneOf("off", "rules", "jev", "fallback"),
+  // Why the tier was chosen: ROUTE_REASONS in lib/agent/routing.ts.
+  "lift.route_reason": oneOf(
+    "configured",
+    "routine",
+    "vision-log",
+    "plan",
+    "mixed-plan",
+    "lookup",
+    "uncertain",
+    "high-stakes",
+    "judgment",
+    "log",
+    "correct",
+    "explain",
+  ),
   // True on the content-filter retry; on routing, why Jev was not used.
   "lift.fallback": either(flag, oneOf("timeout", "error", "no_key")),
   "lift.round": count,

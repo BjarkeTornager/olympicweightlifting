@@ -254,6 +254,7 @@ test(
     assert.equal(route["gen_ai.usage.input_tokens"], 812);
     assert.equal(route["lift.route"], "jev");
     assert.equal(route["lift.tier"], "luna");
+    assert.equal(route["lift.route_reason"], "log");
 
     // The blocked call keeps its own span and usage.
     const chats = named("chat").map((s) => s.attributes);
@@ -291,6 +292,7 @@ test(
       [true, false, false],
     );
     assert.deepEqual(metrics.routeTokens, { input: 812, output: 9 });
+    assert.equal(metrics.routeReason, "log");
     assert.ok(metrics.prepMs >= 0 && metrics.routeMs >= 0);
     assert.ok(metrics.routingMs >= metrics.prepMs);
 

@@ -171,6 +171,21 @@ test("volume, rep records and local calendar dates remain accurate", () => {
     stats.records.find((r) => r.exerciseId === "romanian_deadlift")!.weight,
     100,
   );
+  assert.equal("lifts" in stats.recent[0], false);
+  // Filtered to one exercise, each recent session lists its logged sets.
+  const deadlifts = trainingSummary(
+    state,
+    "2026-09-01",
+    "2026-09-06",
+    "romanian_deadlift",
+  ).recent[0];
+  assert.equal(deadlifts?.sets, 4);
+  assert.equal(deadlifts.lifts?.length, 4);
+  assert.deepEqual(deadlifts.lifts?.at(-1), {
+    weight: 120,
+    reps: 8,
+    result: "miss",
+  });
   assert.equal(weeklyVolume(state)[0].week, "2026-08-31");
   assert.equal(formatSet(0, 16), "Bodyweight × 16");
   assert.equal(

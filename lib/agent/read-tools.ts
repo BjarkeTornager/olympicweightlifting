@@ -9,7 +9,7 @@ import { liftingReview } from "../lifting-coach";
 import { liftingGuide } from "./lifting-guide";
 import { mealTypeConflict } from "./knowledge";
 import { liftingKnowledge } from "../lifting-resources";
-import { days, exerciseName, program } from "../domain";
+import { days, EXERCISES, exerciseName, program } from "../domain";
 import { trainingPrograms, ownedProgram } from "../training-programs";
 import { searchExercises } from "../exercises";
 import { planProgramDay } from "../../js/progression.js";
@@ -98,6 +98,57 @@ export const isReadTool = (name: string): name is ReadToolName =>
 const PAGE = 20;
 const nextOffset = (offset: number, total: number) =>
   offset + PAGE < total ? offset + PAGE : null;
+
+// "Clean & jerk", "clean_and_jerk" and "clean and jerk" share these words.
+const exerciseWords = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/^custom:/, "")
+    .replaceAll("&", " and ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+// An exercise filter that matches no id returns nothing, and Coach then tells
+// the athlete they never did the lift. Models often pass the name ("back
+// squat") instead of the id, so a name resolves to the one id this journal or
+// the catalogue uses for it; anything else is refused with ids to use.
+function exerciseFilter(state: JournalState, requested?: string) {
+  if (!requested) return undefined;
+  const logged = new Set(
+    [
+      ...state.sessions,
+      ...(state.activeWorkout ? [state.activeWorkout] : []),
+    ].flatMap((w) => w.exercises.map((e) => e.exerciseId)),
+  );
+  if (logged.has(requested) || EXERCISES.some((e) => e.id === requested))
+    return requested;
+  const words = exerciseWords(requested);
+  const names = (id: string) => {
+    const known = EXERCISES.find((e) => e.id === id);
+    return [id, ...(known ? [known.name, ...known.aliases] : [])].map(
+      exerciseWords,
+    );
+  };
+  const all = [...new Set([...logged, ...EXERCISES.map((e) => e.id)])].filter(
+    (id) => names(id).includes(words),
+  );
+  // A name the athlete has logged wins over a catalogue id they never used.
+  const matches = all.some((id) => logged.has(id))
+    ? all.filter((id) => logged.has(id))
+    : all;
+  if (matches.length === 1) return matches[0];
+  const ids = matches.length
+    ? matches
+    : searchExercises(words.replace(/s\b/g, "")).map((e) => e.id);
+  throw Error(
+    `No exercise has the id "${requested}". Use an exact exerciseId` +
+      (ids.length
+        ? ` such as ${ids.slice(0, 5).join(", ")}`
+        : " from the exercises tool") +
+      ", or leave exerciseId out.",
+  );
+}
+
 // Large single records are refused rather than truncated, so an edit is never
 // prepared from a partial read.
 function limitSize<T>(output: T, message: string) {
@@ -245,7 +296,11 @@ export async function runReadTool(
       if (a.endDate && a.endDate > currentDate)
         throw Error("Choose today or an earlier date for a lifting review.");
       const output = {
-        ...liftingReview(state, a.endDate ?? currentDate, a.exerciseId),
+        ...liftingReview(
+          state,
+          a.endDate ?? currentDate,
+          exerciseFilter(state, a.exerciseId),
+        ),
         coachingGuide: liftingGuide,
       };
       reads.liftingReview = true;
@@ -318,11 +373,17 @@ export async function runReadTool(
     }
     case "training_summary": {
       const a = range.parse(args);
-      return trainingSummary(state, a.from, a.to ?? currentDate, a.exerciseId);
+      return trainingSummary(
+        state,
+        a.from,
+        a.to ?? currentDate,
+        exerciseFilter(state, a.exerciseId),
+      );
     }
     case "find_sessions": {
       const a = specifications.find_sessions.schema.parse(args);
-      if (!a.exerciseId)
+      const exerciseId = exerciseFilter(state, a.exerciseId);
+      if (!exerciseId)
         reads.trainingRanges.push({
           from: a.from ?? "0000-01-01",
           to: a.to ?? currentDate,
@@ -332,8 +393,8 @@ export async function runReadTool(
           (w) =>
             (!a.from || w.date >= a.from) &&
             w.date <= (a.to ?? currentDate) &&
-            (!a.exerciseId ||
-              w.exercises.some((e) => e.exerciseId === a.exerciseId)),
+            (!exerciseId ||
+              w.exercises.some((e) => e.exerciseId === exerciseId)),
         )
         .sort((a, b) => b.date.localeCompare(a.date));
       const offset = a.offset ?? 0;

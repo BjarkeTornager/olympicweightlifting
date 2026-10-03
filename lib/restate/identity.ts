@@ -1,6 +1,8 @@
 import {
+  createPrivateKey,
   createPublicKey,
   generateKeyPairSync,
+  sign,
   type KeyObject,
 } from "node:crypto";
 
@@ -47,5 +49,29 @@ export function newIdentityKey() {
       type: "pkcs8",
     }) as string,
     publicKey: restatePublicKey(publicKey),
+  };
+}
+
+// The headers Restate signs a request with: an EdDSA token with the path as
+// audience, valid a minute either side of now. For checking the endpoint
+// without a Restate server (tests and scripts/restate-smoke.ts).
+export function restateSignature(path: string, privateKeyPem: string) {
+  const part = (value: unknown) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = `${part({ alg: "EdDSA", typ: "JWT" })}.${part({
+    aud: path,
+    iat: now,
+    nbf: now - 60,
+    exp: now + 60,
+  })}`;
+  const signed = sign(
+    null,
+    Buffer.from(unsigned),
+    createPrivateKey(privateKeyPem),
+  );
+  return {
+    "x-restate-signature-scheme": "v1",
+    "x-restate-jwt-v1": `${unsigned}.${signed.toString("base64url")}`,
   };
 }

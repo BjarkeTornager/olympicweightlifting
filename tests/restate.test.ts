@@ -1,8 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http2 from "node:http2";
-import { createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
-import { createServer } from "node:net";
+import { generateKeyPairSync } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { restateEndpointConfig } from "../lib/restate/config";
@@ -10,8 +9,10 @@ import {
   base58,
   newIdentityKey,
   restatePublicKey,
+  restateSignature,
 } from "../lib/restate/identity";
 import { changes, deploymentChanges } from "../scripts/restate-register";
+import { freePort, request } from "../scripts/restate-smoke";
 
 // The Restate endpoint (lib/restate): off by default, signed in production,
 // HTTP/2 on its own port. No Restate server needed: requests are signed here
@@ -93,58 +94,6 @@ test("Signing keys are in Restate's publickeyv1 form", () => {
   );
 });
 
-// A request identity token as Restate makes one: EdDSA, the path as audience.
-function signature(path: string, key: { privateKeyPem: string }) {
-  const part = (value: unknown) =>
-    Buffer.from(JSON.stringify(value)).toString("base64url");
-  const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${part({ alg: "EdDSA", typ: "JWT" })}.${part({
-    aud: path,
-    iat: now,
-    nbf: now - 60,
-    exp: now + 60,
-  })}`;
-  const signed = sign(
-    null,
-    Buffer.from(unsigned),
-    createPrivateKey(key.privateKeyPem),
-  );
-  return {
-    "x-restate-signature-scheme": "v1",
-    "x-restate-jwt-v1": `${unsigned}.${signed.toString("base64url")}`,
-  };
-}
-
-async function freePort() {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
-
-function request(
-  session: http2.ClientHttp2Session,
-  path: string,
-  headers: Record<string, string> = {},
-) {
-  return new Promise<{ status: number; body: string }>((resolve, reject) => {
-    const stream = session.request({
-      ":path": path,
-      accept: "application/vnd.restate.endpointmanifest.v4+json",
-      ...headers,
-    });
-    let status = 0;
-    let body = "";
-    stream.on("response", (h) => (status = Number(h[":status"])));
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk) => (body += chunk));
-    stream.on("end", () => resolve({ status, body }));
-    stream.on("error", reject);
-    stream.end();
-  });
-}
-
 test("The endpoint serves Ping over HTTP/2, only to Restate's signed calls, and sends GOAWAY on SIGTERM", async () => {
   const key = newIdentityKey();
   const port = await freePort();
@@ -171,20 +120,25 @@ test("The endpoint serves Ping over HTTP/2, only to Restate's signed calls, and 
         await request(
           session,
           "/discover",
-          signature("/discover", newIdentityKey()),
+          restateSignature("/discover", newIdentityKey().privateKeyPem),
         )
       ).status,
       401,
     );
     assert.equal(
-      (await request(session, "/discover", signature("/invoke/Ping/ping", key)))
-        .status,
+      (
+        await request(
+          session,
+          "/discover",
+          restateSignature("/invoke/Ping/ping", key.privateKeyPem),
+        )
+      ).status,
       401,
     );
     const discovered = await request(
       session,
       "/discover",
-      signature("/discover", key),
+      restateSignature("/discover", key.privateKeyPem),
     );
     assert.equal(discovered.status, 200);
     const manifest = JSON.parse(discovered.body);
@@ -198,13 +152,26 @@ test("The endpoint serves Ping over HTTP/2, only to Restate's signed calls, and 
       ),
       [["Ping", ["ping"]]],
     );
-    // On SIGTERM: GOAWAY to open connections, and no new ones.
+    // On SIGTERM: GOAWAY to open connections, and no new ones. Without
+    // another handler (Next.js's) it exits with 143, as Node would; exit is
+    // stubbed here. scripts/restate-smoke.ts checks it under Next.js.
     const goaway = new Promise((resolve) => session.once("goaway", resolve));
-    const added = process
-      .listeners("SIGTERM")
-      .filter((l) => !listeners.includes(l));
-    assert.equal(added.length, 1);
-    (added[0] as () => void)();
+    for (const l of listeners) process.off("SIGTERM", l);
+    assert.equal(process.listenerCount("SIGTERM"), 1);
+    const exits: unknown[] = [];
+    const exit = process.exit;
+    process.exit = ((code?: number) => {
+      exits.push(code);
+    }) as typeof process.exit;
+    try {
+      process.emit("SIGTERM");
+    } finally {
+      process.exit = exit;
+      for (const l of listeners) process.on("SIGTERM", l);
+    }
+    assert.deepEqual(exits, [143]);
+    // Once only: the handler removed itself.
+    assert.equal(process.listenerCount("SIGTERM"), listeners.length);
     await goaway;
     await new Promise((resolve) => server.once("close", resolve));
     assert.equal(server.listening, false);

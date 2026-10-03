@@ -49,9 +49,9 @@ export function startRestateEndpoint() {
     ),
   );
   // On a deploy, GOAWAY tells Restate to open new connections, which reach
-  // the new container, while calls in progress here finish. Next.js then
-  // exits once its own requests are done; Restate retries whatever was cut
-  // off on the new container.
+  // the new container. Next.js then exits once its own requests are done,
+  // without waiting for calls here (within milliseconds when idle); Restate
+  // retries whatever was cut off on the new container.
   process.once("SIGTERM", () => {
     server.close();
     for (const session of sessions) session.close();

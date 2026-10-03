@@ -293,5 +293,32 @@ test(
     assert.deepEqual(metrics.routeTokens, { input: 812, output: 9 });
     assert.ok(metrics.prepMs >= 0 && metrics.routeMs >= 0);
     assert.ok(metrics.routingMs >= metrics.prepMs);
+
+    // A turn that ends while a deploy drains (after SIGTERM) returns only
+    // once its trace is sent, as in production the process exits as soon as
+    // the last request closes, before the batch timer would send it.
+    const batched = await memoryExporterForTests(false, { batched: true });
+    await batched.drain();
+    const { readJournal } = await import("../lib/server");
+    await runTurn(
+      user,
+      {
+        id: crypto.randomUUID(),
+        message: "And yesterday?",
+        revision: (await readJournal(user)).revision,
+        timezone: "Europe/Copenhagen",
+        language: "en",
+      },
+      undefined,
+      { directLogging: true },
+    );
+    const late = batched.spans();
+    const lateRoot = late.find((s) => s.name === "coach_turn");
+    assert.equal(lateRoot?.attributes["lift.status"], "done");
+    assert.equal(
+      lateRoot?.attributes["user.id"],
+      userCode("test-only-secret", user),
+    );
+    assert.ok(late.some((s) => s.name === "commit"));
   },
 );

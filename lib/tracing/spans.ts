@@ -42,6 +42,10 @@ export interface TraceSpan {
   end(attributes?: SpanAttributes): void;
   // Message text for content mode (config.ts); ignored everywhere else.
   content(input: ContentMessage[], output?: ContentMessage): void;
+  // While the server shuts down, waits up to half a second for the spans
+  // ended so far to be sent; returns at once otherwise. Awaited after the
+  // root ends, so the request stays open, and the process alive, until then.
+  settle(): Promise<void>;
 }
 
 export const noTrace: TraceSpan = {
@@ -53,6 +57,7 @@ export const noTrace: TraceSpan = {
   fail() {},
   end() {},
   content() {},
+  async settle() {},
 };
 
 type Trace = { backend: Backend; content: boolean; open: Set<LiveSpan> };
@@ -153,6 +158,13 @@ class LiveSpan implements TraceSpan {
           "gen_ai.output.messages",
           JSON.stringify([plain(output)]),
         );
+    } catch {
+      /* Tracing never fails a request. */
+    }
+  }
+  async settle() {
+    try {
+      await this.trace.backend.settle();
     } catch {
       /* Tracing never fails a request. */
     }

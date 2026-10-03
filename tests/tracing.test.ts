@@ -272,6 +272,51 @@ test("a failure is recorded only as its category, and open steps end with the tr
   }
 });
 
+test("a turn that ends while the server shuts down returns only once its trace is sent", async () => {
+  const { memoryExporterForTests } = await import("../lib/tracing/provider");
+  const { startTrace, noTrace } = await import("../lib/tracing/spans");
+  const memory = await memoryExporterForTests(false, { batched: true });
+  try {
+    await withEnv(TRACING, async () => {
+      // Normally spans wait for the batch timer, and the turn doesn't.
+      const early = await startTrace("coach_turn", { userId: "user-a" });
+      early.end();
+      await early.settle();
+      assert.equal(memory.spans().length, 0);
+      // SIGTERM sends what is queued.
+      await memory.drain();
+      assert.deepEqual(
+        memory.spans().map((s) => s.name),
+        ["coach_turn"],
+      );
+      // A turn still running ends after the signal: without settle its
+      // root would wait a second for the timer, and the process exits first.
+      const late = await startTrace("coach_turn", { userId: "user-a" });
+      late.child("commit").end();
+      late.end({ "lift.status": "done" });
+      const sent = () =>
+        memory.spans().filter((s) => s.traceId === late.traceId);
+      assert.equal(sent().length, 0);
+      await late.settle();
+      assert.deepEqual(
+        sent()
+          .map((s) => s.name)
+          .sort(),
+        ["coach_turn", "commit"],
+      );
+      const root = sent().find((s) => s.name === "coach_turn")!;
+      assert.equal(root.attributes["lift.status"], "done");
+      assert.equal(
+        root.attributes["user.id"],
+        userCode("test-only-secret", "user-a"),
+      );
+      await noTrace.settle();
+    });
+  } finally {
+    await memory.stop();
+  }
+});
+
 const usage = (prompt: number, cost: number) => ({
   prompt_tokens: prompt,
   completion_tokens: 12,

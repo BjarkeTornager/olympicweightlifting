@@ -33,9 +33,17 @@ export type Backend = {
     parent?: RawSpan,
   ): { span: RawSpan; traceId: string };
   fail(span: RawSpan, category: string): void;
+  // Sends the spans ended so far while the server shuts down; nothing
+  // otherwise.
+  settle(): Promise<void>;
 };
 
-type State = { provider: BasicTracerProvider; tracer: Tracer };
+type State = {
+  provider: BasicTracerProvider;
+  tracer: Tracer;
+  // Set on SIGTERM (drain).
+  draining: boolean;
+};
 // Shared through globalThis: instrumentation.ts and the route handlers are
 // separate bundles, and a module-level provider would be created in each.
 const KEY = Symbol.for("lift.tracing");
@@ -90,10 +98,28 @@ function create(processor: SpanProcessor, content: boolean): State {
     },
     spanProcessors: [processor],
   });
-  return { provider, tracer: provider.getTracer("lift-journal") };
+  return {
+    provider,
+    tracer: provider.getTracer("lift-journal"),
+    draining: false,
+  };
 }
 
-function backend({ tracer }: State): Backend {
+// On SIGTERM Next.js stops taking requests, waits for open ones and exits as
+// soon as the last one closes, before the batch timer would send what that
+// request's turn ended with. So from here on a turn waits for its spans to
+// be sent before it returns (settle), and its connection keeps the process
+// alive meanwhile.
+function drain(state: State) {
+  state.draining = true;
+  return state.provider.forceFlush({ timeoutMillis: 1500 }).catch(() => {});
+}
+
+// A turn ending during a drain waits at most this long for MLflow.
+const SETTLE_MS = 500;
+
+function backend(state: State): Backend {
+  const { tracer } = state;
   return {
     start(name, attributes, parent) {
       const span = tracer.startSpan(
@@ -106,6 +132,12 @@ function backend({ tracer }: State): Backend {
     // MLflow reads an unset status as OK, so only failures set one.
     fail(span, category) {
       span.setStatus({ code: SpanStatusCode.ERROR, message: category });
+    },
+    async settle() {
+      if (state.draining)
+        await state.provider
+          .forceFlush({ timeoutMillis: SETTLE_MS })
+          .catch(() => {});
     },
   };
 }
@@ -123,7 +155,8 @@ export function tracingBackend(config: TracingConfig): Backend {
       },
       timeoutMillis: 5000,
     });
-    // Drops spans when the queue is full; a turn never waits for an export.
+    // Drops spans when the queue is full. A turn never waits for an export,
+    // except briefly while the server shuts down (drain).
     state = create(
       new BatchSpanProcessor(new ReportingExporter(exporter), {
         scheduledDelayMillis: 1000,
@@ -134,18 +167,16 @@ export function tracingBackend(config: TracingConfig): Backend {
       config.content,
     );
     shared[KEY] = state;
-    const provider = state.provider;
+    const created = state,
+      provider = state.provider;
     // Next.js closes the server and exits on SIGTERM; flush alongside it. In
     // a script with no handler of its own, end the process afterwards as
     // SIGTERM would have.
     process.once("SIGTERM", () => {
       const alone = process.listenerCount("SIGTERM") === 0;
-      void provider
-        .forceFlush({ timeoutMillis: 1500 })
-        .catch(() => {})
-        .finally(() => {
-          if (alone) process.kill(process.pid, "SIGTERM");
-        });
+      void drain(created).finally(() => {
+        if (alone) process.kill(process.pid, "SIGTERM");
+      });
     });
     // The export timer doesn't keep a process alive, so a script that ends
     // on its own (a benchmark, an eval) flushes before it exits.
@@ -171,12 +202,24 @@ export type FinishedSpan = {
 };
 
 // Tests only: replaces the exporter with an in-memory one, so spans can be
-// read back without MLflow or any network.
-export async function memoryExporterForTests(content = false) {
+// read back without MLflow or any network. Spans are exported as they end,
+// or with `batched` in batches as in production.
+export async function memoryExporterForTests(
+  content = false,
+  { batched = false } = {},
+) {
   await shared[KEY]?.provider.shutdown().catch(() => {});
   const exporter = new InMemorySpanExporter();
-  shared[KEY] = create(new SimpleSpanProcessor(exporter), content);
+  const state = create(
+    batched
+      ? new BatchSpanProcessor(exporter, { scheduledDelayMillis: 1000 })
+      : new SimpleSpanProcessor(exporter),
+    content,
+  );
+  shared[KEY] = state;
   return {
+    // What SIGTERM does.
+    drain: () => drain(state),
     spans(): FinishedSpan[] {
       return exporter.getFinishedSpans().map((s) => ({
         name: s.name,

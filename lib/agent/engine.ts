@@ -197,7 +197,9 @@ type TurnHooks = {
 
 // One Coach turn, traced as one diagnostic trace (lib/tracing) when tracing
 // is on. The trace ends with the turn, not the connection, so a background
-// run is traced to its saved result.
+// run is traced to its saved result. While a deploy shuts the server down,
+// the turn waits briefly for its trace to be sent, since the process exits
+// as soon as the last request closes.
 export async function runTurn(
   userId: string,
   input: TurnInput,
@@ -235,6 +237,7 @@ export async function runTurn(
     throw e;
   } finally {
     trace.end();
+    await trace.settle();
   }
 }
 

@@ -14,6 +14,7 @@ Production stays off until the privacy page has its Diagnostics paragraph and th
 - Errors are recorded only as their `errorCategory` (`lib/error-log.ts`).
 - Each Coach turn is one trace: `coach_turn` with `prepare` (and `photos_sorted`), `route` (Jev's tokens), one `round` per model round, one `chat` per provider call (including a call the content filter blocked), one span per tool, and `commit`. The trace id is saved in the turn's metrics as `traceId`.
 - Traces past `TRACE_RETENTION_DAYS` are deleted every six hours by the janitor that `instrumentation.ts` starts. `deleteUserTraces` in `admin.ts` deletes an account's traces by its code (wired to account deletion in a later PR). Both use `traceAdminConfig`, which needs only the MLflow variables: with `TRACING=off`, or a capture variable that is invalid, they still run. An invalid `TRACE_RETENTION_DAYS` falls back to 30 for deletion.
+- On SIGTERM Next.js exits as soon as the last open request closes, before the batch timer would send the spans that request's turn ended with. So during that drain a turn waits up to half a second for its trace to be sent before it returns (`settle` in `spans.ts`).
 
 ## Environment
 
@@ -28,7 +29,7 @@ Production stays off until the privacy page has its Diagnostics paragraph and th
 | `TRACE_RETENTION_DAYS` | 1 to 30 (default 30) |
 | `TRACE_CONTENT` | `1` adds message text, with images as `[image]`, only when `NODE_ENV` isn't production, the database name ends in `_test` and MLflow is on localhost. For synthetic eval and bench accounts |
 
-A missing or invalid variable turns capture off with one `tracing_disabled` log line naming the reason. Failed exports log `tracing_export_failed` at most every ten minutes and never slow a turn.
+A missing or invalid variable turns capture off with one `tracing_disabled` log line naming the reason. Failed exports log `tracing_export_failed` at most every ten minutes and slow a turn only during a drain, by half a second at most.
 
 ## Local MLflow
 

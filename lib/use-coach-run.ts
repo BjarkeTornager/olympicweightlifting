@@ -45,6 +45,8 @@ export function useCoachRun({
   setNotice: (notice: string) => void;
 }) {
   const activeRun = useRef<AbortController | null>(null);
+  // The message the active run is for, so Stop can cancel it by id.
+  const activeRunId = useRef<string | null>(null);
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
   const [failedMessage, setFailedMessage] = useState<QueuedMessage | null>(
     null,
@@ -60,6 +62,7 @@ export function useCoachRun({
     () => () => {
       activeRun.current?.abort();
       activeRun.current = null;
+      activeRunId.current = null;
     },
     [],
   );
@@ -67,6 +70,7 @@ export function useCoachRun({
     const { id, question, photoIds: attachments } = job;
     const abort = new AbortController();
     activeRun.current = abort;
+    activeRunId.current = id;
     setActiveId(id);
     setBusy(true);
     setBackgroundResult(null);
@@ -177,6 +181,7 @@ export function useCoachRun({
     } finally {
       if (activeRun.current === abort) {
         activeRun.current = null;
+        activeRunId.current = null;
         setActiveId(null);
         setBusy(false);
       }
@@ -216,6 +221,25 @@ export function useCoachRun({
     setFailedMessage(null);
     setError("");
   };
+  // Stop closes the reply's connection, which stops the run where the
+  // server hears it close. It also cancels the run by its id, as the iPhone
+  // does, so a stopped reply never saves with COACH_TURN_EVENTS on, even
+  // when the closed connection isn't heard. Best effort: the run may have
+  // finished, or not have reached the server yet.
+  const stop = () => {
+    const abort = activeRun.current,
+      id = activeRunId.current;
+    if (!abort) return;
+    abort.abort();
+    if (id)
+      void privateFetch("/api/agent/run/cancel", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ id }),
+        keepalive: true,
+        signal: AbortSignal.timeout(10000),
+      }).catch(() => {});
+  };
   const skipFailed = async () => {
     if (busy || !failedMessage) return;
     setActing("queue-sync");
@@ -238,7 +262,7 @@ export function useCoachRun({
     remove,
     retryFailed,
     skipFailed,
-    stop: () => activeRun.current?.abort(),
+    stop,
     // A run in flight, including the moment before React re-renders busy.
     running: () => Boolean(activeRun.current),
   };

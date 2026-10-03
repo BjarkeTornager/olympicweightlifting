@@ -11,6 +11,7 @@ import { emptyJournal, today } from "../../lib/domain";
 import {
   streamingFixture,
   emit,
+  recordCancels,
   startReply,
   type StreamWindow,
 } from "./coach-stream";
@@ -190,6 +191,7 @@ test("Photo and sleep entry links preserve a running turn and the next draft; le
   context,
 }) => {
   await streamingFixture(page);
+  const cancels = await recordCancels(context);
   await context.route("**/api/agent", (r) =>
     r.fulfill({
       json: {
@@ -282,10 +284,17 @@ test("Photo and sleep entry links preserve a running turn and the next draft; le
     ),
   );
   expect(photos).toEqual([[imageIds[0]], [imageIds[1]]]);
+  expect(cancels).toEqual([]);
   await page.getByRole("button", { name: "Stop response" }).click();
   await expect(
     page.getByRole("button", { name: "Retry message" }),
   ).toBeVisible();
+  const stopped = await page.evaluate(
+    () => (window as unknown as StreamWindow).coachRequests[1].body.runId,
+  );
+  await expect
+    .poll(() => cancels)
+    .toEqual([{ id: stopped, account: browserUser.id }]);
   await expect(composer).toHaveValue("");
   await expect(
     page.getByRole("region", { name: "Message queue" }),

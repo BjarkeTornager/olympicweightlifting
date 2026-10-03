@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 
 export type StreamWindow = Window & {
   coachEvents: (event: Record<string, unknown>) => void;
@@ -85,3 +85,16 @@ export const startReply = [
   { type: "STEP_FINISHED", stepName: "Checking your sleep and recovery" },
   { type: "TEXT_MESSAGE_START", messageId: "answer", role: "assistant" },
 ];
+
+// The website's Stop also cancels the run on the server, by its id.
+export async function recordCancels(context: BrowserContext) {
+  const cancels: { id: string; account?: string }[] = [];
+  await context.route("**/api/agent/run/cancel", (r) => {
+    cancels.push({
+      ...r.request().postDataJSON(),
+      account: r.request().headers()["x-journal-account"],
+    });
+    return r.fulfill({ json: { cancelled: true } });
+  });
+  return cancels;
+}

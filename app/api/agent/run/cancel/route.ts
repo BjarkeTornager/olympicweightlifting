@@ -4,8 +4,9 @@ import { cancelRun } from "@/lib/agent/stream";
 
 export const dynamic = "force-dynamic";
 
-// The iPhone app's Stop for a Coach run that carries on in the background
-// (see coachStream). Answers whether a run was cancelled here.
+// Stop for a Coach run: the iPhone app's, for a run that carries on in the
+// background (see coachStream), and the website's, as well as closing the
+// connection. Answers whether a run was cancelled here.
 export async function POST(request: Request) {
   try {
     const user = await requireAthlete(request, true);

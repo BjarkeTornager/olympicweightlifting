@@ -130,14 +130,16 @@ struct CoverArt<Beside: View>: View {
   }
 }
 
-/// "Lift / Journal", roman then italic, in the largest serif.
+/// The wordmark as the cover's title, "Lift / Journal" on two lines, in the
+/// largest serif: regular, roman and in its own spacing, as the name is set
+/// everywhere.
 struct CoverTitle: View {
   var body: some View {
     VStack(alignment: .leading, spacing: -16) {
       Text("Lift")
-      Text("Journal").italic()
+      Text("Journal")
     }
-    .folio(.hero)
+    .folio(.coverWordmark)
     .foregroundStyle(Theme.ink)
     .padding(.top, 8)
     .accessibilityElement(children: .ignore)

@@ -92,16 +92,20 @@ struct TodayView: View {
 
   private var day: Date { model.today.flatMap { JournalDay.date($0.date) } ?? .now }
 
-  /// "Lift Journal · Nº 13 · Week 40", beside the system's + button.
+  /// The running head beside the system's + button: the wordmark, then
+  /// "Nº 13 · Week 40". The wordmark names the page, so the issue beside it
+  /// is in sentence case rather than spaced capitals.
   private var issueLine: some View {
     let number = firstDay.map { Issue.number(first: $0, day: day) }
     let issue = number.map { "Nº \($0) · " } ?? ""
-    return Text("\(Text("Lift Journal").foregroundStyle(Theme.ink)) · \(issue)Week \(Issue.week(day))")
-      .kicker()
-      .lineLimit(1)
-      .fixedSize()
-      .accessibilityLabel(
-        "Lift Journal, \(number.map { "issue \($0), " } ?? "")week \(Issue.week(day))")
+    return HStack(alignment: .firstTextBaseline, spacing: 9) {
+      Wordmark()
+      Text("\(issue)Week \(Issue.week(day))").font(.footnote).foregroundStyle(Theme.inkSecondary)
+    }
+    .lineLimit(1)
+    .fixedSize()
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Lift Journal, \(number.map { "issue \($0), " } ?? "")week \(Issue.week(day))")
   }
 
   private var logMenu: some View {
@@ -1096,12 +1100,23 @@ private struct Colophon: View {
     }
   }
 
+  /// The wordmark, then "Nº 13 · Private to Maja": beside it, or under it
+  /// when the two don't fit one line.
   private var line: some View {
-    let parts = ["Lift Journal", issue.map { "Nº \($0)" }, "Private to \(name ?? "you")"]
-    return Text(parts.compactMap { $0 }.joined(separator: " · "))
+    let parts = [issue.map { "Nº \($0)" }, "Private to \(name ?? "you")"]
+    let note = Text(parts.compactMap { $0 }.joined(separator: " · "))
       .font(.caption)
-      .tracking(0.2)
       .foregroundStyle(Theme.inkSecondary)
+    return ViewThatFits(in: .horizontal) {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
+        Wordmark(mark: false)
+        note
+      }
+      VStack(alignment: .leading, spacing: 2) {
+        Wordmark(mark: false)
+        note.fixedSize(horizontal: false, vertical: true)
+      }
+    }
   }
 }
 

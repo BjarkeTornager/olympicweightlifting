@@ -35,12 +35,17 @@ public enum Folio {
     case heading
     /// Italic empty states and footnotes: 17 pt.
     case note
+    /// "Lift Journal" as a name, beside the mark in a running head or a
+    /// colophon: 17 pt, in the serif's own spacing.
+    case wordmark
+    /// The name on the cover: 66 pt, in the serif's own spacing.
+    case coverWordmark
 
     var size: CGFloat {
       switch self {
       case .masthead: 46
       case .sectionTitle: 30
-      case .hero: 66
+      case .hero, .coverWordmark: 66
       case .display: 50
       case .ledger: 36
       case .tile: 34
@@ -48,16 +53,16 @@ public enum Folio {
       case .standfirst, .lede: 19
       case .heading: 20
       case .coach, .entry: 18
-      case .note: 17
+      case .note, .wordmark: 17
       }
     }
 
     var style: Font.TextStyle {
       switch self {
-      case .masthead, .hero, .display: .largeTitle
+      case .masthead, .hero, .display, .coverWordmark: .largeTitle
       case .sectionTitle, .ledger, .tile: .title
       case .inline, .standfirst, .lede, .heading: .title3
-      case .coach, .entry, .note: .body
+      case .coach, .entry, .note, .wordmark: .body
       }
     }
 

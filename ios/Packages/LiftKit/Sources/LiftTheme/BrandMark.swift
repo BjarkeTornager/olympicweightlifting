@@ -97,12 +97,42 @@ public struct BrandMark: View {
   }
 }
 
+/// "Lift Journal" as a name: New York, regular, in normal case and the
+/// serif's own spacing, beside the split-disc mark. The same wherever the
+/// name stands as a name (the running head, the colophon); never bold sans,
+/// never spaced capitals. Running text says "Lift Journal" in its own face.
+public struct Wordmark: View {
+  var mark: Bool
+  @ScaledMetric(relativeTo: .body) private var side: CGFloat = 15
+
+  public init(mark: Bool = true) {
+    self.mark = mark
+  }
+
+  public var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 7) {
+      if mark {
+        // Centred on the capitals, a little below the baseline.
+        BrandMark()
+          .frame(width: side, height: side)
+          .alignmentGuide(.firstTextBaseline) { $0[.bottom] - $0.height * 0.1 }
+      }
+      Text("Lift Journal").folio(.wordmark).foregroundStyle(Theme.ink).fixedSize()
+    }
+    .accessibilityElement(children: .combine)
+  }
+}
+
 #Preview("Mark") {
-  HStack(spacing: 24) {
-    BrandMark().frame(width: 18)
-    BrandMark().frame(width: 64)
-    BrandMark().frame(width: 160)
-    BrandMark(gap: 0, lift: 0).frame(width: 64)
+  VStack(alignment: .leading, spacing: 24) {
+    HStack(spacing: 24) {
+      BrandMark().frame(width: 18)
+      BrandMark().frame(width: 64)
+      BrandMark().frame(width: 160)
+      BrandMark(gap: 0, lift: 0).frame(width: 64)
+    }
+    Wordmark()
+    Wordmark(mark: false)
   }
   .padding()
   .background(Theme.background)

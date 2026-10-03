@@ -165,10 +165,18 @@ struct AccountView: View {
           }
         }
         .themedRows()
+        // The colophon: the wordmark and this build.
         Section {
         } footer: {
-          Text("Lift Journal \(LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "").replacingOccurrences(of: "/", with: " (")))")
-            .frame(maxWidth: .infinity)
+          VStack(spacing: 4) {
+            Wordmark()
+            Text(
+              LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "")
+                .replacingOccurrences(of: "/", with: " (") + ")")
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.top, 8)
+          .accessibilityElement(children: .combine)
         }
       }
       .themedList()

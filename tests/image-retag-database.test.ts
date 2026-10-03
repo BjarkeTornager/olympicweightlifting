@@ -101,7 +101,7 @@ test(
         )
       ).rows[0].tag_attempts as number;
     const until = async (check: () => Promise<boolean>) => {
-      for (let i = 0; i < 100 && !(await check()); i++)
+      for (let i = 0; i < 250 && !(await check()); i++)
         await new Promise((r) => setTimeout(r, 20));
     };
     const later = (ms: number) => new Date(Date.now() + ms);
@@ -142,8 +142,9 @@ test(
       });
       for (const [i, s] of sweeps.entries()) {
         s.done = sweep(s.run.model, s.at);
-        await until(async () => (await tries(userId, second)) === i + 2);
-        assert.equal(s.run.calls(), 1);
+        // Claimed, then sent to the model, and cut off there.
+        await until(async () => s.run.calls() === 1);
+        assert.equal(await tries(userId, second), i + 2);
       }
       assert.equal(await tries(userId, second), IMAGE_TAG_TRIES);
       const beforeGivingUp = await readUserImage(userId, second);

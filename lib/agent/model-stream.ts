@@ -83,6 +83,41 @@ const ollamaChunk = z.object({
     .optional(),
 });
 
+// Which model answered and what it used, as far as the stream got. Filled in
+// as frames arrive, so a call that fails part way is still recorded in the
+// AI cost ledger with whatever usage it reported.
+export type StreamUsage = {
+  model?: string;
+  usage?: z.infer<typeof usageSchema>;
+};
+
+// How long the rest of a blocked reply is read for its usage frame.
+const BLOCKED_USAGE_WAIT_MS = 2000;
+
+// A read that gives up at a deadline, as if the stream had ended. The read
+// left waiting settles when the reader is cancelled.
+async function readUntil(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  until: number,
+) {
+  const read = reader.read();
+  read.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      read,
+      new Promise<{ done: true; value: undefined }>((resolve) => {
+        timer = setTimeout(
+          () => resolve({ done: true, value: undefined }),
+          Math.max(0, until - Date.now()),
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Provider framing only. Reasoning, raw errors and credentials never leave
 // this adapter; usage leaves only as token counts and cost. Validate assembled messages again before tools execute.
 export async function readModelStream(
@@ -90,6 +125,7 @@ export async function readModelStream(
   kind: "openrouter" | "ollama",
   onText: (delta: string) => void,
   signal: AbortSignal,
+  seen: StreamUsage = {},
 ) {
   const reader = response.body?.getReader();
   if (!reader) throw Error("The assistant returned an empty response.");
@@ -99,8 +135,7 @@ export async function readModelStream(
     pending = "",
     finished = false,
     terminal = false,
-    model: string | undefined,
-    usage: z.infer<typeof usageSchema> | undefined;
+    blocked = false;
   const calls = new Map<
     number,
     { id: string; function: { name: string; arguments: string } }
@@ -125,12 +160,15 @@ export async function readModelStream(
     if (kind === "openrouter") {
       const chunk = routerChunk.parse(raw);
       if (chunk.error) throw Error("The assistant stream was interrupted.");
-      model = chunk.model ?? model;
-      usage = chunk.usage ?? usage;
+      seen.model = chunk.model ?? seen.model;
+      seen.usage = chunk.usage ?? seen.usage;
       const choice = chunk.choices?.[0];
-      if (!choice) return; // usage-only frame
-      if (choice.finish_reason === "content_filter")
-        throw new ContentFiltered();
+      // A usage-only frame, or the rest of a blocked reply.
+      if (!choice || blocked) return;
+      if (choice.finish_reason === "content_filter") {
+        blocked = true;
+        return;
+      }
       if (
         choice.finish_reason &&
         !["stop", "tool_calls"].includes(choice.finish_reason)
@@ -174,7 +212,7 @@ export async function readModelStream(
   };
   const parser = createParser({ onEvent: (event) => receive(event.data) });
   try {
-    while (true) {
+    while (!blocked) {
       signal.throwIfAborted();
       const { done, value } = await reader.read();
       if (done) break;
@@ -193,6 +231,23 @@ export async function readModelStream(
         }
       }
     }
+    if (blocked) {
+      // The blocked reply was still billed, and its usage comes in a frame
+      // of its own just after; nothing else in the rest is used.
+      const until = Date.now() + BLOCKED_USAGE_WAIT_MS;
+      try {
+        while (!seen.usage && !terminal && Date.now() < until) {
+          const { done, value } = await readUntil(reader, until);
+          if (done) break;
+          size += value.byteLength;
+          if (size > 2 * 1024 * 1024) break;
+          parser.feed(decoder.decode(value, { stream: true }));
+        }
+      } catch {
+        // The block stands, whatever the rest holds.
+      }
+      throw new ContentFiltered();
+    }
     const tail = decoder.decode();
     if (kind === "openrouter") parser.feed(tail);
     else if ((pending + tail).trim()) receive((pending + tail).trim());
@@ -201,8 +256,8 @@ export async function readModelStream(
       throw Error("The assistant response ended early. Please try again.");
     return kind === "openrouter"
       ? {
-          model,
-          usage,
+          model: seen.model,
+          usage: seen.usage,
           choices: [
             {
               message: {

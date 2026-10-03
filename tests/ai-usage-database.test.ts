@@ -6,7 +6,7 @@ config({ path: ".env.local", quiet: true });
 // The AI cost ledger, against a fake OpenRouter, Jev and Exa: no request
 // leaves this machine, and each test uses its own synthetic accounts.
 
-type Scripted =
+type Reply =
   | {
       content?: string;
       tool?: { name: string; arguments: Record<string, unknown> };
@@ -14,6 +14,9 @@ type Scripted =
       filtered?: boolean;
     }
   | { status: number };
+// A stream that starts with this text and then waits until it is stopped,
+// or a reply sent as it is.
+type Scripted = Reply | { hang: string } | { raw: unknown };
 
 const usage = (cost: number) => ({
   prompt_tokens: Math.round(cost * 1e6),
@@ -26,7 +29,7 @@ const usage = (cost: number) => ({
 // request asks for a stream.
 function openRouterReply(
   body: { model: string; stream?: boolean },
-  step: Scripted,
+  step: Reply,
 ) {
   if ("status" in step) return new Response("{}", { status: step.status });
   const finish = step.filtered
@@ -88,6 +91,31 @@ function openRouterReply(
   );
 }
 
+// A streamed answer that starts and then waits, as a slow model does, until
+// the request is stopped. No usage has arrived by then.
+function hangingReply(
+  body: { model: string },
+  content: string,
+  signal?: AbortSignal | null,
+) {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            `data: ${JSON.stringify({ model: body.model, choices: [{ delta: { content } }] })}\n\n`,
+          ),
+        );
+        signal?.addEventListener(
+          "abort",
+          () => controller.error(signal.reason),
+          { once: true },
+        );
+      },
+    }),
+  );
+}
+
 const jevReply = {
   model: "jev-1.13.0",
   answers: {
@@ -132,6 +160,8 @@ function fakeProviders(script: Scripted[]) {
         models.push(body.model);
         const step = script.shift();
         assert.ok(step, "An unscripted model call");
+        if ("hang" in step) return hangingReply(body, step.hang, init?.signal);
+        if ("raw" in step) return Response.json(step.raw);
         return openRouterReply(body, step);
       }
       throw Error(`Unexpected request to ${href}`);
@@ -373,6 +403,139 @@ test(
       // keeps every call that was paid for.
       assert.equal(turns[0].status, "done");
       assert.equal(turns[0].metrics.rounds.length, 2);
+    } finally {
+      await db.cleanup();
+    }
+  },
+);
+
+test(
+  "a streamed call that is blocked, stopped or unreadable was still billed, so it is recorded",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const db = await setup();
+    const { runTurn } = await import("../lib/agent/engine"),
+      { callModel, FILTER_FALLBACK_MODEL } =
+        await import("../lib/agent/provider"),
+      { withAiUsage } = await import("../lib/ai-usage");
+    const turn = (id: string, message: string) => ({
+      id,
+      message,
+      revision: 0,
+      timezone: "Europe/Copenhagen",
+    });
+    try {
+      const user = await db.user();
+      // As Coach always runs: streamed. The host's filter blocks the reply,
+      // whose usage arrives just after, and the fallback model answers.
+      const filteredId = crypto.randomUUID(),
+        text: string[] = [];
+      let fake = fakeProviders([
+        { content: "I can't help with that.", cost: 0.0004, filtered: true },
+        { content: "Three light doubles.", cost: 0.0006 },
+      ]);
+      try {
+        const response = await runTurn(
+          user,
+          turn(filteredId, "How many sets when I'm tired?"),
+          undefined,
+          {
+            emit: (event) => {
+              if (event.type === "TEXT_MESSAGE_CONTENT")
+                text.push(String(event.delta));
+            },
+          },
+        );
+        assert.equal(response.reply, "Three light doubles.");
+      } finally {
+        fake.restore();
+      }
+      assert.deepEqual(fake.models, [
+        "openai/gpt-5.6-luna",
+        FILTER_FALLBACK_MODEL,
+      ]);
+      // The blocked text never reached the screen.
+      assert.equal(text.join(""), "Three light doubles.");
+      assert.deepEqual(
+        (await db.rows(user))
+          .filter((r) => r.sourceId === filteredId && r.feature === "coach")
+          .map((r) => [r.model, r.cost, r.estimated]),
+        [
+          ["openai/gpt-5.6-luna", 0.0004, false],
+          [FILTER_FALLBACK_MODEL, 0.0006, false],
+        ],
+      );
+
+      // The athlete taps Stop while the answer streams: no usage has
+      // arrived, so the call is recorded at no known cost.
+      const stoppedId = crypto.randomUUID(),
+        stop = new AbortController();
+      fake = fakeProviders([{ hang: "Let me look at your week" }]);
+      try {
+        await assert.rejects(
+          runTurn(user, turn(stoppedId, "Plan my week, please"), undefined, {
+            signal: stop.signal,
+            emit: (event) => {
+              if (event.type === "TEXT_MESSAGE_CONTENT") stop.abort();
+            },
+          }),
+        );
+      } finally {
+        fake.restore();
+      }
+      assert.deepEqual(
+        (await db.rows(user))
+          .filter((r) => r.sourceId === stoppedId && r.feature === "coach")
+          .map((r) => [r.model, r.cost, r.estimated]),
+        [["openai/gpt-5.6-luna", 0, true]],
+      );
+
+      // A reply that can't be used is recorded with the cost it reported.
+      const brokenId = crypto.randomUUID();
+      fake = fakeProviders([
+        {
+          raw: {
+            model: "openai/gpt-5.6-luna",
+            usage: usage(0.0009),
+            choices: [
+              {
+                finish_reason: "tool_calls",
+                message: {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      id: "call-broken",
+                      function: { name: "current_workout", arguments: "{" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ]);
+      try {
+        await assert.rejects(
+          withAiUsage(
+            { userId: user, feature: "coach", sourceId: brokenId },
+            () =>
+              callModel(
+                [{ role: "user", content: "Hi" }],
+                [],
+                AbortSignal.timeout(5000),
+              ),
+          ),
+        );
+      } finally {
+        fake.restore();
+      }
+      assert.deepEqual(
+        (await db.rows(user))
+          .filter((r) => r.sourceId === brokenId)
+          .map((r) => [r.model, r.cost, r.estimated]),
+        [["openai/gpt-5.6-luna", 0.0009, false]],
+      );
     } finally {
       await db.cleanup();
     }

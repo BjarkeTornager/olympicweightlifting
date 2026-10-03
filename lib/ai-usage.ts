@@ -109,8 +109,10 @@ async function record(usage: UsageContext, row: Row) {
   }
 }
 
-// One model call, with what the provider reported it served and cost.
-// Outside a usage context, such as a unit test, nothing is recorded.
+// One model call, with what the provider reported it served and cost. A
+// call that ended before its cost was reported (stopped, timed out or cut
+// short) is recorded at no cost and marked estimated. Outside a usage
+// context, such as a unit test, nothing is recorded.
 export async function recordModelCall(
   served: ModelUsage | undefined,
   model: string,
@@ -123,6 +125,7 @@ export async function recordModelCall(
     inputTokens: served?.inputTokens,
     outputTokens: served?.outputTokens,
     costUsd: served?.costUsd ?? 0,
+    estimated: served?.costUsd === undefined,
   });
 }
 

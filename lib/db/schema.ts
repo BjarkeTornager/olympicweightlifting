@@ -410,8 +410,9 @@ export const aiUsage = pgTable(
     costUsd: numeric("cost_usd", { precision: 10, scale: 6, mode: "number" })
       .notNull()
       .default(0),
-    // Worked out from call minutes and a configured rate, not reported by
-    // the provider for the call.
+    // Not reported by the provider for the call: worked out from call
+    // minutes and a configured rate, or a call that ended before its cost
+    // arrived, at no cost.
     estimated: boolean("estimated").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

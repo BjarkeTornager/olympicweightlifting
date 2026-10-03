@@ -17,6 +17,8 @@ export const turnEventsEnabled = () => process.env.COACH_TURN_EVENTS === "1";
 const MERGE_MS = 250;
 // A reader looks again this often when no notification arrives.
 const POLL_MS = 2000;
+// A failed write is tried once more after this long.
+const RETRY_MS = 500;
 // A turn saves its result a moment before its last event is written, so a
 // reader in another process waits this long before it calls a turn that
 // ended without one finished.
@@ -186,8 +188,9 @@ function follow(turnId: string) {
 // Writes one run of a turn: its events in order, the reply's pieces merged
 // about every MERGE_MS, each write one statement with its notification.
 // Nothing is written until the run has taken the turn (claim), so a replay,
-// a limit's reply or a refusal leaves no rows. A failed write is logged and
-// stops the writing; the turn itself carries on to its saved result.
+// a limit's reply or a refusal leaves no rows. A write that fails twice is
+// logged and stops the writing; the turn itself carries on to its saved
+// result.
 export class TurnEventWriter {
   private attempt?: number;
   private seq = 0;
@@ -295,8 +298,8 @@ export class TurnEventWriter {
     if (!events.length || this.broken || !this.position) return;
     const first = this.seq + 1;
     this.seq += events.length;
-    try {
-      await getPool().query(
+    const insert = () =>
+      getPool().query(
         `WITH written AS (
            INSERT INTO agent_turn_events (turn_id, seq, attempt, event)
            SELECT $1, $3::int + (n - 1)::int, $2, e::json
@@ -306,8 +309,17 @@ export class TurnEventWriter {
          SELECT pg_notify('${CHANNEL}', $1)`,
         [this.turnId, this.attempt, first, events],
       );
-    } catch (error) {
-      this.fail(error);
+    try {
+      await insert();
+    } catch {
+      // A dropped connection or a busy pool: once more, shortly. Had the
+      // first write gone through, its rows are kept and this one fails.
+      try {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+        await insert();
+      } catch (error) {
+        this.fail(error);
+      }
     }
     wake(this.turnId);
   }

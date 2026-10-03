@@ -188,12 +188,13 @@ export function storedCoachStream(
     AbortSignal.timeout(100000),
   ]);
   const writer = new TurnEventWriter(runId);
-  // The run's last event when it isn't in the table: the run ended before
-  // taking the turn (a saved reply, a limit's reply or a refusal), or
-  // writing failed.
-  let unwritten: BaseEvent | undefined;
+  // The run's last event, and whether it is in the table. When it isn't
+  // (the run ended before taking the turn, with a saved reply, a limit's
+  // reply or a refusal, or writing failed), or reading the table failed,
+  // it is sent from here.
+  let lastEvent: BaseEvent | undefined;
+  let stored = false;
   const finished = (async () => {
-    let lastEvent: BaseEvent | undefined;
     try {
       const result = await run(writer.emit, signal, (attempt) => {
         detachedRuns.set(options.key, cancelled);
@@ -208,7 +209,7 @@ export function storedCoachStream(
       if (detachedRuns.get(options.key) === cancelled)
         detachedRuns.delete(options.key);
     }
-    if (!(await writer.finish(lastEvent))) unwritten = lastEvent;
+    stored = await writer.finish(lastEvent);
   })();
   options.waitUntil?.(finished);
   return framedStream(
@@ -217,17 +218,25 @@ export function storedCoachStream(
       send(encoder.encode({ type: EventType.RUN_STARTED, threadId, runId }));
       await Promise.race([writer.claimed, finished]);
       if (reading.aborted) return;
+      let readFailed = false;
       if (writer.position)
-        for await (const frame of readTurnEvents({
-          turnId: runId,
-          ...writer.position,
-          signal: reading,
-          writer,
-        }))
-          send(frame);
+        try {
+          for await (const frame of readTurnEvents({
+            turnId: runId,
+            ...writer.position,
+            signal: reading,
+            writer,
+          }))
+            send(frame);
+        } catch (error) {
+          // The run carries on in this process, so its last event still
+          // comes, from here.
+          logFailure("turn_events_read_failed", error);
+          readFailed = true;
+        }
       if (reading.aborted) return;
       await finished;
-      if (unwritten) send(encoder.encode(unwritten));
+      if (lastEvent && (!stored || readFailed)) send(encoder.encode(lastEvent));
     },
     () => {
       if (!options.background) cancelled.abort();

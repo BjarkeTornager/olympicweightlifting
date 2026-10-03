@@ -818,3 +818,102 @@ test(
     assert.equal(JSON.parse(finished.event).result.reply, "Logging two eggs.");
   },
 );
+
+test(
+  "through a database blip a failed write is tried again, and a stream that can't read its events still ends with the run's last event",
+  { skip },
+  async (t) => {
+    const { pool, user, cleanUp, rows } = await setup();
+    t.after(cleanUp);
+    const { runTurn } = await import("../lib/agent/engine");
+    const { storedCoachStream } = await import("../lib/agent/stream");
+    const { stopTurnEventListener } = await import("../lib/agent/turn-events");
+    t.after(stopTurnEventListener);
+    // Queries whose text `failing` picks fail, as through a restart.
+    let failing: ((text: string) => boolean) | undefined;
+    const query = pool.query as (...args: unknown[]) => Promise<unknown>;
+    t.mock.method(pool, "query", ((...args: unknown[]) =>
+      typeof args[0] === "string" && failing?.(args[0])
+        ? Promise.reject(Error("Connection terminated unexpectedly"))
+        : query.apply(pool, args)) as typeof pool.query);
+    // The turn-events failures logged, by name.
+    const logged: string[] = [];
+    t.mock.method(console, "error", (line: unknown) => {
+      const event = /"event":"(turn_events_\w+)"/.exec(String(line))?.[1];
+      if (event) logged.push(event);
+    });
+    const pieces = ["Seven ", "hours ", "a ", "night, ", "and ", "steady."];
+    const stream = (
+      turn: ReturnType<typeof input>,
+      go: Promise<void> = Promise.resolve(),
+    ) =>
+      storedCoachStream(
+        new Request("http://localhost"),
+        "coach",
+        turn.id,
+        (emit, signal, onAttempt) =>
+          runTurn(
+            user,
+            turn,
+            async (_messages, _tools, _signal, onText) => {
+              onText?.("First part. ");
+              await go;
+              for (const piece of pieces) {
+                onText?.(piece);
+                await sleep(100);
+              }
+              return {
+                role: "assistant",
+                content: "First part. " + pieces.join(""),
+              };
+            },
+            { emit, signal, onAttempt },
+          ),
+        { key: `${user}:${turn.id}` },
+      );
+    const reply = (frames: Frame[]) =>
+      JSON.parse(frames.at(-1)!.data).result.reply as string;
+
+    // The first write fails once; tried again, every event is in the table.
+    let writes = 0;
+    failing = (text) =>
+      text.includes("INSERT INTO agent_turn_events") && writes++ === 0;
+    const retried = input();
+    const written = framesOf(await stream(retried).text());
+    assert.ok(writes > 1);
+    assert.deepEqual(logged, []);
+    const saved = await rows(retried.id);
+    assert.deepEqual(
+      written.slice(1).map((f) => [f.id, f.data]),
+      saved.map((r) => [r.seq, r.event]),
+    );
+    assert.deepEqual(
+      saved.map((r) => r.seq),
+      saved.map((_, i) => i + 1),
+    );
+    assert.equal(typeOf(written.at(-1)!), "RUN_FINISHED");
+    assert.equal(reply(written), "First part. " + pieces.join(""));
+
+    // Reading fails for the rest of the reply. The run carries on here, and
+    // the stream still ends with its last event, sent from memory.
+    const unread = input();
+    const go = gate();
+    const next = frameReader(stream(unread, go.opened));
+    const frames: Frame[] = [];
+    while (!frames.some((f) => f.data.includes('"delta":"First part. "')))
+      frames.push((await next())!);
+    failing = (text) => text.includes("seq > $2");
+    go.open();
+    for (let frame = await next(); frame; frame = await next())
+      frames.push(frame);
+    assert.deepEqual(logged, ["turn_events_read_failed"]);
+    assert.equal(typeOf(frames.at(-1)!), "RUN_FINISHED");
+    assert.equal(frames.at(-1)!.id, undefined);
+    assert.equal(reply(frames), "First part. " + pieces.join(""));
+    failing = undefined;
+    assert.equal(
+      JSON.parse((await rows(unread.id)).at(-1)!.event).type,
+      "RUN_FINISHED",
+    );
+  },
+);

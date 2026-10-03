@@ -158,8 +158,8 @@ function framedStream(
 // each with its SSE id, so an app that loses the connection can read on
 // from where it was with resumeCoachStream. The events are the same as
 // coachStream's, the reply's pieces merged about every 250 ms. As with
-// coachStream, a closed connection cancels the run: that is the website's
-// Stop until it calls /api/agent/run/cancel. With `background` it doesn't:
+// coachStream, a closed connection cancels the run, as the website's Stop
+// does, which also calls /api/agent/run/cancel. With `background` it doesn't:
 // only cancelRun or the time limit does, and `waitUntil` (after() in the
 // route) keeps a release's shutdown waiting for it.
 export function storedCoachStream(

@@ -15,7 +15,7 @@ export function coachEntrySummary(entry: PreviewEntry) {
     return entry.liftingBrief?.goal ?? "Clear your saved lifting brief";
   if (entry.training) return entry.training.after.name;
   if (entry.meal)
-    return `${entry.meal.date} · ${totalNutrients(entry.meal.items).calories} kcal${entry.meal.estimated ? " · estimated" : ""}`;
+    return `${entry.meal.date} · ${totalNutrients(entry.meal.items).calories}\u00a0kcal${entry.meal.estimated ? " · estimated" : ""}`;
   if (entry.checkin)
     return `${entry.checkin.date}${entry.checkin.sleepHours == null ? "" : ` · ${formatSleepDuration(entry.checkin.sleepHours)} sleep`}`;
   if (entry.cardio)

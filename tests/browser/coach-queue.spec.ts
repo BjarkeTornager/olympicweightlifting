@@ -1,6 +1,10 @@
 import { test, expect, browserUser, openJournalArea } from "./fixtures";
 import { emptyJournal } from "../../lib/domain";
-import { streamingFixture, type StreamWindow } from "./coach-stream";
+import {
+  recordCancels,
+  streamingFixture,
+  type StreamWindow,
+} from "./coach-stream";
 import type { Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -149,7 +153,9 @@ test("rapid messages run FIFO after fresh sync, preserve focus, and continue awa
 
 test("Stop pauses dependents; retry uses the same ID and keeps a new draft separate", async ({
   page,
+  context,
 }) => {
+  const cancels = await recordCancels(context);
   await open(page);
   await send(page, "Log my coffee");
   await expect.poll(async () => (await requests(page)).length).toBe(1);
@@ -159,6 +165,11 @@ test("Stop pauses dependents; retry uses the same ID and keeps a new draft separ
   await expect(
     page.getByRole("button", { name: "Retry message" }),
   ).toBeEnabled();
+  // Only the stopped run is cancelled on the server, not the queued one.
+  const stopped = (await requests(page))[0].body.runId;
+  await expect
+    .poll(() => cancels)
+    .toEqual([{ id: stopped, account: browserUser.id }]);
   await expect(page.getByLabel("Message your coach")).toHaveValue(
     "A draft for later",
   );
@@ -181,11 +192,14 @@ test("Stop pauses dependents; retry uses the same ID and keeps a new draft separ
   await expect(
     page.locator(".chat-user").filter({ hasText: "Log my coffee" }),
   ).toHaveCount(1);
+  expect(cancels).toHaveLength(1);
 });
 
 test("queued messages can be removed and skipping a failed message resumes the next", async ({
   page,
+  context,
 }) => {
+  const cancels = await recordCancels(context);
   await open(page);
   await send(page, "First message");
   await expect.poll(async () => (await requests(page)).length).toBe(1);
@@ -198,6 +212,9 @@ test("queued messages can be removed and skipping a failed message resumes the n
     .click();
   await expect(queue).toContainText("1 queued");
   await page.getByRole("button", { name: "Stop response" }).click();
+  await expect
+    .poll(() => cancels.map((c) => c.id))
+    .toEqual([(await requests(page))[0].body.runId]);
   await page.getByRole("button", { name: "Skip and continue" }).click();
   await expect.poll(async () => (await requests(page)).length).toBe(2);
   expect((await requests(page))[1].body.messages[0].content).toBe(

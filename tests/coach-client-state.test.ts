@@ -17,6 +17,7 @@ import {
   proposalRouteLabel,
 } from "../lib/coach-proposals";
 import { emptyJournal } from "../lib/domain";
+import { coachLines } from "../lib/coach-lines";
 import type { ActionPreview } from "../lib/agent/actions";
 import type { SavedVisual } from "../lib/coach-visuals";
 
@@ -118,6 +119,16 @@ test("streamed updates replace the reply, keep earlier fields and show at most t
     t.visuals!.map((v) => v.id),
     ["1", "2", "3"],
   );
+  // A turn the server runs again after a crash starts its reply afresh.
+  t = applyStreamUpdate(t, { reset: true });
+  assert.equal(t.reply, "");
+  assert.deepEqual(t.visuals, []);
+  assert.equal(t.activity, "Reading");
+  t = applyStreamUpdate(t, { visual: visual("1") });
+  assert.deepEqual(
+    t.visuals!.map((v) => v.id),
+    ["1"],
+  );
 });
 
 test("undoing a directly saved entry replaces its reply; a reviewed save keeps it", () => {
@@ -139,6 +150,19 @@ test("undoing a directly saved entry replaces its reply; a reviewed save keeps i
   assert.equal(second[1].reply, "Ready for your review.");
   assert.equal(second[1].proposals![0].status, "undone");
   assert.equal(turns[0].proposals![0].status, "saved");
+  // A Danish receipt is undone in Danish, as the server words it.
+  const danish = markProposal(
+    [
+      turn("dansk", {
+        reply: coachLines("da").saved,
+        proposals: [preview({ id: "p3", status: "saved", automatic: true })],
+      }),
+    ],
+    "p3",
+    "undone",
+    true,
+  );
+  assert.equal(danish[0].reply, coachLines("da").undone);
 });
 
 test("the send-blocked hint names the most urgent problem first", () => {

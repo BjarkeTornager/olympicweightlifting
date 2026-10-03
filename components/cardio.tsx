@@ -61,7 +61,7 @@ export function CardioDetails({
       ? ["Calories burned", burnText(burn)]
       : [
           "Calories burned",
-          entry.caloriesKcal == null ? null : `${entry.caloriesKcal} kcal`,
+          entry.caloriesKcal == null ? null : `${entry.caloriesKcal}\u00a0kcal`,
         ],
   ].filter(([, value]) => value != null);
   return (

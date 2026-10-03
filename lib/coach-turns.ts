@@ -1,6 +1,7 @@
 import type { ActionPreview } from "./agent/actions";
 import type { SavedVisual } from "./coach-visuals";
 import type { CoachUpdate } from "./coach-client";
+import { undoneReply } from "./coach-lines";
 
 export type Turn = {
   id: string;
@@ -24,8 +25,10 @@ export function mergeSavedTurns(saved: Turn[], current: Turn[]) {
 }
 
 // Applies one streamed update: the reply so far, the current step, or a
-// visual not yet shown. A turn shows at most three visuals.
+// visual not yet shown. A turn shows at most three visuals. A reset drops
+// the reply and visuals of an attempt the server runs again.
 export function applyStreamUpdate(turn: Turn, update: CoachUpdate): Turn {
+  if (update.reset) turn = { ...turn, reply: "", visuals: [] };
   return {
     ...turn,
     ...(update.reply !== undefined ? { reply: update.reply } : {}),
@@ -53,10 +56,7 @@ export function markProposal(
   return turns.map((t) => ({
     ...t,
     ...(undo && t.proposals?.some((v) => v.id === proposalId && v.automatic)
-      ? {
-          reply:
-            "Undone. Your journal has been restored to before this change.",
-        }
+      ? { reply: undoneReply(t.reply) }
       : {}),
     proposals: t.proposals?.map((v) =>
       v.id === proposalId ? { ...v, status } : v,

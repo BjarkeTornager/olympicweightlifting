@@ -5,6 +5,7 @@ import type { CoachResponse, SavedVisual } from "../../lib/coach-visuals";
 import {
   streamingFixture,
   emit,
+  recordCancels,
   startReply,
   type StreamWindow,
 } from "./coach-stream";
@@ -231,6 +232,7 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
   context,
 }) => {
   await streamingFixture(page);
+  const cancels = await recordCancels(context);
   await context.route("**/api/agent", (r) =>
     r.fulfill({
       json: {
@@ -277,6 +279,13 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
       page.evaluate(() => (window as unknown as StreamWindow).coachAborted),
     )
     .toBe(true);
+  // Stop also cancels the run on the server, so it can't save afterwards.
+  const stopped = await page.evaluate(
+    () => (window as unknown as StreamWindow).coachRequests[0].body.runId,
+  );
+  await expect
+    .poll(() => cancels)
+    .toEqual([{ id: stopped, account: browserUser.id }]);
   await expect(
     page.getByText(
       "Response stopped. Reconnect to check whether an entry was saved. Retrying the same message will not save it twice.",
@@ -327,6 +336,8 @@ test("AG-UI cancellation and interrupted replies preserve the question and never
   await expect(page.locator(".coach-visual, img[src*=tracking]")).toHaveCount(
     0,
   );
+  // Only Stop cancels: a reply cut off by the connection may still finish.
+  expect(cancels).toHaveLength(1);
 
   // A completed AG-UI run can offer a review card; saving still needs a click.
   let saves = 0;

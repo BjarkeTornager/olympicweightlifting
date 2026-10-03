@@ -10,6 +10,7 @@ import {
   AGUI_ROUTE_MAP_TOOL,
   visualFromAguiPayload,
 } from "./agui-components";
+import { resumableReply } from "./coach-resume";
 
 type RunInput = {
   id: string;
@@ -23,6 +24,9 @@ export type CoachUpdate = {
   reply?: string;
   activity?: string;
   visual?: SavedVisual;
+  // The server runs the turn again after a crash cut it short: what was
+  // shown of the cut-off attempt goes.
+  reset?: true;
 };
 
 export async function runCoach(
@@ -41,20 +45,34 @@ export async function runCoach(
     // Send only this question. The server loads the owner's trusted history.
     initialMessages: [{ id: input.id, role: "user", content: input.message }],
     fetch: async (url, init) => {
-      const response = await privateFetch(url, {
-        ...init,
-        signal: AbortSignal.any([
-          signal,
-          ...(init.signal ? [init.signal] : []),
-        ]),
-      });
+      const request = AbortSignal.any([
+        signal,
+        ...(init.signal ? [init.signal] : []),
+      ]);
+      const response = await privateFetch(url, { ...init, signal: request });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         connectionFailure =
           data.error ?? "Your coach could not connect. Please try again.";
         throw Error(connectionFailure);
       }
-      return response;
+      // A reply whose connection drops reads on from where it was, with
+      // COACH_TURN_EVENTS on (lib/coach-resume.ts).
+      return resumableReply(
+        response,
+        (after, resuming) =>
+          privateFetch(
+            `/api/agent/run?turnId=${encodeURIComponent(input.id)}&after=${after}`,
+            {
+              headers: {
+                "X-Journal-Account": accountId,
+                Accept: "text/event-stream",
+              },
+              signal: resuming,
+            },
+          ),
+        request,
+      );
     },
   });
   let result: CoachResponse | undefined;
@@ -82,6 +100,7 @@ export async function runCoach(
           update({ reply: textMessageBuffer + event.delta });
         },
         onCustomEvent: ({ event }) => {
+          if (event.name === "coach.reset") update({ reset: true });
           if (event.name !== "coach.visual") return;
           const parsed = savedVisualSchema.safeParse(event.value);
           if (parsed.success) update({ visual: parsed.data });

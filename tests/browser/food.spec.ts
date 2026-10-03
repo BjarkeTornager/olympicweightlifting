@@ -75,6 +75,25 @@ test("manual food logging, extra ingredients, correction, targets and locking on
       .getByRole("button", { name: "Save meal", exact: true })
       .click();
     await expect(page.locator(".food-totals")).toContainText("295");
+    // Each figure stays with its unit when a narrow column wraps.
+    const raw = (selector: string) =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((el) => el.textContent);
+    expect(await raw(".food-calories p > span")).toBe("of 2,300 kcal");
+    expect(await raw(".food-calories .fine-print")).toBe(
+      "2,005 kcal remaining",
+    );
+    expect(await raw('.food-macros [data-macro="protein"] strong')).toBe(
+      "35 g",
+    );
+    expect(await raw('.food-week [aria-pressed="true"] strong')).toBe(
+      "295 kcal",
+    );
+    expect(await raw('.food-week [aria-pressed="true"] small')).toBe(
+      "35 g protein",
+    );
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       expect(

@@ -389,6 +389,37 @@ export const featureUse = pgTable(
   ],
 );
 
+// What each AI call cost, per account: one row per model call, Jev routing
+// request, web search or voice connection, with no content (lib/ai-usage.ts).
+// A call that is retried is billed again, so it gets another row.
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // coach, routing, image-tag, video, transcript-tidy, web-search,
+    // voice-gemini or voice-elevenlabs.
+    feature: text("feature").notNull(),
+    // The Coach turn, image, video or voice call the call was for.
+    sourceId: text("source_id"),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costUsd: numeric("cost_usd", { precision: 10, scale: 6, mode: "number" })
+      .notNull()
+      .default(0),
+    // Worked out from call minutes and a configured rate, not reported by
+    // the provider for the call.
+    estimated: boolean("estimated").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("ai_usage_user_date_idx").on(t.userId, t.createdAt)],
+);
+
 export const agentTurns = pgTable(
   "agent_turns",
   {

@@ -130,6 +130,23 @@ struct TodayTests {
     #expect(model.athleteName == "Maja Jensen")
   }
 
+  @Test("Drinks of one name and size share a line, in the order first drunk, and unnamed ones go by their kind")
+  func drinkLines() {
+    func drink(_ id: String, _ ml: Int, _ kind: String = "water", _ name: String = "") -> Components.Schemas.Drink {
+      .init(id: id, ml: ml, kind: kind, name: name, at: "2026-10-03T0\(id):00:00Z")
+    }
+    let lines = DrinkLine.lines([
+      drink("1", 250), drink("2", 200, "sparkling water"), drink("3", 250), drink("4", 500),
+      drink("5", 250, "tea", "Green tea"), drink("6", 250),
+    ])
+    #expect(lines.map(\.name) == ["Water", "Sparkling water", "Water", "Green tea"])
+    #expect(lines.map(\.amount) == ["3 × 250 ml", "200 ml", "500 ml", "250 ml"])
+    // The line stays put as its latest glass is deleted.
+    #expect(lines[0].id == "1")
+    #expect(lines[0].latest.id == "6")
+    #expect(DrinkLine.lines([]).isEmpty)
+  }
+
   @Test("Each day of the journal is an issue, and weeks are ISO weeks")
   func issue() throws {
     var calendar = Calendar(identifier: .gregorian)

@@ -44,7 +44,16 @@ struct VoiceCallView: View {
       .background(Theme.background)
       .navigationTitle("Voice Check-In")
       .navigationBarTitleDisplayMode(.inline)
+      // Nothing passes under the bar: it would otherwise take on its paper
+      // and hairline once the transcript, below the voice, fills up.
+      .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
       .toolbar {
+        // The hidden background drops the serif title from FolioChrome.
+        ToolbarItem(placement: .principal) {
+          Text("Voice Check-In")
+            .font(.system(.headline, design: .serif, weight: .medium))
+            .foregroundStyle(Theme.ink)
+        }
         ToolbarItem(placement: .confirmationAction) {
           if !call.inCall {
             Button("Done", role: .confirm) { dismiss() }

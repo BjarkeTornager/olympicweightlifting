@@ -141,6 +141,8 @@ struct JournalView: View {
             systemImage: filter == .all
               ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
         }
+        // Read whether or not the running head is in the bar.
+        .accessibilityValue(filter == .all ? "All entries" : filter.rawValue)
       }
     }
     .refreshable { await load(before: nil) }

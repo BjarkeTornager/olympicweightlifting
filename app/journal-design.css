@@ -2021,6 +2021,18 @@ textarea {
   .today-week { padding: 14px; }
   .week-strip-sleep { font-size: 15px; }
 }
+/* On the narrowest phones a status in place of a figure ("Nothing recorded
+   yet") takes two balanced lines rather than push the row off the screen. */
+@media (max-width: 360px) {
+  .today-record { gap: 10px; }
+  .today-record-value small {
+    display: inline-block;
+    max-width: 7em;
+    white-space: normal;
+    text-wrap: balance;
+    line-height: 1.3;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .button { transition: none; }
   .button:active:not(:disabled) { transform: none; }

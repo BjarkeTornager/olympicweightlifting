@@ -21,15 +21,29 @@ export function NextSession({
     <section className="training-quick-start" aria-label="Suggested session">
       <h2>{state.activeWorkout?.title ?? next.title}</h2>
       <p className="muted">
-        {state.activeWorkout
-          ? `Ready to resume your saved workout from ${state.activeWorkout.date}`
-          : `Next in ${next.programName}, day ${next.position} of ${next.count}`}
+        {state.activeWorkout ? (
+          <>
+            Ready to resume your saved workout from{" "}
+            <span className="whitespace-nowrap">
+              {state.activeWorkout.date}
+            </span>
+          </>
+        ) : (
+          `Next in ${next.programName}, day ${next.position} of ${next.count}`
+        )}
       </p>
       {!state.activeWorkout && (
         <p className="fine-print">
-          {next.previousDate
-            ? `Follows your recorded session on ${next.previousDate}. Train when it suits you.`
-            : "Start at the beginning, or choose another session."}
+          {next.previousDate ? (
+            // A date never breaks at its hyphens.
+            <>
+              Follows your recorded session on{" "}
+              <span className="whitespace-nowrap">{next.previousDate}</span>.
+              Train when it suits you.
+            </>
+          ) : (
+            "Start at the beginning, or choose another session."
+          )}
         </p>
       )}
       <div className="button-row">

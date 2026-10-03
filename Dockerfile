@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg python3-
 COPY scripts/video/requirements.txt scripts/video/install_model.py /opt/video-setup/
 RUN python3 -m venv /opt/video-env && /opt/video-env/bin/pip install --no-cache-dir -r /opt/video-setup/requirements.txt && /opt/video-env/bin/python /opt/video-setup/install_model.py /opt/video-models/pose.task
 ENV VIDEO_ANALYSIS_WORKER=1 VIDEO_PYTHON_PATH=/opt/video-env/bin/python VIDEO_POSE_MODEL_PATH=/opt/video-models/pose.task
+# Tags again images and fails Coach turns that a restart cut off (lib/sweeper.ts).
+ENV SWEEPER_WORKER=1
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static

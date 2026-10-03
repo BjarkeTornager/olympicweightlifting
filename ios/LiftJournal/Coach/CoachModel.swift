@@ -147,6 +147,12 @@ final class CoachModel {
   /// Whether the message being answered was handed to Coach: until then,
   /// Stop gives it back rather than throwing it away.
   @ObservationIgnored private var reachedCoach = false
+  /// What the reply's stream has read, so a dropped connection reads on
+  /// from there, and when to try.
+  @ObservationIgnored private var progress: CoachStream.Progress?
+  @ObservationIgnored private var reconnect: CoachReconnect?
+  /// The wait before reading on; coming back to the foreground ends it.
+  @ObservationIgnored private var pausing: Task<Void, Never>?
   @ObservationIgnored private weak var app: AppModel?
   /// The queue on disk, for the account signed in when the session began.
   @ObservationIgnored private var store: CoachQueueStore?
@@ -625,30 +631,99 @@ final class CoachModel {
     // Sent again after a wait, too: the athlete may have switched Coach off.
     try checkAllowed(item, app: app)
     reachedCoach = true
+    let progress = CoachStream.Progress()
+    self.progress = progress
+    defer {
+      self.progress = nil
+      reconnect = nil
+    }
     do {
-      for try await event in stream.run(
-        id: item.id, message: item.message, revision: app.today?.revision ?? 0, photoIDs: ids,
-        language: CoachLanguage.current.rawValue, submittedAt: item.sentAt)
-      {
-        switch event {
-        case .step(let text): step = text
-        case .reply(let text): reply = text
-        case .visual(let visual):
-          if !liveVisuals.contains(where: { $0.id == visual.id }) { liveVisuals.append(visual) }
-        case .finished: step = nil
-        }
-      }
+      try await show(
+        stream.run(
+          id: item.id, message: item.message, revision: app.today?.revision ?? 0, photoIDs: ids,
+          language: CoachLanguage.current.rawValue, submittedAt: item.sentAt, progress: progress))
       // Stop ends the stream without an error: throw, so it counts as one.
       try Task.checkCancellation()
     } catch let failure as CoachFailure where failure.connection != nil || failure.status == 429 {
       // Nothing reached Coach.
       reachedCoach = false
       throw failure
-    } catch where CoachFailure.isInterruption(error) && !Task.isCancelled {
+    } catch where !Task.isCancelled {
       // The connection dropped, usually because the app was in the
       // background: Coach is still working on the server.
-      try await follow(item.id, app: app)
+      try await readOn(item.id, after: error, stream: stream, progress: progress, app: app)
     }
+  }
+
+  /// Shows the reply as its events arrive.
+  private func show(_ events: AsyncThrowingStream<CoachEvent, any Error>) async throws {
+    for try await event in events {
+      reconnect?.restart()
+      switch event {
+      case .step(let text): step = text
+      case .reply(let text): reply = text
+      case .visual(let visual):
+        if !liveVisuals.contains(where: { $0.id == visual.id }) { liveVisuals.append(visual) }
+      case .reset:
+        // Written again from the start after a crash on the server.
+        reply = ""
+        liveVisuals = []
+      case .finished: step = nil
+      }
+    }
+  }
+
+  /// After the reply's stream ended early: reads it on from its last event
+  /// when the events carried ids, with longer waits between tries, or
+  /// waits for the saved turn, as it does without ids. Throws the failure
+  /// when it wasn't a dropped connection.
+  private func readOn(
+    _ id: UUID, after error: any Error, stream: CoachStream, progress: CoachStream.Progress, app: AppModel
+  ) async throws {
+    var failure = error
+    reconnect = CoachReconnect()
+    while true {
+      guard let next = reconnect?.next(after: failure) else { throw failure }
+      switch next {
+      case .fail: throw failure
+      case .waitForSaved: return try await follow(id, app: app)
+      case .readOn(let wait):
+        try await pause(wait)
+        do {
+          try await show(stream.resume(id: id, progress: progress))
+          try Task.checkCancellation()
+          return
+        } catch where !Task.isCancelled {
+          failure = error
+        }
+      }
+    }
+  }
+
+  /// Waits before reading on, or less if the app comes back to the
+  /// foreground meanwhile. Throws if stopped.
+  private func pause(_ wait: Duration) async throws {
+    guard wait > .zero else { return }
+    let sleep = Task<Void, Never> { try? await Task.sleep(for: wait) }
+    pausing = sleep
+    await withTaskCancellationHandler {
+      await sleep.value
+    } onCancel: {
+      sleep.cancel()
+    }
+    pausing = nil
+    try Task.checkCancellation()
+  }
+
+  /// Back in the foreground mid-reply. A reply waiting to be read on is
+  /// tried at once. With ids, a connection that has brought nothing for
+  /// twice the server's keep-alive, as after the app was suspended, is
+  /// taken as lost, and the reply is read on from where it was.
+  func foregrounded() {
+    guard let progress else { return }
+    reconnect?.restart()
+    pausing?.cancel()
+    progress.dropIfQuiet(for: .seconds(20))
   }
 
   /// Waits for a turn whose stream was cut off to finish on the server, for

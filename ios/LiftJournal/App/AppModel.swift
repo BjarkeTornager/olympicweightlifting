@@ -177,6 +177,8 @@ final class AppModel {
 
   func becameActive() async {
     guard phase == .signedIn else { return }
+    // A reply cut off while the app was away is read on at once.
+    coach.foregrounded()
     // A message to Coach that failed offline goes again.
     coach.resume(self)
     await refresh()

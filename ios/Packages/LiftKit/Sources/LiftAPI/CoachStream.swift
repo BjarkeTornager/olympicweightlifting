@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// What the app shows while Coach works on a message.
 public enum CoachEvent: Sendable, Equatable {
@@ -9,6 +10,9 @@ public enum CoachEvent: Sendable, Equatable {
   /// A chart, table or other visual Coach just made, shown before the reply
   /// is finished.
   case visual(Components.Schemas.CoachVisual)
+  /// A crash cut the reply short and the server is writing it again from
+  /// the start (coach.reset): what was shown of it goes.
+  case reset
   /// The turn is complete and saved on the server.
   case finished
 }
@@ -25,17 +29,22 @@ public struct CoachFailure: LocalizedError, Sendable {
   public var connection: URLError.Code?
   /// How long the server asked the app to wait before trying again (429).
   public var retryAfter: Double?
+  /// The connection dropped mid-reply after events that carried SSE ids
+  /// (the server's COACH_TURN_EVENTS switch is on): `resume` reads the rest
+  /// on from the last one.
+  public var resumable = false
   public var errorDescription: String? { message }
 
   public init(
     message: String, status: Int, interrupted: Bool = false, connection: URLError.Code? = nil,
-    retryAfter: Double? = nil
+    retryAfter: Double? = nil, resumable: Bool = false
   ) {
     self.message = message
     self.status = status
     self.interrupted = interrupted
     self.connection = connection
     self.retryAfter = retryAfter
+    self.resumable = resumable
   }
 
   /// Whether an error means the connection was lost rather than Coach or
@@ -81,7 +90,9 @@ public struct CoachFailure: LocalizedError, Sendable {
 /// message. The durable result (reply and saves) is read afterwards from
 /// `/api/v1/coach`, so an interrupted stream loses nothing: the server keeps
 /// working when the app is suspended mid-reply (X-Coach-Background), and
-/// Stop cancels it with `cancel(id:)`.
+/// Stop cancels it with `cancel(id:)`. With the server's COACH_TURN_EVENTS
+/// switch on, each event comes with an SSE id, and `resume` reads a reply
+/// cut off by a dropped connection on from the last one.
 public struct CoachStream: Sendable {
   public let token: String
   public let account: String
@@ -91,23 +102,60 @@ public struct CoachStream: Sendable {
     self.account = account
   }
 
+  static let cutOff = "The connection ended before Coach finished. Refresh to see what was saved."
+
   /// `language` ("en" or "da") is the one chosen in Profile; Coach writes
   /// every reply in it.
   /// `submittedAt` is when the athlete sent it, so a message that waited in
   /// the app's queue keeps the day and time it was meant for.
+  /// `progress` keeps what has been read, for `resume`.
   public func run(
     id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String? = nil,
-    submittedAt: Date = .now
+    submittedAt: Date = .now, progress: Progress = Progress()
+  ) -> AsyncThrowingStream<CoachEvent, any Error> {
+    events { emit in
+      try await stream(
+        id: id, message: message, revision: revision, photoIDs: photoIDs, language: language,
+        submittedAt: submittedAt, progress: progress, emit: emit)
+    }
+  }
+
+  /// Reads a reply on after its connection dropped, from the last event
+  /// `progress` read: GET /api/agent/run?turnId=<id>&after=<last id> sends
+  /// the events after it, then the rest as they come. Only for a run whose
+  /// events carried ids (`progress.resumable`). It never starts or retries
+  /// the run. A refusal (switched off since, or no such turn yet) is an
+  /// interruption: the saved turn tells.
+  public func resume(id: UUID, progress: Progress) -> AsyncThrowingStream<CoachEvent, any Error> {
+    events { emit in
+      let url = LiftServer.origin.appending(path: "api/agent/run").appending(queryItems: [
+        URLQueryItem(name: "turnId", value: id.uuidString.lowercased()),
+        URLQueryItem(name: "after", value: String(progress.lastEventID ?? 0)),
+      ])
+      var request = URLRequest(url: url)
+      // The server sends a keep-alive every 10 seconds: a connection quiet
+      // for longer than this has dropped.
+      request.timeoutInterval = 30
+      request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+      LiftHeaders.apply(to: &request, token: token, account: account)
+      let (bytes, response) = try await LiftServer.session().bytes(for: request)
+      let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+      guard status == 200 else {
+        bytes.task.cancel()
+        throw CoachFailure(message: Self.cutOff, status: status, interrupted: true)
+      }
+      progress.connected(bytes.task)
+      try await Self.read(bytes.lines, into: progress, emit: emit)
+    }
+  }
+
+  private func events(
+    _ body: @escaping @Sendable (_ emit: (CoachEvent) -> Void) async throws -> Void
   ) -> AsyncThrowingStream<CoachEvent, any Error> {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
-          try await stream(
-            id: id, message: message, revision: revision, photoIDs: photoIDs, language: language,
-            submittedAt: submittedAt
-          ) {
-            continuation.yield($0)
-          }
+          try await body { continuation.yield($0) }
           continuation.finish()
         } catch {
           continuation.finish(throwing: error)
@@ -131,7 +179,7 @@ public struct CoachStream: Sendable {
 
   private func stream(
     id: UUID, message: String, revision: Int, photoIDs: [UUID], language: String?,
-    submittedAt: Date, emit: (CoachEvent) -> Void
+    submittedAt: Date, progress: Progress, emit: (CoachEvent) -> Void
   ) async throws {
     let runID = id.uuidString.lowercased()
     var body: [String: Any] = [
@@ -183,23 +231,109 @@ public struct CoachStream: Sendable {
         message: error ?? "Coach could not connect. Your message is kept.", status: status,
         retryAfter: http?.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init))
     }
-    var reader = Reader()
-    for try await line in bytes.lines {
-      try Task.checkCancellation()
-      if let event = try reader.read(line) { emit(event) }
+    progress.connected(bytes.task)
+    try await Self.read(bytes.lines, into: progress, emit: emit)
+  }
+
+  /// Reads the event stream into `progress` line by line until it ends. A
+  /// connection that drops after events with ids throws a resumable
+  /// failure; without ids, the connection's own error, as it always has.
+  static func read<Lines: AsyncSequence>(
+    _ lines: Lines, into progress: Progress, emit: (CoachEvent) -> Void
+  ) async throws where Lines.Element == String {
+    defer { progress.disconnected() }
+    do {
+      for try await line in lines {
+        try Task.checkCancellation()
+        if let event = try progress.read(line) { emit(event) }
+      }
+    } catch is URLError where progress.resumable && !Task.isCancelled {
+      throw CoachFailure(message: cutOff, status: 0, interrupted: true, resumable: true)
     }
-    try reader.end()
+    try progress.end()
+  }
+
+  /// What a run's stream has read, kept as it reads, so a reply cut off by
+  /// a dropped connection is read on from where it was (`resume`). The app
+  /// holds it too, to end a connection that has gone quiet.
+  public final class Progress: Sendable {
+    private struct State {
+      var reader = Reader()
+      /// When the connection last brought anything, keep-alives included.
+      var heard = ContinuousClock.now
+      var connection: URLSessionTask?
+    }
+    private let state = Mutex(State())
+
+    public init() {}
+
+    /// Whether the events carried SSE ids (the server's COACH_TURN_EVENTS
+    /// switch is on): only then can the reply be read on.
+    public var resumable: Bool { lastEventID != nil }
+    /// The SSE id of the last event read.
+    public var lastEventID: Int? { state.withLock { $0.reader.lastID } }
+
+    /// Ends the connection when nothing has come for `quiet`, not even the
+    /// keep-alive the server sends every 10 seconds, as may happen while
+    /// the app is suspended: it reads as dropped, and the reply is read on.
+    /// Only with ids, so a reply is never cut off without a way to read on.
+    /// True when it ended one.
+    @discardableResult
+    public func dropIfQuiet(for quiet: Duration, now: ContinuousClock.Instant = .now) -> Bool {
+      let connection = state.withLock { current -> URLSessionTask? in
+        guard current.reader.lastID != nil, now - current.heard > quiet else { return nil }
+        return current.connection
+      }
+      connection?.cancel()
+      return connection != nil
+    }
+
+    func connected(_ connection: URLSessionTask) {
+      state.withLock {
+        $0.connection = connection
+        $0.heard = .now
+      }
+    }
+
+    func disconnected() {
+      state.withLock { $0.connection = nil }
+    }
+
+    func read(_ line: String) throws -> CoachEvent? {
+      try state.withLock {
+        $0.heard = .now
+        return try $0.reader.read(line)
+      }
+    }
+
+    func end() throws {
+      try state.withLock { try $0.reader.end() }
+    }
   }
 
   /// Reads the AG-UI event stream line by line.
-  struct Reader {
+  struct Reader: Sendable {
     private var reply = ""
     private var finished = false
+    /// The SSE id of the last event read; nil while the server sends none
+    /// (COACH_TURN_EVENTS off).
+    private(set) var lastID: Int?
+    /// The id of the event being read: its `id:` line comes first.
+    private var nextID: Int?
 
     /// The event a `data:` line carries, if the app shows it. Throws the
     /// run's failure, with the server's status code, on RUN_ERROR.
     mutating func read(_ line: String) throws -> CoachEvent? {
+      if line.hasPrefix("id:") {
+        nextID = Int(line.dropFirst(3).trimmingCharacters(in: .whitespaces))
+        return nil
+      }
       guard line.hasPrefix("data:") else { return nil }
+      // An event without an id (RUN_STARTED, coach.reset) keeps the last.
+      if let id = nextID {
+        lastID = id
+        nextID = nil
+      }
       let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
       guard payload.utf8.count < 2_000_000,
         let event = try? JSONDecoder().decode(AGUIEvent.self, from: Data(payload.utf8))
@@ -214,6 +348,10 @@ public struct CoachStream: Sendable {
         reply += event.delta ?? ""
         return .reply(reply)
       case "CUSTOM":
+        if event.name == "coach.reset" {
+          reply = ""
+          return .reset
+        }
         return CoachStream.visual(fromCustom: payload).map(CoachEvent.visual)
       case "RUN_ERROR":
         // `code` is the HTTP status the server would have answered with,
@@ -232,9 +370,7 @@ public struct CoachStream: Sendable {
     /// Throws if the stream ended before the run finished.
     func end() throws {
       if !finished {
-        throw CoachFailure(
-          message: "The connection ended before Coach finished. Refresh to see what was saved.",
-          status: 0, interrupted: true)
+        throw CoachFailure(message: CoachStream.cutOff, status: 0, interrupted: true)
       }
     }
   }
@@ -260,6 +396,7 @@ extension CoachStream {
 
 private struct AGUIEvent: Decodable {
   let type: String
+  let name: String?
   let stepName: String?
   let delta: String?
   let message: String?

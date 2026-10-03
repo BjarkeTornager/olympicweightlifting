@@ -27,6 +27,7 @@ import {
   weightTrend,
 } from "./body-composition";
 import { planForState } from "./body-goals";
+import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
 import { exerciseName } from "./domain";
@@ -297,6 +298,10 @@ export const todayView = z
     priorities: z.array(priorityView),
     // Only in a journal's first two weeks, until all three are done.
     firstSteps: firstStepsView.optional(),
+    // The day the journal began, which Today's issue number counts from, so
+    // it carries on across installs. Optional, as builds must still decode a
+    // server from before it.
+    journalStartDate: day.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Today" });
@@ -760,12 +765,46 @@ export function firstSteps(state: JournalState, date: string) {
   return Object.values(steps).every(Boolean) ? undefined : steps;
 }
 
+// The day the journal began, in the athlete's time zone (the iPhone's, else
+// the profile's, else Copenhagen's): the day it was created, or that of an
+// earlier record logged by hand (from a backup brought in, say). What Apple
+// Health brought is left out, wherever it falls: its first sync fills in the
+// two weeks, and the workouts of the two months, before the journal began.
+export function journalStartDate(
+  state: JournalState,
+  fromAppleHealth: Set<string>,
+  timezone?: string,
+) {
+  const zone =
+    [timezone, state.profile.timezone].find(
+      (t) => timeZoneSchema.safeParse(t).success,
+    ) ?? "Europe/Copenhagen";
+  let first = localClock(new Date(state.createdAt), zone).date;
+  for (const date of [
+    ...state.sessions.map((s) => s.date),
+    ...state.cardio.sessions
+      .filter((s) => !fromAppleHealth.has(s.id))
+      .map((s) => s.date),
+    ...state.nutrition.meals.map((m) => m.date),
+    ...state.health.checkins.filter((c) => !c.sleepImport).map((c) => c.date),
+    ...(state.health.drinks ?? []).map((d) => d.date),
+    ...(state.health.supplements ?? []).map((s) => s.date),
+    ...(state.health.bodyFat ?? [])
+      .filter((b) => b.source !== "apple-health")
+      .map((b) => b.date),
+  ])
+    if (day.safeParse(date).success && date < first) first = date;
+  return first;
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
   date: string,
   fromAppleHealth: Set<string>,
   routes: Map<string, RouteNote> = new Map(),
+  // The iPhone's time zone, for the day the journal began.
+  timezone?: string,
 ): TodayView {
   const health = dailyHealth(state, date);
   const hydration = hydrationForDay(state, date);
@@ -888,6 +927,7 @@ export function buildToday(
         action: p.action,
       })),
       firstSteps: firstSteps(state, date),
+      journalStartDate: journalStartDate(state, fromAppleHealth, timezone),
     }),
   );
 }

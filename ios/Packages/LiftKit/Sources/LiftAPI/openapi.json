@@ -120,6 +120,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2912,6 +2920,9 @@
           },
           "firstSteps": {
             "$ref": "#/components/schemas/FirstSteps"
+          },
+          "journalStartDate": {
+            "type": "string"
           }
         },
         "required": [

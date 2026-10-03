@@ -56,6 +56,7 @@ final class VoiceCall {
   var cards: Int { lines.filter { $0.role == .card }.count }
 
   private let app: AppModel
+  /// The call's id, also its transcript's. Every voice request carries it.
   private let id = UUID()
   private let audio = VoiceAudio()
   private var gate = BargeInGate()
@@ -174,14 +175,9 @@ final class VoiceCall {
 
   private func connect(resume: Bool) async throws {
     guard let session = app.session else { throw VoiceError("Sign in again to talk to Coach.") }
-    var body: [String: Any] = [
-      "timezone": TimeZone.current.identifier, "purpose": "checkin",
-      "language": CoachLanguage.current.rawValue,
-    ]
-    if let voice = provider.chosenVoice(in: app.voiceOptions) { body["voice"] = voice }
-    if resume, let handle { body["resumeHandle"] = handle }
-    // Only sent for ElevenLabs, which only a server that knows it offers.
-    if provider == .elevenlabs { body["provider"] = provider.rawValue }
+    let body = Self.sessionBody(
+      call: id, provider: provider, voice: provider.chosenVoice(in: app.voiceOptions),
+      resumeHandle: resume ? handle : nil, language: CoachLanguage.current.rawValue)
     let response = try await RawRequest.send(
       "api/voice/session", body: body, token: session.token, account: session.accountID,
       headers: ["X-Voice-Client": Self.clientVersion], timeout: 15)
@@ -220,6 +216,23 @@ final class VoiceCall {
   }
 
   private var waiting: CheckedContinuation<Void, any Error>?
+
+  /// What asks the server for a connection, the first and every resume.
+  /// Like every voice request, it carries the call's id (the transcript's),
+  /// which groups the call's diagnostic traces on the server.
+  nonisolated static func sessionBody(
+    call: UUID, provider: VoiceProvider, voice: String?, resumeHandle: String?, language: String,
+    timezone: String = TimeZone.current.identifier
+  ) -> [String: Any] {
+    var body: [String: Any] = [
+      "timezone": timezone, "purpose": "checkin", "language": language, "callId": call.uuidString.lowercased(),
+    ]
+    if let voice { body["voice"] = voice }
+    if let resumeHandle { body["resumeHandle"] = resumeHandle }
+    // Only sent for ElevenLabs, which only a server that knows it offers.
+    if provider == .elevenlabs { body["provider"] = provider.rawValue }
+    return body
+  }
 
   private func connected(_ result: Result<Void, any Error>) {
     waiting?.resume(with: result)
@@ -518,6 +531,20 @@ final class VoiceCall {
     }
   }
 
+  /// A save, read, card or picture the coach asked for, with the call's id.
+  /// `seenPhotos` are the photo ids the coach has seen, for a save.
+  nonisolated static func actionBody(
+    id: String, call: FunctionCall, in callID: UUID, seenPhotos: [String]? = nil,
+    timezone: String = TimeZone.current.identifier
+  ) -> [String: Any] {
+    var body: [String: Any] = [
+      "id": id, "name": call.name, "args": call.args.mapValues(\.foundation), "timezone": timezone,
+      "callId": callID.uuidString.lowercased(),
+    ]
+    if let seenPhotos { body["seenPhotoIds"] = seenPhotos }
+    return body
+  }
+
   /// A save or read through the server's voice actions, retried with one
   /// id so a lost reply never saves twice.
   private func journal(_ call: FunctionCall) async {
@@ -532,11 +559,8 @@ final class VoiceCall {
       if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
       do {
         let response = try await RawRequest.send(
-          "api/voice/action",
-          body: [
-            "id": id, "name": call.name, "args": call.args.mapValues(\.foundation),
-            "timezone": TimeZone.current.identifier, "seenPhotoIds": photos,
-          ], token: session.token, account: session.accountID, headers: ["X-Voice-Client": Self.clientVersion])
+          "api/voice/action", body: Self.actionBody(id: id, call: call, in: self.id, seenPhotos: photos),
+          token: session.token, account: session.accountID, headers: ["X-Voice-Client": Self.clientVersion])
         // A release in progress answers 502/503; try again shortly.
         if response.status >= 502 { continue }
         result = response.json ?? result
@@ -579,12 +603,8 @@ final class VoiceCall {
       if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
       do {
         let response = try await RawRequest.send(
-          "api/voice/action",
-          body: [
-            "id": id, "name": call.name, "args": call.args.mapValues(\.foundation),
-            "timezone": TimeZone.current.identifier, "callId": self.id.uuidString.lowercased(),
-          ], token: session.token, account: session.accountID,
-          headers: ["X-Voice-Client": Self.clientVersion], timeout: 10)
+          "api/voice/action", body: Self.actionBody(id: id, call: call, in: self.id), token: session.token,
+          account: session.accountID, headers: ["X-Voice-Client": Self.clientVersion], timeout: 10)
         if response.status >= 502 { continue }
         result = response.json ?? result
         if response.status != 200 { result = ["ok": false, "error": response.error ?? failure] }
@@ -783,14 +803,21 @@ final class VoiceCall {
 
   /// Connection problems are reported (codes only, never content).
   private func report(_ event: String, _ details: [String: Any] = [:]) {
-    guard let session = app.session else { return }
-    var body = details
-    body["event"] = event
-    guard let json = try? JSONSerialization.data(withJSONObject: body) else { return }
+    guard let session = app.session,
+      let json = try? JSONSerialization.data(withJSONObject: Self.eventBody(event, details: details, call: id))
+    else { return }
     Task.detached {
       _ = try? await RawRequest.send(
         "api/voice/event", json: json, token: session.token, account: session.accountID, timeout: 10)
     }
+  }
+
+  /// A connection problem reported, codes only, with the call's id.
+  nonisolated static func eventBody(_ event: String, details: [String: Any] = [:], call: UUID) -> [String: Any] {
+    var body = details
+    body["event"] = event
+    body["callId"] = call.uuidString.lowercased()
+    return body
   }
 
   private func failureMessage(_ error: any Error) -> String {

@@ -20,8 +20,12 @@ export async function POST(request: Request) {
           "go_away",
           "reconnected",
           "reconnect_failed",
+          // A photo taken in the call that couldn't be sent to the coach.
+          "photo_failed",
         ]),
         code: z.number().int().optional(),
+        // The HTTP status of a failed photo; 0 when there was no answer.
+        status: z.number().int().min(0).max(599).optional(),
         reason: z.string().max(200).optional(),
         attempts: z.number().int().min(0).max(20).optional(),
         resumed: z.number().int().min(0).max(1).optional(),
@@ -47,6 +51,7 @@ export async function POST(request: Request) {
       {
         "lift.socket_event": event.event,
         "lift.close_code": event.code,
+        "lift.http_status": event.status,
         "lift.reconnect_attempts": event.attempts,
         "lift.resumed":
           event.resumed === undefined ? undefined : event.resumed === 1,

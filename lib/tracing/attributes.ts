@@ -157,6 +157,7 @@ export const attributes = {
     "go_away",
     "reconnected",
     "reconnect_failed",
+    "photo_failed",
   ),
   "lift.close_code": count,
   "lift.reconnect_attempts": count,

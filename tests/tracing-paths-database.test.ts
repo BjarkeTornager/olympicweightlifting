@@ -271,6 +271,8 @@ test(
     for (const body of [
       { event: "socket_closed", code: 1006, reason: `lost ${CANARY}`, callId },
       { event: "reconnected", attempts: 2, resumed: 1 },
+      // The iPhone's report of a photo it couldn't send, once refused.
+      { event: "photo_failed", status: 413, callId },
     ]) {
       const logged = await post(voiceEvent, "/api/voice/event", body);
       assert.equal((await logged.json()).logged, true);
@@ -316,6 +318,11 @@ test(
     assert.equal(reconnected.attributes["session.id"], undefined);
     assert.equal(reconnected.attributes["lift.reconnect_attempts"], 2);
     assert.equal(reconnected.attributes["lift.resumed"], true);
+    const photo = sockets.find(
+      (s) => s.attributes["lift.socket_event"] === "photo_failed",
+    )!;
+    assert.equal(photo.attributes["session.id"], call);
+    assert.equal(photo.attributes["lift.http_status"], 413);
     const [tidy] = roots("voice_tidy");
     assert.equal(tidy.attributes["session.id"], call);
     assert.equal(tidy.attributes["lift.trigger"], "final");

@@ -1,5 +1,6 @@
 import Foundation
 import LiftAPI
+import LiftVoice
 import Testing
 
 @testable import LiftJournal
@@ -140,6 +141,43 @@ struct VoiceCallTests {
       VoiceCall.pictureNote(title: "Salmon rice bowl", ready: true)
         == "(The picture of Salmon rice bowl is now on the athlete's screen.)")
     #expect(VoiceCall.pictureNote(title: "Salmon rice bowl", ready: false).contains("couldn't be drawn"))
+  }
+
+  /// A tool call as Gemini sends it.
+  static func toolCall(_ name: String, args: String = "{}") -> FunctionCall? {
+    let json = #"{"toolCall":{"functionCalls":[{"id":"f1","name":"\#(name)","args":\#(args)}]}}"#
+    guard case .toolCall(let calls)? = LiveProtocol.events(Data(json.utf8)).first else { return nil }
+    return calls.first
+  }
+
+  @Test("Every voice request carries the call's id: the session and each resume, every action and each report")
+  func callID() throws {
+    let call = UUID()
+    let key = call.uuidString.lowercased()
+    let session = VoiceCall.sessionBody(
+      call: call, provider: .google, voice: "Kore", resumeHandle: nil, language: "en", timezone: "Europe/Copenhagen")
+    #expect(session["callId"] as? String == key)
+    #expect(session["purpose"] as? String == "checkin" && session["voice"] as? String == "Kore")
+    #expect(session["resumeHandle"] == nil && session["provider"] == nil)
+    let resumed = VoiceCall.sessionBody(
+      call: call, provider: .elevenlabs, voice: nil, resumeHandle: "handle-1", language: "da")
+    #expect(resumed["callId"] as? String == key)
+    #expect(resumed["resumeHandle"] as? String == "handle-1" && resumed["provider"] as? String == "elevenlabs")
+
+    let save = try #require(Self.toolCall("log_drink", args: #"{"ml":250}"#))
+    let action = VoiceCall.actionBody(id: "a1", call: save, in: call, seenPhotos: ["p1"], timezone: "Europe/Copenhagen")
+    #expect(action["callId"] as? String == key)
+    #expect(action["id"] as? String == "a1" && action["name"] as? String == "log_drink")
+    #expect(action["seenPhotoIds"] as? [String] == ["p1"])
+    #expect((action["args"] as? [String: Any])?["ml"] as? Double == 250)
+    let card = VoiceCall.actionBody(id: "a2", call: try #require(Self.toolCall("show_card")), in: call)
+    #expect(card["callId"] as? String == key && card["seenPhotoIds"] == nil)
+
+    let report = VoiceCall.eventBody("socket_closed", details: ["code": 1006, "reason": "Gone"], call: call)
+    #expect(report["callId"] as? String == key && report["event"] as? String == "socket_closed")
+    #expect(report["code"] as? Int == 1006)
+    #expect(VoiceCall.eventBody("reconnect_failed", call: call)["callId"] as? String == key)
+    for body in [session, resumed, action, card, report] { #expect(JSONSerialization.isValidJSONObject(body)) }
   }
 
   @Test("The end of the call counts saves and cards")

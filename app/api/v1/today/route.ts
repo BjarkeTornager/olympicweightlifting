@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   try {
     requireNative(request);
     const user = await requireAthlete(request);
-    const date = foodDate.parse(new URL(request.url).searchParams.get("date"));
+    const params = new URL(request.url).searchParams;
+    const date = foodDate.parse(params.get("date"));
     const [snapshot, fromAppleHealth] = await Promise.all([
       readJournal(user.id),
       importedCardioIds(user.id),
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
         date,
         fromAppleHealth,
         routes,
+        params.get("timezone") ?? undefined,
       ),
       { headers: { "Cache-Control": "private, no-store" } },
     );

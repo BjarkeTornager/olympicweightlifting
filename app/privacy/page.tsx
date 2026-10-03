@@ -136,9 +136,9 @@ export default function PrivacyPage() {
           expire after 24 hours and are removed on subsequent assistant use.
           Clear conversation removes its messages and proposals immediately,
           while keeping saved workouts. Diagnostic traces, described under How
-          we measure use, hold no messages, so clearing conversation leaves
-          them to expire after 30 days. Journal backup exports do not include
-          chat; use your browser to copy any conversation you want to keep.
+          we measure use, hold no messages, so clearing conversation leaves them
+          to expire after 30 days. Journal backup exports do not include chat;
+          use your browser to copy any conversation you want to keep.
         </p>
         <p>
           Your optional coaching focus, approved memories, agreed plans,

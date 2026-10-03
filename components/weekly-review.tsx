@@ -90,7 +90,7 @@ export function WeeklyReview({
           <strong>
             {week.averageCalories == null
               ? "No complete days"
-              : `${Math.round(week.averageCalories)} kcal`}
+              : `${Math.round(week.averageCalories)}\u00a0kcal`}
           </strong>
           <small>
             {week.completeFoodDays}/7 days marked complete ·{" "}
@@ -125,7 +125,7 @@ export function WeeklyReview({
           <li>
             {report.changes.calories == null
               ? "A food intake comparison needs explicitly complete days in both weeks."
-              : `${Math.round(Math.abs(report.changes.calories))} kcal ${report.changes.calories >= 0 ? "higher" : "lower"} average across complete days (${week.completeFoodDays} this week; ${previous.completeFoodDays} before).`}
+              : `${Math.round(Math.abs(report.changes.calories))}\u00a0kcal ${report.changes.calories >= 0 ? "higher" : "lower"} average across complete days (${week.completeFoodDays} this week; ${previous.completeFoodDays} before).`}
           </li>
         </ul>
         <p className="fine-print">

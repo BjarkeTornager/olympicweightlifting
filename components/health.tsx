@@ -41,7 +41,7 @@ export function CheckinDetails({ checkin }: { checkin: Checkin }) {
       : `${formatSleepDuration(checkin.sleepHours)} sleep`,
     checkin.energy == null ? null : `Energy ${checkin.energy}/5`,
     checkin.soreness == null ? null : `Soreness ${checkin.soreness}/5`,
-    checkin.waterMl == null ? null : `${checkin.waterMl} ml water`,
+    checkin.waterMl == null ? null : `${checkin.waterMl}\u00a0ml water`,
     checkin.bodyweight == null ? null : `${checkin.bodyweight} kg`,
   ].filter(Boolean);
   return (
@@ -401,7 +401,7 @@ export function DailyOverview({
           <span>Food</span>
           <strong>
             {view.mealCount
-              ? `${view.nutrients.calories.toLocaleString("en-GB")} kcal`
+              ? `${view.nutrients.calories.toLocaleString("en-GB")}\u00a0kcal`
               : "No entries today"}
           </strong>
           <small>

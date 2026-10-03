@@ -108,7 +108,7 @@ export function FoodView({
     const goal = target(key)!;
     const unit = key === "calories" ? "kcal" : "g";
     const diff = Math.abs(Math.round(goal - totals[key]));
-    return `${diff.toLocaleString("en-GB")} ${unit} ${totals[key] > goal ? "above target" : "remaining"}`;
+    return `${diff.toLocaleString("en-GB")}\u00a0${unit} ${totals[key] > goal ? "above target" : "remaining"}`;
   };
   const weekMax = Math.max(1, ...week.days.map((day) => day.calories));
   return (
@@ -186,7 +186,7 @@ export function FoodView({
               <span>
                 {target("calories") == null
                   ? "kcal · no daily target"
-                  : `of ${target("calories")!.toLocaleString("en-GB")} kcal`}
+                  : `of ${target("calories")!.toLocaleString("en-GB")}\u00a0kcal`}
               </span>
             </p>
             <TargetBar
@@ -203,7 +203,7 @@ export function FoodView({
               <div key={key} data-macro={key}>
                 <span>{macroLabel[key]}</span>
                 <strong>
-                  {totals[key]} <small>g</small>
+                  {totals[key]}&nbsp;<small>g</small>
                 </strong>
                 <TargetBar
                   nutrient={key}
@@ -400,8 +400,8 @@ export function FoodView({
               <strong>{meal.name}</strong>
               <small>
                 {meal.type} ·{" "}
-                {totalNutrients(meal.items).calories.toLocaleString("en-GB")}{" "}
-                kcal
+                {totalNutrients(meal.items).calories.toLocaleString("en-GB")}
+                &nbsp;kcal
                 {meal.estimated ? " · estimated" : ""}
               </small>
             </div>
@@ -440,7 +440,7 @@ export function FoodView({
         <p>
           {week.loggedDays} of 7 days have entries.{" "}
           {week.loggedDays
-            ? `Average on logged days: ${Math.round(week.totals.calories / week.loggedDays).toLocaleString("en-GB")} kcal.`
+            ? `Average on logged days: ${Math.round(week.totals.calories / week.loggedDays).toLocaleString("en-GB")}\u00a0kcal.`
             : "Log meals to see your pattern."}
         </p>
         <div className="food-week">
@@ -457,8 +457,8 @@ export function FoodView({
                   }}
                 />
               </span>
-              <strong>{day.calories.toLocaleString("en-GB")} kcal</strong>
-              <small>{day.protein} g protein</small>
+              <strong>{day.calories.toLocaleString("en-GB")}&nbsp;kcal</strong>
+              <small>{day.protein}&nbsp;g protein</small>
               <span>{day.date.slice(5)}</span>
             </button>
           ))}

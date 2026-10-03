@@ -81,6 +81,9 @@ export default defineRailway(() => {
       TRACE_SAMPLE_RATE: preserve(),
       TRACE_RETENTION_DAYS: preserve(),
       NEXT_OTEL_FETCH_DISABLED: preserve(),
+      // Coach replies streamed from Postgres, so an app can reconnect to
+      // one mid-reply (lib/agent/turn-events.ts); unset or 0 is off.
+      COACH_TURN_EVENTS: preserve(),
       // Releases without downtime: the previous server keeps serving until
       // the new one is live, then gets time to finish open requests. Calls,
       // saves and Coach replies in progress (up to 100 s) are not cut off by

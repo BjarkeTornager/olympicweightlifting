@@ -129,14 +129,16 @@ export default function PrivacyPage() {
         <p>
           Conversation is stored with your account. The app removes conversation
           older than 90 days when you next use the assistant, by typing or by
-          voice. Proposals temporarily include journal snapshots for safe save
-          and undo; they expire after 24 hours and are removed on subsequent
-          assistant use. Clear conversation removes its messages and proposals
-          immediately, while keeping saved workouts. Diagnostic traces,
-          described under How we measure use, hold no messages, so clearing
-          conversation leaves them to expire after 30 days. Journal backup
-          exports do not include chat; use your browser to copy any conversation
-          you want to keep.
+          voice. While Coach writes a reply, the reply so far may also be kept
+          so the app can pick it up again after a dropped connection; that copy
+          is removed about ten minutes after the reply ends. Proposals
+          temporarily include journal snapshots for safe save and undo; they
+          expire after 24 hours and are removed on subsequent assistant use.
+          Clear conversation removes its messages and proposals immediately,
+          while keeping saved workouts. Diagnostic traces, described under How
+          we measure use, hold no messages, so clearing conversation leaves them
+          to expire after 30 days. Journal backup exports do not include chat;
+          use your browser to copy any conversation you want to keep.
         </p>
         <p>
           Your optional coaching focus, approved memories, agreed plans,

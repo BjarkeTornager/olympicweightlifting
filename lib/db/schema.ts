@@ -4,6 +4,8 @@ import {
   timestamp,
   boolean,
   integer,
+  bigint,
+  json,
   jsonb,
   primaryKey,
   numeric,
@@ -477,6 +479,13 @@ export const agentTurns = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // The order turns arrived in, for a queue of turns kept on the server;
+    // nothing reads it yet.
+    seq: bigint("seq", { mode: "number" }).generatedAlwaysAsIdentity(),
+    // How many times the turn was taken to run: 1, and one more for each
+    // retry of a failed or cut-off turn, also one answered with a limit's
+    // reply. Its progress events carry it.
+    attempt: integer("attempt").notNull().default(1),
   },
   (t) => [
     index("agent_turns_user_date_idx").on(t.userId, t.createdAt),
@@ -485,6 +494,28 @@ export const agentTurns = pgTable(
       .on(t.createdAt)
       .where(sql`status = 'running'`),
   ],
+);
+// A Coach turn's AG-UI events as it runs, with COACH_TURN_EVENTS on, so a
+// dropped connection can pick the reply up where it left off
+// (lib/agent/turn-events.ts). The sweeper removes them about ten minutes
+// after the turn ends; the saved reply stays in agent_turns.
+export const agentTurnEvents = pgTable(
+  "agent_turn_events",
+  {
+    turnId: text("turn_id")
+      .notNull()
+      .references(() => agentTurns.id, { onDelete: "cascade" }),
+    // The event's SSE id: 1, 2, 3… across all of the turn's attempts.
+    seq: integer("seq").notNull(),
+    attempt: integer("attempt").notNull(),
+    // As the AG-UI encoder wrote it. json, not jsonb, keeps its bytes and
+    // key order, so the stream read back is the one sent today.
+    event: json("event").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.turnId, t.seq] })],
 );
 export const agentProposals = pgTable(
   "agent_proposals",

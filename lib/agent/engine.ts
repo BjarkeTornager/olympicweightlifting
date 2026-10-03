@@ -265,6 +265,9 @@ type TurnHooks = {
   // Keeps work that outlives the reply, a picture being drawn, running
   // through a release's shutdown: after() in the routes.
   waitUntil?: (work: Promise<unknown>) => void;
+  // Told the attempt number once this run has taken the turn, before its
+  // first event; COACH_TURN_EVENTS writes the events under it.
+  onAttempt?: (attempt: number) => void;
 };
 
 // One Coach turn, traced as one diagnostic trace (lib/tracing) when tracing
@@ -415,7 +418,13 @@ async function turn(
     const saved = existing[0]
       ? await db
           .update(agentTurns)
-          .set({ status: "limited", response, startedAt: new Date() })
+          .set({
+            status: "limited",
+            response,
+            startedAt: new Date(),
+            // A reader from the start then skips an earlier attempt's events.
+            attempt: sql`${agentTurns.attempt} + 1`,
+          })
           .where(retryable())
           .returning({ id: agentTurns.id })
       : await db
@@ -478,9 +487,13 @@ async function turn(
   const inserted = existing[0]
     ? await db
         .update(agentTurns)
-        .set({ status: "running", startedAt: attemptStarted })
+        .set({
+          status: "running",
+          startedAt: attemptStarted,
+          attempt: sql`${agentTurns.attempt} + 1`,
+        })
         .where(retryable())
-        .returning({ id: agentTurns.id })
+        .returning({ id: agentTurns.id, attempt: agentTurns.attempt })
     : await db
         .insert(agentTurns)
         .values({
@@ -492,9 +505,10 @@ async function turn(
           startedAt: attemptStarted,
         })
         .onConflictDoNothing()
-        .returning({ id: agentTurns.id });
+        .returning({ id: agentTurns.id, attempt: agentTurns.attempt });
   if (!inserted.length)
     throw new ApiError("That request is already being processed.", 409);
+  hooks.onAttempt?.(inserted[0].attempt);
   if (!existing[0]) {
     void countUse(userId, "coach.message");
     if (photoIds.length) void countUse(userId, "coach.photo");

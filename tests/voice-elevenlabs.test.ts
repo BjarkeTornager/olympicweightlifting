@@ -59,7 +59,11 @@ function assertValid(node: Node, path: string) {
 
 test("the ElevenLabs coach gets every voice tool but the photo viewers", () => {
   const tools = elevenLabsTools();
-  const gemini = voiceTools()[0].functionDeclarations.map((t) => t.name);
+  // One shared agent for every app build: always with the card tool.
+  const gemini = voiceTools({ cards: true })[0].functionDeclarations.map(
+    (t) => t.name,
+  );
+  assert.ok(gemini.includes("show_card"));
   assert.deepEqual(
     tools.map((t) => t.name),
     gemini.filter((name) => name !== "list_photos" && name !== "view_photo"),
@@ -83,6 +87,24 @@ test("the ElevenLabs coach gets every voice tool but the photo viewers", () => {
   ]);
   // No parameters at all stays that way, rather than an empty object.
   assert.ok(!("parameters" in tools.find((t) => t.name === "end_check_in")!));
+  // A card's nested parts become ElevenLabs' JSON schema too.
+  const card = tools.find((t) => t.name === "show_card") as unknown as {
+    parameters: Node;
+  };
+  assert.deepEqual(card.parameters.required, ["summary", "kind", "title"]);
+  assert.equal(card.parameters.properties!.servings.type, "integer");
+  assert.equal(
+    card.parameters.properties!.rows.items!.properties!.cells.items!.type,
+    "string",
+  );
+  assert.deepEqual(card.parameters.properties!.kind.enum, [
+    "recipe",
+    "table",
+    "bar_chart",
+    "line_chart",
+    "progress",
+    "stats",
+  ]);
 });
 
 test("the agent speaks v4 Turbo, keeps nothing and starts only from a signed link", () => {
@@ -227,6 +249,16 @@ test("the ElevenLabs coach sees photos taken in the call, but can't open saved o
     assert.match(text, /When the photo arrives, name what you see/);
   }
   assert.match(eleven, /can't open saved photos/);
+  // The agent always has show_card, but an older app's instructions say it
+  // can't show anything (and the server refuses the tool from it).
+  assert.match(eleven, /You can't put anything on the athlete's screen/);
+  assert.match(
+    voiceInstruction(context, clock, "Sam", "checkin", [], {
+      savedPhotos: false,
+      cards: true,
+    }),
+    /you can put things on it with show_card/,
+  );
   assert.deepEqual(
     elevenLabsAgent().conversation_config.conversation.file_input,
     { enabled: true, max_files_per_conversation: 10 },
@@ -262,6 +294,8 @@ test("saves are spoken over, reads and call controls aren't", () => {
   assert.equal(speech.log_sleep, "force");
   assert.equal(speech.log_meal, "force");
   assert.equal(speech.undo_save, "force");
+  // The coach says a few words as the card goes up, not after.
+  assert.equal(speech.show_card, "force");
   assert.equal(speech.read_journal, "auto");
   assert.equal(speech.end_check_in, "auto");
 });

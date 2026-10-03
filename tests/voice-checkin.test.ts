@@ -6,6 +6,7 @@ import { mealSchema } from "../lib/nutrition";
 import { addDrink } from "../lib/hydration";
 import {
   mintVoiceToken,
+  voiceClientShowsCards,
   voiceContext,
   voiceInstruction,
   voiceSetup,
@@ -17,8 +18,11 @@ import {
   isCreditError,
   liveEvents,
   pcmToBase64,
+  promisesAction,
+  spokenLines,
   VOICE_CREDIT_MESSAGE,
 } from "../lib/voice-live";
+import { cardRefusal, cardVisual, voiceToolArgs } from "../lib/voice-actions";
 
 const meal = (date: string, name: string, type: "breakfast" | "dinner") =>
   mealSchema.parse({
@@ -157,6 +161,232 @@ test("voice instructions carry the date, the records and the save rules", () => 
     handle: "handle-1",
   });
   assert.deepEqual(setup.generationConfig.responseModalities, ["AUDIO"]);
+});
+
+test("an app that draws cards gets show_card and is told how to use it; older ones are told they can't", () => {
+  const clock = localClock("2026-09-25T17:00:00Z", "Europe/Copenhagen");
+  const context = voiceContext(emptyJournal(), clock.date);
+  const plain = voiceInstruction(context, clock, "Sam");
+  const cards = voiceInstruction(context, clock, "Sam", "checkin", [], {
+    cards: true,
+  });
+  const names = (text: string, showsCards?: boolean) =>
+    voiceSetup(text, undefined, {
+      cards: showsCards,
+    }).tools[0].functionDeclarations.map((f) => f.name);
+  // Without cards the tool list is exactly as before (pinned above).
+  assert.deepEqual(names(plain), names(plain, false));
+  assert.ok(!names(plain).includes("show_card"));
+  const withCards = names(cards, true);
+  assert.deepEqual(
+    withCards.filter((n) => n !== "show_card"),
+    names(plain),
+  );
+  assert.equal(withCards[withCards.indexOf("undo_save") + 1], "show_card");
+
+  assert.match(cards, /you can put things on it with show_card/);
+  assert.match(cards, /not a report; longer things go on a card\./);
+  assert.match(cards, /don't claim it's there before the tool returns/);
+  assert.match(cards, /never read out the ingredients, steps or numbers/);
+  assert.match(cards, /Never say you can't show things on screen/);
+  assert.doesNotMatch(cards, /You can't put anything on the athlete's screen/);
+  assert.match(plain, /You can't put anything on the athlete's screen/);
+  assert.match(plain, /say typed Coach can show it/);
+  assert.doesNotMatch(plain, /show_card|on a card/);
+  for (const text of [plain, cards])
+    assert.ok(!text.includes("—"), "no em dashes in either version");
+
+  // The app's voice version says whether it draws cards.
+  const headers = (version?: string) =>
+    new Headers(version ? { "X-Voice-Client": version } : {});
+  assert.equal(voiceClientShowsCards(headers()), false);
+  assert.equal(voiceClientShowsCards(headers("3")), false);
+  assert.equal(voiceClientShowsCards(headers("4")), true);
+  assert.equal(voiceClientShowsCards(headers("5")), true);
+});
+
+test("show_card's declaration lists every card kind and the recipe's parts", () => {
+  const card = voiceSetup("Instructions", undefined, {
+    cards: true,
+  }).tools[0].functionDeclarations.find((f) => f.name === "show_card")!;
+  assert.ok("parameters" in card);
+  const parameters = card.parameters as {
+    properties: Record<string, { type: string; enum?: readonly string[] }>;
+    required: string[];
+  };
+  assert.deepEqual(
+    [...parameters.properties.kind.enum!],
+    ["recipe", "table", "bar_chart", "line_chart", "progress", "stats"],
+  );
+  assert.deepEqual(parameters.required, ["summary", "kind", "title"]);
+  assert.equal(parameters.properties.servings.type, "INTEGER");
+  assert.equal(parameters.properties.ingredients.type, "ARRAY");
+  // Pictures come in a later release.
+  assert.ok(!("picture" in parameters.properties));
+});
+
+test("only what was said is kept as the call's transcript", () => {
+  const visual = {
+    id: crypto.randomUUID(),
+    content: {
+      kind: "stats" as const,
+      title: "This week",
+      stats: [{ label: "Sleep", value: "7.2", unit: "h" }],
+    },
+  };
+  assert.deepEqual(
+    spokenLines([
+      { role: "coach", text: "I'll put it on your screen." },
+      { role: "card", id: "c1", visual },
+      { role: "save", id: "s1", label: "Meal", state: "saved" },
+      { role: "you", text: "Thanks" },
+    ]),
+    [
+      { role: "coach", text: "I'll put it on your screen." },
+      { role: "you", text: "Thanks" },
+    ],
+  );
+});
+
+test("a promised card followed by silence is noticed", () => {
+  assert.ok(
+    promisesAction("Sure, a quick salmon bowl. I'll put it on your screen."),
+  );
+  assert.ok(promisesAction("Let me show you the week."));
+  assert.ok(promisesAction("I'll draw that up."));
+  assert.ok(promisesAction("Let me check your sleep."));
+  assert.ok(
+    !promisesAction("I'll put it on your screen. About twenty minutes."),
+  );
+});
+
+test("show_card's flat arguments become the visuals typed Coach draws", () => {
+  const card = (args: Record<string, unknown>) =>
+    cardVisual(voiceToolArgs.show_card.parse({ summary: "Show me", ...args }));
+  // Blanks a model sends for fields it leaves out are dropped; a recipe
+  // without servings is for one, and macros become estimated nutrition.
+  assert.deepEqual(
+    card({
+      kind: "recipe",
+      title: "Salmon rice bowl",
+      caption: "",
+      minutes: 0,
+      ingredients: [
+        { item: "Salmon fillet", amount: "250 g" },
+        { item: "Sesame seeds", amount: "" },
+      ],
+      steps: ["Cook the rice.", "Pan-fry the salmon."],
+      kcal: 620,
+      protein_g: 42,
+      carbs_g: null,
+      // Fields of other kinds are ignored.
+      columns: ["Day"],
+    }),
+    {
+      title: "Salmon rice bowl",
+      kind: "recipe",
+      servings: 1,
+      ingredients: [
+        { item: "Salmon fillet", amount: "250 g" },
+        { item: "Sesame seeds" },
+      ],
+      steps: ["Cook the rice.", "Pan-fry the salmon."],
+      nutrition: { kcal: 620, protein: 42 },
+    },
+  );
+  // A quick meal idea has no method and no macros.
+  assert.deepEqual(
+    card({
+      kind: "recipe",
+      title: "Skyr bowl",
+      servings: 2,
+      ingredients: [{ item: "Skyr", amount: "400 g" }],
+    }),
+    {
+      title: "Skyr bowl",
+      kind: "recipe",
+      servings: 2,
+      ingredients: [{ item: "Skyr", amount: "400 g" }],
+    },
+  );
+  // Table rows are objects of cells, so ElevenLabs' schema can take them;
+  // numbers said as numbers are still text in a cell.
+  assert.deepEqual(
+    card({
+      kind: "table",
+      title: "Two dinners",
+      columns: ["Dish", "Protein"],
+      rows: [{ cells: ["Salmon bowl", 42] }, { cells: ["Chili", "38"] }],
+    }),
+    {
+      title: "Two dinners",
+      kind: "table",
+      columns: ["Dish", "Protein"],
+      rows: [
+        ["Salmon bowl", "42"],
+        ["Chili", "38"],
+      ],
+    },
+  );
+  // A line chart is one series named after its title.
+  assert.deepEqual(
+    card({
+      kind: "line_chart",
+      title: "Sleep this week",
+      unit: "h",
+      points: [
+        { label: "Mon", value: 7.2 },
+        { label: "Tue", value: 6.8 },
+      ],
+      target: 8,
+    }),
+    {
+      title: "Sleep this week",
+      kind: "line_chart",
+      unit: "h",
+      series: [
+        {
+          name: "Sleep this week",
+          points: [
+            { label: "Mon", value: 7.2 },
+            { label: "Tue", value: 6.8 },
+          ],
+        },
+      ],
+      target: 8,
+    },
+  );
+  // The kind's own fields are required by the same strict check.
+  assert.throws(
+    () => card({ kind: "recipe", title: "Nothing in it" }),
+    /ingredients/,
+  );
+  assert.throws(
+    () =>
+      card({
+        kind: "recipe",
+        title: "Too many",
+        ingredients: Array.from({ length: 21 }, (_, i) => ({ item: `${i}` })),
+      }),
+    /ingredients/,
+  );
+  assert.throws(() =>
+    card({
+      kind: "line_chart",
+      title: "One day",
+      points: [{ label: "Mon", value: 7 }],
+    }),
+  );
+  assert.throws(() => card({ kind: "calendar", title: "Not for voice" }));
+
+  // An app older than voice version 4 is told to say it instead.
+  const app = (version: string) => new Headers({ "X-Voice-Client": version });
+  assert.match(
+    cardRefusal("show_card", app("3"))!,
+    /can't show cards; give the gist in words/,
+  );
+  assert.equal(cardRefusal("show_card", app("4")), undefined);
+  assert.equal(cardRefusal("log_meal", app("3")), undefined);
 });
 
 test("the coach asks only about missing topics and keeps to English", () => {

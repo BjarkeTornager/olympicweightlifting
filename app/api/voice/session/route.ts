@@ -18,6 +18,7 @@ import {
   VOICE_MODEL,
   VOICE_SESSION_MINUTES,
   VOICE_SOCKET_URL,
+  voiceClientShowsCards,
   voiceConfigured,
   voiceContext,
   voiceInstruction,
@@ -110,6 +111,9 @@ export async function POST(request: Request) {
       );
     const clock = localClock(new Date(), timezone);
     const { state } = await readJournal(user.id);
+    // Only an app that draws cards is offered show_card; older ones are
+    // told they can't show anything.
+    const cards = voiceClientShowsCards(request.headers);
     const instruction = voiceInstruction(
       voiceContext(
         state,
@@ -120,7 +124,7 @@ export async function POST(request: Request) {
       state.profile.name || user.name?.split(" ")[0],
       purpose,
       await recentConversations(user.id, { limit: 10 }),
-      { savedPhotos: provider === "google", language },
+      { savedPhotos: provider === "google", language, cards },
     );
     // A resumed Google call is the same conversation, so it isn't counted again.
     if (!resumeHandle) {
@@ -158,6 +162,7 @@ export async function POST(request: Request) {
     const setup = voiceSetup(instruction, resumeHandle, {
       voice: voiceFor(provider, voice),
       language,
+      cards,
     });
     let token: string;
     try {

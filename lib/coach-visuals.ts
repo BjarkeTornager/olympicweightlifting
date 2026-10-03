@@ -318,6 +318,8 @@ export type CoachResponse = {
   reply: string;
   proposals: import("./agent/actions").ActionPreview[];
   visuals?: SavedVisual[];
+  // A card the voice coach showed: the call it was shown in.
+  voiceCallId?: string;
 };
 
 /** Every day from the first given to the last (at most six weeks), each with

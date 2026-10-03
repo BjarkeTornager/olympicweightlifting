@@ -1,21 +1,28 @@
+import LiftAPI
 import LiftTheme
 import SwiftUI
 
 /// The spoken check-in, full screen: a voice that moves with whoever is
-/// talking, the conversation as it happens with each save, and the call
-/// controls at the bottom.
+/// talking, the conversation as it happens with each save and card, and the
+/// call controls at the bottom.
 struct VoiceCallView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
   let call: VoiceCall
+  /// A card opened in full, or the camera: one at a time over the call.
+  @State private var over = CallPresentation()
 
   var body: some View {
+    // A card needs the room more than the voice does.
+    let small = call.cards > 0
     NavigationStack {
       VStack(spacing: 0) {
         VoiceOrb(level: call.level, active: call.status == .speaking || call.status == .listening)
           .opacity(call.inCall ? 1 : 0.35)
           .animation(.easeInOut, value: call.inCall)
-          .frame(height: 220)
+          .scaleEffect(small ? 96 / 220 : 1)
+          .frame(height: small ? 96 : 220)
+          .animation(.smooth, value: small)
           .padding(.top, 12)
         Text(statusText)
           .font(.headline)
@@ -44,9 +51,20 @@ struct VoiceCallView: View {
           }
         }
       }
-      .fullScreenCover(isPresented: Binding(get: { call.cameraRequested }, set: { call.cameraRequested = $0 })) {
+      .sheet(item: $over.card, onDismiss: { over.sheetDismissed(cameraWaiting: call.cameraRequested) }) { line in
+        if let visual = line.visual { CardSheet(visual: visual) }
+      }
+      .fullScreenCover(
+        isPresented: Binding(
+          get: { over.camera },
+          set: { shown in
+            over.camera = shown
+            if !shown { call.cameraRequested = false }
+          })
+      ) {
         CameraPicker { image in Task { await call.photoTaken(image) } }.ignoresSafeArea()
       }
+      .onChange(of: call.cameraRequested) { _, requested in over.cameraRequested(requested) }
     }
     .interactiveDismissDisabled(call.inCall)
     .task { if call.status == .idle { await call.start() } }
@@ -58,32 +76,51 @@ struct VoiceCallView: View {
     case .listening: call.muted ? "Muted" : "Listening"
     case .speaking: "Coach is speaking"
     case .reconnecting: "Reconnecting… the conversation carries on"
-    case .ended:
-      call.saved > 0
-        ? "Call ended · \(call.saved) saved. Everything is in Coach, with Undo."
-        : "Call ended."
+    case .ended: Self.ended(saved: call.saved, cards: call.cards)
     case .failed: call.error ?? "The call could not continue."
     }
   }
 
+  /// "Call ended · 2 saved · 1 card. Everything is in Coach, with Undo."
+  static func ended(saved: Int, cards: Int) -> String {
+    let parts = [
+      saved > 0 ? "\(saved) saved" : nil,
+      cards > 0 ? "\(cards) \(cards == 1 ? "card" : "cards")" : nil,
+    ].compactMap { $0 }
+    guard !parts.isEmpty else { return "Call ended." }
+    return (["Call ended"] + parts).joined(separator: " · ")
+      + (saved > 0 ? ". Everything is in Coach, with Undo." : ". Everything is in Coach.")
+  }
+
   private var transcript: some View {
-    ScrollView {
-      LazyVStack(spacing: 8) {
-        ForEach(call.lines) { line in
-          switch line.role {
-          case .you:
-            Bubble(text: line.text, mine: true)
-          case .coach:
-            Bubble(text: line.text, mine: false)
-          case .save:
-            SaveChip(label: line.text, state: line.state ?? .saving)
+    ScrollViewReader { proxy in
+      ScrollView {
+        LazyVStack(spacing: 8) {
+          ForEach(call.lines) { line in
+            switch line.role {
+            case .you:
+              Bubble(text: line.text, mine: true)
+            case .coach:
+              Bubble(text: line.text, mine: false)
+            case .save:
+              SaveChip(label: line.text, state: line.state ?? .saving)
+            case .card:
+              if let visual = line.visual {
+                VoiceCard(visual: visual) { over.expand(line) }
+              }
+            }
           }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
       }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
+      .defaultScrollAnchor(.bottom)
+      // A new card is read from its top.
+      .onChange(of: call.lines.last(where: { $0.role == .card })?.id) { _, id in
+        guard let id else { return }
+        withAnimation { proxy.scrollTo(id, anchor: .top) }
+      }
     }
-    .defaultScrollAnchor(.bottom)
   }
 
   @ViewBuilder
@@ -111,6 +148,77 @@ struct VoiceCallView: View {
         .controlSize(.large)
         .padding(.vertical, 20)
     }
+  }
+}
+
+/// What is shown over the call, one at a time: two presentations at once
+/// fail, so a card's sheet closes before the camera opens.
+struct CallPresentation {
+  var card: VoiceCall.Line?
+  var camera = false
+
+  mutating func expand(_ line: VoiceCall.Line) {
+    if !camera { card = line }
+  }
+
+  mutating func cameraRequested(_ requested: Bool) {
+    if !requested {
+      camera = false
+    } else if card != nil {
+      card = nil
+    } else {
+      camera = true
+    }
+  }
+
+  /// The sheet has gone: the camera opens if it is still wanted.
+  mutating func sheetDismissed(cameraWaiting: Bool) {
+    if cameraWaiting { camera = true }
+  }
+}
+
+/// A card the coach put on screen, compact so the conversation stays in
+/// view; the whole card opens in a sheet.
+private struct VoiceCard: View {
+  let visual: Visual
+  let expand: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      CoachVisualView(visual: visual, compact: true)
+      if let more = CoachVisualView.more(visual) {
+        Button(more, action: expand)
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+      }
+    }
+    .padding(14)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Theme.surface, in: .rect(cornerRadius: 18, style: .continuous))
+  }
+}
+
+/// A card in full over the call, which carries on underneath.
+private struct CardSheet: View {
+  @Environment(\.dismiss) private var dismiss
+  let visual: Visual
+
+  var body: some View {
+    NavigationStack {
+      ScrollView {
+        CoachVisualView(visual: visual)
+          .padding(16)
+      }
+      .background(Theme.background)
+      .navigationTitle(visual.kind == "recipe" ? "Recipe" : "Card")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Done", role: .confirm) { dismiss() }
+        }
+      }
+    }
+    .presentationDetents([.medium, .large])
   }
 }
 

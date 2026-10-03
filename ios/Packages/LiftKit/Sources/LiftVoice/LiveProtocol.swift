@@ -103,11 +103,11 @@ public enum LiveProtocol {
   }
 
   nonisolated(unsafe) private static let promise =
-    /(?i)\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add)/
+    /(?i)\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add|show|put|draw)/
 
   /// The same promise in Danish, for a coach speaking Danish.
   nonisolated(unsafe) private static let danishPromise =
-    /(?i)\b(lad mig|jeg skal lige|jeg vil|jeg skal|et øjeblik|et sekund|to sekunder)\b[^.?!]{0,40}\b(tjekke|tjekker|kigge|kigger|se|finde|gemme|gemmer|logge|logger|registrere|opdatere|hente|regne|rette|tilføje)/
+    /(?i)\b(lad mig|jeg skal lige|jeg vil|jeg skal|et øjeblik|et sekund|to sekunder)\b[^.?!]{0,40}\b(tjekke|tjekker|kigge|kigger|se|finde|gemme|gemmer|logge|logger|registrere|opdatere|hente|regne|rette|tilføje|vise|viser|tegne|lægge)/
 
   public static let waitingNudge =
     "(The athlete is waiting: do what you just said now, then answer.)"

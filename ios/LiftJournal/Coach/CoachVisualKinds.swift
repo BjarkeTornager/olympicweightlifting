@@ -391,6 +391,10 @@ struct VisualCalendar: View {
 /// nutrition per serving.
 struct VisualRecipe: View {
   let visual: Visual
+  /// On the call screen: the first ingredients only, without the method or
+  /// nutrition.
+  var compact = false
+  static let compactIngredients = 4
 
   struct Nutrient: Equatable {
     let label: String
@@ -398,8 +402,10 @@ struct VisualRecipe: View {
   }
 
   var body: some View {
-    let steps = visual.steps ?? []
-    let nutrition = Self.nutrition(visual.nutrition)
+    let ingredients = visual.ingredients ?? []
+    let shown = compact ? Array(ingredients.prefix(Self.compactIngredients)) : ingredients
+    let steps = compact ? [] : visual.steps ?? []
+    let nutrition = compact ? [] : Self.nutrition(visual.nutrition)
     VStack(alignment: .leading, spacing: 16) {
       Text(Self.meta(servings: visual.servings ?? 1, minutes: visual.minutes))
         .font(.subheadline)
@@ -407,7 +413,7 @@ struct VisualRecipe: View {
       VStack(alignment: .leading, spacing: 8) {
         CardLabel(title: "Ingredients")
         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
-          ForEach(Array((visual.ingredients ?? []).enumerated()), id: \.offset) { _, ingredient in
+          ForEach(Array(shown.enumerated()), id: \.offset) { _, ingredient in
             GridRow {
               Text(ingredient.amount ?? "")
                 .foregroundStyle(.secondary)
@@ -419,6 +425,11 @@ struct VisualRecipe: View {
           }
         }
         .font(.subheadline)
+        if shown.count < ingredients.count {
+          Text("+\(ingredients.count - shown.count) more")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
       }
       if !steps.isEmpty {
         VStack(alignment: .leading, spacing: 8) {

@@ -1,5 +1,6 @@
 // Wire format helpers for the Gemini Live API. Kept free of browser audio so
 // the protocol handling can be tested directly.
+import type { SavedVisual } from "./coach-visuals";
 
 export function pcmToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
@@ -30,7 +31,7 @@ export const isCreditError = (message: string) =>
 // A coach turn that promises an action ("let me check that") but ends
 // without doing it leaves the athlete in silence; the app then nudges it.
 export const promisesAction = (text: string) =>
-  /\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add)/i.test(
+  /\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add|show|put|draw)/i.test(
     text
       .trim()
       .split(/(?<=[.?!])\s+/)
@@ -108,7 +109,14 @@ export type Receipt = {
   label: string;
   state: "saving" | "saved" | "failed";
 };
-export type Entry = Line | Receipt;
+// A card the coach put on screen, shown where it happened.
+export type Card = { role: "card"; id: string; visual: SavedVisual };
+export type Entry = Line | Receipt | Card;
+
+// What was said, for the stored transcript: saves and cards are kept in
+// Coach as their own turns.
+export const spokenLines = (entries: Entry[]) =>
+  entries.filter((e): e is Line => e.role === "you" || e.role === "coach");
 
 // Fragments usually carry their own spaces ("Did you " + "train?"), but a
 // word sometimes arrives without one ("for" + "last night"). A space goes

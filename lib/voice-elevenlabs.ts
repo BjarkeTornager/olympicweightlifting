@@ -92,8 +92,11 @@ export function elevenLabsSchema(
   return { type, description, ...(schema.enum && { enum: [...schema.enum] }) };
 }
 
+// One shared agent serves every app build, so it always has the card tool;
+// an older app's call instructions say it can't show anything, and the
+// server refuses show_card from it.
 export function elevenLabsTools() {
-  return voiceTools()[0]
+  return voiceTools({ cards: true })[0]
     .functionDeclarations.filter((tool) => !photoTools.has(tool.name))
     .map((tool) => ({
       type: "client",
@@ -102,7 +105,7 @@ export function elevenLabsTools() {
       expects_response: true,
       // The phone retries a save for up to about 20 seconds.
       response_timeout_secs: 30,
-      // A save runs while the coach acknowledges it, not in silence.
+      // A save or a card runs while the coach acknowledges it, not in silence.
       pre_tool_speech: quietTools.has(tool.name) ? "auto" : "force",
       ...("parameters" in tool && {
         parameters: elevenLabsSchema(

@@ -4,6 +4,7 @@ import { useVoiceCheckin, type VoiceStatus } from "@/lib/use-voice-checkin";
 import { updateAppNow } from "@/lib/use-service-worker";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
+import { AguiVisuals } from "./agui-components";
 import { Camera, Check, LoaderCircle, Mic, MicOff, PhoneOff } from "./ui/icons";
 
 const statusText = {
@@ -51,9 +52,29 @@ export function VoiceCheckin({
   const receipts = voice.lines.filter((l) => l.role === "save");
   const saved = receipts.filter((r) => r.state === "saved").length;
   const failed = receipts.filter((r) => r.state === "failed").length;
+  const cards = voice.lines.filter((l) => l.role === "card").length;
+  const summary = [
+    receipts.length ? `${saved} saved` : "",
+    failed ? `${failed} not saved yet` : "",
+    cards ? `${cards} ${cards === 1 ? "card" : "cards"}` : "",
+  ].filter(Boolean);
   const transcript = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    transcript.current?.scrollTo({ top: transcript.current.scrollHeight });
+    const box = transcript.current;
+    if (!box) return;
+    // A new card is shown from its top while the coach sums it up;
+    // otherwise the latest line.
+    const card = voice.lines.slice(-3).findLast((l) => l.role === "card");
+    const top = card
+      ? box.querySelector(`[data-card="${card.id}"]`)?.getBoundingClientRect()
+          .top
+      : undefined;
+    box.scrollTo({
+      top:
+        top === undefined
+          ? box.scrollHeight
+          : box.scrollTop + top - box.getBoundingClientRect().top - 12,
+    });
   }, [voice.lines]);
   return (
     <Dialog
@@ -103,7 +124,11 @@ export function VoiceCheckin({
       {voice.lines.length > 0 && (
         <div className="voice-transcript" ref={transcript} aria-live="polite">
           {voice.lines.map((line, i) =>
-            line.role === "save" ? (
+            line.role === "card" ? (
+              <div key={line.id} className="voice-card" data-card={line.id}>
+                <AguiVisuals visuals={[line.visual]} accountId={accountId} />
+              </div>
+            ) : line.role === "save" ? (
               <p key={line.id} className={`voice-receipt ${line.state}`}>
                 {line.state === "saving" ? (
                   <LoaderCircle size={14} className="spin" aria-hidden="true" />
@@ -125,10 +150,8 @@ export function VoiceCheckin({
           )}
         </div>
       )}
-      {receipts.length > 0 && (
-        <p className="voice-summary">
-          {saved} saved{failed ? ` · ${failed} not saved yet` : ""}
-        </p>
+      {summary.length > 0 && (
+        <p className="voice-summary">{summary.join(" · ")}</p>
       )}
       <div className="voice-actions">
         {voice.status === "paused" ? (
@@ -165,7 +188,7 @@ export function VoiceCheckin({
                 {voice.status === "idle" ? "Start talking" : "Talk again"}
               </Button>
             )}
-            {receipts.length > 0 && (
+            {(receipts.length > 0 || cards > 0) && (
               <Button
                 variant="secondary"
                 onClick={() => {

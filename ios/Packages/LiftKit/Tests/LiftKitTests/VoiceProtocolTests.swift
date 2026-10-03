@@ -62,6 +62,13 @@ struct VoiceProtocolTests {
     #expect(LiveProtocol.promisesAction("Super. Lad mig lige tjekke din søvn."))
     #expect(LiveProtocol.promisesAction("Et øjeblik, jeg gemmer det"))
     #expect(!LiveProtocol.promisesAction("Hvordan gik træningen?"))
+    // A card promised and then silence is nudged too.
+    #expect(LiveProtocol.promisesAction("Sure, a quick salmon rice bowl. I'll put it on your screen."))
+    #expect(LiveProtocol.promisesAction("Let me show you the week"))
+    #expect(LiveProtocol.promisesAction("I'll draw that up for you."))
+    #expect(LiveProtocol.promisesAction("Klart. Jeg skal lige vise dig opskriften."))
+    #expect(LiveProtocol.promisesAction("Lad mig lægge den på din skærm."))
+    #expect(!LiveProtocol.promisesAction("I'll put it on your screen. It's about twenty minutes."))
   }
 
   @Test("Background noise is silenced while the coach speaks; real speech gets through whole")

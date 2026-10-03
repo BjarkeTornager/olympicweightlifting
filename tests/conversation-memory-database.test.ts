@@ -135,6 +135,58 @@ test(
         listed.lines.map((l) => l.text),
         ["Nice work, that's a best.", "Thanks — it felt good."],
       );
+
+      // A card shown in a call is remembered with what it held, so the next
+      // call knows; a voice save stays part of its call.
+      const c = await user();
+      await getDb()
+        .insert(agentTurns)
+        .values([
+          {
+            id: crypto.randomUUID(),
+            userId: c,
+            question: "[voice] A high-protein dinner",
+            status: "done",
+            response: {
+              reply: "",
+              proposals: [],
+              visuals: [
+                {
+                  id: crypto.randomUUID(),
+                  content: {
+                    kind: "recipe",
+                    title: "Salmon rice bowl",
+                    servings: 2,
+                    ingredients: [
+                      { item: "Salmon fillet", amount: "250 g" },
+                      { item: "Sesame seeds" },
+                    ],
+                  },
+                },
+              ],
+            },
+            createdAt: ago(0),
+          },
+          {
+            id: crypto.randomUUID(),
+            userId: c,
+            question: "[voice] Slept seven hours",
+            status: "done",
+            response: {
+              reply: "Saved from your voice check-in.",
+              proposals: [],
+            },
+            createdAt: ago(0),
+          },
+        ]);
+      const cards = await recentConversations(c);
+      assert.deepEqual(cards, [
+        {
+          at: cards[0].at,
+          kind: "card",
+          text: "Athlete: A high-protein dinner\nCard shown: Salmon rice bowl (recipe); ingredients: 250 g Salmon fillet, Sesame seeds",
+        },
+      ]);
     } finally {
       await pool.query("DELETE FROM users WHERE id = ANY($1)", [accounts]);
     }

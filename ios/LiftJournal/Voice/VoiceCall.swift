@@ -18,12 +18,17 @@ final class VoiceCall {
   enum Status: Equatable { case idle, connecting, listening, speaking, reconnecting, ended, failed }
 
   struct Line: Identifiable, Equatable {
-    enum Role { case you, coach, save }
+    enum Role { case you, coach, save, card }
     enum SaveState { case saving, saved, failed }
     let id: String
     var role: Role
     var text: String
     var state: SaveState?
+    /// A card the coach put on screen (show_card).
+    var visual: Components.Schemas.CoachVisual?
+
+    /// What was said, as opposed to a save or a card.
+    var spoken: Bool { role == .you || role == .coach }
   }
 
   private(set) var status: Status = .idle
@@ -42,6 +47,7 @@ final class VoiceCall {
   /// ElevenLabs' id for this conversation, to hand it photos.
   private var conversationID: String?
   var saved: Int { lines.filter { $0.state == .saved }.count }
+  var cards: Int { lines.filter { $0.role == .card }.count }
 
   private let app: AppModel
   private let id = UUID()
@@ -65,7 +71,8 @@ final class VoiceCall {
   static let maxMinutes = 30
   /// After the coach's goodbye, how long the athlete has to keep talking.
   static let endingGrace: Duration = .seconds(12)
-  static let clientVersion = "3"
+  /// 4: draws show_card's cards, so the server offers the tool.
+  static let clientVersion = "4"
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
     "update_meal": "Meal updated", "delete_meal": "Meal deleted", "log_sleep": "Sleep",
@@ -75,6 +82,8 @@ final class VoiceCall {
   ]
   /// Server tools that only read; they leave no receipt in the conversation.
   private static let readTools: Set<String> = ["read_journal", "list_photos", "recall_conversations"]
+  /// Server tools that put a card on screen instead of saving.
+  static let displayTools: Set<String> = ["show_card"]
 
   init(app: AppModel) {
     self.app = app
@@ -276,7 +285,7 @@ final class VoiceCall {
         if !resumed {
           // Without a handle the conversation starts fresh; give the coach
           // the last few lines to carry on from.
-          let recent = lines.filter { $0.role != .save }.suffix(8)
+          let recent = lines.filter(\.spoken).suffix(8)
             .map { "\($0.role == .you ? "Athlete" : "Coach"): \($0.text)" }.joined(separator: "\n")
           note("(The call reconnected. Continue where you left off; the last lines were:\n\(recent))", answer: true)
         }
@@ -462,7 +471,11 @@ final class VoiceCall {
         respond(call, ["error": error.localizedDescription])
       }
     default:
-      await journal(call)
+      if Self.displayTools.contains(call.name) {
+        await display(call)
+      } else {
+        await journal(call)
+      }
     }
   }
 
@@ -484,7 +497,7 @@ final class VoiceCall {
           body: [
             "id": id, "name": call.name, "args": call.args.mapValues(\.foundation),
             "timezone": TimeZone.current.identifier, "seenPhotoIds": photos,
-          ], token: session.token, account: session.accountID)
+          ], token: session.token, account: session.accountID, headers: ["X-Voice-Client": Self.clientVersion])
         // A release in progress answers 502/503; try again shortly.
         if response.status >= 502 { continue }
         result = response.json ?? result
@@ -512,6 +525,54 @@ final class VoiceCall {
     }
   }
 
+  /// A card on the athlete's screen, drawn as soon as the server has kept it
+  /// in Coach, with no Save chip. A quick retry uses the same id, so a lost
+  /// reply never shows the card twice.
+  private func display(_ call: FunctionCall) async {
+    let failure = "The card could not be shown; give the gist in words."
+    guard let session = app.session else {
+      respond(call, ["error": failure])
+      return
+    }
+    let id = UUID().uuidString.lowercased()
+    var result: [String: Any] = ["ok": false, "error": failure]
+    for wait in [0.0, 1, 1] {
+      if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+      do {
+        let response = try await RawRequest.send(
+          "api/voice/action",
+          body: [
+            "id": id, "name": call.name, "args": call.args.mapValues(\.foundation),
+            "timezone": TimeZone.current.identifier, "callId": self.id.uuidString.lowercased(),
+          ], token: session.token, account: session.accountID,
+          headers: ["X-Voice-Client": Self.clientVersion], timeout: 10)
+        if response.status >= 502 { continue }
+        result = response.json ?? result
+        if response.status != 200 { result = ["ok": false, "error": response.error ?? failure] }
+        break
+      } catch {
+        continue
+      }
+    }
+    guard result["ok"] as? Bool == true else {
+      respond(call, ["error": result["error"] as? String ?? failure])
+      return
+    }
+    if let visual = Self.card(result["card"]) {
+      lines.append(Line(id: call.id, role: .card, text: visual.title, visual: visual))
+      UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+    respond(call, ["result": result["data"] ?? [String: Any]()])
+  }
+
+  /// The card in an action's reply, in the shape the Coach thread draws.
+  static func card(_ json: Any?) -> Components.Schemas.CoachVisual? {
+    guard let json, JSONSerialization.isValidJSONObject(json),
+      let data = try? JSONSerialization.data(withJSONObject: json)
+    else { return nil }
+    return try? JSONDecoder().decode(Components.Schemas.CoachVisual.self, from: data)
+  }
+
   private func respond(_ call: FunctionCall, _ response: [String: Any]) {
     send(
       provider == .elevenlabs
@@ -522,7 +583,7 @@ final class VoiceCall {
   func photoTaken(_ image: UIImage) async {
     cameraRequested = false
     guard let jpeg = CoachModel.jpeg(image) else { return }
-    // ElevenLabs' coach can't be sent images; it asks about the plate.
+    // Gemini sees it on the socket; ElevenLabs gets it from the server below.
     if provider == .google { send(LiveProtocol.image(Self.small(image) ?? jpeg)) }
     let id = UUID().uuidString.lowercased()
     do {
@@ -617,16 +678,22 @@ final class VoiceCall {
   /// and the thread can show it. The last save marks the call as ended, so
   /// the server tidies the transcript (punctuation, clear mishearings).
   private func persist(final: Bool = false) {
-    let entries = lines.filter { $0.role != .save }.suffix(400).map {
-      ["role": $0.role == .you ? "you" : "coach", "text": String($0.text.prefix(4000))]
-    }
+    let entries = Self.transcriptEntries(lines)
     guard !entries.isEmpty, let session = app.session else { return }
-    var body: [String: Any] = ["id": id.uuidString.lowercased(), "purpose": "checkin", "entries": Array(entries)]
+    var body: [String: Any] = ["id": id.uuidString.lowercased(), "purpose": "checkin", "entries": entries]
     if final { body["final"] = true }
     guard let json = try? JSONSerialization.data(withJSONObject: body) else { return }
     Task.detached {
       _ = try? await RawRequest.send(
         "api/voice/transcript", json: json, token: session.token, account: session.accountID)
+    }
+  }
+
+  /// What was said, for the stored transcript: saves and cards are kept in
+  /// Coach as their own turns, so they never become the coach's words.
+  static func transcriptEntries(_ lines: [Line]) -> [[String: String]] {
+    lines.filter(\.spoken).suffix(400).map {
+      ["role": $0.role == .you ? "you" : "coach", "text": String($0.text.prefix(4000))]
     }
   }
 

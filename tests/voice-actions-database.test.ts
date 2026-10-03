@@ -391,8 +391,294 @@ test(
           assert.equal((await history(a)).length, 1);
         },
       );
+
+      await t.test(
+        "a card is kept as its own Spoken turn, and a retry shows the same card",
+        async () => {
+          const { buildCoach } = await import("../lib/native-api");
+          const a = await user();
+          const id = crypto.randomUUID(),
+            callId = crypto.randomUUID();
+          const recipe = {
+            summary: "A high-protein dinner",
+            kind: "recipe",
+            title: "Salmon rice bowl",
+            servings: 2,
+            minutes: 25,
+            ingredients: [
+              { item: "Salmon fillet", amount: "250 g" },
+              { item: "Rice", amount: "150 g" },
+            ],
+            steps: ["Cook the rice.", "Pan-fry the salmon."],
+            kcal: 620,
+            protein_g: 42,
+            picture: true,
+          };
+          const show = () =>
+            runVoiceTool(a, {
+              id,
+              name: "show_card",
+              args: recipe,
+              today,
+              seenPhotoIds: [],
+              callId,
+            });
+          const first = await show();
+          assert.ok(first.ok && "data" in first && first.visual);
+          const data = first.data as Record<string, unknown>;
+          assert.equal(data.shown, true);
+          assert.equal(data.card_id, id);
+          // Pictures come in a later release: asked for, not promised.
+          assert.match(String(data.picture), /^not available/);
+          assert.deepEqual(first.visual.content, {
+            title: "Salmon rice bowl",
+            kind: "recipe",
+            servings: 2,
+            minutes: 25,
+            ingredients: recipe.ingredients,
+            steps: recipe.steps,
+            nutrition: { kcal: 620, protein: 42 },
+          });
+          const { rows } = await pool.query(
+            "SELECT question, status, photo_ids, response FROM agent_turns WHERE id=$1 AND user_id=$2",
+            [id, a],
+          );
+          assert.equal(rows.length, 1);
+          assert.equal(rows[0].question, "[voice] A high-protein dinner");
+          assert.equal(rows[0].status, "done");
+          assert.deepEqual(rows[0].photo_ids, []);
+          // No reply and no save: just the card, linked to its call.
+          assert.deepEqual(rows[0].response, {
+            reply: "",
+            proposals: [],
+            visuals: [first.visual],
+            voiceCallId: callId,
+          });
+          // A lost reply retried with the same id shows the same card once.
+          assert.deepEqual(await show(), first);
+          // Two attempts racing for a new id agree on one card.
+          const racing = crypto.randomUUID();
+          const both = await Promise.all(
+            [0, 1].map(() =>
+              runVoiceTool(a, {
+                id: racing,
+                name: "show_card",
+                args: { ...recipe, picture: false },
+                today,
+                seenPhotoIds: [],
+              }),
+            ),
+          );
+          both.forEach((r) => assert.equal(r.ok, true, JSON.stringify(r)));
+          assert.deepEqual(both[0], both[1]);
+          const turns = await history(a);
+          assert.equal(turns.length, 2);
+          // The iPhone's Coach thread reads it as a Spoken turn with its card.
+          const coach = buildCoach(turns);
+          const turn = coach.turns.find((x) => x.id === id)!;
+          assert.equal(turn.fromVoice, true);
+          assert.equal(turn.question, "A high-protein dinner");
+          assert.deepEqual(turn.receipts, []);
+          assert.equal(turn.visuals?.[0].kind, "recipe");
+          assert.equal(turn.visuals?.[0].ingredients?.length, 2);
+          // Another account's id is not this athlete's card.
+          const b = await user();
+          const theirs = await runVoiceTool(b, {
+            id,
+            name: "show_card",
+            args: recipe,
+            today,
+            seenPhotoIds: [],
+          });
+          assert.deepEqual(theirs, {
+            ok: false,
+            error: "That call id was already used.",
+          });
+          // A save's id is not a card either.
+          const sleep = crypto.randomUUID();
+          await runVoiceTool(a, {
+            id: sleep,
+            name: "log_sleep",
+            args: { summary: "Slept 7 hours", date: today, hours: 7 },
+            today,
+            seenPhotoIds: [],
+          });
+          assert.equal(
+            (
+              await runVoiceTool(a, {
+                id: sleep,
+                name: "show_card",
+                args: recipe,
+                today,
+                seenPhotoIds: [],
+              })
+            ).ok,
+            false,
+          );
+        },
+      );
+
+      await t.test(
+        "an invalid card says what was wrong and keeps nothing",
+        async () => {
+          const { voiceFailure } = await import("../lib/voice-actions");
+          const a = await user();
+          const id = crypto.randomUUID();
+          const error = await runVoiceTool(a, {
+            id,
+            name: "show_card",
+            args: {
+              summary: "A recipe",
+              kind: "recipe",
+              title: "Nothing in it",
+              steps: Array.from({ length: 13 }, (_, i) => `Step ${i + 1}`),
+            },
+            today,
+            seenPhotoIds: [],
+          }).then(
+            () => assert.fail("an empty recipe was shown"),
+            (e: unknown) => e,
+          );
+          assert.match(voiceFailure(error), /^steps: /);
+          const empty = await runVoiceTool(a, {
+            id,
+            name: "show_card",
+            args: { summary: "A recipe", kind: "recipe", title: "Nothing" },
+            today,
+            seenPhotoIds: [],
+          }).catch((e: unknown) => voiceFailure(e));
+          assert.match(String(empty), /^ingredients: /);
+          assert.equal((await history(a)).length, 0);
+        },
+      );
     } finally {
       await pool.query("DELETE FROM users WHERE id = ANY($1)", [accounts]);
+    }
+  },
+);
+
+test(
+  "the action route shows cards only to an app that draws them, and the iPhone thread loads them",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    assert.ok(
+      new URL(process.env.TEST_DATABASE_URL!).pathname.endsWith("_test"),
+    );
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    process.env.BETTER_AUTH_SECRET ??= "test-only-secret-".repeat(4);
+    process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
+    const { createHmac, randomBytes } = await import("node:crypto");
+    const { getPool } = await import("../lib/db");
+    const { getAuth } = await import("../lib/auth");
+    const { POST: action } = await import("../app/api/voice/action/route");
+    const { GET: coach } = await import("../app/api/v1/coach/route");
+    const { MIN_IOS_BUILD } = await import("../lib/native-client");
+    const pool = getPool(),
+      origin = new URL(process.env.BETTER_AUTH_URL).origin,
+      id = crypto.randomUUID(),
+      email = `voice-cards-${id}@example.test`;
+    const allowed = process.env.ALLOWED_EMAILS;
+    process.env.ALLOWED_EMAILS = [allowed, email].filter(Boolean).join(",");
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Voice card test',$2,true)",
+      [id, email],
+    );
+    try {
+      const raw = randomBytes(32).toString("base64url");
+      await pool.query(
+        "INSERT INTO auth_sessions(id,token,user_id,expires_at) VALUES($1,$2,$3,now()+interval '1 day')",
+        [crypto.randomUUID(), raw, id],
+      );
+      const secret = (await getAuth().$context).secret;
+      const token = `${raw}.${createHmac("sha256", secret).update(raw).digest("base64")}`;
+      // As the iPhone sends it: signed in, its build, and its voice version.
+      const headers = (voice?: string) => ({
+        Authorization: `Bearer ${token}`,
+        Origin: origin,
+        "X-Journal-Account": id,
+        "X-Client": `ios/1.0/${MIN_IOS_BUILD}`,
+        "Content-Type": "application/json",
+        ...(voice ? { "X-Voice-Client": voice } : {}),
+      });
+      const show = async (
+        voice: string | undefined,
+        args: Record<string, unknown>,
+        callId = crypto.randomUUID(),
+      ) => {
+        const response = await action(
+          new Request(`${origin}/api/voice/action`, {
+            method: "POST",
+            headers: headers(voice),
+            body: JSON.stringify({
+              id: crypto.randomUUID(),
+              name: "show_card",
+              args,
+              timezone: "Europe/Copenhagen",
+              callId,
+            }),
+          }),
+        );
+        assert.equal(response.status, 200);
+        return response.json();
+      };
+      const stats = {
+        summary: "How did I sleep this week?",
+        kind: "stats",
+        title: "Sleep this week",
+        stats: [
+          { label: "Average", value: "7.2", unit: "h" },
+          { label: "Best", value: "8.1", unit: "h", change: "" },
+        ],
+      };
+      // Older apps (voice version 3, or none) can't draw a card.
+      for (const voice of [undefined, "3"])
+        assert.deepEqual(await show(voice, stats), {
+          ok: false,
+          error: "This app version can't show cards; give the gist in words.",
+        });
+      // A card the strict check refuses names the field that was wrong.
+      const refused = await show("4", {
+        ...stats,
+        kind: "recipe",
+        title: "No ingredients",
+      });
+      assert.equal(refused.ok, false);
+      assert.match(refused.error, /ingredients/);
+      const { rows } = await pool.query(
+        "SELECT count(*)::int AS n FROM agent_turns WHERE user_id=$1",
+        [id],
+      );
+      assert.equal(rows[0].n, 0, "nothing is kept for a refused card");
+
+      const shown = await show("4", stats);
+      assert.equal(shown.ok, true);
+      assert.equal(shown.data.shown, true);
+      // The website draws the stored visual, the iPhone the flat card.
+      assert.equal(shown.visual.content.kind, "stats");
+      assert.deepEqual(shown.card, {
+        id: shown.visual.id,
+        kind: "stats",
+        title: "Sleep this week",
+        stats: [
+          { label: "Average", value: "7.2", unit: "h" },
+          { label: "Best", value: "8.1", unit: "h" },
+        ],
+      });
+
+      // The Coach thread on the iPhone loads with the card in it.
+      const thread = await coach(
+        new Request(`${origin}/api/v1/coach`, { headers: headers() }),
+      );
+      assert.equal(thread.status, 200);
+      const { turns } = await thread.json();
+      assert.equal(turns.length, 1);
+      assert.equal(turns[0].fromVoice, true);
+      assert.equal(turns[0].question, "How did I sleep this week?");
+      assert.deepEqual(turns[0].visuals, [shown.card]);
+    } finally {
+      if (allowed === undefined) delete process.env.ALLOWED_EMAILS;
+      else process.env.ALLOWED_EMAILS = allowed;
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
     }
   },
 );

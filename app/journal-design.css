@@ -34,10 +34,15 @@ h3 {
 }:is(p, li, dd, figcaption, .chat-user) {
   text-wrap: pretty;
 }@media (max-width: 600px) {
+  /* Only long words, with four letters either side of the hyphen. Chrome
+     counts trailing punctuation in the word, so "journal." is eight. */
   :is(p, li, .chat-user) {
     -webkit-hyphens: auto;
     hyphens: auto;
-    hyphenate-limit-chars: 8 3 3;
+    hyphenate-limit-chars: 10 4 4;
+    -webkit-hyphenate-limit-before: 4;
+    -webkit-hyphenate-limit-after: 4;
+    -webkit-hyphenate-limit-lines: 2;
   }
 }h1 {
   /* A large title in the style of a native health app: bold and tight, and

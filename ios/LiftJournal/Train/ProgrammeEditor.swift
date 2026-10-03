@@ -44,6 +44,7 @@ struct ProgrammeEditor: View {
             LabeledContent("Weeks", value: draft.weeks == 0 ? "Not set" : "\(draft.weeks)")
           }
         }
+        .themedRows()
         Section {
           ForEach($draft.days) { $day in
             NavigationLink {
@@ -66,6 +67,7 @@ struct ProgrammeEditor: View {
         } footer: {
           Text("Leave a load empty to choose it when you train.")
         }
+        .themedRows()
       }
       .themedList()
       .navigationTitle(isNew ? "New Programme" : "Edit Programme")
@@ -107,6 +109,7 @@ private struct DayEditor: View {
         TextField("Name", text: $day.name)
         TextField("Notes", text: $day.notes, axis: .vertical).lineLimit(1...4)
       }
+      .themedRows()
       Section("Exercises") {
         ForEach($day.exercises) { $exercise in
           ExerciseEditor(exercise: $exercise)
@@ -116,6 +119,7 @@ private struct DayEditor: View {
         Button("Add Exercise", systemImage: "plus") { picking = true }
           .disabled(day.exercises.count >= 30)
       }
+      .themedRows()
     }
     .themedList()
     .navigationTitle(day.name.isEmpty ? "Day" : day.name)
@@ -181,6 +185,7 @@ struct ExercisePicker: View {
               .foregroundStyle(.primary)
           }
         }
+        .themedRows()
       }
     }
     .themedList()

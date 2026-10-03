@@ -60,6 +60,9 @@
   --red: var(--danger);
   --green: var(--success);
   --gold: var(--warning-solid);
+  /* Titles and Coach: New York where ui-serif resolves (Safari), otherwise
+     Newsreader from layout.tsx. Everything else stays in --font-journal. */
+  --font-serif: ui-serif, var(--font-newsreader), Georgia, serif;
 }
 * {
   box-sizing: border-box;

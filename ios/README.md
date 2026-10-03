@@ -8,11 +8,11 @@ A native SwiftUI app for the Lift Journal backend on Railway. It uses the same s
 
 ## What it does
 
-- **Today:** Health-style summary cards for sleep, heart, activity, how you feel, water, food and training. Each card opens a Swift Charts view of the last week, fortnight or month (`/api/v1/trends`). It also has one-tap water and a check-in sheet.
+- **Today:** the day set as a printed page: the date, a one-line summary written on the device (`DaySummary`), the Ledger of energy, protein and water counted in isotype marks, then recovery, body, food and drink, and movement. Each part opens a Swift Charts view of the last week, fortnight or month (`/api/v1/trends`). It also has one-tap water and a check-in sheet.
 - **Voice check-in:** the same spoken check-in as the website (Gemini Live with a single-use token from `/api/voice/session`; saves through `/api/voice/action`). Audio uses AVAudioEngine with Apple's voice processing for echo cancellation, and a call keeps going with the screen locked. The protocol lives in the `LiftVoice` module and mirrors `lib/voice-live.ts`.
 - **Apple Health:** reads sleep with its stages, resting heart rate, HRV, average heart rate, steps, active energy, body fat percentage from a smart scale, and every workout (runs, walks, rides, swims, rows, hikes and more) with distance and heart rate. Workouts recorded with GPS bring their route: the phone simplifies it to at most 200 points and names the start, end or turning point with Apple Maps; Coach gets the place names only, and Journal and Today open the map. New data arrives in the background through HealthKit background delivery. Nothing is written to Apple Health.
 - **Coach:** the same conversation as the website, streamed over AG-UI, in Messages style. Replies render natively: headings, nested lists, tables, quotes and code. Coach's visuals render as native components: tables as grids, bar charts in Swift Charts, diagrams as steps, photo galleries, and routes on Apple Maps. You can attach photos from the camera or library, and Coach's saves come with Undo. A microphone in the text field starts a voice check-in.
-- **Journal:** everything recorded, a fortnight at a time, with the standard search field and a filter menu. Entries that came from Apple Health are marked.
+- **Journal:** everything recorded, a fortnight at a time, with the standard search field and a filter menu. The week sits on top as a register, one row per area of life. Entries that came from Apple Health are marked.
 
 Programmes, routines, set-by-set training, lifting videos and backups are still on the website. They come next (see the plan).
 
@@ -23,7 +23,7 @@ Programmes, routines, set-by-set training, lifting videos and backups are still 
 | `LiftJournal/` | App target: SwiftUI screens and `@Observable` models, default `MainActor` isolation |
 | `Packages/LiftKit/Sources/LiftAPI` | Client generated at build time by Swift OpenAPI Generator from `openapi.json`, plus the Coach event stream |
 | `Packages/LiftKit/Sources/LiftStore` | Keychain session, the offline change queue (`Outbox`), per-account cache, and the HealthKit reader (`HealthSync`) |
-| `Packages/LiftKit/Sources/LiftTheme` | The colours: one palette for light and dark, and what each colour means. Shared with the widget extension |
+| `Packages/LiftKit/Sources/LiftTheme` | The look: one palette for light and dark and what each colour means, the type roles, the brand mark and the isotype meter. Shared with the widget extension |
 | `Config/` | Build settings (`*.xcconfig`), Info.plist additions and entitlements (HealthKit and background delivery) |
 | `LiftJournal/Preview Content` | Synthetic preview data. It is a development asset and never ships in an archive |
 
@@ -31,7 +31,9 @@ The Xcode project uses folder-synchronised groups: a file added under `LiftJourn
 
 **Contract with the server.** The app calls `/api/v1/*`: `config`, `today`, `journal`, `actions`, `health/sync` and `coach`. These views are shaped for the app and described by zod schemas in `lib/native-api.ts`. `npm run openapi` writes `Packages/LiftKit/Sources/LiftAPI/openapi.json` and the JSON fixtures the Swift tests decode, and a server test fails when either is stale. Responses are written to survive change: no closed enums, extra fields allowed, and timestamps as plain strings. The server can therefore add fields and values without breaking an installed build.
 
-**Colours.** Every colour is defined once, in `LiftTheme/Theme.swift`. The `Palette` holds the colours for light and dark mode, and `Theme` names what each one means (`Theme.accent`, `Theme.protein`, `Theme.danger`). Screens only use `Theme`. To restyle the app, change the palette, or point a meaning at another colour. The accent colour must also be set in `LiftJournal/Resources/Assets.xcassets/AccentColor`, because UIKit tints with the asset. An app test fails when the two differ.
+**Colours.** Every colour is defined once, in `LiftTheme/Theme.swift`. The `Palette` holds the colours for light and dark mode, and `Theme` names what each one means (`Theme.accent`, `Theme.protein`, `Theme.danger`). Screens only use `Theme`. To restyle the app, change the palette, or point a meaning at another colour. The accent colour, ultramarine (#1E3CAA, and #9DB0FF in dark mode), must also be set in `LiftJournal/Resources/Assets.xcassets/AccentColor`, because UIKit tints with the asset. An app test fails when the two differ, and another fails when a text colour drops below 4.5:1 on the background or a sheet.
+
+**Type.** Two system fonts and nothing bundled: New York for the human voice (titles, display numbers, Coach) and San Francisco for everything you operate. `LiftTheme/Typography.swift` names the roles (`.folio(.hero)`, `.kicker()`, `.unit()`), each scaled with Dynamic Type, and `FolioChrome.apply()` gives navigation titles the serif and, once a page scrolls under the bar, sets the bar on the paper with a hairline below it. The app icon is `LiftJournal/Resources/AppIcon.icon`, an Icon Composer file, and `BrandMark` draws the same split disc in the app.
 
 **Versioning.** Every request carries `X-Client: ios/<version>/<build>`. The server supports every build until `MIN_IOS_BUILD` is raised on purpose. After that, older builds get HTTP 426 and show "Install the latest build from TestFlight". The website's feature-version headers do not apply to the app.
 

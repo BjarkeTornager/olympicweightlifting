@@ -81,7 +81,7 @@ enum WorkoutActivityController {
       let index = current.sets.firstIndex(where: { !$0.logged })
     {
       let set = current.sets[index]
-      let weight = set.weight.map { $0.formatted(.number.precision(.fractionLength(0...1))) + " kg" }
+      let weight = set.weight.map { Format.decimal($0) + " kg" }
       let reps = set.reps.map { $0 == 1 ? "1 rep" : "\($0) reps" }
       let target = switch (weight, set.reps) {
       case let (weight?, count?): "\(weight) × \(count)"

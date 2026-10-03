@@ -54,7 +54,7 @@ struct RouteFacts: View {
     HStack(spacing: 16) {
       if let km = visual.distanceKm {
         Label(
-          km.formatted(.number.precision(.fractionLength(0...2))) + " km",
+          Format.decimal(km, digits: 2) + " km",
           systemImage: "point.topleft.down.to.point.bottomright.curvepath")
       }
       if let seconds = visual.durationSeconds {

@@ -7,8 +7,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f6f4ef",
-  "theme_color": "#f6f4ef",
+  "background_color": "#efeeea",
+  "theme_color": "#121214",
   "lang": "en",
   "categories": ["fitness", "sports", "productivity"],
   "icons": [

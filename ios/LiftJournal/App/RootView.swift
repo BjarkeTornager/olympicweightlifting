@@ -13,8 +13,8 @@ struct RootView: View {
       case .signedOut:
         SignInView()
       case .signedIn:
-        // Line icons that fill in when chosen, as on Airbnb, drawn for the
-        // app rather than borrowed.
+        // Solid glyphs drawn for the app rather than borrowed; the chosen
+        // tab takes the accent. Today's is the split-disc mark.
         TabView(selection: $model.tab) {
           Tab("Today", image: icon("today", .today), value: AppModel.Tab.today) {
             NavigationStack { TodayView() }
@@ -36,6 +36,11 @@ struct RootView: View {
         // Coach's thread always sits at its newest message, so a tab bar that
         // shrank on scroll would stay shrunk there: keep it whole in Coach.
         .tabBarMinimizeBehavior(model.tab == .coach ? .never : .onScrollDown)
+        // A page scrolled under the navigation bar meets the paper bar and its
+        // hairline (FolioChrome), not the soft scroll edge. With the edge,
+        // the bar took Train's blue button under it for a dark page and set
+        // its title white on the paper.
+        .scrollEdgeEffectHidden(true, for: .top)
         .sheet(isPresented: $model.consentForVoice, onDismiss: {
           if UserDefaults.standard.bool(forKey: AIConsent.key) { model.startVoice() }
         }) {
@@ -75,8 +80,8 @@ struct UpdateRequiredView: View {
       Text("This version is no longer supported. Install the latest build from TestFlight. Your journal is safe.")
     } actions: {
       Link("Open TestFlight", destination: URL(string: "itms-beta://")!)
-        .buttonStyle(.borderedProminent)
-        .foregroundStyle(Theme.onAccent)
+        .buttonStyle(PrimaryButtonStyle())
+        .padding(.horizontal, 20)
     }
     .interactiveDismissDisabled()
   }

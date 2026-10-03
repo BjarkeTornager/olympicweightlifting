@@ -10,34 +10,40 @@ struct HealthView: View {
   @State private var trigger = false
   @State private var requestError: String?
   @State private var needsAccess = false
+  @ScaledMetric(relativeTo: .largeTitle) private var symbolSize: CGFloat = 40
 
   var body: some View {
     List {
       Section {
         VStack(alignment: .leading, spacing: 10) {
           Image(systemName: "heart.text.square.fill")
-            .font(.system(size: 40))
+            .font(.system(size: symbolSize))
             .foregroundStyle(Theme.heart)
-          Text("Apple Health").font(.title2.bold())
+          Text("Apple Health").folio(.sectionTitle).foregroundStyle(Theme.ink)
           Text(
             "Lift Journal reads your sleep, heart rate and workouts so they appear in your journal without typing them. Nothing is written back to Apple Health."
           )
-          .foregroundStyle(.secondary)
+          .foregroundStyle(Theme.inkSecondary)
         }
         .padding(.vertical, 6)
       }
+      .themedRows()
       Section("Read from Apple Health") {
-        Label("Sleep, including stages", systemImage: "bed.double.fill")
-        Label("Resting heart rate, heart rate variability and average heart rate", systemImage: "heart.fill")
-        Label("Steps and active energy", systemImage: "flame.fill")
-        Label("Body fat percentage from a smart scale", systemImage: "scalemass.fill")
-        Label("Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", systemImage: "figure.run")
-        Label("Routes of outdoor workouts, simplified, with place names from Apple Maps", systemImage: "map.fill")
+        read("Sleep, including stages", "bed.double.fill", Theme.sleep)
+        read("Resting heart rate, heart rate variability and average heart rate", "heart.fill", Theme.heart)
+        read("Steps and active energy", "flame.fill", Theme.activity)
+        read("Body fat percentage from a smart scale", "scalemass.fill", Theme.body)
+        read(
+          "Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", "figure.run",
+          Theme.activity)
+        read("Routes of outdoor workouts, simplified, with place names from Apple Maps", "map.fill", Theme.activity)
       }
+      .themedRows()
       if !model.health.available {
         Section {
-          Text("Apple Health isn't available on this device.").foregroundStyle(.secondary)
+          Text("Apple Health isn't available on this device.").foregroundStyle(Theme.inkSecondary)
         }
+        .themedRows()
       } else if model.health.connected {
         if needsAccess {
           Section {
@@ -47,20 +53,21 @@ struct HealthView: View {
               Label("Allow new Apple Health data", systemImage: "heart.text.square.fill")
             }
             if let requestError {
-              Text(requestError).foregroundStyle(.red).font(.subheadline)
+              Text(requestError).foregroundStyle(Theme.danger).font(.subheadline)
             }
           } footer: {
             Text(
               "Lift Journal can now read your workout routes and a smart scale's body fat readings, so you and Coach can use them. Apple asks once for the new permissions."
             )
           }
+          .themedRows()
         }
         Section {
           LabeledContent("Status") {
             if model.health.syncing {
               ProgressView()
             } else {
-              Text("Connected").foregroundStyle(Theme.success)
+              Label("Connected", systemImage: "checkmark").foregroundStyle(Theme.success)
             }
           }
           if let last = model.health.lastSync {
@@ -70,7 +77,7 @@ struct HealthView: View {
             LabeledContent("Result", value: result)
           }
           if let error = model.health.error {
-            Text(error).foregroundStyle(.red).font(.subheadline)
+            Text(error).foregroundStyle(Theme.danger).font(.subheadline)
           }
           Button("Sync now") { Task { await model.syncHealth(force: true) } }
             .disabled(model.health.syncing)
@@ -79,6 +86,7 @@ struct HealthView: View {
             "New sleep and workouts arrive in the background. Entries you edit or delete in the journal stay as you left them. To change what the app can read, open Settings › Health › Data Access & Devices › Lift Journal."
           )
         }
+        .themedRows()
         Section {
           Button("Stop syncing on this iPhone", role: .destructive) {
             Task { await model.disconnectHealth() }
@@ -86,19 +94,18 @@ struct HealthView: View {
         } footer: {
           Text("Entries already imported stay in your journal.")
         }
+        .themedRows()
       } else {
         Section {
           Button {
             trigger.toggle()
           } label: {
             Label("Connect Apple Health", systemImage: "heart.fill")
-              .foregroundStyle(Theme.onAccent)
-              .frame(maxWidth: .infinity)
           }
-          .buttonStyle(.borderedProminent)
+          .buttonStyle(PrimaryButtonStyle())
           .listRowBackground(Color.clear)
           if let requestError {
-            Text(requestError).foregroundStyle(.red).font(.subheadline)
+            Text(requestError).foregroundStyle(Theme.danger).font(.subheadline)
           }
         } footer: {
           Text(
@@ -123,6 +130,15 @@ struct HealthView: View {
       case .failure(let error):
         requestError = error.localizedDescription
       }
+    }
+  }
+
+  /// One kind of data read, with its symbol in the colour of its area.
+  private func read(_ title: String, _ symbol: String, _ tint: Color) -> some View {
+    Label {
+      Text(title)
+    } icon: {
+      Image(systemName: symbol).foregroundStyle(tint)
     }
   }
 }

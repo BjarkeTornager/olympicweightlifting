@@ -9,39 +9,61 @@ struct JournalItemView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 14) {
-        VStack(alignment: .leading, spacing: 12) {
-          JournalRow(item: item)
-          Text([JournalView.heading(item.date), kind].compactMap { $0 }.joined(separator: " · "))
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 0) {
+        CardLabel(
+          title: [JournalView.heading(item.date), kind].compactMap { $0 }.joined(separator: " · "),
+          key: JournalRow.category(item.kind).tint)
+        Text(item.title)
+          .folio(.sectionTitle)
+          .foregroundStyle(Theme.ink)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityAddTraits(.isHeader)
+          .padding(.top, 8)
+        if !item.detail.isEmpty {
+          Text(item.detail).font(.subheadline).foregroundStyle(Theme.inkSecondary).padding(.top, 4)
         }
-        .card()
+        if item.fromAppleHealth {
+          Text("From Apple Health")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Theme.inkSecondary)
+            .padding(.top, 4)
+        }
         if let details = item.details, !details.lines.isEmpty || details.summary != nil || details.footnote != nil {
           EntryDetails(entry: details, fullScreen: true)
             .card()
+            .padding(.top, 20)
         }
         if item.hasRoute == true {
           NavigationLink {
             ActivityRouteView(id: item.id, title: item.title)
           } label: {
-            HStack(spacing: 12) {
-              IconBadge(symbol: "map.fill", tint: Theme.accent, size: 34)
-              Text("Route").font(.body.weight(.medium)).foregroundStyle(Color.primary)
-              Spacer()
-              Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-            }
-            .card()
+            EntryRow(lead: .key(Theme.activity), title: "Route", meta: "Where it went, on a map", opens: true)
           }
           .buttonStyle(CardButtonStyle())
+          .overlay(alignment: .bottom) { Hairline() }
+          .padding(.top, 12)
         }
       }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 12)
+      .padding(.horizontal, Theme.Space.gutter)
+      .padding(.vertical, Theme.Space.s)
     }
     .background(Theme.background)
-    .navigationTitle(item.title)
+    .navigationTitle(name)
     .navigationBarTitleDisplayMode(.inline)
+  }
+
+  /// What kind of entry this is, for the bar above the title.
+  private var name: String {
+    switch item.kind {
+    case "strength": "Workout"
+    case "cardio": "Activity"
+    case "meal": "Meal"
+    case "sleep": "Sleep"
+    case "checkin": "Check-in"
+    case "vitals": "Heart and movement"
+    case "body": "Body"
+    default: "Entry"
+    }
   }
 
   /// A meal's type ("Lunch"), which its details carry in their title.

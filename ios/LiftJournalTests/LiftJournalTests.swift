@@ -63,8 +63,8 @@ struct LiftJournalTests {
     let ends = Date.now.addingTimeInterval(90)
     let state = WorkoutActivityController.contentState(workout, restStarted: .now, restEnds: ends)
     #expect(state.exercise == "Snatch")
-    let load = 62.5.formatted(.number.precision(.fractionLength(0...1)))  // "62,5" in Danish
-    #expect(state.next == "Set 2 of 2 · \(load) kg × 2")
+    // Written as the server writes it, whatever the iPhone's region.
+    #expect(state.next == "Set 2 of 2 · 62.5 kg × 2")
     #expect(state.loggedSets == 1 && state.totalSets == 3)
     #expect(state.resting())
     #expect(!state.resting(at: ends))

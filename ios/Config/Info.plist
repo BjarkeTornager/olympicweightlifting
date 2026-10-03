@@ -10,5 +10,11 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!-- The launch screen is the ink cover, as the privacy cover and sign-in. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 </dict>
 </plist>

@@ -25,7 +25,7 @@ struct AccountView: View {
       List {
         if let session = model.session {
           Section {
-            AthleteCard(name: session.name, email: session.email, today: model.today)
+            AthleteCard(name: model.athleteName ?? session.name, email: session.email, today: model.today)
               .listRowInsets(EdgeInsets())
               .listRowBackground(Color.clear)
           }
@@ -45,6 +45,7 @@ struct AccountView: View {
         } footer: {
           Text("System follows your iPhone's light and dark setting.")
         }
+        .themedRows()
         Section {
           Picker("Language", selection: $language) {
             ForEach(CoachLanguage.allCases) { Text($0.title).tag($0) }
@@ -57,6 +58,7 @@ struct AccountView: View {
         } footer: {
           Text("Coach writes and speaks in this language, in chat and in voice check-ins.")
         }
+        .themedRows()
         if model.voiceEnabled {
           Section {
             if model.voiceProviders.count > 1 {
@@ -79,6 +81,7 @@ struct AccountView: View {
           } footer: {
             if model.voiceProviders.count > 1 { Text(callProvider.detail) }
           }
+          .themedRows()
         }
         Section {
           NavigationLink {
@@ -118,20 +121,22 @@ struct AccountView: View {
             Label {
               Text("Privacy Policy")
             } icon: {
-              IconBadge(symbol: "hand.raised.fill", tint: .secondary, size: 28)
+              IconBadge(symbol: "hand.raised.fill", tint: Theme.inkSecondary, size: 28)
             }
           }
         } footer: {
           Text("Routines, programmes, videos and backups are managed on the website for now.")
         }
+        .themedRows()
         Section {
           Button("Sign out", role: .destructive) { confirmingSignOut = true }
         } footer: {
           Text("Signs out this iPhone only. Your journal stays on the server.")
         }
+        .themedRows()
         Section {
           Toggle(isOn: $aiAllowed) {
-            Label("Share with Coach's AI provider", systemImage: "sparkles")
+            Label("Share with Coach's AI provider", systemImage: "checkmark.shield")
           }
           // Photos still uploading for Coach's waiting messages stop too.
           .onChange(of: aiAllowed) { _, allowed in
@@ -140,6 +145,7 @@ struct AccountView: View {
         } footer: {
           Text("Coach and voice check-ins send your messages, photos and relevant journal and Apple Health records to a third-party AI provider. Turn this off to stop sharing; Coach stays off until you allow it again.")
         }
+        .themedRows()
         Section {
           Button(role: .destructive) {
             confirmingDeletion = true
@@ -153,11 +159,12 @@ struct AccountView: View {
           .disabled(deleting)
         } footer: {
           if let deletionError {
-            Text(deletionError).foregroundStyle(.red)
+            Text(deletionError).foregroundStyle(Theme.danger)
           } else {
             Text("Permanently deletes your account and everything in your journal from Lift Journal's server. Data in Apple Health is not affected.")
           }
         }
+        .themedRows()
         Section {
         } footer: {
           Text("Lift Journal \(LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "").replacingOccurrences(of: "/", with: " (")))")
@@ -229,14 +236,14 @@ private struct AthleteCard: View {
         .padding(4)
         .overlay(Circle().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 2))
       VStack(spacing: 2) {
-        Text(name).font(.title2.weight(.bold))
-        Text(email).font(.subheadline).foregroundStyle(.secondary)
+        Text(name).folio(.sectionTitle).foregroundStyle(Theme.ink)
+        Text(email).font(.subheadline).foregroundStyle(Theme.inkSecondary)
       }
       if let today {
         HStack(spacing: 0) {
-          stat(today.body?.bodyweight.map { $0.formatted() }, "kg", "Weight")
+          stat(today.body?.bodyweight.map { Format.decimal($0) }, "kg", "Weight")
           Divider().frame(height: 32)
-          stat(today.body?.bodyFatPercent.map { $0.formatted() }, "%", "Body fat")
+          stat(today.body?.bodyFatPercent.map { Format.decimal($0) }, "%", "Body fat")
           Divider().frame(height: 32)
           stat("\(today.sessionsThisWeek)", nil, "Sessions this week")
         }
@@ -249,13 +256,12 @@ private struct AthleteCard: View {
 
   private func stat(_ value: String?, _ unit: String?, _ label: String) -> some View {
     VStack(spacing: 2) {
-      HStack(alignment: .firstTextBaseline, spacing: 2) {
-        Text(value ?? "–").font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
-        if let unit, value != nil {
-          Text(unit).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-        }
+      if let value {
+        Measure(value: value, unit: unit, role: .inline).foregroundStyle(Theme.ink)
+      } else {
+        Text("Not yet").folio(.note).foregroundStyle(Theme.inkSecondary)
       }
-      Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+      Text(label).font(.caption).foregroundStyle(Theme.inkSecondary).lineLimit(1).minimumScaleFactor(0.8)
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .combine)
@@ -273,10 +279,10 @@ private struct GoalsSection: View {
         row("Focus", focus, "target", Theme.accent)
       }
       if let kg = body?.targetWeightKg {
-        row("Weight", "\(kg.formatted()) kg", "scalemass.fill", Category.body.tint)
+        row("Weight", "\(Format.decimal(kg)) kg", "scalemass.fill", Category.body.tint)
       }
       if let percent = body?.targetBodyFatPercent {
-        row("Body fat", "\(percent.formatted()) %", "percent", Category.body.tint)
+        row("Body fat", "\(Format.decimal(percent)) %", "percent", Category.body.tint)
       }
       if let kcal = today.nutrition.targetCalories {
         row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)
@@ -293,6 +299,7 @@ private struct GoalsSection: View {
     } footer: {
       Text("Set with Coach. Ask Coach to change any of them.")
     }
+    .themedRows()
   }
 
   private func row(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {

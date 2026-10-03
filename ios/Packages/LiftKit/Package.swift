@@ -5,8 +5,8 @@ import PackageDescription
 // generated from the server's OpenAPI document; LiftStore keeps credentials,
 // the offline queue and the Apple Health reader; LiftVoice runs the audio of
 // a spoken check-in; LiftActivity describes the workout Live Activity; and
-// LiftTheme holds the colours. LiftActivity and LiftTheme are all the widget
-// extension links.
+// LiftTheme holds the look: colours, type and the brand mark. LiftActivity
+// and LiftTheme are all the widget extension links.
 let package = Package(
   name: "LiftKit",
   platforms: [.iOS(.v26)],
@@ -35,7 +35,8 @@ let package = Package(
     .target(name: "LiftVoice"),
     // The workout on the lock screen and in the Dynamic Island.
     .target(name: "LiftActivity"),
-    // The palette and what each colour means, for the app and the widget.
+    // The palette and what each colour means, the type roles, the brand mark
+    // and the isotype meter, for the app and the widget.
     .target(name: "LiftTheme"),
     .testTarget(
       name: "LiftKitTests",

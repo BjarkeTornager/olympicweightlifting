@@ -42,6 +42,8 @@ jobs:
       - run: npm run check:production
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
+      # The Restate endpoint in the standalone build, with its bundled SDK.
+      - run: node --import tsx scripts/restate-smoke.ts
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:browser -- --project=chromium --project=firefox
       - uses: actions/upload-artifact@v6

@@ -7,8 +7,9 @@ import type { ModelUsage } from "./agent/provider";
 
 // The AI cost ledger: one row per paid AI call, charged to the account it was
 // for. Model calls are recorded where the provider's reply is read
-// (lib/agent/provider.ts), with the cost the provider reported. Jev routing
-// and Exa searches are charged a fixed price per request, and voice calls an
+// (lib/agent/provider.ts), with the cost the provider reported, and dish
+// pictures when they are drawn (lib/coach-pictures.ts). Jev routing and Exa
+// searches are charged a fixed price per request, and voice calls an
 // estimate from their minutes. Counts, models and costs only: never what was
 // said, asked or shown.
 
@@ -19,6 +20,7 @@ export type AiFeature =
   | "video"
   | "transcript-tidy"
   | "web-search"
+  | "coach-picture"
   | "voice-gemini"
   | "voice-elevenlabs";
 export type UsageContext = {
@@ -139,6 +141,29 @@ export async function recordFixedPrice(
   const usage = context.getStore();
   if (!usage) return;
   await record(usage, { feature, model, costUsd });
+}
+
+// A dish picture the image model was paid for, charged to its account and
+// picture. It is drawn after the reply has gone, outside the turn's usage
+// context (in after() for a voice card), so the account is given here. A
+// cost the model didn't report is the given estimate.
+export async function recordPicture(
+  userId: string,
+  pictureId: string,
+  model: string,
+  costUsd: number | undefined,
+  estimateUsd: number,
+) {
+  const feature = "coach-picture";
+  await record(
+    { userId, feature, sourceId: pictureId },
+    {
+      feature,
+      model,
+      costUsd: costUsd ?? estimateUsd,
+      estimated: costUsd === undefined,
+    },
+  );
 }
 
 export type VoiceProvider = "google" | "elevenlabs";

@@ -400,9 +400,9 @@ export const aiUsage = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     // coach, routing, image-tag, video, transcript-tidy, web-search,
-    // voice-gemini or voice-elevenlabs.
+    // coach-picture, voice-gemini or voice-elevenlabs.
     feature: text("feature").notNull(),
-    // The Coach turn, image, video or voice call the call was for.
+    // The Coach turn, image, video, picture or voice call the call was for.
     sourceId: text("source_id"),
     model: text("model").notNull(),
     inputTokens: integer("input_tokens"),

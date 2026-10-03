@@ -154,8 +154,9 @@ export function UsageReport({ accountId }: { accountId: string }) {
           <h3>AI cost</h3>
           <p>
             What each account&apos;s AI calls cost today and this month (UTC):
-            model calls as the provider reported them, routing and web searches
-            at list price, and voice calls estimated from their minutes
+            model calls and dish pictures as the provider reported them, routing
+            and web searches at list price, and voice calls estimated from their
+            minutes
             {report.aiCost.total.estimated
               ? ` (${dollars(report.aiCost.total.estimated)} this month)`
               : ""}

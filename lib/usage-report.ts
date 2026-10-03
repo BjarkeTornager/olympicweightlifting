@@ -26,7 +26,8 @@ export type AiCostRow = {
   day: string;
   costUsd: number;
   calls: number;
-  // The part worked out from voice minutes rather than reported.
+  // The part not reported by the provider: voice minutes, and pictures
+  // whose cost didn't arrive.
   estimatedUsd: number;
 };
 type AiCostTotals = {

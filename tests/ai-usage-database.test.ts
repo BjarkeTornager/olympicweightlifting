@@ -602,6 +602,104 @@ test(
 );
 
 test(
+  "a dish picture is charged to its account and picture when the model was paid, however the drawing ended",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const db = await setup();
+    const { drawPicture } = await import("../lib/coach-pictures"),
+      { withAiUsage } = await import("../lib/ai-usage"),
+      { default: sharp } = await import("sharp");
+    const png = await sharp({
+      create: { width: 64, height: 48, channels: 3, background: "#c87830" },
+    })
+      .png()
+      .toBuffer();
+    const model = "google/gemini-3.1-flash-lite-image";
+    const answer =
+      (body: unknown, status = 200): typeof fetch =>
+      async () =>
+        Response.json(body, { status });
+    const picture = (cost: number, image = true) => ({
+      model,
+      usage: { cost },
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "",
+            ...(image
+              ? {
+                  images: [
+                    {
+                      image_url: {
+                        url: `data:image/png;base64,${png.toString("base64")}`,
+                      },
+                    },
+                  ],
+                }
+              : {}),
+          },
+        },
+      ],
+    });
+    try {
+      const user = await db.user();
+      const job = () => ({
+        userId: user,
+        id: crypto.randomUUID(),
+        model,
+        prompt: "A realistic photograph of a salmon rice bowl.",
+      });
+      // Drawn during a Coach turn: charged to the picture, not the turn.
+      const drawn = job();
+      assert.equal(
+        await withAiUsage(
+          { userId: user, feature: "coach", sourceId: crypto.randomUUID() },
+          () => drawPicture(drawn, answer(picture(0.034))),
+        ),
+        "ready",
+      );
+      // Drawn for a voice card, in after() with no usage context: the
+      // model answered without a picture, and was still paid.
+      const refused = job();
+      assert.equal(
+        await drawPicture(refused, answer(picture(0.002, false))),
+        "failed",
+      );
+      // Cut off while drawing: paid, at a cost that never arrived.
+      const timedOut = job();
+      assert.equal(
+        await drawPicture(timedOut, async () => {
+          throw new DOMException("The operation timed out.", "TimeoutError");
+        }),
+        "failed",
+      );
+      // Busy, then busy again: never answered, so never paid.
+      assert.equal(
+        await drawPicture(job(), answer({ error: "busy" }, 503)),
+        "failed",
+      );
+      assert.deepEqual(
+        (await db.rows(user)).map((r) => [
+          r.feature,
+          r.sourceId,
+          r.model,
+          r.cost,
+          r.estimated,
+        ]),
+        [
+          ["coach-picture", drawn.id, model, 0.034, false],
+          ["coach-picture", refused.id, model, 0.002, false],
+          ["coach-picture", timedOut.id, model, 0.04, true],
+        ],
+      );
+    } finally {
+      await db.cleanup();
+    }
+  },
+);
+
+test(
   "voice calls are estimated from their minutes, per connection",
   { skip: !process.env.TEST_DATABASE_URL },
   async () => {

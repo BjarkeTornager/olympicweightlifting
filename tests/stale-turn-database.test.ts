@@ -83,3 +83,178 @@ test(
     }
   },
 );
+
+test(
+  "the sweeper fails cut-off turns, and a cut-off attempt that wakes up can't save over the retry",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    assert.ok(
+      new URL(process.env.TEST_DATABASE_URL!).pathname.endsWith("_test"),
+      "Use a disposable database",
+    );
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db"),
+      { runTurn, findTurn, failStaleTurns, STALE_TURN_MS } =
+        await import("../lib/agent/engine"),
+      { readJournal } = await import("../lib/server");
+    const pool = getPool(),
+      user = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'QA','sweep-'||$1||'@example.test',true)",
+      [user],
+    );
+    const message = "How did I sleep?";
+    const turn = async (
+      status: string,
+      startedMsAgo: number | null,
+      createdMsAgo = 0,
+    ) => {
+      const id = crypto.randomUUID();
+      await pool.query(
+        "INSERT INTO agent_turns(id,user_id,question,status,created_at,started_at) VALUES ($1,$2,$3,$4,$5,$6)",
+        [
+          id,
+          user,
+          message,
+          status,
+          new Date(Date.now() - createdMsAgo),
+          startedMsAgo === null ? null : new Date(Date.now() - startedMsAgo),
+        ],
+      );
+      return id;
+    };
+    const status = async (id: string) =>
+      (await pool.query("SELECT status FROM agent_turns WHERE id=$1", [id]))
+        .rows[0].status;
+    try {
+      const recent = await turn("running", 30000),
+        stale = await turn("running", STALE_TURN_MS + 60000),
+        // From before started_at was kept: its creation time counts.
+        legacy = await turn("running", null, STALE_TURN_MS + 60000),
+        answered = await turn("done", STALE_TURN_MS + 60000);
+      assert.equal(await failStaleTurns({ userId: user }), 2);
+      assert.equal(await status(recent), "running");
+      assert.equal(await status(stale), "failed");
+      assert.equal(await status(legacy), "failed");
+      assert.equal(await status(answered), "done");
+      // What the apps read: a failed turn they offer to ask again.
+      assert.equal((await findTurn(user, stale))?.status, "failed");
+      assert.equal(await failStaleTurns({ userId: user }), 0);
+
+      // A turn whose server stalls past the limit: swept, then retried.
+      const id = crypto.randomUUID();
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let started!: () => void;
+      const running = new Promise<void>((resolve) => (started = resolve));
+      const stalled = runTurn(
+        user,
+        { id, message, revision: 0, timezone: "Europe/Copenhagen" },
+        async (): Promise<ModelResponse> => {
+          started();
+          await released;
+          return { role: "assistant", content: "From the stalled attempt." };
+        },
+      );
+      await running;
+      // This one and, by then, the 30-second-old one above.
+      assert.equal(
+        await failStaleTurns({
+          userId: user,
+          now: new Date(Date.now() + STALE_TURN_MS + 1000),
+        }),
+        2,
+      );
+      const retried = await runTurn(
+        user,
+        { id, message, revision: 0, timezone: "Europe/Copenhagen" },
+        async (): Promise<ModelResponse> => ({
+          role: "assistant",
+          content: "From the retry.",
+        }),
+      );
+      assert.equal(retried.reply, "From the retry.");
+      release();
+      await assert.rejects(stalled, /took too long/);
+      const saved = await findTurn(user, id);
+      assert.equal(saved?.status, "done");
+      assert.equal(saved?.reply, "From the retry.");
+
+      // The same with saves: the cut-off attempt's journal write, made
+      // after the retry's, is rolled back with it, so nothing is saved twice.
+      const date = "2026-09-08",
+        logging = {
+          id: crypto.randomUUID(),
+          message: "I slept 7 hours and drank a glass of water",
+          revision: (await readJournal(user)).revision,
+          timezone: "Europe/Copenhagen",
+        },
+        hooks = { directLogging: true };
+      const tools = (name: string, args: object): ModelResponse => ({
+        role: "assistant",
+        content: "",
+        tool_calls: [{ function: { name, arguments: { ...args } } }],
+      });
+      let wake!: () => void;
+      const woken = new Promise<void>((resolve) => (wake = resolve));
+      let asleep!: () => void;
+      const sleeping = new Promise<void>((resolve) => (asleep = resolve));
+      let round = 0;
+      const late = runTurn(
+        user,
+        logging,
+        async () => {
+          if (++round === 1) return tools("health_overview", { date });
+          asleep();
+          await woken;
+          return tools("log_entry", {
+            kind: "record_checkin",
+            checkin: { date, sleepHours: 7 },
+          });
+        },
+        hooks,
+      );
+      await sleeping;
+      assert.equal(
+        await failStaleTurns({
+          userId: user,
+          now: new Date(Date.now() + STALE_TURN_MS + 1000),
+        }),
+        1,
+      );
+      const retry = await runTurn(
+        user,
+        logging,
+        async () =>
+          tools("log_entry", {
+            kind: "log_drink",
+            drink: { date, ml: 250, kind: "water" },
+          }),
+        hooks,
+      );
+      assert.equal(retry.proposals[0].status, "saved");
+      wake();
+      // It got as far as saving (the retry's drink leaves its check-in's
+      // day alone, so it is made on the newer journal), then lost its turn.
+      await assert.rejects(late, /took too long/);
+      const journal = await readJournal(user);
+      assert.equal(journal.revision, logging.revision + 1);
+      assert.equal(journal.state.health.drinks?.length, 1);
+      assert.equal(journal.state.health.checkins.length, 0);
+      assert.equal(
+        (
+          await pool.query("SELECT id FROM agent_proposals WHERE turn_id=$1", [
+            logging.id,
+          ])
+        ).rows.length,
+        1,
+      );
+      assert.deepEqual(
+        (await findTurn(user, logging.id))?.proposals,
+        retry.proposals,
+      );
+    } finally {
+      await pool.query("DELETE FROM users WHERE id=$1", [user]);
+    }
+  },
+);

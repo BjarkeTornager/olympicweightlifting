@@ -20,4 +20,11 @@ export async function register() {
     const { startTraceJanitor } = await import("./lib/tracing/janitor");
     startTraceJanitor();
   }
+  if (
+    process.env.NEXT_RUNTIME === "nodejs" &&
+    process.env.SWEEPER_WORKER === "1"
+  ) {
+    const { startSweeper } = await import("./lib/sweeper");
+    startSweeper();
+  }
 }

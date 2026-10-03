@@ -557,3 +557,62 @@ test(
     }
   },
 );
+
+test(
+  "the owner's usage page totals each account's AI cost for today and this month",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const db = await setup();
+    const { loadUsageReport } = await import("../lib/usage-report");
+    try {
+      const a = await db.user(),
+        b = await db.user();
+      const now = new Date("2026-10-15T12:00:00Z");
+      const add = (
+        userId: string,
+        at: string,
+        cost: number,
+        estimated = false,
+      ) =>
+        db.pool.query(
+          "INSERT INTO ai_usage(id,user_id,feature,model,cost_usd,estimated,created_at) VALUES ($1,$2,'coach','test',$3,$4,$5)",
+          [crypto.randomUUID(), userId, cost, estimated, at],
+        );
+      await add(a, "2026-10-15T08:00:00Z", 0.5);
+      await add(a, "2026-10-15T09:00:00Z", 0.25, true);
+      await add(a, "2026-10-02T09:00:00Z", 1);
+      // Last month, and next month: neither counts.
+      await add(a, "2026-09-30T23:59:00Z", 3);
+      await add(a, "2026-11-01T00:00:00Z", 3);
+      await add(b, "2026-10-15T00:00:00Z", 0.1);
+      const report = await loadUsageReport(now, a);
+      assert.equal(report.aiCost.day, "2026-10-15");
+      assert.equal(report.aiCost.month, "2026-10");
+      const mine = report.aiCost.accounts.filter((x) =>
+        [a, b].some((id) => id.startsWith(x.account)),
+      );
+      assert.deepEqual(mine, [
+        {
+          account: a.slice(0, 8),
+          you: true,
+          today: 0.75,
+          month: 1.75,
+          calls: 3,
+          estimated: 0.25,
+        },
+        {
+          account: b.slice(0, 8),
+          you: false,
+          today: 0.1,
+          month: 0.1,
+          calls: 1,
+          estimated: 0,
+        },
+      ]);
+      // Never an account's full id, name or email.
+      assert.doesNotMatch(JSON.stringify(report), new RegExp(`${a}|${b}`));
+    } finally {
+      await db.cleanup();
+    }
+  },
+);

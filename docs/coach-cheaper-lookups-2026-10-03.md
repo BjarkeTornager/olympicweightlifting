@@ -59,7 +59,7 @@ Production Terra traffic has a colder cache than these runs. An uncached first T
 ## Limits
 
 - **One seeded journal and one clock.** Most messages ran twice per tier, which can't tell apart a difference of a few percent.
-- **Jev sees only the latest message.** A lookup-shaped message whose meaning depends on the conversation can now reach Luna. The follow-ups tested ("and yesterday?", "og i går?") stayed outside the rule.
+- **Jev sees only the latest message.** A short follow-up can reach Luna whenever Jev puts its mass mostly on `log` and `explain` and sees no judgment in it. "Og min puls?" ("And my pulse?") did in both recorded runs (0.95 and 0.97 on log and explain), and Luna then relies on the conversation history to know what it refers to. Follow-ups with more of the mass on `mixed_or_unclear`, such as "and yesterday?" and "og i går?", stayed on Terra. `tests/agent-routing.test.ts` records "Og min puls?" going to Luna as accepted behaviour.
 - **Small talk and acceptances stay on Terra.** Luna equalled Terra on thanks and confirmations. But it prepared the agreed plan for review in only 4 of 14 acceptances, so this group needs its own change first.
 
 Spend for this step was $0.50 of OpenRouter use, plus under $0.01 for Jev.

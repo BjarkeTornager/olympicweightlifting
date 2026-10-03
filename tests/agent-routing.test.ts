@@ -305,6 +305,21 @@ test("lookups Jev splits between log and explain go to Luna; other uncertainty s
       "terra",
       "uncertain",
     ],
+    // Accepted: Jev sees only the latest message, so a short follow-up with
+    // its mass on log and explain goes to Luna (both recorded runs), and Luna
+    // relies on the conversation history for what it refers to.
+    [
+      "Og min puls?",
+      recorded(
+        "explain",
+        [0.28, 0, 0.67, 0, 0.04],
+        0.07,
+        [0.93, 0.07, 0],
+        0.34,
+      ),
+      "luna",
+      "lookup",
+    ],
     // Acceptances, confirmations, thanks and mixed requests.
     [
       "Okay, det lyder godt",

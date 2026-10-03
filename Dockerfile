@@ -22,6 +22,8 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.deployment/migrate.cjs ./migrate.cjs
+# Registers the Restate endpoint, run by hand (docs/restate-setup.md).
+COPY --from=build --chown=nextjs:nodejs /app/.deployment/restate-register.cjs ./restate-register.cjs
 COPY --from=build --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=build --chown=nextjs:nodejs /app/scripts/video ./scripts/video
 USER nextjs

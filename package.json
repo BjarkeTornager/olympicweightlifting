@@ -10,7 +10,7 @@
     "build": "next build --webpack && node scripts/build-offline.mjs && node scripts/build-migrate.mjs",
     "start": "node scripts/serve-production.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/gepa/tsconfig.json && tsc --noEmit -p scripts/jev/tsconfig.json && tsc --noEmit -p scripts/evals/tsconfig.json && tsc --noEmit -p scripts/coach-bench/tsconfig.json",
-    "lint": "eslint app components lib tests scripts/migrate.ts scripts/gepa/runner.ts scripts/jev scripts/evals scripts/coach-bench",
+    "lint": "eslint app components lib tests scripts/migrate.ts scripts/restate-register.ts scripts/restate-identity-key.ts scripts/gepa/runner.ts scripts/jev scripts/evals scripts/coach-bench",
     "test": "tsx --test tests/*.test.ts",
     "eval": "node --import tsx scripts/evals/run.ts",
     "eval:barge-in": "node --import tsx scripts/evals/barge-in.ts",

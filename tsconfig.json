@@ -25,6 +25,7 @@
     "lib/**/*.ts",
     "tests/**/*.ts",
     "scripts/migrate.ts",
+    "scripts/restate-*.ts",
     "*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"

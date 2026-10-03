@@ -11,6 +11,7 @@ import {
   newIdentityKey,
   restatePublicKey,
 } from "../lib/restate/identity";
+import { changes } from "../scripts/restate-register";
 
 // The Restate endpoint (lib/restate): off by default, signed in production,
 // HTTP/2 on its own port. No Restate server needed: requests are signed here
@@ -216,6 +217,54 @@ test("The endpoint serves Ping over HTTP/2, only to Restate's signed calls, and 
     delete process.env.RESTATE_ENDPOINT_PORT;
     delete process.env.RESTATE_IDENTITY_KEYS;
   }
+});
+
+const service = (
+  name: string,
+  handlers: string[],
+  settings: Record<string, unknown> = {},
+) => ({
+  name,
+  ty: "Service",
+  handlers: handlers.map((h) => ({ name: h })),
+  deployment_id: "dp_1",
+  revision: 1,
+  journal_retention: "1h",
+  ...settings,
+});
+
+test("Registration sees added, removed and changed handlers, and refuses a type change", () => {
+  const ping = service("Ping", ["ping"]);
+  assert.deepEqual(changes([ping], [{ ...ping, revision: 2 }]), []);
+  assert.deepEqual(changes([ping], [service("Ping", ["ping", "echo"])]), [
+    "+ Ping.echo",
+  ]);
+  assert.deepEqual(changes([service("Ping", ["ping", "echo"])], [ping]), [
+    "- Ping.echo",
+  ]);
+  assert.deepEqual(
+    changes([ping], [service("Ping", ["ping"], { journal_retention: "2h" })]),
+    ["~ Ping settings"],
+  );
+  assert.deepEqual(
+    changes(
+      [ping],
+      [
+        ping,
+        {
+          ...service("CoachSession", ["drain"]),
+          ty: "VirtualObject",
+          handlers: [{ name: "drain", ty: "Exclusive" }],
+        },
+      ],
+    ),
+    ["+ CoachSession: drain (Exclusive)"],
+  );
+  assert.deepEqual(changes([ping, service("Old", ["run"])], [ping]), ["- Old"]);
+  assert.throws(
+    () => changes([ping], [{ ...ping, ty: "VirtualObject" }]),
+    /never change a service's type in place/i,
+  );
 });
 
 const sourceFiles = (dir: string): string[] =>

@@ -28,18 +28,37 @@ export const VOICE_CREDIT_MESSAGE =
 export const isCreditError = (message: string) =>
   /prepayment credits|credit has run out|RESOURCE_EXHAUSTED/i.test(message);
 
+const lastSentence = (text: string) =>
+  text
+    .trim()
+    .split(/(?<=[.?!])\s+/)
+    .at(-1) ?? "";
+// An offer ("let me know if you'd like me to draw it") waits for the
+// athlete's answer; it is not a promise. "Let me check if you slept" is.
+const offers =
+  /\b(let me know|if you('d| would)? (like|want|prefer)|would you like|do you want)\b/i;
+
 // A coach turn that promises an action ("let me check that") but ends
 // without doing it leaves the athlete in silence; the app then nudges it.
-export const promisesAction = (text: string) =>
-  /\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add|show|put|draw)/i.test(
-    text
-      .trim()
-      .split(/(?<=[.?!])\s+/)
-      .at(-1) ?? "",
+// The iPhone app matches the same (LiveProtocol.promisesAction).
+export const promisesAction = (text: string) => {
+  const last = lastSentence(text);
+  return (
+    !offers.test(last) &&
+    /\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add|show|put|draw)/i.test(
+      last,
+    )
   );
+};
+// A card promised ("I'll put it on your screen"): writing a whole recipe or
+// table takes longer than a save, so the nudge waits longer.
+export const promisesCard = (text: string) =>
+  promisesAction(text) && /\b(show|put|draw|screen)/i.test(lastSentence(text));
 export const WAITING_NUDGE =
   "(The athlete is waiting: do what you just said now, then answer.)";
+// Counted from when the coach stops speaking.
 export const NUDGE_AFTER_MS = 2500;
+export const CARD_NUDGE_AFTER_MS = 6000;
 
 export type FunctionCall = {
   id: string;
@@ -125,6 +144,20 @@ export const placeCard = (entries: Entry[], card: Card): Entry[] =>
 // Coach as their own turns.
 export const spokenLines = (entries: Entry[]) =>
   entries.filter((e): e is Line => e.role === "you" || e.role === "coach");
+
+// The last few lines for a coach whose call started afresh after a drop,
+// with the cards on screen and their ids, which show_picture needs. The
+// iPhone app sends the same (VoiceCall.recap).
+export const recapLines = (entries: Entry[]) =>
+  entries
+    .filter((e) => e.role !== "save")
+    .slice(-8)
+    .map((e) =>
+      e.role === "card"
+        ? `(Card on screen: ${e.visual.content.title}, ${e.visual.content.kind}, card_id ${e.id})`
+        : `${e.role === "you" ? "Athlete" : "Coach"}: ${e.text}`,
+    )
+    .join("\n");
 
 // Fragments usually carry their own spaces ("Did you " + "train?"), but a
 // word sometimes arrives without one ("for" + "last night"). A space goes

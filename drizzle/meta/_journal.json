@@ -127,6 +127,13 @@
       "when": 1790992689857,
       "tag": "0017_coach_pictures",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790995758683,
+      "tag": "0018_coach_picture_usage",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { useVoiceCheckin, type VoiceStatus } from "@/lib/use-voice-checkin";
 import { updateAppNow } from "@/lib/use-service-worker";
 import { Button } from "./ui/button";
@@ -59,22 +59,31 @@ export function VoiceCheckin({
     cards ? `${cards} ${cards === 1 ? "card" : "cards"}` : "",
   ].filter(Boolean);
   const transcript = useRef<HTMLDivElement>(null);
+  // Whether the transcript follows the latest line: until the athlete
+  // scrolls up, or a card is being read.
+  const following = useRef(true);
+  // The card last scrolled to: each is shown from its top once.
+  const shownCard = useRef<string | undefined>(undefined);
   useEffect(() => {
     const box = transcript.current;
     if (!box) return;
-    // A new card is shown from its top while the coach sums it up;
-    // otherwise the latest line.
-    const card = voice.lines.slice(-3).findLast((l) => l.role === "card");
-    const top = card
-      ? box.querySelector(`[data-card="${card.id}"]`)?.getBoundingClientRect()
-          .top
-      : undefined;
-    box.scrollTo({
-      top:
-        top === undefined
-          ? box.scrollHeight
-          : box.scrollTop + top - box.getBoundingClientRect().top - 12,
-    });
+    // A new card is shown from its top while the coach sums it up, as on
+    // the iPhone; otherwise the latest line, unless the athlete is reading
+    // further up.
+    const card = voice.lines.findLast((l) => l.role === "card");
+    if (card && card.id !== shownCard.current) {
+      shownCard.current = card.id;
+      const top = box
+        .querySelector(`[data-card="${card.id}"]`)
+        ?.getBoundingClientRect().top;
+      if (top !== undefined) {
+        box.scrollTo({
+          top: box.scrollTop + top - box.getBoundingClientRect().top - 12,
+        });
+        return;
+      }
+    }
+    if (following.current) box.scrollTo({ top: box.scrollHeight });
   }, [voice.lines]);
   return (
     <Dialog
@@ -122,12 +131,28 @@ export function VoiceCheckin({
             : statusText[voice.status]}
       </p>
       {voice.lines.length > 0 && (
-        <div className="voice-transcript" ref={transcript} aria-live="polite">
+        <div
+          className="voice-transcript"
+          ref={transcript}
+          aria-live="polite"
+          onScroll={(e) => {
+            const box = e.currentTarget;
+            following.current =
+              box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+          }}
+        >
           {voice.lines.map((line, i) =>
             line.role === "card" ? (
-              <div key={line.id} className="voice-card" data-card={line.id}>
-                <AguiVisuals visuals={[line.visual]} accountId={accountId} />
-              </div>
+              <Fragment key={line.id}>
+                {/* Announced in a few words; the card itself is read when
+                    the athlete moves to it, never over the coach. */}
+                <span className="sr-only">
+                  Card shown: {line.visual.content.title}
+                </span>
+                <div className="voice-card" data-card={line.id} aria-live="off">
+                  <AguiVisuals visuals={[line.visual]} accountId={accountId} />
+                </div>
+              </Fragment>
             ) : line.role === "save" ? (
               <p key={line.id} className={`voice-receipt ${line.state}`}>
                 {line.state === "saving" ? (

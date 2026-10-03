@@ -11,7 +11,10 @@ import { logFailure } from "@/lib/error-log";
 import { isCreditError, VOICE_CREDIT_MESSAGE } from "@/lib/voice-live";
 import { nativeClient } from "@/lib/native-client";
 import { allowRequest, readJournal } from "@/lib/server";
-import { recentConversations } from "@/lib/conversation-memory";
+import {
+  pruneConversations,
+  recentConversations,
+} from "@/lib/conversation-memory";
 import { routeNotesFor } from "@/lib/workout-routes";
 import {
   mintVoiceToken,
@@ -111,6 +114,11 @@ export async function POST(request: Request) {
         429,
       );
     const clock = localClock(new Date(), timezone);
+    // Conversation older than 90 days goes, cards and pictures with it, as
+    // when typing to Coach; a call that can't prune still starts.
+    await pruneConversations(user.id).catch((error: unknown) =>
+      logFailure("conversation_prune_failed", error, {}, "warn"),
+    );
     const { state } = await readJournal(user.id);
     // Only an app that draws cards is offered show_card; older ones are
     // told they can't show anything. A recipe card can have a picture while

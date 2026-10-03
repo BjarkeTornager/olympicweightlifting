@@ -50,6 +50,7 @@ test(
     const { GET: getPicture } =
       await import("../app/api/coach/pictures/[id]/route");
     const { DELETE: clearChat } = await import("../app/api/agent/route");
+    const { POST: startCall } = await import("../app/api/voice/session/route");
     const pool = getPool(),
       origin = new URL(process.env.BETTER_AUTH_URL).origin,
       accounts: string[] = [];
@@ -91,6 +92,15 @@ test(
       (
         await pool.query(
           "SELECT id, turn_id, status, reason, model, cost_usd, duration_ms, bytes, data FROM coach_pictures WHERE user_id=$1 ORDER BY created_at",
+          [userId],
+        )
+      ).rows;
+
+    // What each picture asked for cost, kept apart from the picture.
+    const usage = async (userId: string) =>
+      (
+        await pool.query(
+          "SELECT picture_id, cost_usd, finished_at, created_at FROM coach_picture_usage WHERE user_id=$1 ORDER BY created_at",
           [userId],
         )
       ).rows;
@@ -214,6 +224,10 @@ test(
           assert.equal(row.id, pictureId);
           assert.equal(row.turn_id, id);
           assert.equal(row.status, "drawing");
+          // Its use is counted on its own, unfinished while it draws.
+          const [used] = await usage(a.id);
+          assert.equal(used.picture_id, pictureId);
+          assert.equal(used.finished_at, null);
           // The card in the thread already points at its picture.
           const { rows: turns } = await pool.query(
             "SELECT response FROM agent_turns WHERE id=$1",
@@ -297,6 +311,9 @@ test(
           const [row] = await rows(a.id);
           assert.equal(row.status, "ready");
           assert.equal(row.cost_usd, 0.034);
+          const [used] = await usage(a.id);
+          assert.equal(used.cost_usd, 0.034);
+          assert.ok(used.finished_at);
           assert.equal(row.model, "google/gemini-3.1-flash-lite-image");
           assert.ok(row.duration_ms >= 0);
           assert.equal(row.bytes, row.data.length);
@@ -482,18 +499,21 @@ test(
           assert.equal(sixth.data.picture, pictures.PICTURE_UNAVAILABLE);
           assert.equal((await rows(e.id)).length, 5);
 
-          // Twenty-nine a few days ago, and one before this month.
+          // Twenty-nine a few days ago, and one before this month, as the
+          // usage keeps them whether their pictures are still there or not.
           const f = await user();
           const turn = reserved(await card(f.id, recipe)).data.card_id;
           await pool.query(
-            `INSERT INTO coach_pictures(user_id, id, turn_id, status, cost_usd, created_at)
-             SELECT $1, gen_random_uuid()::text, $2, 'ready', 0.034,
+            `INSERT INTO coach_picture_usage(user_id, picture_id, cost_usd, finished_at, created_at)
+             SELECT $1, gen_random_uuid()::text, 0.034, now(),
                now() - interval '2 days' - (n || ' hours')::interval
              FROM generate_series(1, 29) AS n
              UNION ALL
-             SELECT $1, gen_random_uuid()::text, $2, 'ready', 0.034, now() - interval '31 days'`,
-            [f.id, turn],
+             SELECT $1, gen_random_uuid()::text, 0.034, now(), now() - interval '31 days'`,
+            [f.id],
           );
+          // A different dish each time, so none is the same picture again.
+          let dishes = 0;
           const reserve = (
             userId: string,
             refused?: Parameters<typeof pictures.reservePicture>[1]["refused"],
@@ -501,12 +521,14 @@ test(
             pictures.reservePicture(getDb(), {
               userId,
               turnId: String(turn),
-              recipe: { title: "Porridge", ingredients: [] },
+              recipe: { title: `Porridge ${++dishes}`, ingredients: [] },
               refused,
             });
-          // The thirtieth fits; the thirty-first doesn't.
+          // The thirtieth fits; the thirty-first doesn't. Use older than the
+          // limit's thirty days is no longer kept.
           assert.ok("job" in (await reserve(f.id)));
           assert.deepEqual(await reserve(f.id), { refused: "monthly_limit" });
+          assert.equal((await usage(f.id)).length, 30);
 
           // A low AI allowance (from pictureGate) refuses before counting.
           const g = await user();
@@ -515,17 +537,18 @@ test(
             pictures.reservePicture(getDb(), {
               userId: g.id,
               turnId: String(gTurn),
-              recipe: { title: "Porridge", ingredients: [] },
+              recipe: { title: `Porridge ${++dishes}`, ingredients: [] },
               refused,
             });
           assert.deepEqual(await reserveG("budget"), { refused: "budget" });
           assert.equal((await rows(g.id)).length, 0);
+          assert.equal((await usage(g.id)).length, 0);
 
           // The ceiling: what was spent today, plus about four cents for each
-          // picture still drawing, across every account.
+          // picture not yet finished, across every account.
           const { rows: spent } = await pool.query(
-            `SELECT coalesce(sum(cost_usd), 0) + 0.04 * count(*) FILTER (WHERE status = 'drawing') AS usd
-             FROM coach_pictures WHERE created_at >= now() - interval '1 day'`,
+            `SELECT coalesce(sum(cost_usd), 0) + 0.04 * count(*) FILTER (WHERE finished_at IS NULL) AS usd
+             FROM coach_picture_usage WHERE created_at >= now() - interval '1 day'`,
           );
           process.env.COACH_PICTURES_DAILY_USD = String(
             Number(spent[0].usd) + 0.05,
@@ -698,22 +721,247 @@ test(
             throw new TypeError("fetch failed: no network in tests");
           }) as typeof fetch;
 
-          // Clearing the chat deletes its pictures with it.
-          const cleared = await clearChat(
-            new Request(`${origin}/api/agent`, {
-              method: "DELETE",
-              headers: h.headers,
-            }),
-          );
-          assert.equal(cleared.status, 200);
+          // Clearing the chat deletes its pictures with it, but not their
+          // use: the limits still count them, and one still drawing keeps
+          // what it cost.
+          const unfinished = reserved(
+            await card(h.id, { ...recipe, picture: true }),
+          ).job!;
+          const clear = () =>
+            clearChat(
+              new Request(`${origin}/api/agent`, {
+                method: "DELETE",
+                headers: h.headers,
+              }),
+            );
+          assert.equal((await clear()).status, 200);
           assert.equal((await rows(h.id)).length, 0);
+          assert.equal(
+            await pictures.drawPicture(
+              unfinished,
+              fake(reply(imageReply(0.034))).fetcher,
+            ),
+            "ready",
+          );
+          assert.equal((await rows(h.id)).length, 0);
+          const used = await usage(h.id);
+          assert.deepEqual(
+            used.map((u) => [u.picture_id, u.cost_usd, Boolean(u.finished_at)]),
+            [
+              [pictureId, 0.03, true],
+              [unfinished.id, 0.034, true],
+            ],
+          );
+          process.env.COACH_PICTURES_PER_DAY = "2";
+          try {
+            assert.equal(
+              reserved(await card(h.id, { ...recipe, picture: true })).data
+                .picture,
+              pictures.PICTURE_UNAVAILABLE,
+            );
+            assert.equal((await clear()).status, 200);
+            assert.equal(
+              reserved(await card(h.id, { ...recipe, picture: true })).data
+                .picture,
+              pictures.PICTURE_UNAVAILABLE,
+            );
+          } finally {
+            delete process.env.COACH_PICTURES_PER_DAY;
+          }
+        },
+      );
+
+      await t.test(
+        "a retried typed Coach message shows the picture already drawn for the same dish",
+        async () => {
+          const r = await user();
+          const recipeCard = {
+            kind: "recipe",
+            title: "Chicken traybake",
+            servings: 2,
+            ingredients: [
+              { item: "Chicken thighs", amount: "500 g" },
+              { item: "Potatoes", amount: "400 g" },
+            ],
+            nutrition: { kcal: 560, protein: 45 },
+            picture: true,
+          };
+          const { fetcher, calls } = fake(reply(imageReply(0.03)));
+          globalThis.fetch = fetcher;
+          const input = {
+            id: crypto.randomUUID(),
+            message: "What can I cook tonight? Show me what it looks like.",
+            revision: 0,
+            timezone: "Europe/Copenhagen",
+          };
+          // The first attempt fails after the card was shown.
+          let round = 0;
+          await assert.rejects(
+            runTurn(r.id, input, async () => {
+              if (++round === 1)
+                return {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      function: { name: "show_visual", arguments: recipeCard },
+                    },
+                  ],
+                };
+              throw new Error("The provider failed.");
+            }),
+            /The provider failed/,
+          );
+          const [first] = await rows(r.id);
+          assert.equal(first.turn_id, input.id);
+          // The retry asks for the same dish: the same picture, drawn once.
+          round = 0;
+          const response = await runTurn(r.id, input, async () =>
+            ++round === 1
+              ? {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      function: { name: "show_visual", arguments: recipeCard },
+                    },
+                  ],
+                }
+              : { role: "assistant", content: "A chicken traybake." },
+          );
+          const [shown] = response.visuals ?? [];
+          assert.equal(
+            shown.content.kind === "recipe" ? shown.content.pictureId : "",
+            first.id,
+          );
+          for (
+            let i = 0;
+            i < 50 && (await rows(r.id))[0]?.status === "drawing";
+            i++
+          )
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          assert.equal((await rows(r.id)).length, 1);
+          assert.equal((await usage(r.id)).length, 1);
+          assert.equal(
+            calls.filter((c) => c.url.endsWith("/chat/completions")).length,
+            1,
+          );
+          globalThis.fetch = (async () => {
+            throw new TypeError("fetch failed: no network in tests");
+          }) as typeof fetch;
+        },
+      );
+
+      await t.test(
+        "an app that can't draw a recipe card gets the recipe written out, and no picture",
+        async () => {
+          const o = await user();
+          const outputs: string[] = [];
+          let round = 0;
+          const response = await runTurn(
+            o.id,
+            {
+              id: crypto.randomUUID(),
+              message: "Give me a quick recipe with a picture.",
+              revision: 0,
+              timezone: "Europe/Copenhagen",
+            },
+            async (messages: ModelMessage[]) => {
+              if (++round === 1)
+                return {
+                  role: "assistant",
+                  content: "",
+                  tool_calls: [
+                    {
+                      function: {
+                        name: "show_visual",
+                        arguments: {
+                          kind: "recipe",
+                          title: "Skyr bowl",
+                          ingredients: [{ item: "Skyr", amount: "200 g" }],
+                          picture: true,
+                        },
+                      },
+                    },
+                  ],
+                };
+              outputs.push(
+                ...messages
+                  .filter((m) => m.role === "tool")
+                  .map((m) => m.content),
+              );
+              return {
+                role: "assistant",
+                content: "Skyr bowl: 200 g skyr. Stir and eat.",
+              };
+            },
+            { recipeCards: false },
+          );
+          assert.equal(response.visuals?.length ?? 0, 0);
+          assert.match(
+            JSON.parse(outputs[0]).error,
+            /can't show a recipe card yet\. Write the recipe in your reply/,
+          );
+          assert.equal((await rows(o.id)).length, 0);
+          assert.equal((await usage(o.id)).length, 0);
+        },
+      );
+
+      await t.test(
+        "starting a voice call removes conversation older than 90 days, with its pictures",
+        async () => {
+          const v = await user();
+          const old = reserved(await card(v.id, { ...recipe, picture: true }))
+            .data.card_id;
+          const recent = reserved(
+            await card(v.id, { ...recipe, picture: true }),
+          ).data.card_id;
+          await pool.query(
+            "UPDATE agent_turns SET created_at = now() - interval '91 days' WHERE id=$1",
+            [old],
+          );
+          const key = process.env.GEMINI_API_KEY;
+          // Never a real key: the token request fails offline anyway.
+          process.env.GEMINI_API_KEY = "test-only-not-a-key";
+          try {
+            const started = await startCall(
+              new Request(`${origin}/api/voice/session`, {
+                method: "POST",
+                headers: {
+                  ...v.headers,
+                  "Content-Type": "application/json",
+                  "X-Voice-Client": "4",
+                },
+                body: JSON.stringify({ timezone: "Europe/Copenhagen" }),
+              }),
+            );
+            // Offline, no call starts; the old conversation is gone anyway.
+            assert.equal(started.status, 503);
+          } finally {
+            if (key === undefined) delete process.env.GEMINI_API_KEY;
+            else process.env.GEMINI_API_KEY = key;
+          }
+          const { rows: turns } = await pool.query(
+            "SELECT id FROM agent_turns WHERE user_id=$1",
+            [v.id],
+          );
+          assert.deepEqual(
+            turns.map((t) => t.id),
+            [recent],
+          );
+          assert.deepEqual(
+            (await rows(v.id)).map((p) => p.turn_id),
+            [recent],
+          );
         },
       );
 
       await t.test("deleting the account deletes its pictures", async () => {
         assert.ok((await rows(a.id)).length > 0);
+        assert.ok((await usage(a.id)).length > 0);
         await pool.query("DELETE FROM users WHERE id=$1", [a.id]);
         assert.equal((await rows(a.id)).length, 0);
+        assert.equal((await usage(a.id)).length, 0);
       });
     } finally {
       globalThis.fetch = realFetch;

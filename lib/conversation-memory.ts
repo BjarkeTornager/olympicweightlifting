@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { agentTurns, voiceCalls } from "./db/schema";
+import { agentProposals, agentTurns, voiceCalls } from "./db/schema";
 import { displayMessage, VOICE_PREFIX } from "./coach-tasks";
 import type { SavedVisual } from "./coach-visuals";
 import { tidyTranscript, withoutLabel } from "./voice-transcript";
@@ -18,6 +18,29 @@ export type Exchange = {
   // What the athlete said, and Coach's reply or the call transcript.
   text: string;
 };
+
+/** Removes Coach conversation older than 90 days, with the cards and
+ * pictures in it, and expired proposals (they hold recovery snapshots).
+ * Runs whenever the athlete uses the assistant, typed or by voice. */
+export async function pruneConversations(userId: string) {
+  const db = getDb();
+  await db
+    .delete(agentProposals)
+    .where(
+      and(
+        eq(agentProposals.userId, userId),
+        lt(agentProposals.expiresAt, new Date()),
+      ),
+    );
+  await db
+    .delete(agentTurns)
+    .where(
+      and(
+        eq(agentTurns.userId, userId),
+        lt(agentTurns.createdAt, new Date(Date.now() - 90 * 86400000)),
+      ),
+    );
+}
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;

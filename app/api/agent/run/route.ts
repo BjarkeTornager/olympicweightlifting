@@ -1,9 +1,11 @@
+import { after } from "next/server";
 import {
   requireAthlete,
   requireCurrentCoach,
   readJson,
   apiFailure,
   ApiError,
+  drawsRecipeCards,
 } from "@/lib/agent/http";
 import { providerConfig } from "@/lib/agent/provider";
 import { allowRequest } from "@/lib/server";
@@ -40,6 +42,10 @@ export async function POST(request: Request) {
           directLogging: request.headers.get("x-coach-logging-version") === "1",
           liftingBriefReview:
             request.headers.get("x-lifting-coach-version") === "1",
+          recipeCards: drawsRecipeCards(request),
+          // A picture still drawing when the reply ends keeps a release's
+          // shutdown waiting for it.
+          waitUntil: after,
         }),
       // The iPhone app keeps Coach working when the athlete switches app,
       // and reads the saved reply when it's back.

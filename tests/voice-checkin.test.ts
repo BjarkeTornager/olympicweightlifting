@@ -20,7 +20,11 @@ import {
   pcmToBase64,
   placeCard,
   promisesAction,
+  promisesCard,
+  recapLines,
   spokenLines,
+  CARD_NUDGE_AFTER_MS,
+  NUDGE_AFTER_MS,
   VOICE_CREDIT_MESSAGE,
 } from "../lib/voice-live";
 import { cardRefusal, cardVisual, voiceToolArgs } from "../lib/voice-actions";
@@ -192,7 +196,9 @@ test("an app that draws cards gets show_card and is told how to use it; older on
   assert.match(cards, /Never say you can't show things on screen/);
   assert.doesNotMatch(cards, /You can't put anything on the athlete's screen/);
   assert.match(plain, /You can't put anything on the athlete's screen/);
-  assert.match(plain, /say typed Coach can show it/);
+  // This app's typed Coach may not draw a recipe card either.
+  assert.match(plain, /offer to talk them through it step by step/);
+  assert.doesNotMatch(plain, /typed Coach/);
   assert.doesNotMatch(plain, /show_card|on a card/);
   for (const text of [plain, cards])
     assert.ok(!text.includes("—"), "no em dashes in either version");
@@ -337,6 +343,54 @@ test("a promised card followed by silence is noticed", () => {
   assert.ok(promisesAction("Let me check your sleep."));
   assert.ok(
     !promisesAction("I'll put it on your screen. About twenty minutes."),
+  );
+  // A card takes longer to write than a save, so the nudge waits longer.
+  assert.ok(promisesCard("Sure. I'll put it on your screen."));
+  assert.ok(promisesCard("Let me show you the week."));
+  assert.ok(!promisesCard("Let me check your sleep."));
+  assert.ok(CARD_NUDGE_AFTER_MS > NUDGE_AFTER_MS);
+});
+
+test("an offer waits for the athlete's answer and is never nudged", () => {
+  for (const offer of [
+    "Here it is. Let me know if you'd like me to draw it.",
+    "Let me know if you want me to show you a picture.",
+    "I'll put a picture on it if you want.",
+    "If you'd like, I'll draw it for you.",
+    "Would you like me to show you the week?",
+  ]) {
+    assert.ok(!promisesAction(offer), offer);
+    assert.ok(!promisesCard(offer), offer);
+  }
+  // Checking whether the athlete did something is still a promise.
+  assert.ok(promisesAction("Let me check if you logged your sleep."));
+});
+
+test("a call that starts afresh after a drop hears the cards on screen, with their ids", () => {
+  const visual = {
+    id: crypto.randomUUID(),
+    content: {
+      kind: "recipe" as const,
+      title: "Salmon rice bowl",
+      servings: 2,
+      ingredients: [{ item: "Salmon fillet", amount: "250 g" }],
+    },
+  };
+  const card = crypto.randomUUID();
+  assert.equal(
+    recapLines([
+      { role: "you", text: "What should I cook?" },
+      { role: "coach", text: "A salmon rice bowl." },
+      { role: "card", id: card, visual },
+      { role: "save", id: "s1", label: "Meal", state: "saved" },
+      { role: "you", text: "What does it look like?" },
+    ]),
+    [
+      "Athlete: What should I cook?",
+      "Coach: A salmon rice bowl.",
+      `(Card on screen: Salmon rice bowl, recipe, card_id ${card})`,
+      "Athlete: What does it look like?",
+    ].join("\n"),
   );
 });
 

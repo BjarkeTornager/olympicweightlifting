@@ -439,7 +439,8 @@ export const agentProposals = pgTable(
 // Pictures of dishes Coach drew for a recipe card (lib/coach-pictures.ts).
 // Kept apart from the photo library, so a picture is never a meal's evidence
 // and never counts toward the photo quota; it goes with its card's turn when
-// the chat is cleared, after 90 days, or with the account.
+// the chat is cleared, after 90 days, or with the account. The limits count
+// from coach_picture_usage.
 export const coachPictures = pgTable(
   "coach_pictures",
   {
@@ -456,6 +457,9 @@ export const coachPictures = pgTable(
       .default("drawing"),
     // Why a picture failed, as a code (refused, timeout, http_503…).
     reason: text("reason"),
+    // A hash of what the model was asked, so the same dish asked for again
+    // in a turn (a retried message) shows the picture already drawn.
+    promptHash: text("prompt_hash"),
     model: text("model"),
     costUsd: doublePrecision("cost_usd"),
     durationMs: integer("duration_ms"),
@@ -475,6 +479,32 @@ export const coachPictures = pgTable(
     // The daily spending ceiling counts every account's pictures.
     index("coach_pictures_date_idx").on(t.createdAt),
     index("coach_pictures_turn_idx").on(t.turnId),
+  ],
+);
+
+// One row for each picture asked for, kept apart from the picture so the
+// limits still count it after the chat is cleared: when, and what it cost,
+// never the dish. Rows older than 30 days go as the athlete asks for more,
+// and all of them with the account.
+export const coachPictureUsage = pgTable(
+  "coach_picture_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    pictureId: text("picture_id").notNull(),
+    costUsd: doublePrecision("cost_usd"),
+    // Set once the picture is drawn or has failed.
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.pictureId] }),
+    index("coach_picture_usage_user_date_idx").on(t.userId, t.createdAt),
+    // The daily spending ceiling counts every account's pictures.
+    index("coach_picture_usage_date_idx").on(t.createdAt),
   ],
 );
 

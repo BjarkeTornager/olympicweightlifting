@@ -456,26 +456,47 @@ struct VisualRecipe: View {
       if !nutrition.isEmpty {
         VStack(alignment: .leading, spacing: 8) {
           CardLabel(title: "Estimate per serving")
-          HStack(spacing: 8) {
-            ForEach(nutrition, id: \.label) { item in
-              VStack(alignment: .leading, spacing: 2) {
-                Text(item.label).font(.caption).foregroundStyle(.secondary)
-                Text(item.value)
-                  .font(.subheadline.weight(.semibold))
-                  .monospacedDigit()
-                  .lineLimit(1)
-                  .minimumScaleFactor(0.7)
+          // All in a row while they fit, then two to a row, then one: larger
+          // text sizes need the room.
+          ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+              ForEach(nutrition, id: \.label) { nutrient($0) }
+            }
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+              ForEach(Array(stride(from: 0, to: nutrition.count, by: 2)), id: \.self) { start in
+                GridRow {
+                  nutrient(nutrition[start])
+                  if start + 1 < nutrition.count {
+                    nutrient(nutrition[start + 1])
+                  } else {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                  }
+                }
               }
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.horizontal, 10)
-              .padding(.vertical, 8)
-              .background(Theme.fill, in: .rect(cornerRadius: 10, style: .continuous))
+            }
+            VStack(spacing: 8) {
+              ForEach(nutrition, id: \.label) { nutrient($0) }
             }
           }
         }
         .accessibilityElement(children: .combine)
       }
     }
+  }
+
+  private func nutrient(_ item: Nutrient) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(item.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+      Text(item.value)
+        .font(.subheadline.weight(.semibold))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, 10)
+    .padding(.vertical, 8)
+    .background(Theme.fill, in: .rect(cornerRadius: 10, style: .continuous))
   }
 
   /// The line under the title, such as "2 servings · 1 h 15 min", as on the

@@ -38,6 +38,26 @@ struct VoiceCallTests {
     #expect(lines.filter(\.spoken).map(\.id) == ["1", "4"])
   }
 
+  @Test("A call that starts afresh after a drop hears the cards on screen, with their ids")
+  func recap() throws {
+    let card = try #require(VoiceCall.card(Self.recipeJSON))
+    let lines = [
+      Line(id: "1", role: .you, text: "What should I cook?"),
+      Line(id: "2", role: .coach, text: "A salmon rice bowl."),
+      Line(id: "card-1", role: .card, text: card.title, visual: card),
+      Line(id: "3", role: .save, text: "Meal", state: .saved),
+      Line(id: "4", role: .you, text: "What does it look like?"),
+    ]
+    #expect(
+      VoiceCall.recap(lines)
+        == """
+        Athlete: What should I cook?
+        Coach: A salmon rice bowl.
+        (Card on screen: Salmon rice bowl, recipe, card_id card-1)
+        Athlete: What does it look like?
+        """)
+  }
+
   @Test("The card in an action's reply decodes as the thread's visual; anything else is no card")
   func card() throws {
     let card = try #require(VoiceCall.card(Self.recipeJSON))

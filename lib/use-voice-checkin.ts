@@ -17,9 +17,12 @@ import {
   type FunctionCall,
   type Receipt,
   isCreditError,
+  CARD_NUDGE_AFTER_MS,
   NUDGE_AFTER_MS,
   placeCard,
   promisesAction,
+  promisesCard,
+  recapLines,
   spokenLines,
   VOICE_CREDIT_MESSAGE,
   WAITING_NUDGE,
@@ -319,13 +322,20 @@ export function useVoiceCheckin({
           } else if (e.type === "turnComplete") {
             s.lineClosed = true;
             // "Let me check that" with nothing following would leave the
-            // athlete in silence; prompt the coach to carry on.
+            // athlete in silence; prompt the coach to carry on, counting
+            // from when its words have finished playing.
             clearTimeout(s.nudge);
             if (promisesAction(s.turnText))
-              s.nudge = setTimeout(() => {
-                if (!s.pending)
-                  send({ realtimeInput: { text: WAITING_NUDGE } });
-              }, NUDGE_AFTER_MS);
+              s.nudge = setTimeout(
+                () => {
+                  if (!s.pending)
+                    send({ realtimeInput: { text: WAITING_NUDGE } });
+                },
+                Math.max(0, s.playAt - s.context.currentTime) * 1000 +
+                  (promisesCard(s.turnText)
+                    ? CARD_NUDGE_AFTER_MS
+                    : NUDGE_AFTER_MS),
+              );
           } else if (e.type === "toolCall") {
             clearTimeout(s.nudge);
             e.calls.forEach((call) => void handle(call, send));
@@ -359,16 +369,11 @@ export function useVoiceCheckin({
           await connect(s, true);
           if (!resumed) {
             // Without a resumption handle the conversation starts fresh;
-            // give the coach the last few lines to carry on from.
-            const recent = spokenLines(transcript.current)
-              .map(
-                (e) => `${e.role === "you" ? "Athlete" : "Coach"}: ${e.text}`,
-              )
-              .slice(-8)
-              .join("\n");
+            // give the coach the last few lines to carry on from, with any
+            // card on screen.
             s.send?.({
               realtimeInput: {
-                text: `(The call reconnected. Continue where you left off; the last lines were:\n${recent})`,
+                text: `(The call reconnected. Continue where you left off; the last lines were:\n${recapLines(transcript.current)})`,
               },
             });
           }

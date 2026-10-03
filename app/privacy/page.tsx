@@ -115,12 +115,13 @@ export default function PrivacyPage() {
         </p>
         <p>
           Conversation is stored with your account. The app removes conversation
-          older than 90 days when you next use the assistant. Proposals
-          temporarily include journal snapshots for safe save and undo; they
-          expire after 24 hours and are removed on subsequent assistant use.
-          Clear conversation removes its messages and proposals immediately,
-          while keeping saved workouts. Journal backup exports do not include
-          chat; use your browser to copy any conversation you want to keep.
+          older than 90 days when you next use the assistant, by typing or by
+          voice. Proposals temporarily include journal snapshots for safe save
+          and undo; they expire after 24 hours and are removed on subsequent
+          assistant use. Clear conversation removes its messages and proposals
+          immediately, while keeping saved workouts. Journal backup exports do
+          not include chat; use your browser to copy any conversation you want
+          to keep.
         </p>
         <p>
           Your optional coaching focus, approved memories, agreed plans,
@@ -297,9 +298,11 @@ export default function PrivacyPage() {
           photos and health data are never sent. The picture is AI-generated and
           marked as such. It is stored with that conversation in your account,
           is not added to your photo library and is never used as a record of
-          what you ate. It is deleted when you clear the chat, after 90 days
-          with the conversation, or when you delete your account. Pictures are
-          limited per day and per month.
+          what you ate. It is deleted with that conversation: when you clear the
+          chat, when conversation older than 90 days is removed, or when you
+          delete your account. Pictures are limited per day and per month; to
+          keep to the limits, when you asked for each picture and what it cost
+          (never the dish) is kept for 30 days, even after you clear the chat.
         </p>
       </section>
       <section className="space-y-3">

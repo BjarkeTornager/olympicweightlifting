@@ -86,6 +86,7 @@ public enum LiftHeaders {
   static let origin = HTTPField.Name("Origin")!
   static let coachLogging = HTTPField.Name("X-Coach-Logging-Version")!
   static let liftingCoach = HTTPField.Name("X-Lifting-Coach-Version")!
+  static let coachRecipe = HTTPField.Name("X-Coach-Recipe-Version")!
 
   static func common() -> [(HTTPField.Name, String)] {
     var origin = LiftServer.origin.absoluteString
@@ -97,6 +98,9 @@ public enum LiftHeaders {
       // proposals can be confirmed from the app.
       (coachLogging, "1"),
       (liftingCoach, "1"),
+      // Coach can show recipe cards with pictures; an older build gets the
+      // recipe written out.
+      (coachRecipe, "1"),
     ]
   }
 

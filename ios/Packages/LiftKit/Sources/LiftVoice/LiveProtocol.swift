@@ -94,16 +94,43 @@ public enum LiveProtocol {
   }
 
   /// "Let me check that" with nothing following would leave the athlete in
-  /// silence; the app then prompts the coach to carry on.
+  /// silence; the app then prompts the coach to carry on. An offer ("let me
+  /// know if you'd like me to draw it") waits for the athlete instead. The
+  /// website matches the same (promisesAction in lib/voice-live.ts).
   public static func promisesAction(_ text: String) -> Bool {
-    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    // The last sentence: everything after the final ". ", "? " or "! ".
-    let last = trimmed.matches(of: /[.?!]\s+/).last.map { String(trimmed[$0.range.upperBound...]) } ?? trimmed
+    let last = lastSentence(text)
+    guard last.firstMatch(of: offer) == nil, last.firstMatch(of: danishOffer) == nil else { return false }
     return last.firstMatch(of: promise) != nil || last.firstMatch(of: danishPromise) != nil
+  }
+
+  /// A card promised ("I'll put it on your screen"): writing a whole recipe
+  /// or table takes longer than a save, so the nudge waits longer.
+  public static func promisesCard(_ text: String) -> Bool {
+    promisesAction(text) && lastSentence(text).firstMatch(of: cardWords) != nil
+  }
+
+  /// How long the coach has been quiet before it is nudged.
+  public static func nudgeAfter(_ text: String) -> Duration {
+    promisesCard(text) ? .seconds(6) : .milliseconds(2500)
+  }
+
+  /// The last sentence: everything after the final ". ", "? " or "! ".
+  private static func lastSentence(_ text: String) -> Substring {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.matches(of: /[.?!]\s+/).last.map { trimmed[$0.range.upperBound...] } ?? trimmed[...]
   }
 
   nonisolated(unsafe) private static let promise =
     /(?i)\b(let me|i'?ll|i will|i'?m going to|one moment|give me a (second|moment))\b[^.?!]{0,40}\b(check|look|see|find|review|save|log|record|update|get|pull|calculate|sort|fix|add|show|put|draw)/
+
+  /// "Let me check if you slept" is a promise; "let me know if you'd like"
+  /// is an offer.
+  nonisolated(unsafe) private static let offer =
+    /(?i)\b(let me know|if you('d| would)? (like|want|prefer)|would you like|do you want)\b/
+  nonisolated(unsafe) private static let danishOffer =
+    /(?i)\b(sig til|hvis du (vil|har lyst|ønsker)|vil du have|har du lyst)\b/
+  nonisolated(unsafe) private static let cardWords =
+    /(?i)\b(show|put|draw|screen|vise|viser|tegne|lægge|skærm)/
 
   /// The same promise in Danish, for a coach speaking Danish.
   nonisolated(unsafe) private static let danishPromise =

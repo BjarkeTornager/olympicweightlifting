@@ -727,7 +727,7 @@ async function showCard(
         if ("refused" in reserved) return { visual };
         const drawn = {
           ...visual,
-          content: { ...content, pictureId: reserved.job.id },
+          content: { ...content, pictureId: reserved.id },
         };
         await tx
           .update(agentTurns)
@@ -796,7 +796,7 @@ async function showPicture(
     if ("refused" in reserved) return answer(PICTURE_UNAVAILABLE);
     const updated = {
       ...visual,
-      content: { ...content, pictureId: reserved.job.id },
+      content: { ...content, pictureId: reserved.id },
     };
     await tx
       .update(agentTurns)

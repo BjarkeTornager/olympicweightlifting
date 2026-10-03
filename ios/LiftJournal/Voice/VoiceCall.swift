@@ -289,10 +289,8 @@ final class VoiceCall {
         try await connect(resume: true)
         if !resumed {
           // Without a handle the conversation starts fresh; give the coach
-          // the last few lines to carry on from.
-          let recent = lines.filter(\.spoken).suffix(8)
-            .map { "\($0.role == .you ? "Athlete" : "Coach"): \($0.text)" }.joined(separator: "\n")
-          note("(The call reconnected. Continue where you left off; the last lines were:\n\(recent))", answer: true)
+          // the last few lines to carry on from, with any card on screen.
+          note("(The call reconnected. Continue where you left off; the last lines were:\n\(Self.recap(lines)))", answer: true)
         }
         report("reconnected", ["resumed": resumed ? 1 : 0])
         return
@@ -307,6 +305,22 @@ final class VoiceCall {
     }
     report("reconnect_failed")
     stop(failure: "The call dropped. Anything already saved is in Coach.")
+  }
+
+  /// The last few lines for a coach starting afresh, with the cards on
+  /// screen and their ids, which show_picture needs (recapLines on the
+  /// website).
+  static func recap(_ lines: [Line]) -> String {
+    lines.filter { $0.role != .save }.suffix(8)
+      .map { line in
+        switch line.role {
+        case .card:
+          "(Card on screen: \(line.text), \(line.visual?.kind ?? "card"), card_id \(line.id))"
+        case .you: "Athlete: \(line.text)"
+        default: "Coach: \(line.text)"
+        }
+      }
+      .joined(separator: "\n")
   }
 
   private func send(_ message: [String: Any]) {
@@ -389,8 +403,17 @@ final class VoiceCall {
       lineClosed = true
       nudge?.cancel()
       if LiveProtocol.promisesAction(turnText) {
+        // Counted from when the coach stops speaking: ElevenLabs completes a
+        // turn as it starts to play, while a card it promised may still be
+        // on its way.
+        let wait = LiveProtocol.nudgeAfter(turnText)
         nudge = Task { [weak self] in
-          try? await Task.sleep(for: .milliseconds(2500))
+          var quiet = Duration.zero
+          while quiet < wait {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, !Task.isCancelled else { return }
+            quiet = self.audio.coachSpeaking ? .zero : quiet + .milliseconds(250)
+          }
           guard let self, !Task.isCancelled, self.pending == 0 else { return }
           self.note(LiveProtocol.waitingNudge, answer: true)
         }

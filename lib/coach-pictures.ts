@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import sharp from "sharp";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./db";
-import { coachPictures } from "./db/schema";
+import { coachPictureUsage, coachPictures } from "./db/schema";
 import { uid } from "./domain";
 import { providerBudget } from "./provider-budget";
 import type { BudgetState } from "./tracking-status";
@@ -15,7 +16,8 @@ import { countUse } from "./feature-use";
 // five ingredient names leave the server, through OpenRouter with the same
 // no-collection, zero-retention routing as Coach. Pictures are kept apart
 // from the photo library (coach_pictures), so one can never be a meal's
-// evidence, and each goes with its card.
+// evidence, and each goes with its card. What each cost is also kept on its
+// own (coach_picture_usage), so clearing the chat doesn't reset the limits.
 
 type Db = ReturnType<typeof getDb>;
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -28,7 +30,8 @@ const PICTURE_STALE_MS = 60000;
 // A failed attempt is tried once more only while the picture is still fresh.
 const RETRY_WITHIN_MS = 10000;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-// A picture still drawing counts as this much against the daily ceiling.
+// A picture still drawing, or cut off by a restart (it may have been paid
+// for), counts as this much against the daily ceiling.
 const DRAWING_COST_USD = 0.04;
 const DAY = 86400000;
 
@@ -91,7 +94,7 @@ export function picturePrompt(recipe: {
 }
 
 /** The chat completions request for one picture. No user id is sent; cost
- * per account is kept in coach_pictures. */
+ * per account is kept in coach_picture_usage. */
 export function pictureRequest(prompt: string, model: string) {
   return {
     model,
@@ -122,9 +125,10 @@ export async function pictureGate(
 
 /** The limit that stops another picture now, if any: the athlete's five a
  * day and thirty a month, then the daily ceiling across every account (what
- * was spent, plus about four cents for each picture still drawing). Every
+ * was spent, plus about four cents for each picture not yet finished). Every
  * picture asked for counts, drawn or not, so a failing model can't be asked
- * again and again. */
+ * again and again; it is counted from coach_picture_usage, which clearing
+ * the chat leaves alone. */
 async function pictureLimit(
   db: Db | Transaction,
   userId: string,
@@ -134,31 +138,37 @@ async function pictureLimit(
   const day = new Date(now - DAY);
   const [mine] = await db
     .select({
-      day: sql<number>`(count(*) filter (where ${coachPictures.createdAt} >= ${day}))::int`,
+      day: sql<number>`(count(*) filter (where ${coachPictureUsage.createdAt} >= ${day}))::int`,
       month: sql<number>`count(*)::int`,
     })
-    .from(coachPictures)
+    .from(coachPictureUsage)
     .where(
       and(
-        eq(coachPictures.userId, userId),
-        gte(coachPictures.createdAt, new Date(now - 30 * DAY)),
+        eq(coachPictureUsage.userId, userId),
+        gte(coachPictureUsage.createdAt, new Date(now - 30 * DAY)),
       ),
     );
   if (mine.day >= settings.perDay) return "daily_limit";
   if (mine.month >= settings.perMonth) return "monthly_limit";
   const [all] = await db
     .select({
-      cost: sql<number | null>`sum(${coachPictures.costUsd})`,
-      drawing: sql<number>`(count(*) filter (where ${coachPictures.status} = 'drawing'))::int`,
+      cost: sql<number | null>`sum(${coachPictureUsage.costUsd})`,
+      unfinished: sql<number>`(count(*) filter (where ${coachPictureUsage.finishedAt} is null))::int`,
     })
-    .from(coachPictures)
-    .where(gte(coachPictures.createdAt, day));
-  const spent = Number(all.cost ?? 0) + DRAWING_COST_USD * all.drawing;
+    .from(coachPictureUsage)
+    .where(gte(coachPictureUsage.createdAt, day));
+  const spent = Number(all.cost ?? 0) + DRAWING_COST_USD * all.unfinished;
   if (spent + DRAWING_COST_USD > settings.dailyUsd) return "ceiling";
 }
 
+/** What the model is asked for a picture, as a hash. */
+const promptHash = (prompt: string) =>
+  createHash("sha256").update(prompt).digest("hex");
+
 /** Keeps a place for a picture of this recipe on its card's turn, which must
- * already exist, or says why there is none. The counts aren't locked, so a
+ * already exist, or says why there is none. The same dish asked for again
+ * on the turn (a retried message) gets the picture already there, drawn or
+ * still drawing, with nothing more to draw. The counts aren't locked, so a
  * burst can go one over a limit. */
 export async function reservePicture(
   db: Db | Transaction,
@@ -169,7 +179,40 @@ export async function reservePicture(
     // From pictureGate.
     refused?: PictureRefusal;
   },
-): Promise<{ job: PictureJob } | { refused: PictureRefusal }> {
+): Promise<{ id: string; job?: PictureJob } | { refused: PictureRefusal }> {
+  const prompt = picturePrompt(input.recipe);
+  const hash = promptHash(prompt);
+  const [kept] = await db
+    .select({ id: coachPictures.id })
+    .from(coachPictures)
+    .where(
+      and(
+        eq(coachPictures.userId, input.userId),
+        eq(coachPictures.turnId, input.turnId),
+        eq(coachPictures.promptHash, hash),
+        or(
+          eq(coachPictures.status, "ready"),
+          and(
+            eq(coachPictures.status, "drawing"),
+            gte(
+              coachPictures.createdAt,
+              new Date(Date.now() - PICTURE_STALE_MS),
+            ),
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  if (kept) return { id: kept.id };
+  // Use older than the monthly limit counts for nothing.
+  await db
+    .delete(coachPictureUsage)
+    .where(
+      and(
+        eq(coachPictureUsage.userId, input.userId),
+        lt(coachPictureUsage.createdAt, new Date(Date.now() - 30 * DAY)),
+      ),
+    );
   const refused = input.refused ?? (await pictureLimit(db, input.userId));
   if (refused) {
     void countUse(input.userId, `coach.picture.refused.${refused}`);
@@ -179,16 +222,20 @@ export async function reservePicture(
     userId: input.userId,
     id: uid(),
     model: pictureSettings().model,
-    prompt: picturePrompt(input.recipe),
+    prompt,
   };
   await db.insert(coachPictures).values({
     userId: job.userId,
     id: job.id,
     turnId: input.turnId,
     status: "drawing",
+    promptHash: hash,
     model: job.model,
   });
-  return { job };
+  await db
+    .insert(coachPictureUsage)
+    .values({ userId: job.userId, pictureId: job.id });
+  return { id: job.id, job };
 }
 
 /** Where a reserved picture is: drawing, ready or failed. */
@@ -346,40 +393,57 @@ export async function drawPicture(
     eq(coachPictures.id, job.id),
     eq(coachPictures.status, "drawing"),
   );
+  // The picture, unless the chat was cleared meanwhile, and what it cost in
+  // the usage, which stays either way.
+  const finish = (
+    picture: Partial<typeof coachPictures.$inferInsert>,
+    costUsd: number | null,
+  ) =>
+    db.transaction(async (tx) => {
+      const now = new Date();
+      await tx
+        .update(coachPictures)
+        .set({
+          ...picture,
+          costUsd,
+          durationMs: now.getTime() - started,
+          updatedAt: now,
+        })
+        .where(drawing);
+      await tx
+        .update(coachPictureUsage)
+        .set({ costUsd, finishedAt: now })
+        .where(
+          and(
+            eq(coachPictureUsage.userId, job.userId),
+            eq(coachPictureUsage.pictureId, job.id),
+            isNull(coachPictureUsage.finishedAt),
+          ),
+        );
+    });
   try {
     const reply = parsePictureReply(
       await requestPicture(job, fetcher, started),
     );
     const data = await normalizePicture(reply.image);
-    await db
-      .update(coachPictures)
-      .set({
+    await finish(
+      {
         status: "ready",
         data,
         bytes: data.length,
         model: reply.model ?? job.model,
-        costUsd: reply.costUsd ?? null,
-        durationMs: Date.now() - started,
-        updatedAt: new Date(),
-      })
-      .where(drawing);
+      },
+      reply.costUsd ?? null,
+    );
     void countUse(job.userId, "coach.picture.ready");
     return "ready";
   } catch (error) {
     const reason =
       error instanceof PictureFailure ? error.reason : errorCategory(error);
-    await db
-      .update(coachPictures)
-      .set({
-        status: "failed",
-        reason: reason.slice(0, 60),
-        costUsd:
-          error instanceof PictureFailure ? (error.costUsd ?? null) : null,
-        durationMs: Date.now() - started,
-        updatedAt: new Date(),
-      })
-      .where(drawing)
-      .catch((e: unknown) => logFailure("coach_picture_failed", e, {}, "warn"));
+    await finish(
+      { status: "failed", reason: reason.slice(0, 60) },
+      error instanceof PictureFailure ? (error.costUsd ?? null) : null,
+    ).catch((e: unknown) => logFailure("coach_picture_failed", e, {}, "warn"));
     // Codes only: never the dish or the account.
     logFailure("coach_picture_failed", error, { reason }, "warn");
     void countUse(job.userId, "coach.picture.failed");

@@ -1,5 +1,6 @@
 import Foundation
 import LiftAPI
+import SwiftUI
 import Testing
 
 @testable import LiftJournal
@@ -91,6 +92,8 @@ struct CoachVisualTests {
     #expect(VisualTint.topic("Body fat this month") == .body)
     #expect(VisualTint.topic("Water today") == .water)
     #expect(VisualTint.topic("Steps") == .activity)
+    // Energy is food, as VisualTint.of and Today colour it.
+    #expect(VisualTint.topic("Energy, 19 Sep to 2 Oct") == .food)
     #expect(VisualTint.hatched("Fat") && !VisualTint.hatched("Body fat"))
   }
 
@@ -104,6 +107,7 @@ struct CoachVisualTests {
     #expect(!VisualBars.isDays(["Snatch", "Clean & jerk"]))
     #expect(!VisualBars.isDays(["Mon"]))
     #expect(VisualBars.labelled([7.4, 6.6, 8.1, 7.0, 6.2, 7.8, 7.25]) == [2, 4, 6])
+    #expect(VisualBars.labelled([92, 118, 165], days: false) == [0, 1, 2])
     let week = try Self.visual(
       #"{"id":"a","kind":"bar_chart","title":"Sleep","unit":"h","points":[{"label":"Mo","value":7},{"label":"Tu","value":8},{"label":"We","value":6}]}"#
     )
@@ -116,6 +120,29 @@ struct CoachVisualTests {
     #expect(CoachVisualView.note(meals) == "g")
   }
 
+  @Test("Over many bars a value too near another is left out, the latest kept first")
+  func thinnedLabels() {
+    // Two weeks: the highest on Fr 25, the lowest on Th 1 beside today.
+    let energy: [Double] = [2150, 1890, 2400, 2010, 1760, 2290, 2580, 1950, 2105, 1830, 2460, 2210, 1680, 1980]
+    #expect(VisualBars.labelled(energy) == [6, 13])
+    #expect(VisualBars.labelled(Array(repeating: 1, count: 10), days: false) == [0, 2, 4, 6, 8])
+    // A month: a seventh of the plot apart.
+    let month = (0..<30).map { Double($0 == 3 ? 9 : $0 == 27 ? 1 : 5) }
+    #expect(VisualBars.labelled(month) == [29, 3])
+    #expect(VisualBars.lean(0, of: 14) == .leading && VisualBars.lean(13, of: 14) == .trailing)
+    #expect(VisualBars.lean(6, of: 14) == .center && VisualBars.lean(0, of: 1) == .center)
+    #expect(VisualLineChart.sparse(Array(0..<14), count: 5) == [0, 3, 7, 10, 13])
+  }
+
+  @Test("A figure takes the colour of the area its title names, else the reply's")
+  func figureTint() throws {
+    let energy = try Self.visual(#"{"id":"a","kind":"bar_chart","title":"Energy this week","unit":"kcal","points":[]}"#)
+    let table = try Self.visual(#"{"id":"b","kind":"table","title":"Your plan","columns":["A"],"rows":[]}"#)
+    #expect(Figures.tint(energy, topic: .training) == Category.food.tint)
+    #expect(Figures.tint(table, topic: .training) == Category.training.tint)
+    #expect(Figures.tint(table, topic: nil) == nil)
+  }
+
   @Test("Figures write hours as hours and minutes, and other amounts as numbers")
   func amounts() {
     #expect(VisualAmount.short(7.2, unit: "h") == "7 h 12")
@@ -123,6 +150,13 @@ struct CoachVisualTests {
     #expect(VisualAmount.short(1234, unit: "kcal") == "1,234")
     #expect(VisualAmount.long(112.5, unit: "g") == "112.5 g")
     #expect(VisualAmount.long(3, unit: "") == "3")
+    // An average is whole from 100 up and for counts.
+    #expect(VisualAmount.average(2092.5, unit: "kcal") == "2,093 kcal")
+    #expect(VisualAmount.average(7457.14, unit: "steps") == "7,457 steps")
+    #expect(VisualAmount.average(84.6, unit: "kcal") == "85 kcal")
+    #expect(VisualAmount.average(70.84, unit: "kg") == "70.8 kg")
+    #expect(VisualAmount.average(2.46, unit: "L") == "2.5 L")
+    #expect(VisualAmount.average(7.2, unit: "h") == "7 h 12")
   }
 
   @Test("A progress meter counts a target in 20 round marks or fewer")

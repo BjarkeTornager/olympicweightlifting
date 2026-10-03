@@ -88,7 +88,7 @@ struct CoachVisualView: View {
   static func note(_ visual: Components.Schemas.CoachVisual) -> String? {
     guard visual.kind == "bar_chart" else { return nil }
     if let average = VisualBars.average(visual) {
-      return "Average \(VisualAmount.long(average, unit: visual.unit))"
+      return "Average \(VisualAmount.average(average, unit: visual.unit))"
     }
     return visual.unit.flatMap { $0.isEmpty || VisualAmount.hours($0) ? nil : $0 }
   }

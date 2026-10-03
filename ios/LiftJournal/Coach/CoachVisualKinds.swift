@@ -58,7 +58,7 @@ enum VisualTint {
         .food,
         [
           "meal", "breakfast", "brunch", "lunch", "dinner", "snack", "food", "recipe", "nutrition", "macro",
-          "protein", "carb", "fat", "calor", "kcal", "supplement", "vitamin",
+          "protein", "carb", "fat", "calor", "kcal", "energy", "supplement", "vitamin",
         ]
       ),
       (.heart, ["heart", "hrv", "pulse"]),
@@ -89,6 +89,15 @@ enum VisualAmount {
     if hours(unit) { return short(value, unit: unit) }
     return [formatted(value), unit].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ")
   }
+
+  /// An average in a caption: whole from 100 up and for counts, as Today
+  /// writes kilocalories and steps ("2,093 kcal"), otherwise with up to one
+  /// decimal ("70.8 kg").
+  static func average(_ value: Double, unit: String?) -> String {
+    let whole = abs(value) >= 100 || ["kcal", "cal", "steps"].contains(unit?.lowercased() ?? "")
+    guard whole, !hours(unit) else { return long(value, unit: unit) }
+    return [Format.number(value), unit].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ")
+  }
 }
 
 private func formatted(_ value: Double) -> String {
@@ -112,12 +121,16 @@ struct DottedRule: View {
 
 /// Amounts per day or per item. A run of days draws the earlier ones in
 /// track and the latest in the pigment, labels the highest, the lowest and
-/// the latest inside their bars, and dots the average; items are all in
-/// the pigment, each with its value. Days are named in full beneath.
+/// the latest in place, and dots the average; items are all in the
+/// pigment, each with its value. Days are named in full beneath, or a few
+/// of them over many bars.
 struct VisualBars: View {
   let visual: Visual
   let tint: Color
   @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 104
+  /// Room above the tallest bar for a value set over it.
+  @ScaledMetric(relativeTo: .caption2) private var headroom: CGFloat = 16
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     let points = visual.points ?? []
@@ -125,39 +138,23 @@ struct VisualBars: View {
     let days = Self.isDays(points.map(\.label))
     let average = Self.average(visual)
     let top = max(points.map(\.value).max() ?? 0, 0.0001)
-    let labelled = days ? Self.labelled(points.map(\.value)) : Set(points.indices)
+    let labelled = Self.labelled(points.map(\.value), days: days)
+    let values = points.indices.map { labelled.contains($0) ? VisualAmount.short(points[$0].value, unit: unit) : nil }
+    let shares = points.map { $0.value / top }
     let gap: CGFloat = points.count > 12 ? 3 : 8
-    let shown = Set(points.count > 8 ? VisualLineChart.sparse(points.map(\.label), count: 5) : points.map(\.label))
     VStack(spacing: 6) {
-      HStack(alignment: .bottom, spacing: gap) {
-        ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-          let latest = days && index == points.count - 1
-          bar(
-            point.value / top, lit: !days || latest, bold: latest,
-            label: labelled.contains(index) ? VisualAmount.short(point.value, unit: unit) : nil,
-            inside: points.count <= 8)
-        }
-      }
-      .frame(height: height)
-      .overlay(alignment: .top) {
+      ZStack(alignment: .top) {
+        plot(shares, values: values, days: days, gap: gap, layer: .bars)
         if let average {
-          DottedRule().offset(y: height * (1 - average / top) - 1)
+          DottedRule().offset(y: headroom + height * (1 - average / top) - 1)
         }
+        plot(shares, values: values, days: days, gap: gap, layer: .values)
       }
+      .frame(height: headroom + height)
       .overlay(alignment: .bottom) {
         Rectangle().fill(Theme.ink.opacity(0.5)).frame(height: 1)
       }
-      HStack(spacing: gap) {
-        ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-          let latest = days && index == points.count - 1
-          Text(shown.contains(point.label) ? point.label : "")
-            .font(.caption2.weight(latest ? .bold : .medium))
-            .foregroundStyle(latest ? Theme.ink : Theme.inkSecondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .frame(maxWidth: .infinity)
-        }
-      }
+      names(points.map(\.label), days: days, gap: gap)
     }
     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     .accessibilityElement(children: .ignore)
@@ -165,26 +162,139 @@ struct VisualBars: View {
       points.map { "\($0.label): \(VisualAmount.long($0.value, unit: unit))" }.joined(separator: ", "))
   }
 
-  /// One bar on the baseline, its value at its foot when it is tall enough
-  /// to hold it, otherwise just above it.
-  private func bar(_ share: Double, lit: Bool, bold: Bool, label: String?, inside: Bool) -> some View {
-    let fits = inside && share >= 0.3
-    return UnevenRoundedRectangle(topLeadingRadius: Theme.Radius.mark, topTrailingRadius: Theme.Radius.mark)
+  /// The plot is drawn twice in the same columns: the bars, then the values
+  /// over the dotted average, so a value set over a bar is cut out of the
+  /// average and of a neighbour it is wider than.
+  private enum Layer { case bars, values }
+
+  private func plot(_ shares: [Double], values: [String?], days: Bool, gap: CGFloat, layer: Layer) -> some View {
+    HStack(alignment: .bottom, spacing: gap) {
+      ForEach(Array(shares.enumerated()), id: \.offset) { index, share in
+        let latest = days && index == shares.count - 1
+        let lean = Self.lean(index, of: shares.count)
+        column(
+          share, lit: !days || latest, bold: latest, label: values[index], inside: shares.count <= 8, lean: lean,
+          layer: layer
+        )
+        // Its own width, whatever its value's.
+        .frame(
+          minWidth: 0, maxWidth: .infinity, maxHeight: .infinity,
+          alignment: .init(horizontal: lean, vertical: .bottom))
+      }
+    }
+  }
+
+  /// One bar on the baseline and its value, if it has one: at its foot when
+  /// the bar is wide and tall enough to hold it, otherwise in ink just above
+  /// it, leaning inwards at the plot's edges when it is wider than the bar.
+  @ViewBuilder
+  private func column(
+    _ share: Double, lit: Bool, bold: Bool, label: String?, inside: Bool, lean: HorizontalAlignment, layer: Layer
+  ) -> some View {
+    let bar = UnevenRoundedRectangle(topLeadingRadius: Theme.Radius.mark, topTrailingRadius: Theme.Radius.mark)
       .fill(lit ? tint : Theme.track)
       .frame(height: max(1, height * share))
-      .overlay(alignment: fits ? .bottom : .top) {
-        if let label {
-          Text(label)
-            .font(.caption2.weight(bold ? .bold : .semibold))
-            .monospacedDigit()
-            .foregroundStyle(fits && lit ? Theme.surface : Theme.ink)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.bottom, fits ? 6 : 0)
-            .alignmentGuide(.top) { fits ? $0[.top] : $0[.bottom] + 3 }
+      .opacity(layer == .bars ? 1 : 0)
+    if let label {
+      let value = Text(label)
+        .font(.caption2.weight(bold ? .bold : .semibold))
+        .monospacedDigit()
+        .lineLimit(1)
+        .fixedSize()
+      let above = value
+        .foregroundStyle(Theme.ink)
+        .background(Theme.surface.padding(.horizontal, -3))
+        .opacity(layer == .values ? 1 : 0)
+      // The first that fits the bar's width.
+      ViewThatFits(in: .horizontal) {
+        if inside && share >= 0.3 {
+          ZStack(alignment: .bottom) {
+            bar
+            value
+              .foregroundStyle(lit ? Theme.surface : Theme.ink)
+              .padding(.bottom, 6)
+              .opacity(layer == .values ? 1 : 0)
+          }
+        }
+        VStack(spacing: 3) {
+          above
+          bar
+        }
+        VStack(alignment: lean, spacing: 3) {
+          above
+          bar
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    } else {
+      bar
+    }
+  }
+
+  /// The days or items beneath, each centred on its bar and never shrunk.
+  /// Days stay on one line while the widest fits its bar with room beside
+  /// it, and otherwise all take two ("Sa" over "26"); items wrap within
+  /// their bars. Over many bars, a few days, wider than the bars.
+  @ViewBuilder
+  private func names(_ labels: [String], days: Bool, gap: CGFloat) -> some View {
+    if labels.count > 8 {
+      let shown = Set(VisualLineChart.sparse(Array(labels.indices), count: typeSize > .large ? 4 : 5))
+      name(" ", latest: true)
+        .frame(maxWidth: .infinity)
+        .hidden()
+        .overlay {
+          HStack(spacing: gap) {
+            ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+              let lean = Self.lean(index, of: labels.count)
+              Color.clear.overlay(alignment: .init(horizontal: lean, vertical: .top)) {
+                if shown.contains(index) {
+                  name(label, latest: days && index == labels.count - 1).fixedSize()
+                }
+              }
+            }
+          }
+        }
+    } else if days {
+      ViewThatFits(in: .horizontal) {
+        // As wide as every day at the widest's width, 4 pt apart.
+        HStack(spacing: 4) {
+          ForEach(labels.indices, id: \.self) { _ in
+            ZStack { ForEach(Array(labels.enumerated()), id: \.offset) { name($1, latest: true).fixedSize() } }
+              .frame(maxWidth: .infinity)
+          }
+        }
+        .hidden()
+        .overlay { row(labels, days: true, gap: gap) }
+        row(labels.map { $0.replacingOccurrences(of: " ", with: "\n") }, days: true, gap: gap)
+      }
+    } else {
+      row(labels, days: false, gap: gap)
+    }
+  }
+
+  /// Names in their bars' columns; a day's takes the gaps beside its bar.
+  private func row(_ labels: [String], days: Bool, gap: CGFloat) -> some View {
+    HStack(alignment: .top, spacing: days ? 0 : gap) {
+      ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+        name(label, latest: days && index == labels.count - 1)
+          .lineLimit(2)
+          .multilineTextAlignment(.center)
+          .frame(minWidth: 0, maxWidth: .infinity)
+      }
+    }
+    .padding(.horizontal, days ? -gap / 2 : 0)
+  }
+
+  private func name(_ label: String, latest: Bool) -> some View {
+    Text(label)
+      .font(.caption2.weight(latest ? .bold : .medium))
+      .foregroundStyle(latest ? Theme.ink : Theme.inkSecondary)
+  }
+
+  /// Where a value or a name sits on its bar: centred, but the first and
+  /// the last lean inwards so the plot's edges don't cut them.
+  static func lean(_ index: Int, of count: Int) -> HorizontalAlignment {
+    guard count > 1 else { return .center }
+    return index == 0 ? .leading : index == count - 1 ? .trailing : .center
   }
 
   /// Whether the labels name days or dates ("Mon", "Sa 26", "26 Sep",
@@ -207,13 +317,23 @@ struct VisualBars: View {
       }
   }
 
-  /// The bars whose values are written: the highest, the lowest and the
-  /// latest.
-  static func labelled(_ values: [Double]) -> Set<Int> {
+  /// The bars whose values are written: over days the highest, the lowest
+  /// and the latest, over items every one. Over more than eight bars a
+  /// value is wider than its bar, so one too near another is left out:
+  /// the latest wins, then the highest.
+  static func labelled(_ values: [Double], days: Bool = true) -> Set<Int> {
     guard let high = values.indices.max(by: { values[$0] < values[$1] }),
       let low = values.indices.min(by: { values[$0] < values[$1] })
     else { return [] }
-    return [high, low, values.count - 1]
+    let wanted = days ? [values.count - 1, high, low] : Array(values.indices)
+    guard values.count > 8 else { return Set(wanted) }
+    // At least a seventh of the plot apart.
+    let room = max(2, (values.count + 6) / 7)
+    var kept: [Int] = []
+    for index in wanted where kept.allSatisfy({ abs($0 - index) >= room }) {
+      kept.append(index)
+    }
+    return Set(kept)
   }
 
   /// The average a run of three days or more is dotted at.
@@ -326,7 +446,7 @@ struct VisualLineChart: View {
 }
 
 extension VisualLineChart {
-  static func sparse(_ labels: [String], count: Int = 4) -> [String] {
+  static func sparse<Label>(_ labels: [Label], count: Int = 4) -> [Label] {
     guard labels.count > count else { return labels }
     let step = Double(labels.count - 1) / Double(count - 1)
     return (0..<count).map { labels[Int((Double($0) * step).rounded())] }

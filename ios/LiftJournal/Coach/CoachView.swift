@@ -372,19 +372,23 @@ private struct TurnView: View {
 }
 
 /// A reply's figures, each on its sheet, numbered in order and lit in the
-/// colour of the reply's topic.
+/// colour of the area its title names, or else of the reply's topic: one
+/// colour for each area, whatever the reply is about.
 struct Figures: View {
   let visuals: [Components.Schemas.CoachVisual]
   var topic: Category?
 
   var body: some View {
     let numbers = CoachVisualView.numbers(visuals)
-    let tint = topic?.tint
     ForEach(Array(visuals.enumerated()), id: \.element.id) { index, visual in
-      CoachVisualView(visual: visual, number: numbers[index], tint: tint)
+      CoachVisualView(visual: visual, number: numbers[index], tint: Self.tint(visual, topic: topic))
         .card(padding: 14)
         .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
     }
+  }
+
+  static func tint(_ visual: Components.Schemas.CoachVisual, topic: Category?) -> Color? {
+    (VisualTint.topic(visuals: [visual]) ?? topic)?.tint
   }
 }
 
@@ -451,32 +455,19 @@ struct ReceiptCard: View {
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(receipt.state == "pending" ? Theme.accent : Theme.ink)
           .accessibilityHidden(true)
-        Button {
-          withAnimation(.snappy) { expanded = !isOpen }
-        } label: {
-          VStack(alignment: .leading, spacing: 3) {
-            Text(receipt.title).folio(.entry).foregroundStyle(Theme.ink)
-            Text(receipt.detail)
-              .font(.footnote)
-              .foregroundStyle(Theme.inkSecondary)
-              .lineLimit(isOpen ? nil : 2)
-            if receipt.state == "undone" {
-              Text("Undone").font(.footnote.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
-            }
-            if !entries.isEmpty {
-              Label(isOpen ? "Hide details" : "Show details", systemImage: isOpen ? "chevron.up" : "chevron.down")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.accent)
-                .padding(.top, 4)
-            }
+        // Only a button when there is more to show: a disabled one would
+        // grey the title and detail out.
+        if !entries.isEmpty || receipt.detail.count >= 90 {
+          Button {
+            withAnimation(.snappy) { expanded = !isOpen }
+          } label: {
+            summary.contentShape(.rect)
           }
-          .multilineTextAlignment(.leading)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .contentShape(.rect)
+          .buttonStyle(.plain)
+          .accessibilityHint(entries.isEmpty ? "" : isOpen ? "Hides what was saved" : "Shows what was saved")
+        } else {
+          summary
         }
-        .buttonStyle(.plain)
-        .disabled(entries.isEmpty && receipt.detail.count < 90)
-        .accessibilityHint(entries.isEmpty ? "" : isOpen ? "Hides what was saved" : "Shows what was saved")
         if !typeSize.isAccessibilitySize { action }
       }
       if typeSize.isAccessibilitySize { action }
@@ -493,6 +484,27 @@ struct ReceiptCard: View {
       }
     }
     .card(padding: 14)
+  }
+
+  private var summary: some View {
+    VStack(alignment: .leading, spacing: 3) {
+      Text(receipt.title).folio(.entry).foregroundStyle(Theme.ink)
+      Text(receipt.detail)
+        .font(.footnote)
+        .foregroundStyle(Theme.inkSecondary)
+        .lineLimit(isOpen ? nil : 2)
+      if receipt.state == "undone" {
+        Text("Undone").font(.footnote.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
+      }
+      if !entries.isEmpty {
+        Label(isOpen ? "Hide details" : "Show details", systemImage: isOpen ? "chevron.up" : "chevron.down")
+          .font(.footnote.weight(.semibold))
+          .foregroundStyle(Theme.accent)
+          .padding(.top, 4)
+      }
+    }
+    .multilineTextAlignment(.leading)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder

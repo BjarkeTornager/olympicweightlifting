@@ -2327,6 +2327,38 @@ h1,
   font-family: var(--font-ui);
   letter-spacing: 0;
 }
+/* Equal-width digits wherever figures update or line up: the day's records,
+   tables, set entry, timers, counters and charts. Running text keeps the
+   body's proportional digits. */
+table,
+input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]),
+.set-row input,
+.set-number,
+.set-chips,
+.exercise-number,
+.workout-dock strong,
+.timer-digits,
+.today-record-value,
+.week-strip-sleep,
+.food-calories p strong,
+.food-macros strong,
+.meal-item-energy,
+.food-week,
+.health-summary-grid strong,
+.sleep-bars,
+.stat-number,
+.pr-row > strong,
+.load-row strong,
+.record-grid span,
+.date-tile strong,
+.week-stats strong,
+.cardio-totals dd,
+.import-counts strong,
+.video-metrics dd,
+.progress-chart,
+:is(.coach-line-chart, .coach-split, .coach-calendar, .coach-diagram-number) {
+  font-variant-numeric: lining-nums tabular-nums;
+}
 h1 { font-size: clamp(32px, 2.8vw, 38px); font-weight: 400; }
 .page-heading h1,
 .page-heading.compact h1 { font-size: clamp(32px, 2.8vw, 38px); letter-spacing: -0.01em; }

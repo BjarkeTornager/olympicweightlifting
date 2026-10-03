@@ -16,7 +16,8 @@ struct Hairline: View {
 /// One thing in a list set on the page, in Movement, Train and the Journal:
 /// a pigment key or a word in the left column ("Next"), the title in the
 /// serif, an SF line of detail, where it came from, and an arrow when it
-/// opens. Titles wrap; nothing is cut short. At the largest text sizes the
+/// opens. Titles wrap, with their last two words together; nothing is cut
+/// short. At the largest text sizes the
 /// word sits above the title, so the title keeps the full width.
 struct EntryRow: View {
   enum Lead {
@@ -56,7 +57,7 @@ struct EntryRow: View {
         if stacked, case .word(let word) = lead {
           wordText(word).padding(.bottom, 2)
         }
-        Text(title)
+        Text(LineBreaks.title(title, size: typeSize))
           .folio(.heading)
           .foregroundStyle(Theme.ink)
           .multilineTextAlignment(.leading)

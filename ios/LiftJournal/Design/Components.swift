@@ -254,7 +254,7 @@ struct FolioSection<Trailing: View>: View {
   @ViewBuilder
   private var note: some View {
     if let meta {
-      Text(meta).kicker()
+      Text(meta).font(.footnote).foregroundStyle(Theme.inkSecondary)
     }
     trailing
   }

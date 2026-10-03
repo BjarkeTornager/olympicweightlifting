@@ -7,6 +7,10 @@ import UIKit
 /// numbers, Coach's letters, dish and entry titles. San Francisco is
 /// everything you operate: labels, units, buttons, lists and chrome.
 /// New York is never set below 15 pt, and serif numbers start at 22 pt.
+/// Numbers that update or line up take tabular figures; running text keeps
+/// proportional ones. Spaced capitals (`kicker()`) are kept for running
+/// heads and one level of section labels; every other label is in sentence
+/// case (`label()`).
 public enum Folio {
   public enum Role: Sendable {
     /// The day's date on Today and the Journal: 46 pt.
@@ -35,12 +39,17 @@ public enum Folio {
     case heading
     /// Italic empty states and footnotes: 17 pt.
     case note
+    /// "Lift Journal" as a name, beside the mark in a running head or a
+    /// colophon: 17 pt, in the serif's own spacing.
+    case wordmark
+    /// The name on the cover: 66 pt, in the serif's own spacing.
+    case coverWordmark
 
     var size: CGFloat {
       switch self {
       case .masthead: 46
       case .sectionTitle: 30
-      case .hero: 66
+      case .hero, .coverWordmark: 66
       case .display: 50
       case .ledger: 36
       case .tile: 34
@@ -48,22 +57,33 @@ public enum Folio {
       case .standfirst, .lede: 19
       case .heading: 20
       case .coach, .entry: 18
-      case .note: 17
+      case .note, .wordmark: 17
       }
     }
 
     var style: Font.TextStyle {
       switch self {
-      case .masthead, .hero, .display: .largeTitle
+      case .masthead, .hero, .display, .coverWordmark: .largeTitle
       case .sectionTitle, .ledger, .tile: .title
       case .inline, .standfirst, .lede, .heading: .title3
-      case .coach, .entry, .note: .body
+      case .coach, .entry, .note, .wordmark: .body
       }
     }
 
     var italic: Bool { self == .standfirst || self == .note }
 
-    /// Display sizes tighten; text sizes keep the default tracking.
+    /// Numbers that update or line up take tabular figures, so a total
+    /// doesn't jitter as it counts and a column of values aligns. Running
+    /// text keeps the serif's proportional figures.
+    var tabular: Bool {
+      switch self {
+      case .hero, .display, .ledger, .tile, .inline: true
+      default: false
+      }
+    }
+
+    /// Display sizes tighten; text sizes and the wordmark keep the default
+    /// tracking.
     var tracking: CGFloat {
       switch self {
       case .hero: -2.2
@@ -104,7 +124,13 @@ private struct FolioFont: ViewModifier {
       .italic(role.italic)
       .tracking(role.tracking)
       .lineSpacing(leading)
-      .monospacedDigit()
+      .tabularFigures(role.tabular)
+  }
+}
+
+extension View {
+  @ViewBuilder fileprivate func tabularFigures(_ tabular: Bool) -> some View {
+    if tabular { monospacedDigit() } else { self }
   }
 }
 
@@ -112,9 +138,20 @@ extension View {
   /// New York in one of the Folio roles, scaled with Dynamic Type.
   public func folio(_ role: Folio.Role) -> some View { modifier(FolioFont(role)) }
 
-  /// The small spaced capitals that label every column and section.
+  /// Small spaced capitals, only where they help people find their way: the
+  /// running head at the top of a page, and one level of section labels on
+  /// an overview page ("Get started" on Today, "This week" in the Journal).
+  /// Never inside a card that has a title, for a value's label (the Ledger's
+  /// areas), a status line, a caption or a button, or twice in one card:
+  /// those take `label()`.
   public func kicker() -> some View {
     font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Theme.inkSecondary)
+  }
+
+  /// A label in sentence case, in the interface face: what a value is ("Body
+  /// fat"), a column's head, a speaker's name, a meal's kind.
+  public func label() -> some View {
+    font(.footnote.weight(.semibold)).foregroundStyle(Theme.inkSecondary)
   }
 
   /// The SF unit beside a serif number, as in "980 kcal".

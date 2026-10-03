@@ -81,7 +81,8 @@ struct ProgrammeView: View {
           programme.builtIn ? "Built in" : nil,
         ].compactMap { $0 }.joined(separator: " · ")
       )
-      .kicker()
+      .font(.subheadline)
+      .foregroundStyle(Theme.inkSecondary)
       if let notes = programme.notes, !notes.isEmpty {
         Text(notes).font(.subheadline).foregroundStyle(Theme.ink)
       }
@@ -108,12 +109,13 @@ private struct DaySection: View {
   let day: Components.Schemas.ProgrammeDay
   let canStart: Bool
   let start: () -> Void
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       Rectangle().fill(Theme.ink).frame(height: 1)
-      Text("Day \(number)").kicker().padding(.top, 10)
-      Text(day.name)
+      Text("Day \(number)").label().padding(.top, 10)
+      Text(LineBreaks.title(day.name, size: typeSize))
         .folio(.heading)
         .foregroundStyle(Theme.ink)
         .fixedSize(horizontal: false, vertical: true)

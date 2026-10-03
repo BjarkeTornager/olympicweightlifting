@@ -6,6 +6,7 @@ import SwiftUI
 /// and its route when Apple Health recorded one.
 struct JournalItemView: View {
   let item: Components.Schemas.JournalItem
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     ScrollView {
@@ -13,7 +14,7 @@ struct JournalItemView: View {
         CardLabel(
           title: [JournalView.heading(item.date), kind].compactMap { $0 }.joined(separator: " · "),
           key: JournalRow.category(item.kind).tint)
-        Text(item.title)
+        Text(LineBreaks.title(item.title, size: typeSize))
           .folio(.sectionTitle)
           .foregroundStyle(Theme.ink)
           .fixedSize(horizontal: false, vertical: true)

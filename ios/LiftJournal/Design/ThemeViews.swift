@@ -45,9 +45,10 @@ struct Hatch: View {
   }
 }
 
-/// The small spaced capitals that head a column or a cell, with the key of
-/// its data colour. One line, or up to three at the largest text sizes, so
-/// a long name wraps rather than being cut short.
+/// What a column or a cell holds, with the key of its data colour: "Sleep",
+/// "Body fat", "Energy", in sentence case. Up to two lines, or three at the
+/// largest text sizes, with the last two words together, so a long name
+/// ("Gennemsnitlig hvilepuls") wraps rather than being cut short.
 struct CardLabel: View {
   let title: String
   var key: Color?
@@ -55,14 +56,14 @@ struct CardLabel: View {
   @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
-    let wraps = typeSize >= .xxxLarge
-    HStack(alignment: wraps ? .firstTextBaseline : .center, spacing: 7) {
+    // The key sits on the first line's baseline, as tall as its capitals.
+    HStack(alignment: .firstTextBaseline, spacing: 7) {
       if let key {
         Key(tint: key, hatched: hatched)
       }
-      Text(title)
-        .kicker()
-        .lineLimit(wraps ? 3 : 1)
+      Text(LineBreaks.title(title, size: typeSize))
+        .label()
+        .lineLimit(typeSize >= .xxxLarge ? 3 : 2)
         .fixedSize(horizontal: false, vertical: true)
     }
   }

@@ -86,7 +86,7 @@ struct JournalView: View {
           if !query.isEmpty {
             ContentUnavailableView.search(text: query).padding(.top, 40)
           } else {
-            Text(error ?? "Training, food and recovery appear here as you log them.")
+            Paragraph(error ?? "Training, food and recovery appear here as you log them.", language: .english)
               .folio(.note)
               .foregroundStyle(Theme.inkSecondary)
               .padding(.top, 32)
@@ -183,8 +183,8 @@ struct JournalView: View {
   }
 }
 
-/// A day's heading on its ink rule: "Today", with "Friday 2 October" as the
-/// kicker; earlier days by weekday, with the date.
+/// A day's heading on its ink rule: "Today", with "Friday 2 October" beside
+/// it; earlier days by weekday, with the date.
 private struct DayHeading: View {
   let day: String
 
@@ -278,7 +278,9 @@ struct WeekRegister: View {
         Spacer(minLength: 8)
         if let first = dates.first ?? nil, let last = dates.last ?? nil {
           let style = Date.FormatStyle.dateTime.day().month(.abbreviated).locale(Format.locale)
-          Text("\(first.formatted(style)) – \(last.formatted(style))").kicker()
+          Text("\(first.formatted(style)) – \(last.formatted(style))")
+            .font(.footnote)
+            .foregroundStyle(Theme.inkSecondary)
         }
       }
       .padding(.top, 10)

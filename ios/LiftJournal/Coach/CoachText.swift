@@ -165,9 +165,38 @@ enum CoachReplyFormat {
       ?? AttributedString(text)
   }
 
+  /// The reply as plain text, for Copy and Share: the words as Coach wrote
+  /// them, without the Markdown marks, and without the soft hyphens and
+  /// joined spaces the letter is typeset with.
+  static func plain(_ text: String) -> String {
+    plain(MarkdownBlock.parse(text), indent: "")
+  }
+
+  private static func plain(_ blocks: [MarkdownBlock], indent: String) -> String {
+    func inline(_ text: String) -> String { String(attributed(text).characters) }
+    return blocks.map { block in
+      switch block {
+      case .heading(let text), .paragraph(let text), .quote(let text):
+        return indent + inline(text)
+      case .code(let code):
+        return code
+      case .list(let ordered, let start, let items):
+        return items.enumerated().map { index, item in
+          let line = indent + (ordered ? "\(start + index)." : "•") + " " + inline(item.text)
+          return item.children.isEmpty ? line : line + "\n" + plain(item.children, indent: indent + "   ")
+        }
+        .joined(separator: "\n")
+      case .table(let header, let rows):
+        return ([header] + rows).map { $0.map(inline).joined(separator: "\t") }.joined(separator: "\n")
+      }
+    }
+    .joined(separator: "\n\n")
+  }
+
   /// As `attributed`, set in New York at `size`: strong words in weight 500
   /// rather than bold, which is too heavy in running serif text, and code in
   /// SF Mono. A short strong figure ("7 h 15 min") never breaks across lines.
+  /// Figures keep the serif's proportional digits, as running text does.
   static func letter(_ text: String, size: CGFloat) -> AttributedString {
     let source = attributed(text)
     var letter = AttributedString()
@@ -187,7 +216,7 @@ enum CoachReplyFormat {
           ? .system(size: size * 0.85, weight: .regular, design: .monospaced)
           : .system(size: size, weight: strong ? .medium : .regular, design: .serif)
         if italic { font = font.italic() }
-        piece.font = font.monospacedDigit()
+        piece.font = font
         piece.inlinePresentationIntent = nil
       }
       letter.append(piece)
@@ -197,47 +226,72 @@ enum CoachReplyFormat {
 }
 
 /// A Coach reply rendered natively, as a letter: New York paragraphs and
-/// lists, tables as small sheets, code in SF Mono.
+/// lists, tables as small sheets, code in SF Mono. Lines break as set in
+/// `LineBreaks`, in the reply's language. A long press copies or shares the
+/// reply as written (`CoachReplyFormat.plain`), not as typeset.
 struct CoachText: View {
   let text: String
+  /// Coach is still writing it: set in the language Coach was asked to use,
+  /// rather than one told from its first few words, with its end left to
+  /// break as it comes.
+  var streaming = false
 
   var body: some View {
-    MarkdownBlocksView(blocks: MarkdownBlock.parse(text))
-      .textSelection(.enabled)
+    let language = streaming ? LineBreaks.Language.coach : LineBreaks.language(of: text)
+    MarkdownBlocksView(blocks: MarkdownBlock.parse(text), language: language, streaming: streaming)
       .frame(maxWidth: .infinity, alignment: .leading)
+      .contextMenu {
+        let plain = CoachReplyFormat.plain(text)
+        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = plain }
+        ShareLink(item: plain)
+      }
   }
 }
 
 struct MarkdownBlocksView: View {
   let blocks: [MarkdownBlock]
+  /// The reply's language, for hyphenating its paragraphs.
+  var language: LineBreaks.Language = .english
+  /// Coach is still writing the last block: its end is left to break as it
+  /// comes (`LineBreaks.paragraph`).
+  var streaming = false
+  @Environment(\.dynamicTypeSize) private var typeSize
   /// The serif's size for Coach's paragraphs, which runs of strong or
   /// italic text must match.
   @ScaledMetric(relativeTo: .body) private var size: CGFloat = 18
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+      ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+        let open = streaming && index == blocks.count - 1
         switch block {
         case .heading(let text):
-          Text(CoachReplyFormat.letter(text, size: size * 20 / 18))
+          // A heading keeps its words whole.
+          let heading = LineBreaks.title(text, size: typeSize, finished: !open)
+          Text(CoachReplyFormat.letter(heading, size: size * 20 / 18))
             .folio(.heading)
             .foregroundStyle(Theme.ink)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 4)
             .accessibilityAddTraits(.isHeader)
         case .paragraph(let text):
-          paragraph(text)
+          paragraph(text, open: open)
         case .list(let ordered, let start, let items):
           VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+              let last = open && index == items.count - 1
               HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // Equal-width digits, so "9." and "10." line up on the right.
                 Text(ordered ? "\(start + index)." : "•")
                   .folio(.coach)
+                  .monospacedDigit()
                   .foregroundStyle(Theme.inkSecondary)
                   .frame(minWidth: ordered ? 22 : 10, alignment: .trailing)
                 VStack(alignment: .leading, spacing: 8) {
-                  paragraph(item.text)
-                  if !item.children.isEmpty { MarkdownBlocksView(blocks: item.children) }
+                  paragraph(item.text, open: last && item.children.isEmpty)
+                  if !item.children.isEmpty {
+                    MarkdownBlocksView(blocks: item.children, language: language, streaming: last)
+                  }
                 }
               }
             }
@@ -255,9 +309,10 @@ struct MarkdownBlocksView: View {
         case .quote(let text):
           HStack(spacing: 12) {
             Rectangle().fill(Theme.track).frame(width: 2)
-            Text(CoachReplyFormat.letter(text, size: size))
+            Text(CoachReplyFormat.letter(body(text, open: open), size: size))
               .folio(.coach)
               .italic()
+              .typesettingLanguage(language.typesetting)
               .foregroundStyle(Theme.inkSecondary)
               .fixedSize(horizontal: false, vertical: true)
           }
@@ -266,17 +321,26 @@ struct MarkdownBlocksView: View {
     }
   }
 
-  private func paragraph(_ text: String) -> some View {
-    Text(CoachReplyFormat.letter(text, size: size))
+  private func paragraph(_ text: String, open: Bool) -> some View {
+    Text(CoachReplyFormat.letter(body(text, open: open), size: size))
       .folio(.coach)
       .foregroundStyle(Theme.ink)
+      .typesettingLanguage(language.typesetting)
       .fixedSize(horizontal: false, vertical: true)
+  }
+
+  /// A paragraph's text with its line breaks set (`LineBreaks.paragraph`),
+  /// its end left alone while Coach is still writing it (`open`).
+  private func body(_ text: String, open: Bool) -> String {
+    LineBreaks.paragraph(text, language: language, size: typeSize, finished: !open)
   }
 }
 
-/// A table as a native grid: the header in small capitals, the first
-/// column as row labels, hairlines between rows, scrolling sideways when it
-/// is wider than the screen. It sits on whatever sheet holds it.
+/// A table as a native grid: the header in sentence case, the first column
+/// as row labels, hairlines between rows, scrolling sideways when it
+/// is wider than the screen. A column of figures is set flush right, so its
+/// equal-width digits line up by place ("980" under "1,900"). It sits on
+/// whatever sheet holds it.
 struct DataTable: View {
   let columns: [String]
   let rows: [[String]]
@@ -284,13 +348,16 @@ struct DataTable: View {
   var inset: CGFloat = 14
 
   var body: some View {
+    let figures = Self.figureColumns(rows, count: columns.count)
     ScrollView(.horizontal) {
       Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 0) {
         GridRow {
-          ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
+          ForEach(Array(columns.enumerated()), id: \.offset) { index, column in
             Text(CoachReplyFormat.attributed(column))
-              .kicker()
+              .label()
+              .multilineTextAlignment(figures.contains(index) ? .trailing : .leading)
               .padding(.vertical, 8)
+              .gridColumnAlignment(figures.contains(index) ? .trailing : .leading)
           }
         }
         ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
@@ -301,8 +368,9 @@ struct DataTable: View {
                 .font(.subheadline.weight(index == 0 ? .semibold : .regular))
                 .monospacedDigit()
                 .foregroundStyle(Theme.ink)
+                .multilineTextAlignment(figures.contains(index) ? .trailing : .leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 220, alignment: .leading)
+                .frame(maxWidth: 220, alignment: figures.contains(index) ? .trailing : .leading)
                 .padding(.vertical, 8)
             }
           }
@@ -312,5 +380,18 @@ struct DataTable: View {
       .padding(.vertical, 4)
     }
     .scrollIndicators(.hidden)
+  }
+
+  /// The columns after the first whose every cell starts with a figure
+  /// ("980", "1,900 kcal", "−2 bpm"), an empty cell or a dash aside.
+  static func figureColumns(_ rows: [[String]], count: Int) -> Set<Int> {
+    Set(
+      (1..<max(count, 1)).filter { column in
+        let cells = rows.compactMap { row in
+          row.indices.contains(column) ? String(CoachReplyFormat.attributed(row[column]).characters) : nil
+        }
+        .filter { !["", "-", "\u{2013}", "\u{2014}"].contains($0) }
+        return !cells.isEmpty && cells.allSatisfy { $0.prefixMatch(of: /[+\-−±~≈]?\d/) != nil }
+      })
   }
 }

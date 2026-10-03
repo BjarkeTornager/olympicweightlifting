@@ -125,6 +125,21 @@ struct LiftJournalTests {
     #expect(MarkdownBlock.cells(#"| a \| b | `x|y` |"#) == ["a | b", "`x|y`"])
   }
 
+  @Test("Copying a Coach reply copies its words as written, not as typeset")
+  func plainReply() {
+    let reply = "## Søvn\n\nDu sov **7 t 12 min**, efter dagens styrketræning.\n\n1. Spis *tidligere*\n2. Gå i seng kl. 22\n\n| Dag | kcal |\n| --- | --- |\n| Man | 1,900 |"
+    let plain = CoachReplyFormat.plain(reply)
+    #expect(plain == "Søvn\n\nDu sov 7 t 12 min, efter dagens styrketræning.\n\n1. Spis tidligere\n2. Gå i seng kl. 22\n\nDag\tkcal\nMan\t1,900")
+    #expect(!plain.contains("\u{00AD}") && !plain.contains("\u{00A0}"))
+  }
+
+  @Test("A table's columns of figures are set flush right, its words and labels flush left")
+  func tableFigures() {
+    let rows = [["Monday", "980", "Rest", "−2 bpm"], ["Tuesday", "1,900", "Squats", "-"]]
+    #expect(DataTable.figureColumns(rows, count: 4) == [1, 3])
+    #expect(DataTable.figureColumns([["1", "2"]], count: 2) == [1])
+  }
+
   @Test("Coach's strong words are set in weight 500 New York, not bold")
   func letterEmphasis() {
     let text = CoachReplyFormat.letter("You slept **7 h 12 min** on *average*.", size: 18)

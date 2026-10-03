@@ -45,7 +45,9 @@ struct SignInView: View {
 
   private var pitch: some View {
     let more = Text(
-      "Tell Coach how you slept, what you ate and how you moved. It keeps the record and tells you what it means."
+      LineBreaks.paragraph(
+        "Tell Coach how you slept, what you ate and how you moved. It keeps the record and tells you what it means.",
+        language: .english, size: typeSize)
     )
     .foregroundStyle(Theme.inkSecondary)
     return Text("A private health journal you can talk to. \(more)")
@@ -130,14 +132,16 @@ struct CoverArt<Beside: View>: View {
   }
 }
 
-/// "Lift / Journal", roman then italic, in the largest serif.
+/// The wordmark as the cover's title, "Lift / Journal" on two lines, in the
+/// largest serif: regular, roman and in its own spacing, as the name is set
+/// everywhere.
 struct CoverTitle: View {
   var body: some View {
     VStack(alignment: .leading, spacing: -16) {
       Text("Lift")
-      Text("Journal").italic()
+      Text("Journal")
     }
-    .folio(.hero)
+    .folio(.coverWordmark)
     .foregroundStyle(Theme.ink)
     .padding(.top, 8)
     .accessibilityElement(children: .ignore)
@@ -162,12 +166,13 @@ private struct CoachAsks: View {
 
   @State private var asked = 0
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.dynamicTypeSize) private var typeSize
   @ScaledMetric(relativeTo: .title2) private var width: CGFloat = 156
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Text("Coach asks").foregroundStyle(Theme.accent).kicker()
-      Text("\u{201C}\(Self.questions[asked].text)\u{201D}")
+      Text("Coach asks").foregroundStyle(Theme.accent).label()
+      Text("\u{201C}\(LineBreaks.title(Self.questions[asked].text, size: typeSize))\u{201D}")
         .font(.system(.title2, design: .serif))
         .italic()
         .foregroundStyle(Theme.ink)

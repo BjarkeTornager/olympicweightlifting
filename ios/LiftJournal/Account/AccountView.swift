@@ -112,14 +112,14 @@ struct AccountView: View {
           }
           Link(destination: LiftServer.origin) {
             Label {
-              Text("Open the Website")
+              Text("Open the website")
             } icon: {
               IconBadge(symbol: "safari.fill", tint: Theme.accent, size: 28)
             }
           }
           Link(destination: LiftServer.origin.appending(path: "privacy")) {
             Label {
-              Text("Privacy Policy")
+              Text("Privacy policy")
             } icon: {
               IconBadge(symbol: "hand.raised.fill", tint: Theme.inkSecondary, size: 28)
             }
@@ -165,10 +165,18 @@ struct AccountView: View {
           }
         }
         .themedRows()
+        // The colophon: the wordmark and this build.
         Section {
         } footer: {
-          Text("Lift Journal \(LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "").replacingOccurrences(of: "/", with: " (")))")
-            .frame(maxWidth: .infinity)
+          VStack(spacing: 4) {
+            Wordmark()
+            Text(
+              LiftServer.clientHeader.replacingOccurrences(of: "ios/", with: "")
+                .replacingOccurrences(of: "/", with: " (") + ")")
+          }
+          .frame(maxWidth: .infinity)
+          .padding(.top, 8)
+          .accessibilityElement(children: .combine)
         }
       }
       .themedList()
@@ -304,7 +312,8 @@ private struct GoalsSection: View {
 
   private func row(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {
     LabeledContent {
-      Text(value)
+      // A column of targets: tabular figures, so they line up.
+      Text(value).monospacedDigit()
     } label: {
       Label {
         Text(title)

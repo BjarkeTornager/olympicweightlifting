@@ -132,7 +132,8 @@ struct DaySummary: Equatable {
   }
 }
 
-/// The issue line over Today's masthead: "Lift Journal · Nº 13 · Week 40".
+/// The issue line over Today's masthead: the wordmark, then "Nº 13 · Week
+/// 40".
 /// Each day of the journal is an issue, counted from the first day it was
 /// opened on this iPhone.
 enum Issue {

@@ -290,7 +290,7 @@ struct TrendView: View {
                 ? .dateTime.weekday(.narrow).locale(Format.locale)
                 : .dateTime.day().month(.abbreviated).locale(Format.locale))
           )
-          .font(.caption2.weight(today ? .bold : .medium))
+          .font(.caption2.weight(today ? .bold : .medium).monospacedDigit())
           .foregroundStyle(today ? Theme.ink : Theme.inkSecondary)
         }
       }
@@ -309,7 +309,7 @@ struct TrendView: View {
               ? number.formatted(.number.precision(.fractionLength(1)).locale(Format.locale))
               : number.formatted(.number.locale(Format.locale))
           )
-          .font(.caption2)
+          .font(.caption2.monospacedDigit())
           .foregroundStyle(Theme.inkSecondary)
         }
       }

@@ -92,16 +92,20 @@ struct TodayView: View {
 
   private var day: Date { model.today.flatMap { JournalDay.date($0.date) } ?? .now }
 
-  /// "Lift Journal · Nº 13 · Week 40", beside the system's + button.
+  /// The running head beside the system's + button: the wordmark, then
+  /// "Nº 13 · Week 40". The wordmark names the page, so the issue beside it
+  /// is in sentence case rather than spaced capitals.
   private var issueLine: some View {
     let number = firstDay.map { Issue.number(first: $0, day: day) }
     let issue = number.map { "Nº \($0) · " } ?? ""
-    return Text("\(Text("Lift Journal").foregroundStyle(Theme.ink)) · \(issue)Week \(Issue.week(day))")
-      .kicker()
-      .lineLimit(1)
-      .fixedSize()
-      .accessibilityLabel(
-        "Lift Journal, \(number.map { "issue \($0), " } ?? "")week \(Issue.week(day))")
+    return HStack(alignment: .firstTextBaseline, spacing: 9) {
+      Wordmark()
+      Text("\(issue)Week \(Issue.week(day))").font(.footnote).foregroundStyle(Theme.inkSecondary)
+    }
+    .lineLimit(1)
+    .fixedSize()
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Lift Journal, \(number.map { "issue \($0), " } ?? "")week \(Issue.week(day))")
   }
 
   private var logMenu: some View {
@@ -303,7 +307,7 @@ private struct Masthead: View {
       .accessibilityElement(children: .combine)
       .accessibilityAddTraits(.isHeader)
       if let summary {
-        Text(summary)
+        Paragraph(summary, language: .english)
           .folio(.standfirst)
           .foregroundStyle(Theme.ink)
           // Two lines, as written; at the largest sizes it may run on
@@ -484,7 +488,7 @@ private struct BodySection: View {
           leanMass
           if let goal {
             VStack(alignment: .leading, spacing: 6) {
-              Text("Goal").kicker()
+              Text("Goal").label()
               Measure(value: goal.0, unit: goal.1, role: .inline).foregroundStyle(Theme.ink)
             }
             .accessibilityElement(children: .combine)
@@ -494,7 +498,7 @@ private struct BodySection: View {
         .padding(.top, 16)
       } else {
         VStack(alignment: .leading, spacing: 8) {
-          Text("Add your weight in a check-in to follow your progress.")
+          Paragraph("Add your weight in a check-in to follow your progress.", language: .english)
             .folio(.note)
             .foregroundStyle(Theme.inkSecondary)
           Button(action: checkIn) { ActionText("Check in") }
@@ -518,7 +522,7 @@ private struct BodySection: View {
     return nil
   }
 
-  /// The kicker over the weight, with the arrow to the chart.
+  /// The label over the weight, with the arrow to the chart.
   private var weightLabel: some View {
     HStack {
       CardLabel(title: "Weight", key: Theme.body)
@@ -562,7 +566,7 @@ private struct BodySection: View {
 
   private var bodyFat: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("Body fat").kicker()
+      Text("Body fat").label()
       if let percent = body_?.bodyFatPercent {
         Measure(value: Format.decimal(percent), unit: "%", role: .inline).foregroundStyle(Theme.ink)
       } else {
@@ -575,7 +579,7 @@ private struct BodySection: View {
 
   private var leanMass: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text("Lean mass").kicker()
+      Text("Lean mass").label()
       if let lean = body_?.leanMassKg {
         Measure(value: Format.decimal(lean), unit: "kg", role: .inline).foregroundStyle(Theme.ink)
       } else {
@@ -640,7 +644,7 @@ private struct WeightChart: View {
         AxisValueLabel(horizontalSpacing: 9) {
           if let kg = value.as(Double.self) {
             Text(kg.formatted(.number.precision(.fractionLength(1)).locale(Format.locale)))
-              .font(.caption2.weight(.medium))
+              .font(.caption2.weight(.medium).monospacedDigit())
               .foregroundStyle(Theme.inkSecondary)
           }
         }
@@ -651,7 +655,7 @@ private struct WeightChart: View {
         AxisValueLabel(anchor: value.index == 0 ? .topLeading : .topTrailing) {
           if let index = value.as(Int.self), let day = days[safe: index] ?? nil {
             Text(day.formatted(.dateTime.weekday(.abbreviated).day().locale(Format.locale)))
-              .font(.caption2.weight(.medium))
+              .font(.caption2.weight(.medium).monospacedDigit())
               .foregroundStyle(Theme.inkSecondary)
           }
         }
@@ -690,7 +694,7 @@ struct FoodSection: View {
   let hydration: Components.Schemas.Hydration
   /// Absent from servers older than supplement tracking.
   var supplements: Components.Schemas.Supplements?
-  @ScaledMetric(relativeTo: .caption) private var kindColumn: CGFloat = 82
+  @ScaledMetric(relativeTo: .footnote) private var kindColumn: CGFloat = 72
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -723,7 +727,7 @@ struct FoodSection: View {
       MacroSplit(protein: nutrition.protein, carbs: nutrition.carbs, fat: nutrition.fat)
         .padding(.top, 14)
       if nutrition.meals.isEmpty {
-        Text("Nothing logged yet. Tell Coach what you ate, or send a photo.")
+        Paragraph("Nothing logged yet. Tell Coach what you ate, or send a photo.", language: .english)
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -742,8 +746,9 @@ struct FoodSection: View {
 
   @ViewBuilder
   private func mealRow(_ meal: Components.Schemas.Meal) -> some View {
-    let kind = Text(meal._type).kicker()
-    let dish = Text(meal.name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+    let kind = Text(Self.kind(meal._type)).label()
+    let dish = Text(LineBreaks.title(meal.name, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
+      .fixedSize(horizontal: false, vertical: true)
     let energy = Text("\(Format.number(meal.calories)) kcal")
       .font(.subheadline.monospacedDigit())
       .foregroundStyle(Theme.inkSecondary)
@@ -759,8 +764,7 @@ struct FoodSection: View {
         }
       } else {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-          // One line: "Breakfast" broke as "Break-fast" at the smaller text
-          // sizes, where the letter spacing doesn't shrink with the text.
+          // One line, so a kind is never broken inside the word.
           kind.lineLimit(1).minimumScaleFactor(0.8).frame(width: kindColumn, alignment: .leading)
           dish
           Spacer(minLength: 8)
@@ -769,6 +773,11 @@ struct FoodSection: View {
       }
     }
     .accessibilityElement(children: .combine)
+  }
+
+  /// A meal's kind as the server names it ("breakfast"), in sentence case.
+  static func kind(_ type: String) -> String {
+    type.prefix(1).uppercased() + type.dropFirst()
   }
 
   private var drinks: some View {
@@ -860,15 +869,17 @@ private struct LoggedLines<Item, ID: Hashable, Line: View>: View {
 }
 
 /// One line of the ledger, as the meals above it are set: the name in the
-/// serif, which wraps, and the amount, if there is one, aligned on the
-/// right. At the largest text sizes the amount goes under the name.
+/// serif, which wraps with its last two words together, and the amount, if
+/// there is one, aligned on the right. At the largest text sizes the amount
+/// goes under the name.
 private struct LoggedLine: View {
   let name: String
   let amount: String
   @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
-    let title = Text(name).folio(.entry).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+    let title = Text(LineBreaks.title(name, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
+      .fixedSize(horizontal: false, vertical: true)
     let amount = amount.isEmpty
       ? nil : Text(amount).font(.subheadline.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
     Group {
@@ -1041,7 +1052,7 @@ struct MovementSection: View {
       }
       .buttonStyle(CardButtonStyle())
       .padding(.top, 4)
-      Text(footnote)
+      Paragraph(footnote, language: .english)
         .folio(.note)
         .foregroundStyle(Theme.inkSecondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -1070,19 +1081,23 @@ struct MovementSection: View {
 // MARK: Colophon
 
 /// The foot of the page: the mark and the issue, private to its owner. After
-/// 21:00 the halves meet and the day reads as closed.
+/// 21:00 the halves meet and the day reads as closed. The mark grows with
+/// the text and stands on the first line's baseline, as in the wordmark.
 private struct Colophon: View {
   let issue: Int?
   let name: String?
+  @ScaledMetric(relativeTo: .body) private var side: CGFloat = 20
+  @ScaledMetric(relativeTo: .body) private var closedSide: CGFloat = 26
 
   var body: some View {
     TimelineView(.everyMinute) { context in
       let closed = Calendar.current.component(.hour, from: context.date) >= 21
       VStack(alignment: .leading, spacing: 8) {
         Hairline()
-        HStack(spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
           BrandMark(gap: closed ? 0 : 40, lift: closed ? 0 : 136)
-            .frame(width: closed ? 26 : 20)
+            .frame(width: closed ? closedSide : side, height: closed ? closedSide : side)
+            .alignmentGuide(.firstTextBaseline) { $0[.bottom] - $0.height * 0.1 }
           if closed {
             Text("The day, closed").folio(.standfirst).foregroundStyle(Theme.ink)
           } else {
@@ -1096,12 +1111,23 @@ private struct Colophon: View {
     }
   }
 
+  /// The wordmark, then "Nº 13 · Private to Maja": beside it, or under it
+  /// when the two don't fit one line.
   private var line: some View {
-    let parts = ["Lift Journal", issue.map { "Nº \($0)" }, "Private to \(name ?? "you")"]
-    return Text(parts.compactMap { $0 }.joined(separator: " · "))
+    let parts = [issue.map { "Nº \($0)" }, "Private to \(name ?? "you")"]
+    let note = Text(parts.compactMap { $0 }.joined(separator: " · "))
       .font(.caption)
-      .tracking(0.2)
       .foregroundStyle(Theme.inkSecondary)
+    return ViewThatFits(in: .horizontal) {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
+        Wordmark(mark: false)
+        note
+      }
+      VStack(alignment: .leading, spacing: 2) {
+        Wordmark(mark: false)
+        note.fixedSize(horizontal: false, vertical: true)
+      }
+    }
   }
 }
 

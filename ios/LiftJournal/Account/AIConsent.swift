@@ -87,17 +87,18 @@ struct AIConsentView: View {
     .background(Theme.background)
   }
 
-  /// A numbered paragraph: the number in the margin, its subject in small
-  /// capitals, then the paragraph in the serif.
+  /// A numbered paragraph: the number in the margin, its subject, then the
+  /// paragraph in the serif.
   private func point(_ number: Int, _ title: String, _ detail: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 12) {
       Text("\(number)")
         .folio(.coach)
+        .monospacedDigit()
         .foregroundStyle(Theme.inkSecondary)
         .frame(minWidth: 12, alignment: .leading)
       VStack(alignment: .leading, spacing: 4) {
-        Text(title).foregroundStyle(Theme.ink).kicker()
-        Text(detail)
+        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+        Paragraph(detail, language: .english)
           .folio(.coach)
           .foregroundStyle(Theme.ink)
           .fixedSize(horizontal: false, vertical: true)

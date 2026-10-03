@@ -59,9 +59,7 @@ struct CoachPicture: View {
         // A printed label on the picture, legible on any dish.
         .overlay(alignment: .topLeading) {
           Text("AI picture")
-            .font(.caption2.weight(.semibold))
-            .textCase(.uppercase)
-            .tracking(1)
+            .font(.caption.weight(.semibold))
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)

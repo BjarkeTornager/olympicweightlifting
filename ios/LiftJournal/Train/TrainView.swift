@@ -54,7 +54,7 @@ struct TrainView: View {
   // MARK: Now
 
   /// The workout in progress or the next session, set like the Ledger: a
-  /// heavy rule, a kicker, the title in the serif, and its sets counted in
+  /// heavy rule, a label, the title in the serif, and its sets counted in
   /// marks.
   @ViewBuilder
   private func hero(_ training: Training) -> some View {
@@ -131,7 +131,7 @@ struct TrainView: View {
         Button {
           Task { await train.start(next, app) }
         } label: {
-          Label("Start Workout", systemImage: "play.fill")
+          Label("Start workout", systemImage: "play.fill")
         }
         .buttonStyle(PrimaryButtonStyle())
         .disabled(!next.canStart)
@@ -169,8 +169,9 @@ struct TrainView: View {
         }
         if !bests.isEmpty {
           Text("Personal bests")
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(Theme.ink)
-            .kicker()
+            .accessibilityAddTraits(.isHeader)
             .padding(.top, weeks.isEmpty ? 16 : 28)
           CellGrid {
             ForEach(bests, id: \.exerciseId) { best in
@@ -221,7 +222,7 @@ struct TrainView: View {
     VStack(alignment: .leading, spacing: 0) {
       FolioSection("Recent sessions", meta: training.recent.isEmpty ? nil : "Every set")
       if training.recent.isEmpty {
-        Text("Finished workouts appear here with every set.")
+        Paragraph("Finished workouts appear here with every set.", language: .english)
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .padding(.top, 14)
@@ -335,6 +336,7 @@ enum WorkoutRoute: Hashable {
 
 private struct ProgrammeCard: View {
   let programme: Programme
+  @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -352,7 +354,7 @@ private struct ProgrammeCard: View {
             .foregroundStyle(Theme.success)
         }
       }
-      Text(programme.name)
+      Text(LineBreaks.title(programme.name, size: typeSize))
         .folio(.entry)
         .foregroundStyle(Theme.ink)
         .lineLimit(2)

@@ -286,7 +286,7 @@ struct VisualBars: View {
 
   private func name(_ label: String, latest: Bool) -> some View {
     Text(label)
-      .font(.caption2.weight(latest ? .bold : .medium))
+      .font(.caption2.weight(latest ? .bold : .medium).monospacedDigit())
       .foregroundStyle(latest ? Theme.ink : Theme.inkSecondary)
   }
 
@@ -395,7 +395,7 @@ struct VisualLineChart: View {
       .chartYScale(domain: .automatic(includesZero: false))
       .chartYAxis {
         AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
-          AxisValueLabel().font(.caption2).foregroundStyle(Theme.inkSecondary)
+          AxisValueLabel().font(.caption2.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
         }
       }
       .chartXAxis {
@@ -407,7 +407,7 @@ struct VisualLineChart: View {
           AxisValueLabel(anchor: value.index == 0 ? .topLeading : last ? .topTrailing : .top) {
             if let label = value.as(String.self) {
               Text(label)
-                .font(.caption2.weight(last ? .bold : .medium))
+                .font(.caption2.weight(last ? .bold : .medium).monospacedDigit())
                 .foregroundStyle(last ? Theme.ink : Theme.inkSecondary)
             }
           }
@@ -504,7 +504,7 @@ struct VisualProgress: View {
 }
 
 /// Headline numbers, two to a row in cells divided by hairlines, each with
-/// its kicker, a serif value and how it changed. One to a row at the
+/// its label, a serif value and how it changed. One to a row at the
 /// largest text sizes.
 struct VisualStats: View {
   let visual: Visual
@@ -581,7 +581,7 @@ struct VisualComparison: View {
           Text(after).frame(width: column, alignment: .trailing)
           Text("Change").frame(width: column, alignment: .trailing)
         }
-        .kicker()
+        .label()
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .padding(.bottom, 6)
@@ -847,7 +847,7 @@ struct VisualRecipe: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.inkSecondary)
                 .frame(minWidth: 18, alignment: .trailing)
-              Text(step)
+              Paragraph(step)
                 .font(.system(.body, design: .serif))
                 .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)

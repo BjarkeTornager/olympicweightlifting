@@ -32,8 +32,9 @@ struct LedgerLine {
   }
 }
 
-/// One column of the Ledger: the kicker with its key, the serif number, its
-/// target, the isotype meter and the scale. VoiceOver reads it as one line:
+/// One column of the Ledger: its area in sentence case with its key, as
+/// Recovery's and Body's cells are, the serif number, its target, the
+/// isotype meter and the scale. VoiceOver reads it as one line:
 /// "Energy, 980 of 1,900 kilocalories". With a `link`, the column opens that
 /// chart and shows an arrow; the scale row stays outside the link, so its
 /// "Set a target" button is never a button inside a button.
@@ -71,13 +72,13 @@ struct LedgerColumn<Accessory: View>: View {
         if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
         accessory
       }
-      .font(.caption2.weight(.medium))
+      .font(.caption2.weight(.medium).monospacedDigit())
       .foregroundStyle(Theme.inkSecondary)
       .padding(.top, line.target == nil ? 10 : 7)
     }
   }
 
-  /// The kicker, the number and the meter: what the link opens.
+  /// The area, the number and the meter: what the link opens.
   private var reading: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
@@ -314,7 +315,7 @@ struct Sparkline: View {
   }
 }
 
-/// One measurement in a grid of cells divided by hairlines: the kicker with
+/// One measurement in a grid of cells divided by hairlines: its label with
 /// its key and an arrow when it opens, the value in the serif, a small chart
 /// of recent days, and a note.
 struct MetricCell<Chart: View>: View {
@@ -343,7 +344,7 @@ struct MetricCell<Chart: View>: View {
           .contentTransition(.numericText())
           .padding(.top, 8)
       } else {
-        Text(empty)
+        Paragraph(empty, language: .english)
           .folio(.note)
           .foregroundStyle(Theme.inkSecondary)
           .padding(.top, 8)
@@ -352,7 +353,7 @@ struct MetricCell<Chart: View>: View {
       chart.frame(height: chartHeight * min(growth, 1.8)).padding(.top, 12)
       if let note {
         Text(note)
-          .font(.footnote)
+          .font(.footnote.monospacedDigit())
           .foregroundStyle(Theme.inkSecondary)
           .lineLimit(2)
           .padding(.top, 6)

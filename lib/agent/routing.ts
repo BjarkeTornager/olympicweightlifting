@@ -9,6 +9,24 @@ export const COACH_MODELS = {
 } as const;
 export type CoachTier = keyof typeof COACH_MODELS;
 export type RouteSource = "off" | "rules" | "jev" | "fallback";
+// Why a turn went to its tier, as a fixed code: "configured" when routing is
+// off, the rules' reasons, then Jev's. Kept on the turn's metrics, its log
+// line and its trace (lift.route_reason, which allows exactly these).
+export const ROUTE_REASONS = [
+  "configured",
+  "routine",
+  "vision-log",
+  "plan",
+  "mixed-plan",
+  "lookup",
+  "uncertain",
+  "high-stakes",
+  "judgment",
+  "log",
+  "correct",
+  "explain",
+] as const;
+export type RouteReason = (typeof ROUTE_REASONS)[number];
 // How the call to Jev went, for Coach's metrics and trace: time, tokens and,
 // when the rules decided instead, why. Never the message.
 export type JevCall = {
@@ -20,7 +38,7 @@ export type JevCall = {
 export type CoachRoute = {
   model: string;
   tier: CoachTier;
-  reason: string;
+  reason: RouteReason;
   source: RouteSource;
   jev?: JevCall;
 };

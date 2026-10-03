@@ -2,11 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   COACH_MODELS,
+  ROUTE_REASONS,
   policyFromJev,
   routeCoachTurn,
   rulesRoute,
   routingMode,
 } from "../lib/agent/routing";
+import { allowed } from "../lib/tracing/attributes";
 
 const previous = {
   AGENT_ROUTING: process.env.AGENT_ROUTING,
@@ -187,6 +189,21 @@ test("a successful Jev decision is used once as a server-owned tier", async () =
   assert.equal(calls, 1);
   assert.equal(routed.source, "jev");
   assert.equal(routed.model, COACH_MODELS.luna);
+  assert.equal(routed.reason, "log");
+});
+
+test("every route reason can be traced, and nothing else", () => {
+  for (const reason of ROUTE_REASONS)
+    assert.deepEqual(
+      allowed({ "lift.route_reason": reason }),
+      { kept: { "lift.route_reason": reason }, dropped: 0 },
+      reason,
+    );
+  for (const value of ["Lookup", "lookup; drop", "How much water?", 1])
+    assert.deepEqual(allowed({ "lift.route_reason": value }), {
+      kept: {},
+      dropped: 1,
+    });
 });
 
 // Jev's recorded answers (3 October 2026 probe) for messages Coach receives.

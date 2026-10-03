@@ -12,6 +12,7 @@ Simple questions about the athlete's own records, such as "How much water have I
 
   Everything else that is uncertain stays on Terra. Confident answers route as before.
 - **Exercise names** (`lib/agent/read-tools.ts`). `training_summary`, `find_sessions` and `lifting_review` accepted any `exerciseId`. Luna often passed a name such as "back squat", got nothing back and said the athlete had never done the lift. A name now resolves to the id the journal or the catalogue uses. An unknown one is refused with ids to use.
+- **Route reason recorded** (`lib/agent/engine.ts`). Each turn's metrics (`routeReason`), its `coach_turn_metrics` log line and its trace's `route` span (`lift.route_reason`) now say why the tier was chosen, as a fixed code such as `lookup` or `uncertain`, never the message. So production can count how many turns the rule moves.
 - **Sets for one exercise** (`lib/training.ts`). When `training_summary` is filtered to one exercise, each recent session now lists its logged sets. Before, it gave only totals and the best set per rep count, so "What did I lift on clean and jerk last week?" lost a session.
 
 ## Evidence

@@ -670,6 +670,7 @@ async function turn(
         status,
         tier: metrics.tier ?? null,
         route: metrics.route ?? null,
+        routeReason: metrics.routeReason ?? null,
         skills: [...loaded],
         totalMs: metrics.totalMs ?? Date.now() - turnStarted,
         firstTextMs: metrics.firstTextMs ?? null,
@@ -702,6 +703,7 @@ async function turn(
     if (routed) {
       metrics.tier = routed.tier;
       metrics.route = routed.source;
+      metrics.routeReason = routed.reason;
       metrics.routingMs = Date.now() - turnStarted;
       metrics.routeMs = Date.now() - routeStarted;
       if (
@@ -715,6 +717,7 @@ async function turn(
       routeSpan?.end({
         "lift.tier": routed.tier,
         "lift.route": routed.source,
+        "lift.route_reason": routed.reason,
         "lift.ms": metrics.routeMs,
         ...(routed.jev
           ? {

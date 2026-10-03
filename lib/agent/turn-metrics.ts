@@ -2,6 +2,7 @@
 // counts and cost only, never message text. Saved on the turn and logged, so
 // speed and cost changes can be measured against real use.
 import type { ModelUsage } from "./provider";
+import type { RouteReason } from "./routing";
 
 export type TurnRound = ModelUsage & {
   ms: number;
@@ -10,9 +11,11 @@ export type TurnRound = ModelUsage & {
   filtered?: boolean;
 };
 export type TurnMetrics = {
-  // Which tier Jev (or the rules) chose, and how.
+  // Which tier Jev (or the rules) chose, how, and why: a reason code from
+  // ROUTE_REASONS in routing.ts, such as "lookup", never the message.
   tier?: string;
   route?: string;
+  routeReason?: RouteReason;
   // Skills the turn loaded (skills.ts), up front or during the turn.
   skills?: string[];
   // From the start of the turn to the routing decision: preparation plus

@@ -19,8 +19,9 @@ const dollars = (n: number) =>
 // AI cost and usage limits are shown per account, under the start of its id.
 export function UsageReport({ accountId }: { accountId: string }) {
   const [report, setReport] = useState<Report>();
-  // Missing from a server older than the cost ledger.
+  // Missing from a server older than the cost ledger or the limits.
   const aiCost: Report["aiCost"] | undefined = report?.aiCost;
+  const limits: Report["limits"] | undefined = report?.limits;
   const [error, setError] = useState("");
   useEffect(() => {
     const abort = new AbortController();
@@ -213,48 +214,52 @@ export function UsageReport({ accountId }: { accountId: string }) {
               )}
             </>
           )}
-          <h3>Usage limits</h3>
-          <p>
-            {report.limits.mode === "enforce"
-              ? "Limits are enforced: Coach replies with the limit instead of answering, and voice calls don't start."
-              : "Limits only log for now: nothing is refused, and each time an account would have been is counted."}{" "}
-            How often each account reached a limit this month (UTC).
-          </p>
-          {report.limits.rows.length ? (
-            <div
-              className="table-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="Usage limits reached per account"
-            >
-              <table className="training-table">
-                <thead>
-                  <tr>
-                    <th>Account</th>
-                    <th>Limit</th>
-                    <th>Would refuse</th>
-                    <th>Refused</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.limits.rows.map((r) => (
-                    <tr key={`${r.account}:${r.limit}`}>
-                      <th>
-                        <code>{r.account}</code>
-                        {r.you ? " (you)" : ""}
-                      </th>
-                      <td>
-                        <code>{r.limit}</code>
-                      </td>
-                      <td>{r.logged}</td>
-                      <td>{r.refused}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p>No account has reached a limit this month.</p>
+          {limits && (
+            <>
+              <h3>Usage limits</h3>
+              <p>
+                {limits.mode === "enforce"
+                  ? "Limits are enforced: Coach replies with the limit instead of answering, and voice calls don't start."
+                  : "Limits only log for now: nothing is refused, and each time an account would have been is counted."}{" "}
+                How often each account reached a limit this month (UTC).
+              </p>
+              {limits.rows.length ? (
+                <div
+                  className="table-scroll"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Usage limits reached per account"
+                >
+                  <table className="training-table">
+                    <thead>
+                      <tr>
+                        <th>Account</th>
+                        <th>Limit</th>
+                        <th>Would refuse</th>
+                        <th>Refused</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {limits.rows.map((r) => (
+                        <tr key={`${r.account}:${r.limit}`}>
+                          <th>
+                            <code>{r.account}</code>
+                            {r.you ? " (you)" : ""}
+                          </th>
+                          <td>
+                            <code>{r.limit}</code>
+                          </td>
+                          <td>{r.logged}</td>
+                          <td>{r.refused}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p>No account has reached a limit this month.</p>
+              )}
+            </>
           )}
         </>
       )}

@@ -4,8 +4,8 @@ import LiftTheme
 import SwiftUI
 
 // The visuals Coach composes from journal numbers, drawn natively: trends,
-// targets, headline numbers, comparisons, splits and calendars. The website
-// draws the same kinds (components/coach-visual-kinds.tsx).
+// targets, headline numbers, comparisons, splits and calendars, and recipe
+// cards. The website draws the same kinds (components/coach-visual-kinds.tsx).
 
 typealias Visual = Components.Schemas.CoachVisual
 
@@ -382,6 +382,142 @@ struct VisualCalendar: View {
     case .none: .secondary
     case .some(let level) where level >= 2: Theme.onAccent
     default: .primary
+    }
+  }
+}
+
+/// A recipe or meal idea: an AI picture of the dish when one was asked for,
+/// servings and time, every ingredient with its amount, numbered steps (none
+/// for a quick idea) and the estimated nutrition per serving.
+struct VisualRecipe: View {
+  let visual: Visual
+  /// On the call screen: the picture as a strip and the first ingredients
+  /// only, without the method or nutrition.
+  var compact = false
+  static let compactIngredients = 4
+
+  struct Nutrient: Equatable {
+    let label: String
+    let value: String
+  }
+
+  var body: some View {
+    let ingredients = visual.ingredients ?? []
+    let shown = compact ? Array(ingredients.prefix(Self.compactIngredients)) : ingredients
+    let steps = compact ? [] : visual.steps ?? []
+    let nutrition = compact ? [] : Self.nutrition(visual.nutrition)
+    VStack(alignment: .leading, spacing: 16) {
+      // Drawn after the card appears; a strip in the compact card.
+      if let picture = visual.pictureId {
+        CoachPicture(id: picture, title: visual.title, height: compact ? 140 : nil)
+      }
+      Text(Self.meta(servings: visual.servings ?? 1, minutes: visual.minutes))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 8) {
+        CardLabel(title: "Ingredients")
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
+          ForEach(Array(shown.enumerated()), id: \.offset) { _, ingredient in
+            GridRow {
+              Text(ingredient.amount ?? "")
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(maxWidth: 110, alignment: .leading)
+              Text(ingredient.item)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+          }
+        }
+        .font(.subheadline)
+        if shown.count < ingredients.count {
+          Text("+\(ingredients.count - shown.count) more")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+      if !steps.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          CardLabel(title: "Method")
+          ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+              Text("\(index + 1)")
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(Theme.accent)
+                .frame(minWidth: 16, alignment: .trailing)
+              Text(step)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+          }
+        }
+      }
+      if !nutrition.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          CardLabel(title: "Estimate per serving")
+          // All in a row while they fit, then two to a row, then one: larger
+          // text sizes need the room.
+          ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+              ForEach(nutrition, id: \.label) { nutrient($0) }
+            }
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+              ForEach(Array(stride(from: 0, to: nutrition.count, by: 2)), id: \.self) { start in
+                GridRow {
+                  nutrient(nutrition[start])
+                  if start + 1 < nutrition.count {
+                    nutrient(nutrition[start + 1])
+                  } else {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                  }
+                }
+              }
+            }
+            VStack(spacing: 8) {
+              ForEach(nutrition, id: \.label) { nutrient($0) }
+            }
+          }
+        }
+        .accessibilityElement(children: .combine)
+      }
+    }
+  }
+
+  private func nutrient(_ item: Nutrient) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(item.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+      Text(item.value)
+        .font(.subheadline.weight(.semibold))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, 10)
+    .padding(.vertical, 8)
+    .background(Theme.fill, in: .rect(cornerRadius: 10, style: .continuous))
+  }
+
+  /// The line under the title, such as "2 servings · 1 h 15 min", as on the
+  /// website.
+  static func meta(servings: Int, minutes: Int?) -> String {
+    var parts = ["\(servings) \(servings == 1 ? "serving" : "servings")"]
+    if let minutes {
+      parts.append(
+        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : ""))
+    }
+    return parts.joined(separator: " · ")
+  }
+
+  /// The nutrition values Coach gave, in a fixed order.
+  static func nutrition(_ nutrition: Components.Schemas.RecipeNutrition?) -> [Nutrient] {
+    guard let nutrition else { return [] }
+    return [
+      ("Calories", nutrition.kcal, "kcal"), ("Protein", nutrition.protein, "g"),
+      ("Carbs", nutrition.carbs, "g"), ("Fat", nutrition.fat, "g"),
+    ].compactMap { label, value, unit in
+      value.map { Nutrient(label: label, value: "\(formatted($0)) \(unit)") }
     }
   }
 }

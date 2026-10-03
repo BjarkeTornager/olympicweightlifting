@@ -4,7 +4,7 @@ import { EventType } from "@ag-ui/core";
 import { searchWeb, webSearchEnabled } from "../web-search";
 import { visualSchema, type SavedVisual } from "../coach-visuals";
 import type { EmitCoachEvent } from "./stream";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { countUse } from "../feature-use";
 import { agentProposals, agentTurns } from "../db/schema";
@@ -47,9 +47,20 @@ import type { CoachLanguage } from "../coach-language";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
 import { guardChange } from "./change-guards";
-import { recentConversations } from "../conversation-memory";
+import {
+  pruneConversations,
+  recentConversations,
+} from "../conversation-memory";
 import { dayForCoach } from "../journal-summary";
 import { withoutEmDashes } from "./coach-style";
+import {
+  drawPicture,
+  PICTURE_DRAWING,
+  PICTURE_UNAVAILABLE,
+  pictureGate,
+  reservePicture,
+} from "../coach-pictures";
+import { logFailure } from "../error-log";
 
 export { toolDefinitions };
 type SavedImage = Awaited<ReturnType<typeof readUserImage>>;
@@ -167,6 +178,12 @@ export async function runTurn(
     liftingBriefReview?: boolean;
     // Observes each executed tool call; used by offline evals.
     onToolCall?: (name: string, args: unknown, ok: boolean) => void;
+    // False for an app that can't draw a recipe card (an older iPhone build,
+    // or a website not yet reloaded): the recipe is written out instead.
+    recipeCards?: boolean;
+    // Keeps work that outlives the reply, a picture being drawn, running
+    // through a release's shutdown: after() in the routes.
+    waitUntil?: (work: Promise<unknown>) => void;
   } = {},
 ) {
   const turnStarted = Date.now();
@@ -434,22 +451,7 @@ export async function runTurn(
     );
   try {
     // Short-lived proposals contain recovery snapshots. Conversation is retained for 90 days.
-    await db
-      .delete(agentProposals)
-      .where(
-        and(
-          eq(agentProposals.userId, userId),
-          lt(agentProposals.expiresAt, new Date()),
-        ),
-      );
-    await db
-      .delete(agentTurns)
-      .where(
-        and(
-          eq(agentTurns.userId, userId),
-          lt(agentTurns.createdAt, new Date(Date.now() - 90 * 86400000)),
-        ),
-      );
+    await pruneConversations(userId);
     let reply =
       "I couldn’t finish that request. Try a shorter question or use Train to log your session.";
     let mealReminderUsed = false;
@@ -589,9 +591,11 @@ export async function runTurn(
             throw Error("This tool is not available.");
           const key = name as keyof typeof specifications,
             args = specifications[key].schema.parse(call.function.arguments);
-          // Calling a skill's tool loads the skill for the rest of the turn.
-          const owner = skillTools.get(name);
-          if (owner) loaded.add(owner);
+          // Calling a skill's tool loads the skill for the rest of the turn
+          // (the first that offers it, unless one already is).
+          const owners = skillTools.get(name);
+          if (owners && !owners.some((skill) => loaded.has(skill)))
+            loaded.add(owners[0]);
           if (key === "load_skills") {
             const { skills: wanted } =
               specifications.load_skills.schema.parse(args);
@@ -756,13 +760,54 @@ export async function runTurn(
               throw Error(
                 "Three visuals are enough for one reply. Explain the result now.",
               );
-            const visual = {
-              id: uid(),
-              content: visualSchema.parse(args),
-            };
+            const { picture, ...fields } =
+              specifications.show_visual.schema.parse(args);
+            if (fields.kind === "recipe" && hooks.recipeCards === false)
+              throw Error(
+                "This app can't show a recipe card yet. Write the recipe in your reply instead: every ingredient with its amount, short numbered steps, and the estimated kcal and protein per serving.",
+              );
+            const content = visualSchema.parse(fields);
+            let visual: SavedVisual = { id: uid(), content };
+            let pictureNote: string | undefined;
+            if (picture && content.kind !== "recipe")
+              pictureNote =
+                "not available: pictures are only of dishes, on a recipe card";
+            else if (picture && content.kind === "recipe") {
+              // The turn's row exists while it runs, so the picture can
+              // belong to it; it is drawn while the reply goes on. A retried
+              // message asking for the same dish gets the same picture.
+              const reserved = await reservePicture(db, {
+                userId,
+                turnId: input.id,
+                recipe: content,
+                refused: await pictureGate(),
+              });
+              if ("refused" in reserved) pictureNote = PICTURE_UNAVAILABLE;
+              else {
+                visual = {
+                  ...visual,
+                  content: { ...content, pictureId: reserved.id },
+                };
+                pictureNote = PICTURE_DRAWING;
+                if (reserved.job) {
+                  const drawing = drawPicture(reserved.job).catch((error) =>
+                    logFailure("coach_picture_failed", error, {}, "warn"),
+                  );
+                  try {
+                    hooks.waitUntil?.(drawing);
+                  } catch {
+                    // The server is already shutting down: it draws anyway.
+                  }
+                }
+              }
+            }
             visuals.push(visual);
             emitDisplayedVisual(emit, visual);
-            output = { displayed: true, title: visual.content.title };
+            output = {
+              displayed: true,
+              title: visual.content.title,
+              ...(pictureNote ? { picture: pictureNote } : {}),
+            };
           } else if (isReadTool(key)) {
             output = await runReadTool(key, args, readContext);
           } else if (key === "prepare_change" || key === "log_entry") {

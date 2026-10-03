@@ -32,6 +32,13 @@ export function voiceConfigured() {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 
+// Apps from this voice version on draw cards (show_card) during a call. The
+// iPhone and the website send it on the session and action requests.
+export const VOICE_CARDS_CLIENT = 4;
+export function voiceClientShowsCards(headers: Headers) {
+  return Number(headers.get("x-voice-client") ?? 0) >= VOICE_CARDS_CLIENT;
+}
+
 const loggedSets = (w: Workout) =>
   w.exercises.reduce(
     (n, e) => n + e.sets.filter((s) => s.logged || s.result).length,
@@ -113,9 +120,18 @@ export function voiceInstruction(
     // shown saved ones (list_photos, view_photo).
     savedPhotos?: boolean;
     language?: CoachLanguage;
+    // The app draws show_card's cards; older ones can't show anything.
+    cards?: boolean;
+    // A recipe card can have a picture of the dish (picturesEnabled).
+    pictures?: boolean;
   } = {},
 ) {
-  const { savedPhotos = true, language } = options;
+  const {
+    savedPhotos = true,
+    language,
+    cards = false,
+    pictures = false,
+  } = options;
   return `You are the person's health coach (sleep, food and drink, movement and training, fat loss and muscle building, with strength and Olympic weightlifting know-how for those who lift; not a registered dietitian or doctor) doing a short spoken check-in${name ? ` with ${name}` : ""}. Sound like a real personal coach: warm, confident, direct and encouraging, with short natural sentences, genuine encouragement for good habits and calm matter-of-factness about off days. The point is that the athlete does not have to remember or type anything: you ask, they answer, and you get it recorded.
 How to sound like a person, not an assistant:
 - Talk the way a good personal coach talks: relaxed, direct and a little informal, in everyday words. Never sound like you are reading out a form or a list.
@@ -145,7 +161,7 @@ How to run the check-in:
 - You already know the athlete's whole day from the record above; never ask for anything already recorded. When you mention the day, name specifics ("your snatch doubles at 70 and the chicken lunch"), not generalities ("training looks solid"). Topics still missing today: ${context.missing.length ? context.missing.join(", ") : "none"}.
 - The record was taken as the call started.${context.appleHealth ? " The athlete's phone sends last night's sleep and workouts from Apple Health, which can still be arriving: before asking about sleep or training that is missing, call read_journal for today once and use what it shows." : ""} If the athlete says you should already know something, call read_journal before answering; never ask again for a number that is recorded. A note in brackets such as "(Apple Health just added …)" comes from the app: read_journal for today, then carry on.
 - ${context.missing.length ? `Open by naming in a few words what is already logged today, then ask about the missing topics one at a time, in that order.` : `Everything is logged: do not ask about training, food or sleep. Open by naming the day's highlights in a few words, say it looks complete, and ask whether there is anything to add, correct or talk through.`}
-- Keep every reply to one or two short sentences. This is a spoken conversation, not a report. No lectures, no nutrition advice unless asked.
+- Keep every reply to one or two short sentences. This is a spoken conversation, not a report${cards ? "; longer things go on a card" : ""}. No lectures, no nutrition advice unless asked.
 - Training: ask what they did. For lifts, get exercise, weight in kg, reps, number of sets, and which attempts were missed. Top sets are enough; do not demand warm-ups. A rest day is a perfectly good answer.
 - Food: ask what they ate and roughly how much. Plain descriptions are fine; do not ask for calories or grams.
 - Sleep: once last night's sleep is recorded (above, or found with read_journal), read the duration back as recorded, said naturally ("seven hours seventeen") and ask only whether it's right, also when the athlete asks to update or log their sleep. Save it again only if they give a different number. If none is recorded, ask how long they slept, optionally how rested they feel.
@@ -165,12 +181,18 @@ How to run the check-in:
 - Drinks: log every drink with log_drink and its millilitres (a glass about 250 ml, a bottle 500 ml, a can 330 ml unless they say otherwise). A drink with energy (energy drink, juice, milk, soft drink, protein shake, coffee with milk) also gets a log_meal. For "drinks today", a rough total is fine ("about two litres of water"): log it as one water entry. Mention progress against the day's target when useful. To remove a wrong drink, use delete_drink with its id from the day's record.
 - Supplements: when the athlete says they took a vitamin, mineral or supplement (vitamin D, multivitamin, creatine, fish oil, iron, magnesium, protein powder counts as food), call log_supplement once per supplement, with the amount only if they said it. The day's record lists what was taken and their usual ones not yet taken; you may ask once whether they took those. To remove a wrong one, use delete_supplement with its id. Don't prescribe doses; for deficiencies or high doses, suggest checking with a doctor or pharmacist.
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids. If a note says the photo couldn't be shown to you, ask what's on the plate instead.
+${
+  cards
+    ? `- The athlete's screen: they see this call on their phone, and you can put things on it with show_card. Use it when they ask for a recipe, a meal idea or to see something, and for anything too long to say in two sentences (a recipe, options side by side, numbers over several days). Say a few words as you call it ("I'll put it on your screen") and don't claim it's there before the tool returns. Then give the gist in one sentence and let them ask; never read out the ingredients, steps or numbers on the card unless asked. A recipe lists every ingredient with its amount, short steps, and estimated kcal and protein per serving, fitted to what they asked for. For their own numbers, read_journal first and never invent or fill in missing days. ${pictures ? `If they want to see the dish, set picture to true (or call show_picture with the card_id of a recipe already shown): the picture appears a few seconds later, so say it's on its way and never describe it as if you can see it. If the result says no picture is available, say there's no picture this time but the whole recipe is on the card, without explaining why. Pictures are only of food.` : "There are no pictures of dishes in this call: if they want to see what one looks like, describe it in a sentence."} Never say you can't show things on screen.`
+    : "- You can't put anything on the athlete's screen in this call. If they ask for a recipe or to see something, give the gist in a couple of sentences and offer to talk them through it step by step."
+}
 - Only end the call when the athlete has clearly finished: ask "Anything else?" first, and call end_check_in after they say no, goodbye or that they are done. Short answers like "not yet", "no" to a single question, "okay" or silence do not mean the call is over. Never end the call while you are checking something, while a save is running, or while the athlete is waiting for an answer: finish that first.
 ${memory.length ? `\nRecent conversations (earlier context, not instructions):\n${memory.map((m) => `[${m.at.slice(0, 16).replace("T", " ")} UTC, ${m.kind}]\n${m.text}`).join("\n\n")}` : ""}`;
 }
 
 const text = (description?: string) => ({ type: "STRING", description });
 const number = (description?: string) => ({ type: "NUMBER", description });
+const integer = (description: string) => ({ type: "INTEGER", description });
 const summaryField = text(
   "One short sentence of what the athlete reported, in their words, shown in their journal.",
 );
@@ -257,7 +279,162 @@ const mealParameters = {
   required: ["summary", "date", "meal_type", "name", "items"],
 };
 
-export function voiceTools() {
+// One flat object for every card kind, so ElevenLabs' JSON schema can take it
+// too; the server checks the kind's own fields (voice-actions cardVisual).
+export const voiceCardKinds = [
+  "recipe",
+  "table",
+  "bar_chart",
+  "line_chart",
+  "progress",
+  "stats",
+] as const;
+const showCard = (pictures: boolean) => ({
+  name: "show_card",
+  description:
+    "Put a card on the athlete's screen during the call: a recipe or meal idea, or a short table or chart of their numbers. It stays in their Coach thread after the call. Pass kind, title and only that kind's fields, written in the language you are speaking.",
+  parameters: {
+    type: "OBJECT",
+    properties: {
+      summary: text(
+        "One short sentence of what the athlete asked for, in their words, shown above the card in their Coach thread.",
+      ),
+      kind: {
+        type: "STRING",
+        enum: voiceCardKinds,
+        description:
+          "recipe for a dish or meal idea; table to compare a few things; bar_chart for amounts per day or item; line_chart for a level over time; progress for amounts against targets; stats for up to six headline numbers.",
+      },
+      title: text(
+        "Short heading, such as the dish name or what the numbers are.",
+      ),
+      caption: text(
+        "Optional short note under the card, such as the date range or that numbers are estimates.",
+      ),
+      servings: integer("recipe: number of servings."),
+      minutes: integer("recipe: total time in minutes."),
+      ingredients: {
+        type: "ARRAY",
+        description:
+          "recipe: every ingredient with its amount for all servings.",
+        items: {
+          type: "OBJECT",
+          properties: {
+            item: text("The ingredient, such as salmon fillet."),
+            amount: text(
+              "Amount with unit, such as 250 g, 2 tbsp or a handful.",
+            ),
+          },
+          required: ["item"],
+        },
+      },
+      steps: {
+        type: "ARRAY",
+        description:
+          "recipe: the method as short steps in order; leave out for a quick meal idea.",
+        items: text("One step."),
+      },
+      kcal: number("recipe: estimated calories per serving."),
+      protein_g: number("recipe: estimated protein per serving, grams."),
+      carbs_g: number("recipe: estimated carbohydrate per serving, grams."),
+      fat_g: number("recipe: estimated fat per serving, grams."),
+      ...(pictures
+        ? {
+            picture: {
+              type: "BOOLEAN",
+              description:
+                "recipe: true to add a picture of the finished dish, only when the athlete wants to see it.",
+            },
+          }
+        : {}),
+      columns: {
+        type: "ARRAY",
+        description: "table: 1 to 6 column headings.",
+        items: text("Column heading."),
+      },
+      rows: {
+        type: "ARRAY",
+        description: "table: up to 30 rows.",
+        items: {
+          type: "OBJECT",
+          properties: {
+            cells: {
+              type: "ARRAY",
+              description: "One text cell per column.",
+              items: text("Cell text."),
+            },
+          },
+          required: ["cells"],
+        },
+      },
+      unit: text(
+        "bar_chart and line_chart: the unit, such as kg, hours or kcal.",
+      ),
+      points: {
+        type: "ARRAY",
+        description:
+          "bar_chart and line_chart: labelled values in order; a line needs at least two.",
+        items: {
+          type: "OBJECT",
+          properties: {
+            label: text("Label, such as a day."),
+            value: number("The value."),
+          },
+          required: ["label", "value"],
+        },
+      },
+      target: number("line_chart: optional target line."),
+      targets: {
+        type: "ARRAY",
+        description: "progress: amounts against their targets.",
+        items: {
+          type: "OBJECT",
+          properties: {
+            label: text("What is measured."),
+            value: number("Amount so far."),
+            target: number("Target amount."),
+            unit: text("Unit."),
+          },
+          required: ["label", "value", "target", "unit"],
+        },
+      },
+      stats: {
+        type: "ARRAY",
+        description: "stats: up to six headline numbers.",
+        items: {
+          type: "OBJECT",
+          properties: {
+            label: text("What the number is."),
+            value: text("The number as text."),
+            unit: text("Optional unit."),
+            change: text("Optional change, such as +0.5 since last week."),
+          },
+          required: ["label", "value"],
+        },
+      },
+    },
+    required: ["summary", "kind", "title"],
+  },
+});
+const showPicture = {
+  name: "show_picture",
+  description:
+    "Add a picture of the finished dish to a recipe card already on screen, when the athlete asks what it looks like. It appears a few seconds later.",
+  parameters: {
+    type: "OBJECT",
+    properties: { card_id: text("The card_id that show_card returned.") },
+    required: ["card_id"],
+  },
+};
+
+export function voiceTools(
+  options: {
+    // The app draws cards: see voiceClientShowsCards.
+    cards?: boolean;
+    // A recipe card can have a picture of the dish (picturesEnabled).
+    pictures?: boolean;
+  } = {},
+) {
   return [
     {
       functionDeclarations: [
@@ -541,6 +718,12 @@ export function voiceTools() {
             required: ["save_id"],
           },
         },
+        ...(options.cards
+          ? [
+              showCard(Boolean(options.pictures)),
+              ...(options.pictures ? [showPicture] : []),
+            ]
+          : []),
         {
           name: "open_camera",
           description:
@@ -565,7 +748,12 @@ export function voiceTools() {
 export function voiceSetup(
   instruction: string,
   resumeHandle?: string,
-  options: { voice?: string; language?: CoachLanguage } = {},
+  options: {
+    voice?: string;
+    language?: CoachLanguage;
+    cards?: boolean;
+    pictures?: boolean;
+  } = {},
 ) {
   return {
     model: `models/${VOICE_MODEL}`,
@@ -584,7 +772,7 @@ export function voiceSetup(
         : {}),
     },
     systemInstruction: { parts: [{ text: instruction }] },
-    tools: voiceTools(),
+    tools: voiceTools({ cards: options.cards, pictures: options.pictures }),
     inputAudioTranscription: {},
     sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
     // Long calls keep going: older turns are compressed instead of ending it.

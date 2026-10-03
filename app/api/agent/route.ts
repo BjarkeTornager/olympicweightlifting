@@ -1,5 +1,6 @@
 import { turnInputSchema } from "@/lib/agent/input";
 import { z } from "zod";
+import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agentTurns } from "@/lib/db/schema";
@@ -7,6 +8,7 @@ import { allowRequest } from "@/lib/server";
 import {
   ApiError,
   apiFailure,
+  drawsRecipeCards,
   readJson,
   requireAthlete,
   requireCurrentCoach,
@@ -58,6 +60,8 @@ export async function POST(request: Request) {
         directLogging: request.headers.get("x-coach-logging-version") === "1",
         liftingBriefReview:
           request.headers.get("x-lifting-coach-version") === "1",
+        recipeCards: drawsRecipeCards(request),
+        waitUntil: after,
       }),
       {
         headers: { "Cache-Control": "no-store" },

@@ -30,6 +30,20 @@ import { applyProposal } from "./agent/engine";
 import { ApiError } from "./agent/http";
 import { VOICE_PREFIX } from "./coach-tasks";
 import { routeNotesFor } from "./workout-routes";
+import {
+  visualSchema,
+  type CoachVisual,
+  type SavedVisual,
+} from "./coach-visuals";
+import { voiceCardKinds, voiceClientShowsCards } from "./voice-checkin";
+import {
+  PICTURE_DRAWING,
+  PICTURE_UNAVAILABLE,
+  pictureGate,
+  pictureStatus,
+  reservePicture,
+  type PictureJob,
+} from "./coach-pictures";
 
 // Saves requested by the voice coach. They skip a second model: each tool call
 // becomes one ordinary journal action, checked by the same guards and saved
@@ -82,6 +96,149 @@ const mealArgs = z.object({
   // Omitted on an update keeps the meal's photos.
   photo_ids: z.array(z.string().uuid()).max(4).optional(),
 });
+
+// Models send an empty value, zero or null for a field they leave out.
+const blank = (v: unknown) =>
+  v === "" || v === 0 || v === null ? undefined : v;
+const optionalText = (max: number) =>
+  z.preprocess(blank, z.string().trim().max(max).optional());
+const optionalNumber = (schema: z.ZodNumber) =>
+  z.preprocess(blank, schema.optional());
+// A number said as text ("72.5") is still that text on a card.
+const cellText = (max: number) =>
+  z.preprocess(
+    (v) => (typeof v === "number" ? String(v) : v),
+    z.string().trim().max(max),
+  );
+const cardArgs = z.object({
+  summary: summarySchema,
+  kind: z.enum(voiceCardKinds),
+  title: z.string().trim().min(1).max(120),
+  caption: optionalText(400),
+  servings: optionalNumber(z.number().int().min(1).max(12)),
+  minutes: optionalNumber(z.number().int().min(1).max(600)),
+  ingredients: z
+    .array(
+      z.object({
+        item: z.string().trim().min(1).max(80),
+        amount: optionalText(40),
+      }),
+    )
+    .max(20)
+    .optional(),
+  steps: z.array(z.string().trim().min(1).max(300)).max(12).optional(),
+  kcal: optionalNumber(z.number().min(0).max(5000)),
+  protein_g: optionalNumber(z.number().min(0).max(500)),
+  carbs_g: optionalNumber(z.number().min(0).max(500)),
+  fat_g: optionalNumber(z.number().min(0).max(500)),
+  // recipe: a picture of the dish, drawn after the card is on screen.
+  picture: z.boolean().optional(),
+  columns: z.array(cellText(120)).max(6).optional(),
+  rows: z
+    .array(z.object({ cells: z.array(cellText(300)).max(6) }))
+    .max(30)
+    .optional(),
+  unit: optionalText(30),
+  points: z
+    .array(z.object({ label: cellText(120), value: z.number() }))
+    .max(60)
+    .optional(),
+  target: optionalNumber(z.number()),
+  targets: z
+    .array(
+      z.object({
+        label: cellText(120),
+        value: z.number(),
+        target: z.number(),
+        unit: cellText(30).default(""),
+      }),
+    )
+    .max(6)
+    .optional(),
+  stats: z
+    .array(
+      z.object({
+        label: cellText(120),
+        value: cellText(40),
+        unit: optionalText(30),
+        change: optionalText(40),
+      }),
+    )
+    .max(6)
+    .optional(),
+});
+
+/** show_card's flat arguments as a Coach visual, checked by the same strict
+ * schema as typed Coach's. Fields of other kinds are ignored. */
+export function cardVisual(a: z.infer<typeof cardArgs>): CoachVisual {
+  const base = { title: a.title, ...(a.caption ? { caption: a.caption } : {}) };
+  const nutrition = {
+    kcal: a.kcal,
+    protein: a.protein_g,
+    carbs: a.carbs_g,
+    fat: a.fat_g,
+  };
+  switch (a.kind) {
+    case "recipe":
+      return visualSchema.parse({
+        ...base,
+        kind: "recipe",
+        servings: a.servings ?? 1,
+        ...(a.minutes ? { minutes: a.minutes } : {}),
+        ingredients: (a.ingredients ?? []).map((i) => ({
+          item: i.item,
+          ...(i.amount ? { amount: i.amount } : {}),
+        })),
+        ...(a.steps?.length ? { steps: a.steps } : {}),
+        ...(Object.values(nutrition).some((v) => v !== undefined)
+          ? {
+              nutrition: Object.fromEntries(
+                Object.entries(nutrition).filter(([, v]) => v !== undefined),
+              ),
+            }
+          : {}),
+      });
+    case "table":
+      return visualSchema.parse({
+        ...base,
+        kind: "table",
+        columns: a.columns ?? [],
+        rows: (a.rows ?? []).map((r) => r.cells),
+      });
+    case "bar_chart":
+      return visualSchema.parse({
+        ...base,
+        kind: "bar_chart",
+        unit: a.unit ?? "",
+        points: a.points ?? [],
+      });
+    case "line_chart":
+      return visualSchema.parse({
+        ...base,
+        kind: "line_chart",
+        unit: a.unit ?? "",
+        series: [{ name: a.title, points: a.points ?? [] }],
+        ...(a.target !== undefined ? { target: a.target } : {}),
+      });
+    case "progress":
+      return visualSchema.parse({
+        ...base,
+        kind: "progress",
+        targets: a.targets ?? [],
+      });
+    case "stats":
+      return visualSchema.parse({
+        ...base,
+        kind: "stats",
+        stats: (a.stats ?? []).map((s) => ({
+          label: s.label,
+          value: s.value,
+          ...(s.unit ? { unit: s.unit } : {}),
+          ...(s.change ? { change: s.change } : {}),
+        })),
+      });
+  }
+}
 
 const workoutFrom = (
   title: string,
@@ -204,13 +361,30 @@ export const voiceToolArgs = {
     ),
   }),
   undo_save: z.object({ save_id: z.string().uuid() }),
+  // Not a save: a card on the athlete's screen, kept in the Coach thread.
+  show_card: cardArgs,
+  // A picture of the dish on a recipe card already shown.
+  show_picture: z.object({ card_id: z.string().uuid() }),
 };
 export type VoiceToolName = keyof typeof voiceToolArgs;
 type ReadTool = "read_journal" | "list_photos" | "recall_conversations";
+type CardTool = "show_card" | "show_picture";
+// Tools only an app that draws cards may call (voiceClientShowsCards).
+export const cardTools = new Set<string>([
+  "show_card",
+  "show_picture",
+] satisfies CardTool[]);
+
+/** Why this app can't use a card tool, or nothing when it can. */
+export function cardRefusal(name: string, headers: Headers) {
+  return cardTools.has(name) && !voiceClientShowsCards(headers)
+    ? "This app version can't show cards; give the gist in words."
+    : undefined;
+}
 
 // Turns a voice tool call into a journal action for the current state.
 export function voiceAction(
-  name: Exclude<VoiceToolName, "undo_save" | ReadTool>,
+  name: Exclude<VoiceToolName, "undo_save" | ReadTool | CardTool>,
   raw: unknown,
   state: JournalState,
   today: string,
@@ -364,7 +538,8 @@ function allRead(state: JournalState, day: string) {
 
 export type VoiceResult =
   | { ok: true; saveId?: string; title: string; detail: string }
-  | { ok: true; data: unknown }
+  // A card, and the picture to draw once the reply has gone (never sent).
+  | { ok: true; data: unknown; visual?: SavedVisual; job?: PictureJob }
   | { ok: false; error: string };
 
 export async function runVoiceTool(
@@ -376,8 +551,12 @@ export async function runVoiceTool(
     today: string;
     // Photos the voice coach saw in this call, eligible as meal sources.
     seenPhotoIds: string[];
+    // The call this tool ran in (voice_calls.id), kept with a card.
+    callId?: string;
   },
 ): Promise<VoiceResult> {
+  if (input.name === "show_card") return showCard(userId, input);
+  if (input.name === "show_picture") return showPicture(userId, input);
   if (input.name === "read_journal") {
     const { from, to } = voiceToolArgs.read_journal.parse(input.args);
     const { state } = await readJournal(userId);
@@ -471,11 +650,167 @@ function uniqueViolation(error: unknown) {
   return code === "23505";
 }
 
+// A card is its own Spoken turn in the Coach thread, with no reply or save:
+// the thread draws it after the call like any visual. The phone's tool-call
+// id is the turn's id, so a retry after a lost reply shows the same card. A
+// recipe asked for with a picture keeps its place in the same transaction;
+// the route draws it once the reply has gone.
+async function showCard(
+  userId: string,
+  input: { id: string; args: unknown; callId?: string },
+): Promise<VoiceResult> {
+  const db = getDb();
+  const picture =
+    (input.args as { picture?: unknown } | null)?.picture === true;
+  const shown = (visual: SavedVisual, job?: PictureJob): VoiceResult => ({
+    ok: true,
+    data: {
+      shown: true,
+      card_id: input.id,
+      ...(picture
+        ? {
+            picture:
+              visual.content.kind !== "recipe"
+                ? "not available: pictures are only of dishes, on a recipe card"
+                : visual.content.pictureId
+                  ? PICTURE_DRAWING
+                  : PICTURE_UNAVAILABLE,
+          }
+        : {}),
+    },
+    visual,
+    ...(job ? { job } : {}),
+  });
+  const existing = async () => {
+    const [turn] = await db
+      .select()
+      .from(agentTurns)
+      .where(and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)));
+    return turn;
+  };
+  const before = await existing();
+  if (before) {
+    const visual = before.response?.visuals?.[0];
+    if (visual) return shown(visual);
+    return { ok: false, error: "That call id was already used." };
+  }
+  const args = voiceToolArgs.show_card.parse(input.args);
+  const content = cardVisual(args);
+  const wanted = picture && content.kind === "recipe";
+  // Before the transaction: the AI allowance is looked up, then cached.
+  const gate = wanted ? await pictureGate() : undefined;
+  try {
+    const kept = await db.transaction(
+      async (tx): Promise<{ visual: SavedVisual; job?: PictureJob }> => {
+        const visual: SavedVisual = { id: uid(), content };
+        const response = {
+          reply: "",
+          proposals: [],
+          visuals: [visual],
+          ...(input.callId ? { voiceCallId: input.callId } : {}),
+        };
+        await tx.insert(agentTurns).values({
+          id: input.id,
+          userId,
+          question: `${VOICE_PREFIX}${args.summary}`,
+          photoIds: [],
+          status: "done",
+          response,
+        });
+        if (!wanted || content.kind !== "recipe") return { visual };
+        const reserved = await reservePicture(tx, {
+          userId,
+          turnId: input.id,
+          recipe: content,
+          refused: gate,
+        });
+        if ("refused" in reserved) return { visual };
+        const drawn = {
+          ...visual,
+          content: { ...content, pictureId: reserved.id },
+        };
+        await tx
+          .update(agentTurns)
+          .set({ response: { ...response, visuals: [drawn] } })
+          .where(
+            and(eq(agentTurns.id, input.id), eq(agentTurns.userId, userId)),
+          );
+        return { visual: drawn, job: reserved.job };
+      },
+    );
+    return shown(kept.visual, kept.job);
+  } catch (error) {
+    if (!uniqueViolation(error)) throw error;
+    // The same call id was shown at the same time: return that card.
+    const card = (await existing())?.response?.visuals?.[0];
+    if (card) return shown(card);
+    return { ok: false, error: "That call id was already used." };
+  }
+}
+
+// A picture of the dish on a recipe card already shown, when the athlete
+// wants to see it after all. One picture per card.
+async function showPicture(
+  userId: string,
+  input: { args: unknown },
+): Promise<VoiceResult> {
+  const { card_id } = voiceToolArgs.show_picture.parse(input.args);
+  const gate = await pictureGate();
+  return getDb().transaction(async (tx) => {
+    const card = and(eq(agentTurns.id, card_id), eq(agentTurns.userId, userId));
+    const [turn] = await tx.select().from(agentTurns).where(card).for("update");
+    const [visual, ...others] = turn?.response?.visuals ?? [];
+    const content = visual?.content;
+    if (!turn?.response || content?.kind !== "recipe")
+      return {
+        ok: false,
+        error:
+          "Only a recipe card can have a picture: pass the card_id show_card returned for it.",
+      };
+    const answer = (
+      picture: string,
+      saved = visual,
+      job?: PictureJob,
+    ): VoiceResult => ({
+      ok: true,
+      data: { card_id, picture },
+      visual: saved,
+      ...(job ? { job } : {}),
+    });
+    if (content.pictureId) {
+      const status = await pictureStatus(tx, userId, content.pictureId);
+      return answer(
+        status === "ready"
+          ? "already on the card"
+          : status === "drawing"
+            ? PICTURE_DRAWING
+            : PICTURE_UNAVAILABLE,
+      );
+    }
+    const reserved = await reservePicture(tx, {
+      userId,
+      turnId: card_id,
+      recipe: content,
+      refused: gate,
+    });
+    if ("refused" in reserved) return answer(PICTURE_UNAVAILABLE);
+    const updated = {
+      ...visual,
+      content: { ...content, pictureId: reserved.id },
+    };
+    await tx
+      .update(agentTurns)
+      .set({ response: { ...turn.response, visuals: [updated, ...others] } })
+      .where(card);
+    return answer(PICTURE_DRAWING, updated, reserved.job);
+  });
+}
+
 async function saveVoiceAction(
   userId: string,
   input: {
     id: string;
-    name: Exclude<VoiceToolName, "undo_save" | ReadTool>;
+    name: Exclude<VoiceToolName, "undo_save" | ReadTool | CardTool>;
     args: unknown;
     today: string;
     seenPhotoIds: string[];

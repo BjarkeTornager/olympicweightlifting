@@ -33,6 +33,10 @@ export function requireCurrentCoach(request: Request) {
       426,
     );
 }
+// Apps that draw recipe cards, and their pictures, send this. An older
+// iPhone build or a website not yet reloaded gets the recipe written out.
+export const drawsRecipeCards = (request: Request) =>
+  request.headers.get("x-coach-recipe-version") === "1";
 // For endpoints that expose nothing account-specific (such as the public
 // Maps browser key). A 401 here signs the browser out, so use it only where a
 // missing session is the sole reason to refuse.

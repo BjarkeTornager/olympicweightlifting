@@ -18,12 +18,18 @@ final class VoiceCall {
   enum Status: Equatable { case idle, connecting, listening, speaking, reconnecting, ended, failed }
 
   struct Line: Identifiable, Equatable {
-    enum Role { case you, coach, save }
+    enum Role { case you, coach, save, card }
     enum SaveState { case saving, saved, failed }
     let id: String
     var role: Role
     var text: String
     var state: SaveState?
+    /// A card the coach put on screen (show_card), with its picture once
+    /// one is asked for (show_picture).
+    var visual: Components.Schemas.CoachVisual?
+
+    /// What was said, as opposed to a save or a card.
+    var spoken: Bool { role == .you || role == .coach }
   }
 
   private(set) var status: Status = .idle
@@ -42,6 +48,7 @@ final class VoiceCall {
   /// ElevenLabs' id for this conversation, to hand it photos.
   private var conversationID: String?
   var saved: Int { lines.filter { $0.state == .saved }.count }
+  var cards: Int { lines.filter { $0.role == .card }.count }
 
   private let app: AppModel
   private let id = UUID()
@@ -60,12 +67,16 @@ final class VoiceCall {
   private var ending: Task<Void, Never>?
   private var nudge: Task<Void, Never>?
   private var persistTask: Task<Void, Never>?
+  /// Pictures ElevenLabs has been or will be told about, each once.
+  private var watchedPictures: Set<String> = []
   private let log = Logger(subsystem: "com.bjarketornager.liftjournal", category: "voice")
 
   static let maxMinutes = 30
   /// After the coach's goodbye, how long the athlete has to keep talking.
   static let endingGrace: Duration = .seconds(12)
-  static let clientVersion = "3"
+  /// 4: draws show_card's cards and their pictures, so the server offers
+  /// the tools.
+  static let clientVersion = "4"
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
     "update_meal": "Meal updated", "delete_meal": "Meal deleted", "log_sleep": "Sleep",
@@ -75,6 +86,9 @@ final class VoiceCall {
   ]
   /// Server tools that only read; they leave no receipt in the conversation.
   private static let readTools: Set<String> = ["read_journal", "list_photos", "recall_conversations"]
+  /// Server tools that put a card on screen, or a picture on a card,
+  /// instead of saving.
+  static let displayTools: Set<String> = ["show_card", "show_picture"]
 
   init(app: AppModel) {
     self.app = app
@@ -275,10 +289,8 @@ final class VoiceCall {
         try await connect(resume: true)
         if !resumed {
           // Without a handle the conversation starts fresh; give the coach
-          // the last few lines to carry on from.
-          let recent = lines.filter { $0.role != .save }.suffix(8)
-            .map { "\($0.role == .you ? "Athlete" : "Coach"): \($0.text)" }.joined(separator: "\n")
-          note("(The call reconnected. Continue where you left off; the last lines were:\n\(recent))", answer: true)
+          // the last few lines to carry on from, with any card on screen.
+          note("(The call reconnected. Continue where you left off; the last lines were:\n\(Self.recap(lines)))", answer: true)
         }
         report("reconnected", ["resumed": resumed ? 1 : 0])
         return
@@ -293,6 +305,22 @@ final class VoiceCall {
     }
     report("reconnect_failed")
     stop(failure: "The call dropped. Anything already saved is in Coach.")
+  }
+
+  /// The last few lines for a coach starting afresh, with the cards on
+  /// screen and their ids, which show_picture needs (recapLines on the
+  /// website).
+  static func recap(_ lines: [Line]) -> String {
+    lines.filter { $0.role != .save }.suffix(8)
+      .map { line in
+        switch line.role {
+        case .card:
+          "(Card on screen: \(line.text), \(line.visual?.kind ?? "card"), card_id \(line.id))"
+        case .you: "Athlete: \(line.text)"
+        default: "Coach: \(line.text)"
+        }
+      }
+      .joined(separator: "\n")
   }
 
   private func send(_ message: [String: Any]) {
@@ -375,8 +403,17 @@ final class VoiceCall {
       lineClosed = true
       nudge?.cancel()
       if LiveProtocol.promisesAction(turnText) {
+        // Counted from when the coach stops speaking: ElevenLabs completes a
+        // turn as it starts to play, while a card it promised may still be
+        // on its way.
+        let wait = LiveProtocol.nudgeAfter(turnText)
         nudge = Task { [weak self] in
-          try? await Task.sleep(for: .milliseconds(2500))
+          var quiet = Duration.zero
+          while quiet < wait {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, !Task.isCancelled else { return }
+            quiet = self.audio.coachSpeaking ? .zero : quiet + .milliseconds(250)
+          }
           guard let self, !Task.isCancelled, self.pending == 0 else { return }
           self.note(LiveProtocol.waitingNudge, answer: true)
         }
@@ -462,7 +499,11 @@ final class VoiceCall {
         respond(call, ["error": error.localizedDescription])
       }
     default:
-      await journal(call)
+      if Self.displayTools.contains(call.name) {
+        await display(call)
+      } else {
+        await journal(call)
+      }
     }
   }
 
@@ -484,7 +525,7 @@ final class VoiceCall {
           body: [
             "id": id, "name": call.name, "args": call.args.mapValues(\.foundation),
             "timezone": TimeZone.current.identifier, "seenPhotoIds": photos,
-          ], token: session.token, account: session.accountID)
+          ], token: session.token, account: session.accountID, headers: ["X-Voice-Client": Self.clientVersion])
         // A release in progress answers 502/503; try again shortly.
         if response.status >= 502 { continue }
         result = response.json ?? result
@@ -512,6 +553,99 @@ final class VoiceCall {
     }
   }
 
+  /// A card on the athlete's screen, drawn as soon as the server has kept it
+  /// in Coach, with no Save chip, or a picture added to one. A quick retry
+  /// uses the same id, so a lost reply never shows the card twice.
+  private func display(_ call: FunctionCall) async {
+    let failure = "The card could not be shown; give the gist in words."
+    guard let session = app.session else {
+      respond(call, ["error": failure])
+      return
+    }
+    let id = UUID().uuidString.lowercased()
+    var result: [String: Any] = ["ok": false, "error": failure]
+    for wait in [0.0, 1, 1] {
+      if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+      do {
+        let response = try await RawRequest.send(
+          "api/voice/action",
+          body: [
+            "id": id, "name": call.name, "args": call.args.mapValues(\.foundation),
+            "timezone": TimeZone.current.identifier, "callId": self.id.uuidString.lowercased(),
+          ], token: session.token, account: session.accountID,
+          headers: ["X-Voice-Client": Self.clientVersion], timeout: 10)
+        if response.status >= 502 { continue }
+        result = response.json ?? result
+        if response.status != 200 { result = ["ok": false, "error": response.error ?? failure] }
+        break
+      } catch {
+        continue
+      }
+    }
+    guard result["ok"] as? Bool == true else {
+      respond(call, ["error": result["error"] as? String ?? failure])
+      return
+    }
+    if let visual = Self.card(result["card"]) {
+      // The card's id is the one show_picture names it by.
+      let card = (result["data"] as? [String: Any])?["card_id"] as? String ?? id
+      let fresh = !lines.contains { $0.role == .card && $0.id == card }
+      lines = Self.placing(visual, id: card, in: lines)
+      if fresh { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+      if let picture = visual.pictureId { watchPicture(picture, title: visual.title) }
+    }
+    respond(call, ["result": result["data"] ?? [String: Any]()])
+  }
+
+  /// The call's lines with a card shown: a new card at the end, or one
+  /// already on screen updated where it is (its picture added).
+  static func placing(_ visual: Components.Schemas.CoachVisual, id: String, in lines: [Line]) -> [Line] {
+    var lines = lines
+    if let index = lines.firstIndex(where: { $0.role == .card && $0.id == id }) {
+      lines[index].visual = visual
+    } else {
+      lines.append(Line(id: id, role: .card, text: visual.title, visual: visual))
+    }
+    return lines
+  }
+
+  /// ElevenLabs is told once a picture it asked for is on screen, or
+  /// couldn't be drawn, without being made to reply. Gemini answers every
+  /// note, so it gets none; the card shows the picture either way.
+  private func watchPicture(_ picture: String, title: String) {
+    guard provider == .elevenlabs, !watchedPictures.contains(picture), let session = app.session else { return }
+    watchedPictures.insert(picture)
+    tasks.append(
+      Task { [weak self] in
+        let until = ContinuousClock.now + CoachPicture.patience
+        var outcome = CoachPicture.Outcome.drawing
+        while outcome == .drawing, ContinuousClock.now < until, !Task.isCancelled {
+          let response = try? await RawRequest.send(
+            "api/coach/pictures/\(picture)", method: "GET", json: nil, token: session.token,
+            account: session.accountID, timeout: 15)
+          outcome = CoachPicture.outcome(status: response?.status ?? 0)
+          if outcome == .drawing { try? await Task.sleep(for: CoachPicture.interval) }
+        }
+        guard let self, !Task.isCancelled, !self.closed else { return }
+        self.note(Self.pictureNote(title: title, ready: outcome == .ready), answer: false)
+      })
+  }
+
+  /// What ElevenLabs is told when a picture settles.
+  static func pictureNote(title: String, ready: Bool) -> String {
+    ready
+      ? "(The picture of \(title) is now on the athlete's screen.)"
+      : "(The picture of \(title) couldn't be drawn; the recipe card is still on screen. Mention it only if asked.)"
+  }
+
+  /// The card in an action's reply, in the shape the Coach thread draws.
+  static func card(_ json: Any?) -> Components.Schemas.CoachVisual? {
+    guard let json, JSONSerialization.isValidJSONObject(json),
+      let data = try? JSONSerialization.data(withJSONObject: json)
+    else { return nil }
+    return try? JSONDecoder().decode(Components.Schemas.CoachVisual.self, from: data)
+  }
+
   private func respond(_ call: FunctionCall, _ response: [String: Any]) {
     send(
       provider == .elevenlabs
@@ -522,7 +656,7 @@ final class VoiceCall {
   func photoTaken(_ image: UIImage) async {
     cameraRequested = false
     guard let jpeg = CoachModel.jpeg(image) else { return }
-    // ElevenLabs' coach can't be sent images; it asks about the plate.
+    // Gemini sees it on the socket; ElevenLabs gets it from the server below.
     if provider == .google { send(LiveProtocol.image(Self.small(image) ?? jpeg)) }
     let id = UUID().uuidString.lowercased()
     do {
@@ -617,16 +751,22 @@ final class VoiceCall {
   /// and the thread can show it. The last save marks the call as ended, so
   /// the server tidies the transcript (punctuation, clear mishearings).
   private func persist(final: Bool = false) {
-    let entries = lines.filter { $0.role != .save }.suffix(400).map {
-      ["role": $0.role == .you ? "you" : "coach", "text": String($0.text.prefix(4000))]
-    }
+    let entries = Self.transcriptEntries(lines)
     guard !entries.isEmpty, let session = app.session else { return }
-    var body: [String: Any] = ["id": id.uuidString.lowercased(), "purpose": "checkin", "entries": Array(entries)]
+    var body: [String: Any] = ["id": id.uuidString.lowercased(), "purpose": "checkin", "entries": entries]
     if final { body["final"] = true }
     guard let json = try? JSONSerialization.data(withJSONObject: body) else { return }
     Task.detached {
       _ = try? await RawRequest.send(
         "api/voice/transcript", json: json, token: session.token, account: session.accountID)
+    }
+  }
+
+  /// What was said, for the stored transcript: saves and cards are kept in
+  /// Coach as their own turns, so they never become the coach's words.
+  static func transcriptEntries(_ lines: [Line]) -> [[String: String]] {
+    lines.filter(\.spoken).suffix(400).map {
+      ["role": $0.role == .you ? "you" : "coach", "text": String($0.text.prefix(4000))]
     }
   }
 

@@ -17,11 +17,17 @@ import {
   type FunctionCall,
   type Receipt,
   isCreditError,
+  CARD_NUDGE_AFTER_MS,
   NUDGE_AFTER_MS,
+  placeCard,
   promisesAction,
+  promisesCard,
+  recapLines,
+  spokenLines,
   VOICE_CREDIT_MESSAGE,
   WAITING_NUDGE,
 } from "./voice-live";
+import type { SavedVisual } from "./coach-visuals";
 
 export type VoiceStatus =
   | "idle"
@@ -35,7 +41,7 @@ export type VoiceStatus =
 export type VoicePurpose = "checkin" | "goals";
 type ActionResult =
   | { ok: true; saveId?: string; title: string; detail: string }
-  | { ok: true; data: unknown }
+  | { ok: true; data: unknown; visual?: SavedVisual }
   | { ok: false; error: string };
 
 const saveLabels: Record<string, string> = {
@@ -61,11 +67,14 @@ const readTools = new Set([
   "list_photos",
   "recall_conversations",
 ]);
+// Tools that put a card on screen, or a picture on a card; no receipt either.
+const displayTools = new Set(["show_card", "show_picture"]);
 const MAX_CALL_MINUTES = 30;
 // After the coach's goodbye, how long the athlete has to keep talking.
 const ENDING_GRACE_MS = 12000;
-// The server refuses calls from an app older than this voice protocol.
-export const VOICE_CLIENT_VERSION = "3";
+// The server refuses calls from an app older than this voice protocol, and
+// offers cards (show_card) and their pictures (show_picture) from version 4.
+export const VOICE_CLIENT_VERSION = "4";
 
 type Session = {
   id: string;
@@ -136,11 +145,10 @@ export function useVoiceCheckin({
     (s: Session, final = false) => {
       // A save still pending when the call ended would undo "final".
       if (s.closed && !final) return;
-      const entries = transcript.current.flatMap((e) =>
-        e.role === "save"
-          ? []
-          : [{ role: e.role, text: e.text.slice(0, 4000) }],
-      );
+      const entries = spokenLines(transcript.current).map((e) => ({
+        role: e.role,
+        text: e.text.slice(0, 4000),
+      }));
       if (!entries.length) return;
       void privateFetch("/api/voice/transcript", {
         method: "POST",
@@ -314,13 +322,20 @@ export function useVoiceCheckin({
           } else if (e.type === "turnComplete") {
             s.lineClosed = true;
             // "Let me check that" with nothing following would leave the
-            // athlete in silence; prompt the coach to carry on.
+            // athlete in silence; prompt the coach to carry on, counting
+            // from when its words have finished playing.
             clearTimeout(s.nudge);
             if (promisesAction(s.turnText))
-              s.nudge = setTimeout(() => {
-                if (!s.pending)
-                  send({ realtimeInput: { text: WAITING_NUDGE } });
-              }, NUDGE_AFTER_MS);
+              s.nudge = setTimeout(
+                () => {
+                  if (!s.pending)
+                    send({ realtimeInput: { text: WAITING_NUDGE } });
+                },
+                Math.max(0, s.playAt - s.context.currentTime) * 1000 +
+                  (promisesCard(s.turnText)
+                    ? CARD_NUDGE_AFTER_MS
+                    : NUDGE_AFTER_MS),
+              );
           } else if (e.type === "toolCall") {
             clearTimeout(s.nudge);
             e.calls.forEach((call) => void handle(call, send));
@@ -354,18 +369,11 @@ export function useVoiceCheckin({
           await connect(s, true);
           if (!resumed) {
             // Without a resumption handle the conversation starts fresh;
-            // give the coach the last few lines to carry on from.
-            const recent = transcript.current
-              .flatMap((e) =>
-                e.role === "save"
-                  ? []
-                  : [`${e.role === "you" ? "Athlete" : "Coach"}: ${e.text}`],
-              )
-              .slice(-8)
-              .join("\n");
+            // give the coach the last few lines to carry on from, with any
+            // card on screen.
             s.send?.({
               realtimeInput: {
-                text: `(The call reconnected. Continue where you left off; the last lines were:\n${recent})`,
+                text: `(The call reconnected. Continue where you left off; the last lines were:\n${recapLines(transcript.current)})`,
               },
             });
           }
@@ -735,6 +743,10 @@ export function useVoiceCheckin({
       }
       return;
     }
+    if (displayTools.has(call.name)) {
+      await display(s, call, send);
+      return;
+    }
     const reading = readTools.has(call.name);
     if (!reading)
       setLines((l) => [
@@ -757,7 +769,7 @@ export function useVoiceCheckin({
       try {
         const response = await privateFetch("/api/voice/action", {
           method: "POST",
-          headers: headers(),
+          headers: { ...headers(), "X-Voice-Client": VOICE_CLIENT_VERSION },
           body: JSON.stringify({
             id,
             name: call.name,
@@ -797,6 +809,55 @@ export function useVoiceCheckin({
               },
             },
     );
+  };
+
+  // A card on screen, shown in the conversation as soon as the server has
+  // kept it, with no receipt, or a picture added to one. A quick retry uses
+  // the same id, so a lost reply never shows the card twice.
+  const display = async (
+    s: Session,
+    call: FunctionCall,
+    send: (m: object) => void,
+  ) => {
+    const failed = "The card could not be shown; give the gist in words.";
+    let result: ActionResult = { ok: false, error: failed };
+    const id = crypto.randomUUID();
+    for (const wait of [0, 1000, 1000]) {
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      try {
+        const response = await privateFetch("/api/voice/action", {
+          method: "POST",
+          headers: { ...headers(), "X-Voice-Client": VOICE_CLIENT_VERSION },
+          body: JSON.stringify({
+            id,
+            name: call.name,
+            args: call.args ?? {},
+            timezone: timezone(),
+            callId: s.id,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (response.status >= 502) continue;
+        const data = await response.json();
+        result = response.ok
+          ? data
+          : { ok: false, error: data.error ?? failed };
+        break;
+      } catch {
+        /* Network or server restart: retry with the same id. */
+      }
+    }
+    if (!result.ok) return respond(send, call, { error: result.error });
+    if ("visual" in result && result.visual) {
+      const visual = result.visual;
+      // The card's id is the one show_picture names it by.
+      const card =
+        (result.data as { card_id?: unknown } | undefined)?.card_id ?? id;
+      setLines((l) => placeCard(l, { role: "card", id: String(card), visual }));
+      // The card is a turn in Coach's thread too.
+      onSaved();
+    }
+    respond(send, call, { result: "data" in result ? result.data : {} });
   };
 
   return {

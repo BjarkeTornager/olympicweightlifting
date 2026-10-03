@@ -11,13 +11,17 @@ import { logFailure } from "@/lib/error-log";
 import { isCreditError, VOICE_CREDIT_MESSAGE } from "@/lib/voice-live";
 import { nativeClient } from "@/lib/native-client";
 import { allowRequest, readJournal } from "@/lib/server";
-import { recentConversations } from "@/lib/conversation-memory";
+import {
+  pruneConversations,
+  recentConversations,
+} from "@/lib/conversation-memory";
 import { routeNotesFor } from "@/lib/workout-routes";
 import {
   mintVoiceToken,
   VOICE_MODEL,
   VOICE_SESSION_MINUTES,
   VOICE_SOCKET_URL,
+  voiceClientShowsCards,
   voiceConfigured,
   voiceContext,
   voiceInstruction,
@@ -35,6 +39,7 @@ import {
 import { voiceFor } from "@/lib/voice-options";
 import { coachLanguageSchema } from "@/lib/coach-language";
 import { countUse } from "@/lib/feature-use";
+import { picturesEnabled } from "@/lib/coach-pictures";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +114,17 @@ export async function POST(request: Request) {
         429,
       );
     const clock = localClock(new Date(), timezone);
+    // Conversation older than 90 days goes, cards and pictures with it, as
+    // when typing to Coach; a call that can't prune still starts.
+    await pruneConversations(user.id).catch((error: unknown) =>
+      logFailure("conversation_prune_failed", error, {}, "warn"),
+    );
     const { state } = await readJournal(user.id);
+    // Only an app that draws cards is offered show_card; older ones are
+    // told they can't show anything. A recipe card can have a picture while
+    // pictures are switched on.
+    const cards = voiceClientShowsCards(request.headers);
+    const pictures = cards && picturesEnabled();
     const instruction = voiceInstruction(
       voiceContext(
         state,
@@ -120,7 +135,7 @@ export async function POST(request: Request) {
       state.profile.name || user.name?.split(" ")[0],
       purpose,
       await recentConversations(user.id, { limit: 10 }),
-      { savedPhotos: provider === "google", language },
+      { savedPhotos: provider === "google", language, cards, pictures },
     );
     // A resumed Google call is the same conversation, so it isn't counted again.
     if (!resumeHandle) {
@@ -158,6 +173,8 @@ export async function POST(request: Request) {
     const setup = voiceSetup(instruction, resumeHandle, {
       voice: voiceFor(provider, voice),
       language,
+      cards,
+      pictures,
     });
     let token: string;
     try {

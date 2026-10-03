@@ -3,6 +3,7 @@ import { memo, useId } from "react";
 import {
   ArrowRight,
   BarChart3,
+  ChefHat,
   GitBranch,
   Table2,
   Images,
@@ -16,6 +17,7 @@ import {
   Comparison,
   LineChart,
   Progress,
+  RecipeCard,
   Split,
   Stats,
 } from "./coach-visual-kinds";
@@ -204,7 +206,9 @@ export const CoachVisuals = memo(function CoachVisuals({
                       ? CalendarDays
                       : visual.kind === "stats"
                         ? SquaresFour
-                        : BarChart3;
+                        : visual.kind === "recipe"
+                          ? ChefHat
+                          : BarChart3;
         return (
           <figure
             className={`coach-visual coach-visual-${visual.kind}`}
@@ -231,7 +235,9 @@ export const CoachVisuals = memo(function CoachVisuals({
                               ? "Breakdown"
                               : visual.kind === "calendar"
                                 ? "Calendar"
-                                : "At a glance"}
+                                : visual.kind === "recipe"
+                                  ? "Recipe"
+                                  : "At a glance"}
               </span>
               <h3>{visual.title}</h3>
               {visual.caption && <p>{visual.caption}</p>}
@@ -300,6 +306,9 @@ export const CoachVisuals = memo(function CoachVisuals({
             {visual.kind === "comparison" && <Comparison visual={visual} />}
             {visual.kind === "split" && <Split visual={visual} />}
             {visual.kind === "calendar" && <Calendar visual={visual} />}
+            {visual.kind === "recipe" && (
+              <RecipeCard visual={visual} accountId={accountId} />
+            )}
             {visual.kind === "photo_gallery" && (
               <CoachPhotoGallery
                 imageIds={visual.imageIds}

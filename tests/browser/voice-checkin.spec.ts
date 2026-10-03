@@ -138,7 +138,7 @@ test("a spoken check-in streams the microphone, saves directly, uses the camera 
   await context.route("**/api/voice/session", (r) =>
     r.request().method() === "GET"
       ? r.fulfill({ json: { enabled: true } })
-      : (expect(r.request().headers()["x-voice-client"]).toBe("3"),
+      : (expect(r.request().headers()["x-voice-client"]).toBe("4"),
         (sessionBody = r.request().postDataJSON()),
         sessionBodies.push(r.request().postDataJSON()),
         r.fulfill({

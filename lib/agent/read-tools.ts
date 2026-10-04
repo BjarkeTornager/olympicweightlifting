@@ -9,7 +9,7 @@ import { liftingReview } from "../lifting-coach";
 import { liftingGuide } from "./lifting-guide";
 import { mealTypeConflict } from "./knowledge";
 import { liftingKnowledge } from "../lifting-resources";
-import { days, EXERCISES, exerciseName, program } from "../domain";
+import { athleteAge, days, EXERCISES, exerciseName, program } from "../domain";
 import { trainingPrograms, ownedProgram } from "../training-programs";
 import { searchExercises } from "../exercises";
 import { planProgramDay } from "../../js/progression.js";
@@ -484,6 +484,7 @@ export async function runReadTool(
             sessions: state.sessions,
             programId: program.id,
             date: a.date,
+            age: athleteAge(state),
           }),
         })),
         routines: state.templates.map((t) => ({

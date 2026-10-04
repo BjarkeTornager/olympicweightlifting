@@ -1683,6 +1683,22 @@ textarea {
   margin: 4px 0 8px;
 }.focused-workout .exercise-help > p {
   font-size: 13px;
+}
+/* A short night's suggestion, the under-18 technique check and a proposed
+   reset sit with the workout, quiet until needed. */
+.focused-workout :is(.recovery-hint, .technique-check, .reset-proposal) {
+  margin: 0;
+}
+.focused-workout .technique-check {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+.focused-workout .technique-check input {
+  flex: none;
+  margin-top: 2px;
+}
+.focused-workout .exercise-body > .reset-proposal {
+  margin-bottom: 12px;
 }.focused-workout .exercise-body > .button.full {
   margin-top: 10px;
   min-height: 50px;

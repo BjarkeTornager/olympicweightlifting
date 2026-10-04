@@ -2,7 +2,11 @@
 import { useEffect, useState } from "react";
 import { Pause, Play, RotateCcw, Timer } from "@/components/ui/icons";
 import { Button } from "./ui/button";
-type Clock = { endsAt: number | null; remaining: number };
+// `full` is the duration an idle clock was set to, so an untouched timer
+// can start from the next exercise's rest instead of the last one's.
+type Clock = { endsAt: number | null; remaining: number; full?: number };
+const durationLabel = (seconds: number) =>
+  seconds < 60 || seconds % 30 ? `${seconds} s` : `${seconds / 60} min`;
 export function RestTimer({
   accountId,
   duration = 90,
@@ -22,13 +26,18 @@ export function RestTimer({
         (saved.endsAt === null || Number.isFinite(saved.endsAt)) &&
         Number.isFinite(saved.remaining) &&
         saved.remaining >= 0 &&
-        saved.remaining <= 600
+        saved.remaining <= 1800
       )
-        return saved;
+        return saved.endsAt === null && saved.remaining === saved.full
+          ? { endsAt: null, remaining: duration, full: duration }
+          : saved;
     } catch {}
-    return { endsAt: null, remaining: duration };
+    return { endsAt: null, remaining: duration, full: duration };
   });
   const [selected, setSelected] = useState(duration);
+  const choices = [...new Set([60, 90, 120, 180, 300, selected])].sort(
+    (a, b) => a - b,
+  );
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -67,12 +76,12 @@ export function RestTimer({
             const seconds = Number(e.target.value);
             setSelected(seconds);
             onDurationChange?.(seconds);
-            setClock({ endsAt: null, remaining: seconds });
+            setClock({ endsAt: null, remaining: seconds, full: seconds });
           }}
         >
-          {[60, 90, 120, 180, 300].map((s) => (
+          {choices.map((s) => (
             <option key={s} value={s}>
-              {s / 60} min
+              {durationLabel(s)}
             </option>
           ))}
         </select>
@@ -98,7 +107,9 @@ export function RestTimer({
       <Button
         variant="ghost"
         aria-label="Reset rest timer"
-        onClick={() => setClock({ endsAt: null, remaining: selected })}
+        onClick={() =>
+          setClock({ endsAt: null, remaining: selected, full: selected })
+        }
       >
         <RotateCcw size={18} />
       </Button>

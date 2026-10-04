@@ -1,5 +1,6 @@
 import { isValidLoggedSet } from "../js/progression.js";
 import { today, uid } from "./domain";
+import { formatSleepDuration } from "./health";
 import type { JournalState, Workout, WorkoutTemplate } from "./model";
 
 export function formatSet(weight: string | number, reps: string | number) {
@@ -158,4 +159,12 @@ export function weeklyVolume(state: JournalState) {
   return [...weeks.values()]
     .sort((a, b) => b.week.localeCompare(a.week))
     .slice(0, 12);
+}
+// Under 6 hours' sleep can lower performance, though little for morning
+// sessions, so a short night before a workout suggests holding today's
+// loads. It only suggests; the athlete decides.
+export function shortSleepHint(state: JournalState, date: string) {
+  const hours = state.health.checkins.find((c) => c.date === date)?.sleepHours;
+  if (hours == null || hours >= 6) return undefined;
+  return `You slept ${formatSleepDuration(hours)} before this session. Under 6 hours can lower performance, so you may want to hold today’s loads.`;
 }

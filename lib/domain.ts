@@ -179,8 +179,10 @@ export function replanDraft(state: JournalState): void {
   if (!day) return;
   draft.exercises.forEach((entry) => {
     const source = day.exercises.find((e) => e.exerciseId === entry.exerciseId);
+    // Entered work and a reset the athlete took stay as they are.
     if (
       !source ||
+      (entry.prescribed.progression as Plan | undefined)?.status === "reset" ||
       entry.sets.some(
         (s) =>
           s.touched ||
@@ -249,8 +251,8 @@ export function proposedReset(entry: Entry) {
     : undefined;
 }
 // Take a proposed reset before logging the exercise: its target and sets
-// drop to the reset load, marked as the athlete's choice so replanning
-// leaves them alone.
+// drop to the reset load. Its "reset" status keeps replanning away; the sets
+// are not marked as edited, so a weight change still carries to later sets.
 export function takeReset(entry: Entry) {
   const plan = entry.prescribed.progression as Plan | undefined;
   const reset = Number(plan?.resetWeight);
@@ -274,7 +276,6 @@ export function takeReset(entry: Entry) {
   };
   entry.sets.forEach((s) => {
     s.weight = String(reset);
-    s.edited = { ...s.edited, weight: true };
   });
 }
 export function takeLoadReset(state: JournalState, entryId: string) {

@@ -198,7 +198,8 @@ export function planProgramDay(day, { sessions = [], programId, date, age = 0 })
 }
 
 // Upgrade only untouched presets. Never reinterpret an athlete's recorded or
-// manually edited sets, or rewrite a saved historical session.
+// manually edited sets or a reset they took, or rewrite a saved historical
+// session.
 export function upgradeProgramDraft(draft, { day, sessions, age = 0 }) {
   if (!draft || !day || draft.editingSessionId || draft.progressionRevision === PROGRAM_PROGRESSION_REVISION) return draft;
   const upgraded = JSON.parse(JSON.stringify(draft));
@@ -206,7 +207,7 @@ export function upgradeProgramDraft(draft, { day, sessions, age = 0 }) {
   upgraded.recovery = draft.recovery === "limited" ? "limited" : "auto";
   for (const entry of upgraded.exercises ?? []) {
     const exercise = day.exercises.find(item => item.exerciseId === entry.exerciseId);
-    if (!exercise || entry.completed || !entry.sets?.length || entry.sets.some(set => set.touched || isLoggedSet(set) || Object.values(set.edited ?? {}).some(Boolean))) continue;
+    if (!exercise || entry.completed || !entry.sets?.length || entry.prescribed?.progression?.status === "reset" || entry.sets.some(set => set.touched || isLoggedSet(set) || Object.values(set.edited ?? {}).some(Boolean))) continue;
     const expectedWeight = entry.prescribed?.targetWeight ?? exercise.initialWeight;
     const expectedReps = entry.prescribed?.targetReps ?? exercise.defaultReps;
     if (entry.sets.length !== targetSetCount(exercise) ||

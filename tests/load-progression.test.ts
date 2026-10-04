@@ -18,6 +18,10 @@ import {
   startTrainingDay,
 } from "../lib/training-programs";
 import { shortSleepHint } from "../lib/training";
+import {
+  updatePendingSets,
+  upgradeProgramDraft,
+} from "../js/progression.js";
 
 const monday = days.find((d) => d.id === "monday")!;
 const plan = (state: JournalState, index: number) =>
@@ -129,6 +133,20 @@ test("a proposed reset is taken only before logging, and replanning keeps it", (
   assert.ok(pull.sets.every((s) => s.weight === "72"));
   setWorkoutRecovery(state, "auto");
   assert.ok(pull.sets.every((s) => s.weight === "72"));
+  // The reset is not a weight typed by hand: a change to one set still
+  // carries to the later sets, and an older draft's upgrade keeps the reset.
+  assert.ok(pull.sets.every((s) => !s.edited?.weight));
+  const upgraded = upgradeProgramDraft(
+    { ...structuredClone(state.activeWorkout), progressionRevision: 3 },
+    { day: monday, sessions: state.sessions },
+  );
+  assert.ok(upgraded!.exercises[1].sets.every((s) => s.weight === "72"));
+  const tried = structuredClone(pull);
+  updatePendingSets(tried, tried.sets[0].id, "weight", "74");
+  assert.deepEqual(
+    tried.sets.map((s) => s.weight),
+    ["74", "74", "74", "74"],
+  );
   // Next time builds from the reset load: with an RPE straight away, or
   // after a second session without one.
   pull.sets.forEach((s) =>

@@ -237,11 +237,13 @@ struct TodayView: View {
 
   /// Under the steps: Apple's active energy, which is its estimate, and
   /// "Yesterday" when the cell shows yesterday's because today has nothing
-  /// from Apple Health yet.
+  /// from Apple Health yet. The server holds the figure within range and
+  /// flags one unusually high, as the Ledger does.
   static func stepsNote(_ today: Today) -> String? {
     guard let vitals = today.vitals else { return nil }
     let energy = vitals.activeEnergyKcal.map {
       "~\(Format.number((Double($0) / 10).rounded() * 10)) kcal active"
+        + (vitals.activeEnergyUnusual == true ? ", unusually high" : "")
     }
     let parts = [vitals.date == today.date ? nil : "Yesterday", energy].compactMap { $0 }
     return parts.isEmpty ? nil : parts.joined(separator: " · ")

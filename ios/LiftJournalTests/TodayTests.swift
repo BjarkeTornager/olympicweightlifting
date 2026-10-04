@@ -137,13 +137,15 @@ struct TodayTests {
     #expect(TodayView.burned(nil).isEmpty)
   }
 
-  @Test("The steps cell says Yesterday when it shows yesterday's, and marks active energy as an estimate")
+  @Test("The steps cell says Yesterday when it shows yesterday's, and marks active energy as an estimate, flagged when unusually high")
   func stepsNote() throws {
     var today = try #require(PreviewData.today)
     today.vitals = .init(date: today.date, steps: 9120, activeEnergyKcal: 612)
     #expect(TodayView.stepsNote(today) == "~610 kcal active")
     today.vitals = .init(date: "2026-09-25", steps: 11200, activeEnergyKcal: 704)
     #expect(TodayView.stepsNote(today) == "Yesterday · ~700 kcal active")
+    today.vitals = .init(date: today.date, steps: 9120, activeEnergyKcal: 10000, activeEnergyUnusual: true)
+    #expect(TodayView.stepsNote(today) == "~10,000 kcal active, unusually high")
     today.vitals = .init(date: "2026-09-25", steps: 11200)
     #expect(TodayView.stepsNote(today) == "Yesterday")
     today.vitals = nil

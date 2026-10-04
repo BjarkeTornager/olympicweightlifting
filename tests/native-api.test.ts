@@ -190,6 +190,8 @@ test("Today and the journal feed describe the day for the app", () => {
   const today = buildToday(state, 3, date, new Set([run.id]));
   assert.equal(today.hydration.totalMl, 500);
   assert.equal(today.vitals?.restingHeartRate, 52);
+  assert.equal(today.vitals?.activeEnergyKcal, 540);
+  assert.equal(today.vitals?.activeEnergyUnusual, undefined);
   assert.equal(today.activities[0].fromAppleHealth, true);
   assert.equal(today.activities[0].averageHeartRate, 148);
   assert.equal(today.activeWorkout?.title, days[0].title);
@@ -224,6 +226,31 @@ test("Today and the journal feed describe the day for the app", () => {
       "Active energy",
     ],
   );
+});
+
+test("an implausible active energy is held within range and flagged under the steps too", () => {
+  const state = emptyJournal();
+  state.health.vitals = [
+    {
+      date,
+      restingHeartRate: null,
+      heartRateVariabilityMs: null,
+      averageHeartRate: null,
+      steps: 9120,
+      activeEnergyKcal: 15000,
+      source: "apple-health",
+      updatedAt: now.toISOString(),
+    },
+  ];
+  const today = buildToday(state, 3, date, new Set());
+  assert.equal(today.vitals?.activeEnergyKcal, 10000);
+  assert.equal(today.vitals?.activeEnergyUnusual, true);
+  assert.deepEqual(
+    today.burned?.lines?.map((l) => [l.text, l.note]),
+    [["~10,000", "Apple Health, so far; unusually high, worth checking there"]],
+  );
+  const trends = buildTrends(state, date, 1);
+  assert.equal(trends.days.at(-1)?.activeEnergyKcal, 10000);
 });
 
 test("journal items carry their full details: meals item by item, sleep with its night", () => {

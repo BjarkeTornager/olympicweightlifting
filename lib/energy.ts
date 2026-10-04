@@ -255,7 +255,6 @@ export function dayBurn(
 export type DayBurned = {
   active: {
     kcal: number;
-    // Above 6,000 kcal: shown, but worth checking in Apple Health.
     unusual: boolean;
     syncedAt: string;
   } | null;
@@ -264,6 +263,8 @@ export type DayBurned = {
 // Apple Health's active energy for a day, kept within 0-10,000 kcal.
 export const activeEnergyKcal = (kcal: number) =>
   tens(Math.min(10000, Math.max(0, kcal)));
+// Above 6,000 kcal: shown, but worth checking in Apple Health.
+export const unusualActiveEnergy = (kcal: number) => kcal > 6000;
 export function burnedToday(
   state: JournalState,
   date: string,
@@ -274,7 +275,7 @@ export function burnedToday(
     vitals?.activeEnergyKcal != null
       ? {
           kcal: activeEnergyKcal(vitals.activeEnergyKcal),
-          unusual: vitals.activeEnergyKcal > 6000,
+          unusual: unusualActiveEnergy(vitals.activeEnergyKcal),
           syncedAt: vitals.updatedAt,
         }
       : null;

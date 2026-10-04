@@ -7,6 +7,7 @@ import {
   burnedToday,
   cardioBurn,
   strengthBurn,
+  unusualActiveEnergy,
 } from "./energy";
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
@@ -157,7 +158,11 @@ const vitalsView = z
     heartRateVariabilityMs: z.number().optional(),
     averageHeartRate: int.optional(),
     steps: int.optional(),
+    // Apple's estimate, held within 0-10,000 kcal and to the nearest 10.
     activeEnergyKcal: int.optional(),
+    // Above 6,000 kcal: worth checking in Apple Health. Optional: older
+    // servers.
+    activeEnergyUnusual: z.boolean().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Vitals" });
@@ -822,6 +827,16 @@ export function journalStartDate(
   return first;
 }
 
+// Apple Health's active energy under the steps, held within range and flagged
+// when unusually high, as Today's Ledger shows it.
+const activeEnergy = (kcal?: number | null) =>
+  kcal == null
+    ? {}
+    : {
+        activeEnergyKcal: activeEnergyKcal(kcal),
+        ...(unusualActiveEnergy(kcal) ? { activeEnergyUnusual: true } : {}),
+      };
+
 // Today's burned figures, or nothing until there is one to show.
 function burnedForToday(burned: ReturnType<typeof burnedToday>) {
   const lines = burned ? burnedLines(burned) : [];
@@ -882,7 +897,7 @@ export function buildToday(
             heartRateVariabilityMs: vitals.heartRateVariabilityMs,
             averageHeartRate: vitals.averageHeartRate,
             steps: vitals.steps,
-            activeEnergyKcal: vitals.activeEnergyKcal,
+            ...activeEnergy(vitals.activeEnergyKcal),
           })
         : undefined,
       checkin:
@@ -1138,7 +1153,9 @@ export function buildJournal(
             v.activeEnergyKcal != null && {
               label: "Active energy",
               value: `~${activeEnergyKcal(v.activeEnergyKcal).toLocaleString("en-GB")} kcal`,
-              note: "Apple's estimate",
+              note: unusualActiveEnergy(v.activeEnergyKcal)
+                ? "Apple's estimate; unusually high, worth checking there"
+                : "Apple's estimate",
             },
           ].filter((line) => line !== false),
           footnote: "From Apple Health",
@@ -1786,7 +1803,10 @@ export function buildTrends(
       restingHeartRate: vitals?.restingHeartRate,
       heartRateVariabilityMs: vitals?.heartRateVariabilityMs,
       steps: vitals?.steps,
-      activeEnergyKcal: vitals?.activeEnergyKcal,
+      activeEnergyKcal:
+        vitals?.activeEnergyKcal != null
+          ? activeEnergyKcal(vitals.activeEnergyKcal)
+          : undefined,
       waterMl: water.recorded ? water.totalMl : undefined,
       calories: meals.length ? food.calories : undefined,
       protein: meals.length ? food.protein : undefined,

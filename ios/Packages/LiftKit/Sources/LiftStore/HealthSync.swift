@@ -3,8 +3,9 @@ import HealthKit
 import LiftAPI
 import os
 
-/// Reads sleep, daily heart-rate and movement summaries, workouts and their
-/// GPS routes from Apple Health and sends them to the journal. The server
+/// Reads sleep, daily heart-rate and movement summaries, weight and body fat,
+/// workouts and their GPS routes from Apple Health and sends them to the
+/// journal. The server
 /// decides what is saved: it never overwrites a manual entry, never logs a
 /// workout twice, and leaves an entry alone once the athlete edits or
 /// deletes it. The app only reads Apple Health; it never writes to it.
@@ -22,6 +23,7 @@ public actor HealthSync {
     HKQuantityType(.stepCount),
     HKQuantityType(.activeEnergyBurned),
     HKQuantityType(.bodyFatPercentage),
+    HKQuantityType(.bodyMass),
     HKQuantityType(.distanceWalkingRunning),
     HKQuantityType(.distanceCycling),
     HKQuantityType(.distanceSwimming),
@@ -37,6 +39,7 @@ public actor HealthSync {
     public var daysUpdated: Int
     public var routesImported = 0
     public var bodyFatUpdated = 0
+    public var bodyMassUpdated = 0
   }
 
   public nonisolated let store = HKHealthStore()
@@ -112,6 +115,7 @@ public actor HealthSync {
       summary.daysUpdated += next.daysUpdated
       summary.routesImported += next.routesImported
       summary.bodyFatUpdated += next.bodyFatUpdated
+      summary.bodyMassUpdated += next.bodyMassUpdated
     }
     continuation.yield(summary)
     return summary
@@ -151,24 +155,34 @@ public actor HealthSync {
         workouts: page.workouts,
         deletedWorkoutIds: page.deleted
       )
-      let result: Components.Schemas.HealthSyncResult
-      do {
-        result = try await client.syncHealth(body: .json(request)).value()
-      } catch let failure as APIFailure
-        where failure.status == 400 && Self.namesSources(request.sleep ?? [])
-      {
-        // A server from before sleep sources refuses the whole batch (this
-        // build can reach TestFlight before the deploy, or the server can be
-        // rolled back): send the nights as older builds did, so the rest
-        // still syncs.
-        log.info("Sleep sources refused; sending the nights without them")
-        request.sleep = Self.withoutSources(request.sleep ?? [])
-        result = try await client.syncHealth(body: .json(request)).value()
+      var result: Components.Schemas.HealthSyncResult?
+      while result == nil {
+        do {
+          result = try await client.syncHealth(body: .json(request)).value()
+        } catch let failure as APIFailure
+          where failure.status == 400 && Self.weighsIn(request.days ?? [])
+        {
+          // A server from before weights refuses the whole batch (this build
+          // can reach TestFlight before the deploy, or the server can be
+          // rolled back): send the days as older builds did, so the rest
+          // still syncs.
+          log.info("Weights refused; sending the days without them")
+          request.days = Self.withoutWeights(request.days ?? [])
+        } catch let failure as APIFailure
+          where failure.status == 400 && Self.namesSources(request.sleep ?? [])
+        {
+          // Likewise a server from before sleep sources: send the nights
+          // without them.
+          log.info("Sleep sources refused; sending the nights without them")
+          request.sleep = Self.withoutSources(request.sleep ?? [])
+        }
       }
+      guard let result else { break }
       if first {
         summary.nightsImported = result.sleep.filter { ["imported", "updated"].contains($0.result) }.count
         summary.daysUpdated = result.daysUpdated
         summary.bodyFatUpdated = result.bodyFatUpdated ?? 0
+        summary.bodyMassUpdated = result.bodyMassUpdated ?? 0
       }
       summary.workoutsImported += result.workouts.filter {
         ["imported", "updated", "matched"].contains($0.result)
@@ -309,7 +323,9 @@ public actor HealthSync {
     async let energy = daily(.activeEnergyBurned, .cumulativeSum, .kilocalorie(), from: start, to: now)
     // A smart scale's last reading of the day, as a fraction of 1.
     async let fat = daily(.bodyFatPercentage, .mostRecent, .percent(), from: start, to: now)
-    let (r, h, a, s, e, f) = try await (resting, hrv, average, steps, energy, fat)
+    // The day's first weight, as a morning weigh-in is the steadiest.
+    async let mass = firstOfDay(.bodyMass, .gramUnit(with: .kilo), from: start, to: now, calendar: calendar)
+    let (r, h, a, s, e, f, m) = try await (resting, hrv, average, steps, energy, fat, mass)
     return dates.compactMap { date in
       let key = calendar.startOfDay(for: date)
       // Values outside the server's ranges are left out rather than
@@ -321,12 +337,64 @@ public actor HealthSync {
         averageHeartRate: a[key].map { Int($0.rounded()) }.flatMap { (20...250).contains($0) ? $0 : nil },
         steps: s[key].map { Int($0.rounded()) }.flatMap { (0...200_000).contains($0) ? $0 : nil },
         activeEnergyKcal: e[key].map { Int($0.rounded()) }.flatMap { (0...20_000).contains($0) ? $0 : nil },
-        bodyFatPercent: f[key].map { ($0 * 1000).rounded() / 10 }.flatMap { (3...70).contains($0) ? $0 : nil }
+        bodyFatPercent: f[key].map { ($0 * 1000).rounded() / 10 }.flatMap { (3...70).contains($0) ? $0 : nil },
+        bodyMassKg: m[key].map { ($0 * 10).rounded() / 10 }.flatMap { (20...500).contains($0) ? $0 : nil }
       )
       let empty = [day.restingHeartRate, day.averageHeartRate, day.steps, day.activeEnergyKcal]
         .allSatisfy { $0 == nil } && day.heartRateVariabilityMs == nil && day.bodyFatPercent == nil
+        && day.bodyMassKg == nil
       return empty ? nil : day
     }
+  }
+
+  /// Whether any day carries a weight, which a server from before weights
+  /// refuses.
+  static func weighsIn(_ days: [Components.Schemas.HealthDay]) -> Bool {
+    days.contains { $0.bodyMassKg != nil }
+  }
+
+  /// The days as builds before weights sent them; a day with only a weight
+  /// is left out.
+  static func withoutWeights(_ days: [Components.Schemas.HealthDay]) -> [Components.Schemas.HealthDay] {
+    days.compactMap { day in
+      var plain = day
+      plain.bodyMassKg = nil
+      let empty = [plain.restingHeartRate, plain.averageHeartRate, plain.steps, plain.activeEnergyKcal]
+        .allSatisfy { $0 == nil } && plain.heartRateVariabilityMs == nil && plain.bodyFatPercent == nil
+      return empty ? nil : plain
+    }
+  }
+
+  /// The first sample of each local day, keyed by the day's start.
+  static func firstPerDay(_ samples: [(start: Date, value: Double)], calendar: Calendar) -> [Date: Double] {
+    var days: [Date: (start: Date, value: Double)] = [:]
+    for sample in samples {
+      let day = calendar.startOfDay(for: sample.start)
+      if let seen = days[day], seen.start <= sample.start { continue }
+      days[day] = sample
+    }
+    return days.mapValues(\.value)
+  }
+
+  /// The first value of each local day for a quantity type, such as the
+  /// morning's weight.
+  private func firstOfDay(
+    _ identifier: HKQuantityTypeIdentifier, _ unit: HKUnit, from start: Date, to end: Date, calendar: Calendar
+  ) async throws -> [Date: Double] {
+    let descriptor = HKSampleQueryDescriptor(
+      predicates: [
+        .quantitySample(
+          type: HKQuantityType(identifier), predicate: HKQuery.predicateForSamples(withStart: start, end: end))
+      ],
+      sortDescriptors: [SortDescriptor(\.startDate, order: .forward)]
+    )
+    let samples: [HKQuantitySample]
+    do {
+      samples = try await descriptor.result(for: store)
+    } catch let error as HKError where error.code == .errorNoData {
+      return [:]
+    }
+    return Self.firstPerDay(samples.map { ($0.startDate, $0.quantity.doubleValue(for: unit)) }, calendar: calendar)
   }
 
   /// One value per local day for a quantity type.
@@ -576,8 +644,8 @@ public actor HealthSync {
 
   // MARK: Background delivery
 
-  /// Ask Apple Health to wake the app when new sleep, workouts or resting
-  /// heart rate arrive. Must be called on every launch, including launches
+  /// Ask Apple Health to wake the app when new sleep, workouts, resting
+  /// heart rate, body fat or weight arrive. Must be called on every launch, including launches
   /// in the background, before the app finishes launching.
   public func observe(onChange: @escaping @Sendable () async -> Void) async {
     guard Self.isAvailable, connected, !observing else { return }
@@ -588,6 +656,7 @@ public actor HealthSync {
       (HKSeriesType.workoutRoute(), .immediate),
       (HKQuantityType(.restingHeartRate), .hourly),
       (HKQuantityType(.bodyFatPercentage), .hourly),
+      (HKQuantityType(.bodyMass), .hourly),
     ]
     for (type, frequency) in types {
       let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in

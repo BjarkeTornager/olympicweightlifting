@@ -48,6 +48,34 @@ struct HealthMappingTests {
     #expect(!json.contains("source"))
   }
 
+  @Test("A day's weight is its first reading, as a morning weigh-in is the steadiest")
+  func firstWeightOfDay() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Copenhagen")!
+    let at = { (day: Int, hour: Int) in
+      calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour))!
+    }
+    let first = HealthSync.firstPerDay(
+      [(at(26, 19), 82.4), (at(26, 7), 81.6), (at(25, 23), 82.9), (at(26, 12), 82.0)], calendar: calendar)
+    #expect(first == [calendar.startOfDay(for: at(26, 0)): 81.6, calendar.startOfDay(for: at(25, 0)): 82.9])
+  }
+
+  @Test("Days go without weights to a server from before them")
+  func daysWithoutWeights() throws {
+    let days: [Components.Schemas.HealthDay] = [
+      .init(date: "2026-09-25", steps: 9120, bodyMassKg: 81.6),
+      .init(date: "2026-09-26", bodyMassKg: 81.4),
+    ]
+    #expect(HealthSync.weighsIn(days))
+    let plain = HealthSync.withoutWeights(days)
+    // A day with only a weight has nothing else to send.
+    #expect(plain.map(\.date) == ["2026-09-25"])
+    #expect(plain[0].steps == 9120 && plain[0].bodyMassKg == nil)
+    #expect(!HealthSync.weighsIn(plain))
+    let json = try #require(String(data: JSONEncoder().encode(plain), encoding: .utf8))
+    #expect(!json.contains("bodyMassKg"))
+  }
+
   @Test("A night runs from local noon to local noon, even across a clock change")
   func nightWindow() {
     var calendar = Calendar(identifier: .gregorian)

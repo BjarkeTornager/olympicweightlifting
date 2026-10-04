@@ -166,7 +166,7 @@ final class AppModel {
         self.health.lastResult = Self.describe(summary)
         self.health.error = nil
         if summary.nightsImported + summary.workoutsImported + summary.daysUpdated + summary.routesImported
-          + summary.bodyFatUpdated > 0
+          + summary.bodyFatUpdated + summary.bodyMassUpdated > 0
         {
           await self.loadToday()
           if summary.nightsImported + summary.workoutsImported > 0 { self.voiceCall?.healthArrived() }
@@ -370,6 +370,7 @@ final class AppModel {
     case .logSupplement, .deleteSupplement: .food
     case .recordCheckin: .checkin
     case .recordBodyFat, .deleteBodyFat: .body
+    case .takeSuggestedTargets, .keepCurrentTargets: .food
     default: nil
     }
   }
@@ -402,6 +403,26 @@ final class AppModel {
 
   func removeDrink(id: String) async {
     await save(.deleteDrink(.init(kind: .deleteDrink, drinkId: id)), confirmation: "Drink removed")
+  }
+
+  /// Take the daily targets the goals plan suggests, or keep the current
+  /// ones over them, sending the suggestion back as Today showed it: one
+  /// that has changed since is refused.
+  func chooseTargets(_ proposal: Components.Schemas.TargetsProposal, take: Bool) async {
+    let shown = Self.shownTargets(proposal.suggested)
+    await save(
+      take
+        ? .takeSuggestedTargets(.init(kind: .takeSuggestedTargets, targets: shown))
+        : .keepCurrentTargets(.init(kind: .keepCurrentTargets, targets: shown)),
+      confirmation: take ? "New targets saved" : "Targets kept")
+  }
+
+  /// The suggested targets as the server sent them; a goal it names that this
+  /// build doesn't know can't be sent back, so it falls back to maintain,
+  /// which the server refuses as changed.
+  nonisolated static func shownTargets(_ t: Components.Schemas.DailyTargets) -> Components.Schemas.SuggestedTargets {
+    .init(
+      goal: .init(rawValue: t.goal) ?? .maintain, calories: t.calories, protein: t.protein, carbs: t.carbs, fat: t.fat)
   }
 
   /// Hide or show the day's drinks target on Today. Drinks still add up.
@@ -531,6 +552,9 @@ final class AppModel {
     if s.routesImported > 0 { parts.append("\(s.routesImported) \(s.routesImported == 1 ? "route" : "routes")") }
     if s.bodyFatUpdated > 0 {
       parts.append("\(s.bodyFatUpdated) body fat \(s.bodyFatUpdated == 1 ? "reading" : "readings")")
+    }
+    if s.bodyMassUpdated > 0 {
+      parts.append("\(s.bodyMassUpdated) \(s.bodyMassUpdated == 1 ? "weight" : "weights")")
     }
     return parts.isEmpty ? "Up to date" : "Added " + parts.joined(separator: ", ")
   }

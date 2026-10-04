@@ -175,6 +175,10 @@ struct TodayView: View {
         FirstStepsCard(steps: firstSteps) { firstStepsHidden = true }
           .padding(.top, Theme.Space.section)
       }
+      // New daily targets the goals plan suggests, to take or keep over.
+      if let proposal = today.targetsProposal {
+        TargetsProposalCard(proposal: proposal).padding(.top, Theme.Space.section)
+      }
       recovery(today).padding(.top, Theme.Space.section)
       BodySection(
         body: today.body, weights: weekDays.map { (JournalDay.date($0.date), $0.bodyweight) }
@@ -283,7 +287,7 @@ struct TodayView: View {
         } label: {
           NoteRow(
             title: "Allow new Apple Health data",
-            detail: "Workout routes, and body fat from a smart scale, for you and Coach")
+            detail: "Your weight, workout routes, and body fat from a smart scale, for you and Coach")
         }
         .buttonStyle(CardButtonStyle())
       }

@@ -51,6 +51,28 @@ struct ContractTests {
     #expect(plain.sleep.nights == 1 && plain.sleep.averageHours == nil && plain.sleepNote == nil)
   }
 
+  @Test("Today carries the goals plan's suggested targets beside the saved ones")
+  func todayTargets() throws {
+    let today = try fixture("today-targets", as: Components.Schemas.Today.self)
+    #expect(today.nutrition.targetCalories == 2550)
+    let proposal = try #require(today.targetsProposal)
+    #expect(proposal.title == "Hold your weight from here")
+    #expect(proposal.maintain)
+    #expect(proposal.current.goal == "lose" && proposal.current.calories == 2550)
+    #expect(proposal.suggested.goal == "maintain" && proposal.suggested.calories == 3000)
+    #expect(proposal.reasons.first?.contains("you've reached your goal of 81 kg") == true)
+    #expect(today.body?.bodyweightFromAppleHealth == false)
+    // None without a suggestion.
+    #expect(try fixture("today", as: Components.Schemas.Today.self).targetsProposal == nil)
+  }
+
+  @Test("Trends rows carry the targets in force each day")
+  func trendTargets() throws {
+    let trends = try fixture("trends-targets", as: Components.Schemas.Trends.self)
+    #expect(trends.days.map(\.targetCalories) == [2640, 2640, 2640, 2550, 2550, 2550, 2550])
+    #expect(trends.targetCalories == 2550)
+  }
+
   @Test func journal() throws {
     let feed = try fixture("journal", as: Components.Schemas.JournalFeed.self)
     #expect(Set(feed.items.map(\.kind)).isSuperset(of: ["cardio", "meal", "sleep", "vitals", "strength"]))

@@ -206,7 +206,11 @@ struct TrendView: View {
         { $0.waterMl.map(Double.init) }, unit: "ml",
         target: trends.flatMap { $0.waterTargetHidden == true ? nil : Double($0.waterTargetMl) })
     case .food:
-      bars(\.calories, unit: "kcal", target: Format.target(trends?.targetCalories))
+      // The target in force each day, from a server that sends it, else
+      // today's.
+      bars(
+        \.calories, unit: "kcal", target: Format.target(trends?.targetCalories),
+        daily: { Format.target($0.targetCalories) })
     case .heart:
       Chart {
         ForEach(days, id: \.date) { day in
@@ -250,12 +254,14 @@ struct TrendView: View {
   }
 
   /// Bars on a zero baseline: earlier days in the track, today in the
-  /// pigment, with a dotted average or target.
+  /// pigment, with a dotted average or target. A target that changed over
+  /// the range is drawn as steps, each day at the one in force then.
   private func bars(
     _ value: @escaping (Components.Schemas.TrendDay) -> Double?, unit: String, average: Double? = nil,
-    target: Double? = nil
+    target: Double? = nil, daily: ((Components.Schemas.TrendDay) -> Double?)? = nil
   ) -> some View {
     let tint = trend.category.tint
+    let steps = daily.map { Self.targetSteps(days, $0) } ?? []
     return Chart {
       ForEach(days, id: \.date) { day in
         if let amount = value(day) {
@@ -265,7 +271,22 @@ struct TrendView: View {
         }
       }
       RuleMark(y: .value("Zero", 0)).foregroundStyle(Theme.rule).lineStyle(StrokeStyle(lineWidth: 1))
-      if let line = target ?? average {
+      if !steps.isEmpty {
+        ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+          LineMark(
+            x: .value("Day", JournalDay.date(step.date) ?? .now, unit: .day), y: .value("Target", step.value),
+            series: .value("Line", "Target")
+          )
+          .interpolationMethod(.stepCenter)
+          .foregroundStyle(Theme.ink.opacity(0.7))
+          .lineStyle(StrokeStyle(lineWidth: 1, dash: [1.5, 2.5]))
+          .annotation(position: .top, alignment: .trailing) {
+            if index == steps.count - 1 {
+              Text("Target").font(.caption2.weight(.medium)).foregroundStyle(Theme.inkSecondary)
+            }
+          }
+        }
+      } else if let line = target ?? average {
         RuleMark(y: .value(target == nil ? "Average" : "Target", line))
           .foregroundStyle(Theme.ink.opacity(0.7))
           .lineStyle(StrokeStyle(lineWidth: 1, dash: [1.5, 2.5]))
@@ -279,6 +300,14 @@ struct TrendView: View {
     .chartXAxis { dayAxis }
     .chartYAxis { valueAxis }
     .chartYAxisLabel(unit)
+  }
+
+  /// The days a target was in force and what it was, oldest first; empty
+  /// when no day carries one (a server from before daily targets).
+  static func targetSteps(
+    _ days: [Components.Schemas.TrendDay], _ target: (Components.Schemas.TrendDay) -> Double?
+  ) -> [(date: String, value: Double)] {
+    days.compactMap { day in target(day).map { (day.date, $0) } }
   }
 
   private func line(
@@ -353,7 +382,12 @@ struct TrendView: View {
       case .water:
         [day.waterMl.map { "\(Format.number($0)) ml" }]
       case .food:
-        [day.calories.map { "\(Format.number($0)) kcal" }, day.protein.map { "\(Format.number($0)) g protein" }]
+        [
+          day.calories.map { kcal in
+            "\(Format.number(kcal))\(Format.target(day.targetCalories).map { " of \(Format.number($0))" } ?? "") kcal"
+          },
+          day.protein.map { "\(Format.number($0)) g protein" },
+        ]
       case .body:
         [day.bodyweight.map { "\(Format.decimal($0)) kg" }, day.bodyFatPercent.map { "\(Format.decimal($0))% fat" }]
       }

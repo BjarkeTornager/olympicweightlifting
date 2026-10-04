@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import LiftAPI
 import Testing
 
 @testable import LiftStore
@@ -27,6 +28,24 @@ struct HealthMappingTests {
     #expect(HealthSync.sleepSource(bundle: "com.example.sleep", product: "iPhone17,2", name: "  ") == nil)
     #expect(HealthSync.sleepSource(bundle: "com.example.sleep", product: nil, name: String(repeating: "z", count: 80))?.count == 60)
     #expect(HealthSync.sleepSource(bundle: "com.example.sleep", product: nil, name: String(repeating: "😴", count: 40))?.utf16.count == 60)
+  }
+
+  @Test("Nights go without sources to a server from before them")
+  func nightsWithoutSources() throws {
+    let night = Components.Schemas.SleepNight(
+      date: "2026-09-26",
+      samples: [
+        .init(start: "2026-09-25T23:00:00+02:00", end: "2026-09-26T03:00:00+02:00", value: .core, source: "Apple Watch"),
+        .init(start: "2026-09-26T03:00:00+02:00", end: "2026-09-26T07:00:00+02:00", value: .asleep),
+      ])
+    #expect(HealthSync.namesSources([night]))
+    let plain = HealthSync.withoutSources([night])
+    #expect(!HealthSync.namesSources(plain))
+    #expect(!HealthSync.namesSources([]))
+    #expect(plain[0].samples.map(\.start) == night.samples.map(\.start))
+    #expect(plain[0].samples.map(\.value) == [.core, .asleep])
+    let json = try #require(String(data: JSONEncoder().encode(plain), encoding: .utf8))
+    #expect(!json.contains("source"))
   }
 
   @Test("A night runs from local noon to local noon, even across a clock change")

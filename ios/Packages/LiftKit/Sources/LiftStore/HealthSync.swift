@@ -144,14 +144,27 @@ public actor HealthSync {
     for _ in 0..<10 {
       let page = try await workoutPage(anchor: anchor, now: now, calendar: calendar)
       guard first || !page.workouts.isEmpty || !page.deleted.isEmpty else { break }
-      let request = Components.Schemas.HealthSyncRequest(
+      var request = Components.Schemas.HealthSyncRequest(
         timezone: TimeZone.current.identifier,
         sleep: first ? nights : [],
         days: first ? days : [],
         workouts: page.workouts,
         deletedWorkoutIds: page.deleted
       )
-      let result = try await client.syncHealth(body: .json(request)).value()
+      let result: Components.Schemas.HealthSyncResult
+      do {
+        result = try await client.syncHealth(body: .json(request)).value()
+      } catch let failure as APIFailure
+        where failure.status == 400 && Self.namesSources(request.sleep ?? [])
+      {
+        // A server from before sleep sources refuses the whole batch (this
+        // build can reach TestFlight before the deploy, or the server can be
+        // rolled back): send the nights as older builds did, so the rest
+        // still syncs.
+        log.info("Sleep sources refused; sending the nights without them")
+        request.sleep = Self.withoutSources(request.sleep ?? [])
+        result = try await client.syncHealth(body: .json(request)).value()
+      }
       if first {
         summary.nightsImported = result.sleep.filter { ["imported", "updated"].contains($0.result) }.count
         summary.daysUpdated = result.daysUpdated
@@ -251,6 +264,23 @@ public actor HealthSync {
       app.append(character)
     }
     return app.isEmpty ? nil : app
+  }
+
+  static func namesSources(_ nights: [Components.Schemas.SleepNight]) -> Bool {
+    nights.contains { $0.samples.contains { $0.source != nil } }
+  }
+
+  /// The nights as builds from before sleep sources sent them.
+  static func withoutSources(_ nights: [Components.Schemas.SleepNight]) -> [Components.Schemas.SleepNight] {
+    nights.map { night in
+      var night = night
+      night.samples = night.samples.map { sample in
+        var sample = sample
+        sample.source = nil
+        return sample
+      }
+      return night
+    }
   }
 
   static func sleepValue(_ raw: Int) -> Components.Schemas.SleepNight.SamplesPayloadPayload.ValuePayload? {

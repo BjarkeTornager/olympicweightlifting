@@ -9,6 +9,7 @@ import {
   type WorkoutTemplate,
 } from "../model";
 import type { TrainingProgram } from "../training-program-schema";
+import { exerciseResolver } from "../exercises";
 import type { Checkin } from "../health";
 import type { Meal, DietTargets } from "../nutrition";
 import { actionSchema, type AgentAction } from "./action-schema";
@@ -124,6 +125,29 @@ export type PreparedChange = Omit<PreviewEntry, "workout"> & {
   workout?: Workout | null;
 };
 
+// Every exercise an action names, as the journal knows it, so Coach, voice
+// and the iPhone app save one id per movement: custom:Back squat is
+// back_squat, and another spelling of the athlete's own exercise is the one
+// they already use (lib/exercises.ts). Resolving again changes nothing.
+function resolveExercises(state: JournalState, action: AgentAction) {
+  const resolve = exerciseResolver(state);
+  const each = (exercises: { exerciseId: string }[] = []) => {
+    for (const e of exercises) e.exerciseId = resolve(e.exerciseId);
+  };
+  const visit = (a: AgentAction) => {
+    if ("exerciseId" in a) a.exerciseId = resolve(a.exerciseId);
+    if ("workout" in a) each(a.workout.exercises);
+    if ("routine" in a) each(a.routine.exercises);
+    if ("trainingProgram" in a)
+      for (const day of a.trainingProgram.days) each(day.exercises);
+    if ("programChanges" in a)
+      for (const day of a.programChanges.days ?? []) each(day.exercises);
+    if (a.kind === "record_bundle") a.entries.forEach(visit);
+  };
+  visit(action);
+  return action;
+}
+
 function applyAction(
   next: JournalState,
   action: Exclude<AgentAction, { kind: "record_bundle" }>,
@@ -210,7 +234,7 @@ export function prepareAction(
   // meal is not asked for one.
   mealDates: ReadonlySet<string> = new Set(),
 ): PreparedAction {
-  const parsed = actionSchema.parse(raw);
+  const parsed = resolveExercises(state, actionSchema.parse(raw));
   if (parsed.kind === "record_bundle") {
     const checkinDates = parsed.entries.flatMap((e) =>
       e.kind === "record_checkin" ? [e.checkin.date] : [],

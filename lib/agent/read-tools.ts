@@ -11,7 +11,14 @@ import { mealTypeConflict } from "./knowledge";
 import { liftingKnowledge } from "../lifting-resources";
 import { athleteAge, days, EXERCISES, exerciseName, program } from "../domain";
 import { trainingPrograms, ownedProgram } from "../training-programs";
-import { searchExercises } from "../exercises";
+import {
+  catalogueMatches,
+  customExerciseIds,
+  exerciseKey,
+  resolveExerciseId,
+  searchExercises,
+} from "../exercises";
+import { isCustomExerciseId } from "../training-program-schema";
 import { planProgramDay } from "../../js/progression.js";
 import { trainingSummary, workoutTotals } from "../training";
 import type { JournalState, Workout } from "../model";
@@ -99,19 +106,26 @@ const PAGE = 20;
 const nextOffset = (offset: number, total: number) =>
   offset + PAGE < total ? offset + PAGE : null;
 
-// "Clean & jerk", "clean_and_jerk" and "clean and jerk" share these words.
-const exerciseWords = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/^custom:/, "")
-    .replaceAll("&", " and ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+// Muscle, equipment, category and training-style words, singular or plural:
+// a search for "chest" or "dumbbell" is not the name of a new exercise.
+const catalogueTerms = new Set(
+  EXERCISES.flatMap((e) => [
+    ...e.muscles,
+    ...e.equipment,
+    e.category,
+    ...e.disciplines,
+  ]).flatMap((term) => [
+    exerciseKey(term),
+    exerciseKey(term).replace(/s$/, ""),
+  ]),
+);
 
 // An exercise filter that matches no id returns nothing, and Coach then tells
 // the athlete they never did the lift. Models often pass the name ("back
 // squat") instead of the id, so a name resolves to the one id this journal or
-// the catalogue uses for it; anything else is refused with ids to use.
+// the catalogue uses for it; anything else is refused with ids to use. The
+// athlete's own exercise (custom:) matches another spelling of it, and one
+// not logged yet is an honest empty answer.
 function exerciseFilter(state: JournalState, requested?: string) {
   if (!requested) return undefined;
   const logged = new Set(
@@ -122,11 +136,22 @@ function exerciseFilter(state: JournalState, requested?: string) {
   );
   if (logged.has(requested) || EXERCISES.some((e) => e.id === requested))
     return requested;
-  const words = exerciseWords(requested);
+  const words = exerciseKey(requested);
+  if (isCustomExerciseId(requested)) {
+    const spelled = [...logged].find(
+      (id) => id.startsWith("custom:") && exerciseKey(id) === words,
+    );
+    if (spelled) return spelled;
+    try {
+      return resolveExerciseId(state, requested);
+    } catch {
+      // Not a name an exercise can have: refused below.
+    }
+  }
   const names = (id: string) => {
     const known = EXERCISES.find((e) => e.id === id);
     return [id, ...(known ? [known.name, ...known.aliases] : [])].map(
-      exerciseWords,
+      exerciseKey,
     );
   };
   const all = [...new Set([...logged, ...EXERCISES.map((e) => e.id)])].filter(
@@ -504,16 +529,13 @@ export async function runReadTool(
     }
     case "exercises": {
       const a = specifications.exercises.schema.parse(args);
-      const found = a.queries
-        ? [
-            ...new Map(
-              a.queries
-                .flatMap((q) => searchExercises(q))
-                .map((e) => [e.id, e]),
-            ).values(),
-          ]
-        : searchExercises(a.query);
-      return found.map((exercise) => ({
+      const queries = a.queries ?? [a.query ?? ""];
+      const found = [
+        ...new Map(
+          queries.flatMap((q) => searchExercises(q)).map((e) => [e.id, e]),
+        ).values(),
+      ];
+      const catalogue = found.map((exercise) => ({
         ...(a.queries
           ? {
               id: exercise.id,
@@ -527,6 +549,47 @@ export async function runReadTool(
           ? `https://www.youtube.com/watch?v=${exercise.videoId}`
           : null,
       }));
+      // The athlete's own exercises with every query word, then, for a
+      // movement neither they nor the catalogue has by that name, the id
+      // that saves it as theirs: never a dead end, never a guess.
+      const own = customExerciseIds(state);
+      const theirs = own.filter((id) =>
+        queries.some((q) =>
+          exerciseKey(q)
+            .split(" ")
+            .every((word) => exerciseKey(id).includes(word)),
+        ),
+      );
+      const fresh = queries.flatMap((q) => {
+        const key = exerciseKey(q);
+        if (
+          !key ||
+          catalogueTerms.has(key) ||
+          catalogueMatches(q).length ||
+          own.some((id) => exerciseKey(id) === key)
+        )
+          return [];
+        try {
+          return [resolveExerciseId(state, `custom:${q}`)];
+        } catch {
+          return [];
+        }
+      });
+      return [
+        ...catalogue,
+        ...[...new Set([...theirs, ...fresh])].map((id) => ({
+          id,
+          name: exerciseName(id),
+          category: theirs.includes(id)
+            ? "The athlete's own exercises"
+            : "Not in the catalogue",
+          custom: true,
+          loggingNotes: theirs.includes(id)
+            ? "The athlete's own exercise, already in their journal. Reuse this exact id for it."
+            : "No catalogue exercise has this name. The catalogue is in English: if this is a catalogue exercise in another language or by another name (bænkpres is bench press), search for that and use its id. Only for a movement the catalogue lacks, use this id to log, plan or add it; it becomes the athlete's own exercise, not a library one.",
+          videoUrl: null,
+        })),
+      ];
     }
     case "site_help":
       return siteHelp;

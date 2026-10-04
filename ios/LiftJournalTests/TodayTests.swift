@@ -145,6 +145,11 @@ struct TodayTests {
     #expect(lines[0].id == "1")
     #expect(lines[0].latest.id == "6")
     #expect(DrinkLine.lines([]).isEmpty)
+    // A usual size Coach saved without a volume is "about", on its own line.
+    var glass = drink("7", 250)
+    glass.estimated = true
+    let mixed = DrinkLine.lines([drink("1", 250), glass, glass])
+    #expect(mixed.map(\.amount) == ["250 ml", "2 × about 250 ml"])
   }
 
   @Test("Each day of the journal is an issue, and weeks are ISO weeks")

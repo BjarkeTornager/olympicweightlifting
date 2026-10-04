@@ -107,7 +107,9 @@ export function targetsProposal(
 ): TargetsProposal | null {
   const goals = goalsForState(state);
   const plan = planForState(state, today);
-  if (!goals || !plan) return null;
+  // In pregnancy the plan sets no daily targets, and the goals saved then
+  // saved none, so there is nothing to suggest.
+  if (!goals || !plan?.dailyTargets) return null;
   const saved = state.nutrition.targets;
   const targets = proposedTargets(plan, saved.protein);
   if (sameTargets(targets, saved)) return null;
@@ -183,7 +185,14 @@ export function targetsProposal(
       reasons.push(
         "Your last body fat reading is more than 90 days old, so the plan works from your height and weight instead.",
       );
-    if (legacy && !declined) {
+    // Maintenance as the old plan counted it, for targets it saved; while
+    // breastfeeding the allowance for milk, which it left out, would muddle
+    // the comparison.
+    if (
+      legacy &&
+      !declined &&
+      state.profile.goalChecks?.pregnancy !== "breastfeeding"
+    ) {
       const earlier = earlierMaintenance(
         state,
         plan,

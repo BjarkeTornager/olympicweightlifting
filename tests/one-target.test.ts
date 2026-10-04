@@ -297,6 +297,27 @@ test("reaching the goal suggests maintenance; taking it saves the plan's targets
   journalSchema.parse(state);
 });
 
+test("in pregnancy, when the plan sets no daily targets, it suggests none", () => {
+  const state = emptyJournal();
+  applyGoals(
+    state,
+    {
+      ...athlete,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 70,
+      targetWeightKg: 64,
+      targetDate: "2026-12-01",
+      pregnancy: "pregnant",
+    },
+    today,
+  );
+  assert.equal(state.nutrition.targets.calories, null);
+  // Her own calories, and the date passed: still nothing to suggest.
+  setDailyTargets(state, { ...state.nutrition.targets, calories: 2300 }, today);
+  assert.equal(targetsProposal(state, "2026-12-05"), null);
+});
+
 test("passing the target date suggests maintenance", () => {
   const state = emptyJournal();
   applyGoals(state, { ...athlete, targetDate: "2026-12-01" }, today);

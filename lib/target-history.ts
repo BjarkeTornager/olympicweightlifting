@@ -218,7 +218,8 @@ const near = (a: number, b: number | null) =>
 // goals or in Settings. The weight given with the goals counts as that
 // day's weigh-in, and earlier ones don't count, as it is the athlete's
 // latest word on it. A weigh-in a quarter away from the one before is
-// passed over as a likely slip, unless the next agrees with it.
+// passed over as a likely slip; the next one that agrees with it counts
+// again.
 export function currentWeightKg(state: JournalState, date: string) {
   const anchor = weightAnchor(state);
   const since = anchor && anchor.day <= date ? anchor : null;

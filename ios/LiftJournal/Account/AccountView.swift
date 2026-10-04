@@ -292,10 +292,10 @@ private struct GoalsSection: View {
       if let percent = body?.targetBodyFatPercent {
         row("Body fat", "\(Format.decimal(percent)) %", "percent", Category.body.tint)
       }
-      if let kcal = today.nutrition.targetCalories {
+      if let kcal = Format.target(today.nutrition.targetCalories) {
         row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)
       }
-      if let grams = today.nutrition.targetProtein {
+      if let grams = Format.target(today.nutrition.targetProtein) {
         row("Protein", "\(Format.number(grams)) g a day", "fork.knife", Theme.protein)
       }
       let (litres, unit) = Format.litres(today.hydration.targetMl)

@@ -17,7 +17,12 @@ import {
 } from "./hydration";
 import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
-import { mealTypes, totalNutrients, type Nutrients } from "./nutrition";
+import {
+  dailyTarget,
+  mealTypes,
+  totalNutrients,
+  type Nutrients,
+} from "./nutrition";
 import type { SavedVisual } from "./coach-visuals";
 import { describeRoute, type RouteNote } from "./route-summary";
 import {
@@ -760,7 +765,7 @@ export function firstSteps(state: JournalState, date: string) {
       Boolean(state.health.vitals?.length) ||
       Boolean(state.health.bodyFat?.some((b) => b.source === "apple-health")),
     meal: state.nutrition.meals.length > 0,
-    goals: state.nutrition.targets.calories != null,
+    goals: dailyTarget(state.nutrition.targets.calories) != null,
   };
   return Object.values(steps).every(Boolean) ? undefined : steps;
 }
@@ -857,8 +862,11 @@ export function buildToday(
       body: bodyForToday(state, date),
       nutrition: defined({
         ...totalNutrients(meals.flatMap((m) => m.items)),
-        targetCalories: state.nutrition.targets?.calories,
-        targetProtein: state.nutrition.targets?.protein,
+        // A target of 0 is no target.
+        targetCalories:
+          dailyTarget(state.nutrition.targets?.calories) ?? undefined,
+        targetProtein:
+          dailyTarget(state.nutrition.targets?.protein) ?? undefined,
         meals: meals.map((m) => {
           const total = totalNutrients(m.items);
           return {
@@ -1194,12 +1202,14 @@ type StoredProposal = ReceiptSource &
 const capitalised = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 const grams = (value: number) => `${Math.round(value)} g`;
-const targetAmount = (value: number | null, key: keyof Nutrients) =>
-  value == null
+const targetAmount = (value: number | null, key: keyof Nutrients) => {
+  const target = dailyTarget(value);
+  return target == null
     ? "No target"
     : key === "calories"
-      ? `${Math.round(value)} kcal`
-      : grams(value);
+      ? `${Math.round(target)} kcal`
+      : grams(target);
+};
 const dietGoalNames = {
   maintain: "Maintain weight",
   lose: "Lose weight",
@@ -1325,15 +1335,15 @@ export function receiptEntryView(
     // changes, so a target cleared shows as plainly as a new one.
     const t = entry.targets,
       before = entry.targetsBefore;
-    const line = (label: string, key: keyof Nutrients) =>
-      defined({
+    const line = (label: string, key: keyof Nutrients) => {
+      const value = targetAmount(t[key], key),
+        was = before && targetAmount(before[key], key);
+      return defined({
         label,
-        note:
-          before && before[key] !== t[key]
-            ? `Was ${targetAmount(before[key], key)}`
-            : undefined,
-        value: targetAmount(t[key], key),
+        note: was && was !== value ? `Was ${was}` : undefined,
+        value,
       });
+    };
     return {
       title: entry.title,
       lines: [
@@ -1785,8 +1795,9 @@ export function buildTrends(
   return trendsView.parse(
     defined({
       days: rows,
-      targetCalories: state.nutrition.targets?.calories,
-      targetProtein: state.nutrition.targets?.protein,
+      targetCalories:
+        dailyTarget(state.nutrition.targets?.calories) ?? undefined,
+      targetProtein: dailyTarget(state.nutrition.targets?.protein) ?? undefined,
       waterTargetMl: hydrationTargetMl(state, date).targetMl,
     }),
   );

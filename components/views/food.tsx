@@ -8,6 +8,8 @@ import {
   favouriteFromMeal,
   repeatMeal,
   dietTargetsSchema,
+  dailyTarget,
+  targetProgress,
   totalNutrients,
   nutritionSummary,
   findMeals,
@@ -103,13 +105,13 @@ export function FoodView({
     date,
   );
   const target = (key: (typeof nutrientKeys)[number]) =>
-    nutrition.targets[key] ?? null;
-  const remaining = (key: (typeof nutrientKeys)[number]) => {
-    const goal = target(key)!;
-    const unit = key === "calories" ? "kcal" : "g";
-    const diff = Math.abs(Math.round(goal - totals[key]));
-    return `${diff.toLocaleString("en-GB")}\u00a0${unit} ${totals[key] > goal ? "above target" : "remaining"}`;
-  };
+    dailyTarget(nutrition.targets[key]);
+  const remaining = (key: (typeof nutrientKeys)[number]) =>
+    targetProgress(
+      totals[key],
+      nutrition.targets[key],
+      key === "calories" ? "kcal" : "g",
+    );
   const weekMax = Math.max(1, ...week.days.map((day) => day.calories));
   return (
     <div className="food-page">
@@ -210,9 +212,7 @@ export function FoodView({
                   value={totals[key]}
                   target={target(key)}
                 />
-                <small>
-                  {target(key) == null ? "No daily target" : remaining(key)}
-                </small>
+                <small>{remaining(key)}</small>
               </div>
             ))}
           </div>

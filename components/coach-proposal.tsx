@@ -1,7 +1,7 @@
 "use client";
 import { Check, ChevronDown, Undo2 } from "@/components/ui/icons";
 import type { ActionPreview } from "@/lib/agent/actions";
-import type { DietTargets } from "@/lib/nutrition";
+import { dailyTarget, type DietTargets } from "@/lib/nutrition";
 import { exerciseName } from "@/lib/domain";
 import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
@@ -41,22 +41,25 @@ function TargetsReview({
   after: DietTargets;
   before?: DietTargets;
 }) {
-  const amount = (key: keyof DietTargets, targets: DietTargets) =>
-    key === "goal"
-      ? `${targets.goal} weight`
-      : targets[key] == null
-        ? "No target"
-        : `${targets[key]!.toLocaleString("en-GB")} ${key === "calories" ? "kcal" : "g"}`;
+  const amount = (key: keyof DietTargets, targets: DietTargets) => {
+    if (key === "goal") return `${targets.goal} weight`;
+    const target = dailyTarget(targets[key]);
+    return target == null
+      ? "No target"
+      : `${target.toLocaleString("en-GB")} ${key === "calories" ? "kcal" : "g"}`;
+  };
   return (
     <div className="meal-details">
-      {(Object.keys(targetLabels) as (keyof DietTargets)[]).map((key) => (
-        <p key={key}>
-          {targetLabels[key]}: {amount(key, after)}
-          {before && before[key] !== after[key]
-            ? ` (was ${amount(key, before)})`
-            : ""}
-        </p>
-      ))}
+      {(Object.keys(targetLabels) as (keyof DietTargets)[]).map((key) => {
+        const value = amount(key, after),
+          was = before && amount(key, before);
+        return (
+          <p key={key}>
+            {targetLabels[key]}: {value}
+            {was && was !== value ? ` (was ${was})` : ""}
+          </p>
+        );
+      })}
     </div>
   );
 }

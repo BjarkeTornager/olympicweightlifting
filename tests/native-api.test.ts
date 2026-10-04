@@ -941,6 +941,51 @@ test("A new journal's first steps show until all are done, for two weeks", () =>
     buildToday(state, 2, "2026-10-15", new Set()).firstSteps,
     undefined,
   );
+  // A target of 0 is no target, so goals are still to set.
+  state.nutrition.targets.calories = 0;
+  assert.equal(buildToday(state, 3, date, new Set()).firstSteps?.goals, false);
   state.nutrition.targets.calories = 2200;
   assert.equal(buildToday(state, 3, date, new Set()).firstSteps, undefined);
+});
+
+test("a target of 0 reaches the app as no target, for Today, Account and Trends", () => {
+  const state = emptyJournal();
+  const date = "2026-09-26";
+  state.nutrition.targets = {
+    goal: "maintain",
+    calories: 0,
+    protein: 0,
+    carbs: null,
+    fat: null,
+  };
+  const today = buildToday(state, 1, date, new Set());
+  assert.equal(today.nutrition.targetCalories, undefined);
+  assert.equal(today.nutrition.targetProtein, undefined);
+  const trends = buildTrends(state, date, 3);
+  assert.equal(trends.targetCalories, undefined);
+  assert.equal(trends.targetProtein, undefined);
+  state.nutrition.targets.calories = 1900;
+  assert.equal(
+    buildToday(state, 2, date, new Set()).nutrition.targetCalories,
+    1900,
+  );
+  assert.equal(buildTrends(state, date, 3).targetCalories, 1900);
+  // A receipt shows a 0 target as no target, and clearing one to 0 changes
+  // nothing it shows.
+  const receipt = receiptView(
+    {
+      id: "z",
+      title: "Update your daily nutrition targets",
+      detail: "",
+      workout: null,
+      expiresAt: "2026-09-27T18:00:00.000Z",
+      targets: { ...state.nutrition.targets, protein: 0 },
+      targetsBefore: { ...state.nutrition.targets, protein: null },
+    },
+    new Date("2026-09-26T18:00:00Z"),
+  );
+  assert.deepEqual(receipt.entries![0].lines[2], {
+    label: "Protein",
+    value: "No target",
+  });
 });

@@ -5,12 +5,21 @@ import {
   backup,
   mergeImport,
   parseLegacyBackup,
+  today,
 } from "../lib/domain";
 import { journalSchema } from "../lib/model";
-import { mealSchema, nutritionSummary, totalNutrients } from "../lib/nutrition";
+import {
+  mealSchema,
+  nutritionSummary,
+  targetProgress,
+  totalNutrients,
+} from "../lib/nutrition";
 import { prepareAction } from "../lib/agent/actions";
 import { normalizeFoodPhoto } from "../lib/food-photos";
 import sharp from "sharp";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { FoodView } from "../components/views/food";
 
 export const sampleMeal = () =>
   mealSchema.parse({
@@ -197,6 +206,38 @@ test("a Coach target update changes only the targets it names", () => {
   );
   // The journal itself is untouched until the change is saved.
   assert.equal(state.nutrition.targets.calories, 2350);
+});
+test("a daily target of 0 is no target: the Food page says so", () => {
+  assert.equal(targetProgress(980, 0, "kcal"), "No daily target");
+  assert.equal(targetProgress(980, null, "kcal"), "No daily target");
+  assert.equal(targetProgress(980, 1900, "kcal"), "920\u00a0kcal remaining");
+  assert.equal(targetProgress(140, 130, "g"), "10\u00a0g above target");
+  const state = emptyJournal(),
+    meal = sampleMeal();
+  meal.date = today();
+  state.nutrition.meals = [meal];
+  state.nutrition.targets = {
+    goal: "maintain",
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  };
+  const page = () =>
+    renderToStaticMarkup(
+      createElement(FoodView, {
+        journal: { state, update: async () => {} } as never,
+        go: () => {},
+      }),
+    );
+  const html = page();
+  assert.match(html, /kcal · no daily target/);
+  assert.equal(html.match(/No daily target/g)?.length, 3);
+  assert.doesNotMatch(html, /of 0|<progress|above target|remaining/);
+  state.nutrition.targets.calories = 2300;
+  state.nutrition.targets.protein = 150;
+  assert.match(page(), /of 2,300\u00a0kcal/);
+  assert.match(page(), /134\u00a0g remaining/);
 });
 test("photo processing rejects spoofed files, bounds size and removes metadata", async () => {
   await assert.rejects(

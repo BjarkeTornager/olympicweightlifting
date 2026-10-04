@@ -130,6 +130,22 @@ export function mergeDietTargets(
 ): DietTargets {
   return dietTargetsSchema.parse({ ...current, ...update });
 }
+// A daily target, or null when none is set. Zero counts as none: nobody
+// aims to eat nothing, and "of 0 kcal" would read as a target to meet.
+export function dailyTarget(value: number | null | undefined) {
+  return value != null && value > 0 ? value : null;
+}
+// What is left of a daily target, or that there is none.
+export function targetProgress(
+  eaten: number,
+  target: number | null | undefined,
+  unit: "kcal" | "g",
+) {
+  const goal = dailyTarget(target);
+  if (goal == null) return "No daily target";
+  const diff = Math.abs(Math.round(goal - eaten));
+  return `${diff.toLocaleString("en-GB")}\u00a0${unit} ${eaten > goal ? "above target" : "remaining"}`;
+}
 export const favouriteMealSchema = mealInputSchema
   .omit({ date: true, photoIds: true, source: true })
   .extend({

@@ -7,6 +7,7 @@ import {
   isValidLoggedSet,
   upgradeProgramDraft,
 } from "../js/progression.js";
+import { sessionMinutes, timedMinutes } from "./session-length";
 import {
   journalSchema,
   type JournalState,
@@ -138,6 +139,17 @@ export function createWorkout(
       day?.exercises.map((ex) => createEntry(ex, state, day.id, date)) ?? [],
   };
 }
+// A session's clock starts at its first logged set (see session-length.ts).
+export const hasLoggedSet = (w: Workout) =>
+  w.exercises.some((e) => e.sets.some(isValidLoggedSet));
+export function startClock(
+  workout: Workout,
+  hadLoggedSet: boolean,
+  now = new Date(),
+) {
+  if (!hadLoggedSet && !workout.firstSetAt && hasLoggedSet(workout))
+    workout.firstSetAt = now.toISOString();
+}
 export function finishWorkout(state: JournalState): JournalState {
   const draft = state.activeWorkout;
   if (!draft) throw Error("No workout in progress");
@@ -153,12 +165,25 @@ export function finishWorkout(state: JournalState): JournalState {
     }))
     .filter((e) => e.sets.length);
   if (!exercises.length) throw Error("Log at least one set before finishing.");
+  const now = new Date().toISOString();
+  // Editing a finished session keeps when it finished and how long it took.
+  const original = draft.editingSessionId
+    ? state.sessions.find((s) => s.id === draft.editingSessionId)
+    : undefined;
+  const finishedAt = original?.finishedAt ?? now;
+  const durationMinutes =
+    draft.durationMinutes !== undefined
+      ? draft.durationMinutes
+      : original
+        ? sessionMinutes(original)
+        : timedMinutes(draft.firstSetAt ?? draft.startedAt, now);
   const session = {
     ...draft,
     id: draft.editingSessionId ?? draft.id,
     editingSessionId: null,
     exercises,
-    finishedAt: new Date().toISOString(),
+    finishedAt,
+    durationMinutes,
   };
   return {
     ...state,

@@ -197,6 +197,9 @@ const summaryField = text(
   "One short sentence of what the athlete reported, in their words, shown in their journal.",
 );
 const dateField = text("YYYY-MM-DD");
+const sessionLength = integer(
+  "How long the whole workout took, in minutes, only if the athlete said. Never a guess.",
+);
 
 const exercisesParameter = {
   type: "ARRAY",
@@ -452,6 +455,7 @@ export function voiceTools(
                 type: "BOOLEAN",
                 description: "False only if the athlete is still training.",
               },
+              duration_minutes: sessionLength,
               exercises: exercisesParameter,
             },
             required: ["summary", "date", "title", "exercises"],
@@ -499,6 +503,7 @@ export function voiceTools(
               summary: summaryField,
               session_id: text("From read_journal"),
               title: text(),
+              duration_minutes: sessionLength,
               exercises: exercisesParameter,
             },
             required: ["summary", "session_id", "title", "exercises"],

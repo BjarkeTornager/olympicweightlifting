@@ -8,6 +8,7 @@ import {
   finishWorkout,
   uid,
 } from "../domain";
+import { sessionMinutes } from "../session-length";
 import type { JournalState, Workout } from "../model";
 import { startTemplate, templateFromWorkout } from "../training";
 import type { trainingInputSchema } from "./action-schema";
@@ -34,6 +35,8 @@ function buildWorkout(
     date: input.date,
     programId: "personal",
     programDayId: input.category === "accessories" ? "gym_accessories" : "open",
+    // Only a length the athlete stated; a session told afterwards has no clock.
+    ...(logged ? { durationMinutes: input.durationMinutes ?? null } : {}),
     recovery: "auto",
     athleteNotes: input.notes ?? "",
     coachNotes: "",
@@ -126,8 +129,14 @@ export function prepareWorkoutProgress(
     draft.athleteNotes = [draft.athleteNotes, action.workout.notes]
       .filter(Boolean)
       .join("\n");
-  if (existing)
+  if (existing) {
     next.sessions = next.sessions.filter((s) => s.id !== existing.id);
+    // Sets added later keep the session's length.
+    if (draft.durationMinutes === undefined)
+      draft.durationMinutes = sessionMinutes(existing);
+  }
+  if (action.workout.durationMinutes != null)
+    draft.durationMinutes = action.workout.durationMinutes;
   delete draft.finishedAt;
   next.activeWorkout = draft;
   let workout = draft;
@@ -191,6 +200,8 @@ export function prepareSession(
           ? "gym_accessories"
           : existing.programDayId,
       athleteNotes: action.workout.notes ?? existing.athleteNotes,
+      durationMinutes:
+        action.workout.durationMinutes ?? existing.durationMinutes,
       exercises: built.exercises.map((entry) => {
         const original = existing.exercises.find(
           (e) => e.exerciseId === entry.exerciseId,

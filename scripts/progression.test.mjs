@@ -249,7 +249,11 @@ test("after a break, the plan restarts lighter or holds", () => {
   assert.match(twelveWeeks.reason, /12 weeks ago, on 2026-09-07\. After more than 4 weeks away, a cautious restart is about 90% of your last load: 40 kg instead of 45 kg/);
   assert.equal(after("2026-12-07").weight, 36, "More than 12 weeks: about 80 %");
   assert.equal(after("2026-10-12").weight, 40, "Five weeks: about 90 %");
-  assert.equal(after("2026-10-12", { age: 65 }).weight, 36, "Five weeks at 65: about 80 %");
+  const older = after("2026-10-12", { age: 70 });
+  assert.equal(older.weight, 36, "Five weeks at 65 or over: about 80 %");
+  assert.match(older.reason, /5 weeks ago, on 2026-09-07\. After more than 4 weeks away, and at 65 or over, a cautious restart is about 80% of your last load: 36 kg instead of 45 kg\./);
+  assert.equal(after("2026-10-12", { age: 65 }).weight, 36, "From 65");
+  assert.match(after("2026-12-07", { age: 70 }).reason, /After more than 12 weeks away, a cautious restart is about 80%/);
   assert.equal(after("2026-10-05").status, "hold", "Four weeks: hold, no increase");
   assert.equal(after("2026-10-05").weight, 45);
   assert.match(after("2026-10-05").reason, /28 days ago/);

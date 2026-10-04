@@ -141,10 +141,11 @@ export function planExercise(exercise, { sessions, programId, dayId, date, recov
   if (gap > BREAK_DAYS && weight > 0) {
     const percent = gap > LONG_BREAK_DAYS || age >= OLDER_AGE ? 80 : 90;
     const restart = percentOf(weight, percent);
-    const away = gap > LONG_BREAK_DAYS ? "more than 12 weeks" : age >= OLDER_AGE ? "more than 4 weeks at 65 or over" : "more than 4 weeks";
+    const away = gap > LONG_BREAK_DAYS ? "more than 12 weeks" : "more than 4 weeks";
+    const older = gap <= LONG_BREAK_DAYS && age >= OLDER_AGE ? `, and at ${OLDER_AGE} or over` : "";
     return {
       ...plan, weight: restart, status: "return",
-      reason: `You last trained this lift ${Math.floor(gap / 7)} weeks ago, on ${lastTrained}. After ${away} away, a cautious restart is about ${percent}% of your last load: ${restart} kg instead of ${weight} kg. This is a convention, not a fixed rule, so change the weight if it feels too light or too heavy.` + roundingNote,
+      reason: `You last trained this lift ${Math.floor(gap / 7)} weeks ago, on ${lastTrained}. After ${away} away${older}, a cautious restart is about ${percent}% of your last load: ${restart} kg instead of ${weight} kg. This is a convention, not a fixed rule, so change the weight if it feels too light or too heavy.` + roundingNote,
     };
   }
   if (!entry) return hold("This exercise was not logged in the last workout for this day. Repeat the last load.");

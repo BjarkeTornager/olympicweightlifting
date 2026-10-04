@@ -9,6 +9,8 @@ export function privateRequestHeaders(input?: HeadersInit) {
   headers.set("X-Food-Tags-Version", "1");
   headers.set("X-Activity-Photos-Version", "1");
   headers.set("X-Sleep-Import-Version", "1");
+  // Alcohol kinds and estimated volumes on drinks.
+  headers.set("X-Drinks-Version", "1");
   // Coach can show recipe cards with pictures (drawsRecipeCards).
   headers.set("X-Coach-Recipe-Version", "1");
   return headers;

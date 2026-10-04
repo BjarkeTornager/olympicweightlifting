@@ -166,6 +166,8 @@ export const journalSchema = z
         installHintDismissed: z.boolean().optional(),
         largeText: z.boolean().optional(),
         restSeconds: z.number().int().min(15).max(600).optional(),
+        // The athlete would rather not see a daily drinks target.
+        hideHydrationTarget: z.boolean().optional(),
       })
       .passthrough(),
   })

@@ -104,6 +104,15 @@ export function cardioBurn(
   };
 }
 
+// A session's length from its start to its finish, or null without both
+// times. An unfinished session left open for hours is not training time.
+export function workoutMinutes(workout: Workout) {
+  if (!workout.startedAt || !workout.finishedAt) return null;
+  const minutes =
+    (Date.parse(workout.finishedAt) - Date.parse(workout.startedAt)) / 60000;
+  return minutes >= 10 && minutes <= 240 ? minutes : null;
+}
+
 // Olympic weightlifting sessions are mostly rest between short efforts; the
 // Compendium lists vigorous resistance training at about 5 METs overall.
 export function strengthBurn(
@@ -111,11 +120,8 @@ export function strengthBurn(
   workout: Workout,
 ): Burn | null {
   const weight = bodyweightKg(state, workout.date);
-  if (!weight || !workout.startedAt || !workout.finishedAt) return null;
-  const minutes =
-    (Date.parse(workout.finishedAt) - Date.parse(workout.startedAt)) / 60000;
-  // An unfinished session left open for hours is not training time.
-  if (!(minutes >= 10 && minutes <= 240)) return null;
+  const minutes = workoutMinutes(workout);
+  if (!weight || minutes == null) return null;
   return {
     kcal: Math.round(5 * weight * (minutes / 60)),
     estimated: true,

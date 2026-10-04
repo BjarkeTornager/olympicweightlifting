@@ -48,7 +48,7 @@ const meal = (day = date, calories = 500) =>
 
 test("a bundle is one review, preserves omitted health fields and never partially changes its input", () => {
   const state = emptyJournal();
-  saveCheckin(state, { date, waterMl: 1500, notes: "Existing note" }, date);
+  saveCheckin(state, { date, bodyweight: 80, notes: "Existing note" }, date);
   const original = structuredClone(state);
   const m = meal();
   const { id, createdAt, ...input } = m;
@@ -68,7 +68,7 @@ test("a bundle is one review, preserves omitted health fields and never partiall
     date,
   );
   assert.equal(prepared.entries?.length, 3);
-  assert.equal(prepared.state.health.checkins[0].waterMl, 1500);
+  assert.equal(prepared.state.health.checkins[0].bodyweight, 80);
   assert.equal(prepared.state.health.checkins[0].notes, "Existing note");
   assert.equal(prepared.state.nutrition.meals.length, 1);
   assert.equal(prepared.state.cardio.sessions.length, 1);

@@ -823,25 +823,30 @@ export function notesForTargets(
 }
 
 const WEEK_MS = 7 * 86400000;
+const weeksOld = (bornOn: string, today: string) =>
+  Math.floor((Date.parse(today) - Date.parse(bornOn)) / WEEK_MS);
+
+// While breastfeeding, the baby's age in whole weeks today, when known.
+export function babyWeeks(state: JournalState, today: string) {
+  const bornOn = state.profile.goalHealth?.babyBornOn;
+  return state.profile.goalChecks?.pregnancy === "breastfeeding" && bornOn
+    ? weeksOld(bornOn, today)
+    : null;
+}
 
 // The plan for the saved goals, with the focus, target, latest body fat and
-// the safety checks given with them; the baby's age in whole weeks today.
+// the safety checks given with them.
 export function planForState(state: JournalState, today: string) {
   const body = goalsForState(state);
   if (!body) return null;
   const checks = state.profile.goalChecks;
-  const health = state.profile.goalHealth;
-  const bornOn =
-    checks?.pregnancy === "breastfeeding" ? health?.babyBornOn : undefined;
   return planGoals(body, today, {
     focus: state.profile.bodyTargets?.focus,
     targetBodyFatPercent: state.profile.bodyTargets?.targetBodyFatPercent,
     bodyFatPercent: latestBodyFat(state, today)?.percent ?? null,
     pregnancy: checks?.pregnancy ?? null,
-    weeksSinceBirth: bornOn
-      ? Math.floor((Date.parse(today) - Date.parse(bornOn)) / WEEK_MS)
-      : null,
-    limitProtein: Boolean(health?.limitProtein),
+    weeksSinceBirth: babyWeeks(state, today),
+    limitProtein: Boolean(state.profile.goalHealth?.limitProtein),
     lowWeightConfirmed: checks?.lowWeightConfirmedKg === body.targetWeightKg,
   });
 }
@@ -891,7 +896,9 @@ export const ASSUMED_SESSION =
 // with the goals is recorded as today's reading. Pregnancy, a confirmed low
 // goal weight and a limit on protein carry over when not given again, the
 // confirmation only while the goal weight stays the same and the baby's
-// birth day only while breastfeeding.
+// birth day only while breastfeeding. The birth day is worked out from the
+// weeks given only when they differ from the saved age, so saving the
+// goals again never moves it.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
@@ -929,14 +936,16 @@ export function applyGoals(
   else delete state.profile.goalChecks;
   const health = state.profile.goalHealth;
   const limitProtein = checks.limitProtein ?? Boolean(health?.limitProtein);
+  const weeks = checks.weeksSinceBirth;
   const babyBornOn =
-    pregnancy !== "breastfeeding" || checks.weeksSinceBirth === null
+    pregnancy !== "breastfeeding" || weeks === null
       ? undefined
-      : checks.weeksSinceBirth !== undefined
-        ? new Date(Date.parse(today) - checks.weeksSinceBirth * WEEK_MS)
+      : weeks === undefined ||
+          (health?.babyBornOn && weeksOld(health.babyBornOn, today) === weeks)
+        ? health?.babyBornOn
+        : new Date(Date.parse(today) - weeks * WEEK_MS)
             .toISOString()
-            .slice(0, 10)
-        : health?.babyBornOn;
+            .slice(0, 10);
   if (limitProtein || babyBornOn)
     state.profile.goalHealth = {
       ...(limitProtein && { limitProtein }),

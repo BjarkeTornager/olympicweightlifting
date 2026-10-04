@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { emptyJournal } from "../lib/domain";
 import {
   applyGoals,
+  babyWeeks,
   CARBS_FLOOR_G,
   describePlan,
   LACTATION_KCAL,
@@ -19,6 +20,7 @@ import {
 import { prepareAction } from "../lib/agent/actions";
 import { localClock } from "../lib/agent/time-context";
 import { coachingContext } from "../lib/coaching";
+import { offsetDate } from "../lib/health";
 import { journalSchema } from "../lib/model";
 import { buildToday } from "../lib/native-api";
 import { voiceAction, voiceToolArgs } from "../lib/voice-actions";
@@ -482,4 +484,39 @@ test("Coach and the voice coach pass the answers to the same plan, and get no pr
     ),
   );
   assert.ok(instruction.includes("don't ask about them outside goal setup"));
+});
+
+test("saving the goals again keeps the baby's birth day, so a gentle deficit can start at 6 weeks", () => {
+  const born = "2026-09-01";
+  const state = emptyJournal();
+  applyGoals(
+    state,
+    { ...mother, pregnancy: "breastfeeding", weeksSinceBirth: 0 },
+    born,
+  );
+  assert.equal(state.profile.goalHealth?.babyBornOn, born);
+  // The form sends back the age it shows, in whole weeks, on every save.
+  for (let day = 6; day <= 60; day += 6) {
+    const date = offsetDate(born, day);
+    applyGoals(
+      state,
+      {
+        ...mother,
+        pregnancy: "breastfeeding",
+        weeksSinceBirth: babyWeeks(state, date),
+      },
+      date,
+    );
+    assert.equal(state.profile.goalHealth?.babyBornOn, born, date);
+  }
+  assert.equal(
+    planForState(state, offsetDate(born, 41))?.direction,
+    "maintain",
+  );
+  assert.equal(planForState(state, offsetDate(born, 42))?.direction, "lose");
+  // A different age is a new answer, and moves the day.
+  const date = offsetDate(born, 60);
+  applyGoals(state, { ...mother, weeksSinceBirth: 6 }, date);
+  assert.equal(babyWeeks(state, date), 6);
+  assert.equal(state.profile.goalHealth?.babyBornOn, offsetDate(date, -42));
 });

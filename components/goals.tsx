@@ -2,6 +2,7 @@
 import { useState } from "react";
 import {
   applyGoals,
+  babyWeeks,
   bodyGoalsRequestSchema,
   describePlan,
   describeSessions,
@@ -121,14 +122,9 @@ function GoalsForm({
   const body = goalsForState(state);
   const training = savedTraining(state);
   const health = state.profile.goalHealth;
-  // The baby's age in whole weeks today, from the day it was born.
-  const babyWeeks =
-    state.profile.goalChecks?.pregnancy === "breastfeeding" &&
-    health?.babyBornOn
-      ? Math.floor(
-          (Date.parse(today()) - Date.parse(health.babyBornOn)) / 604800000,
-        )
-      : null;
+  // The baby's age in whole weeks today, from the day it was born. Sent
+  // back unchanged, it keeps that day (applyGoals).
+  const babyAge = babyWeeks(state, today());
   // Sex and everyday activity are left for the athlete to choose: a default
   // would quietly change the plan.
   const [draft, setDraft] = useState<Draft>(() => ({
@@ -150,7 +146,7 @@ function GoalsForm({
       state.profile.bodyTargets?.targetBodyFatPercent ?? "",
     ),
     pregnancy: state.profile.goalChecks?.pregnancy ?? "",
-    weeksSinceBirth: babyWeeks == null ? "" : String(babyWeeks),
+    weeksSinceBirth: babyAge == null ? "" : String(babyAge),
     limitProtein: health?.limitProtein ? "yes" : "",
   }));
   // A loss towards a weight just under the healthy range, confirmed for

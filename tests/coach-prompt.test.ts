@@ -211,7 +211,23 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // paragraph. Restoring that paragraph reproduces the previous hash
     // (74336db6…). Health, privacy and evidence text is otherwise
     // unchanged.
-    "2457ba00c296405fce8774f8b2c1cbafeadac8c27d0ebe0986663e635c2effb0",
+    // Revised 2026-10-04, deliberate and reviewed at the owner's request
+    // ("Coach should be able to add any exercise that the user requests"):
+    // the core workout continuity paragraph gains three sentences. Any
+    // exercise the athlete names can be logged, planned or added: the
+    // catalogue id when it is the same movement, otherwise custom:<their
+    // name for it>, never a refusal, a request for permission or a
+    // different exercise, and the custom id already shown is reused. Sets
+    // still to do go into the ongoing workout with the new
+    // add_workout_exercise and are never logged as done (without that
+    // sentence Coach logged "jeg tager dem efter squats" as done in the
+    // Coach benchmark). The programmes paragraph's custom sentence no longer
+    // limits custom ids to "explicitly named" movements; it still forbids
+    // invented catalogue IDs. The server makes the ids canonical
+    // (custom-exercises.test.ts). Removing the three sentences and restoring
+    // the old one reproduces the previous hash (2457ba00…). Health, privacy
+    // and evidence text is unchanged.
+    "14390d3e323fb8f941dfdbe6d153e256ea668575a6f01b559b0918dfb5ef1720",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

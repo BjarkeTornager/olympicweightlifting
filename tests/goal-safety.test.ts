@@ -829,6 +829,7 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
     const notes = today.body?.goalNotes ?? [];
     const plan = planForState(state, date)!;
     if (notes.join() === TARGETS_DIFFER) return notes;
+    if (/^These are your own daily targets/.test(notes.join())) return notes;
     if (today.targetsProposal) {
       assert.match(notes.join(), /^Your goals plan suggests new daily targets/);
       return notes;
@@ -900,11 +901,15 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
     state.nutrition.targets.calories,
   );
   assert.notDeepEqual(consistent(state, next), [TARGETS_DIFFER]);
-  // Targets set by hand, or none, get the line.
+  // Targets set by hand, here by an older version of the app with no
+  // record, or none, are the athlete's own, with the plan's estimate.
+  const own = [
+    "These are your own daily targets; your goals plan's estimate is about 2,770 kcal a day.",
+  ];
   state.nutrition.targets.calories = 2300;
-  assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+  assert.deepEqual(consistent(state, next), own);
   state.nutrition.targets.calories = 0;
-  assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+  assert.deepEqual(consistent(state, next), own);
 });
 
 test("old saved targets that break a hard limit follow the plan again, once; others are left alone", () => {

@@ -460,14 +460,14 @@ export function coachingContext(state: JournalState, date: string) {
             // with the goals until there are newer ones: goals.plan's weight.
             currentWeightKg: currentWeightKg(state, date) ?? undefined,
             // How the saved daily targets (dailyTargets) were set: the
-            // plan's or the athlete's own, from which day, at which weight.
-            ...(set.recorded && {
-              targetsSet: {
-                source: set.source,
-                from: set.from,
-                weightKg: set.weightKgAtSet,
-              },
-            }),
+            // plan's or the athlete's own, from which day, at which weight;
+            // the day and weight are null for targets saved before they
+            // were recorded (targetsInForce).
+            targetsSet: {
+              source: set.source,
+              from: set.from,
+              weightKg: set.weightKgAtSet,
+            },
             // New targets the app suggests from goals.plan, which the
             // athlete can take or keep theirs over on Today, and why.
             ...(proposal && {

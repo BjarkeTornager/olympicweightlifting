@@ -7,6 +7,7 @@ import {
 } from "./nutrition";
 import { daysBefore, weighIns } from "./body-composition";
 import { localClock, timeZoneSchema } from "./reminders";
+import { savedByOldPlan } from "./old-goal-plan";
 import type { JournalState } from "./model";
 
 // Where the daily targets came from, and when: the plan's, from the goals or
@@ -87,9 +88,11 @@ export function localDay(at: string, state: JournalState) {
 
 const records = (state: JournalState) => state.profile.targetHistory ?? [];
 
-// The saved targets as a record: the latest one when it matches them;
-// otherwise they were saved before records were kept, or by an older
-// version of the app, and nothing is known about them.
+// The saved targets as a record: the latest one when it matches them.
+// Otherwise they were saved before records were kept, and are the plan's
+// when they are what it gave then (savedByOldPlan), else the athlete's own;
+// or they were saved since by an older version of the app, most likely by
+// hand, and count as the athlete's own. Nothing else is known about them.
 export function targetsInForce(state: JournalState): TargetRecord & {
   recorded: boolean;
 } {
@@ -99,7 +102,7 @@ export function targetsInForce(state: JournalState): TargetRecord & {
     return { ...latest, ...targetsOf(saved), recorded: true };
   return {
     ...targetsOf(saved),
-    source: null,
+    source: !latest && savedByOldPlan(state) ? "plan" : "manual",
     from: null,
     setAt: null,
     weightKgAtSet: null,

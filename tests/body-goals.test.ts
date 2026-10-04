@@ -13,7 +13,6 @@ import {
   planGoals,
   planTargets,
   proteinPerKg,
-  TARGETS_DIFFER,
   weeklyRates,
   type BodyGoalsInput,
   type GoalPlan,
@@ -272,13 +271,17 @@ test("the plan's notes on macros show only beside the plan's own macros", () => 
   );
   assert.ok(goalNotes(state)?.some((n) => n.startsWith("To keep 130 g")));
   // The same calories with an older plan's macros (fat at 0.8 g/kg, so
-  // 101 g of carbohydrate): the line that they differ, not the note.
+  // 101 g of carbohydrate), saved without a record by an older version of
+  // the app: the line that they differ, as the athlete's own, not the note.
   state.nutrition.targets = {
     ...state.nutrition.targets,
     fat: 44,
     carbs: 101,
   };
-  assert.deepEqual(goalNotes(state), [TARGETS_DIFFER]);
+  const own = [
+    `These are your own daily targets; your goals plan's estimate is about ${plan.calories.toLocaleString("en-GB")} kcal a day.`,
+  ];
+  assert.deepEqual(goalNotes(state), own);
   // A few grams either way, as the next body fat reading moves them, keep
   // the notes.
   state.nutrition.targets = {
@@ -290,7 +293,7 @@ test("the plan's notes on macros show only beside the plan's own macros", () => 
   // A protein target well off the plan's gets the line too, as does none.
   for (const protein of [plan.protein + 30, null]) {
     state.nutrition.targets = { ...planTargets(plan), protein };
-    assert.deepEqual(goalNotes(state), [TARGETS_DIFFER], `${protein}`);
+    assert.deepEqual(goalNotes(state), own, `${protein}`);
   }
 });
 

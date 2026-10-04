@@ -36,10 +36,20 @@ test("goals are set from Today, preview the plan and become the daily food targe
     .analyze();
   expect(axe.violations).toEqual([]);
   await page.screenshot({ path: info.outputPath("goals-form.png") });
-  // An unhealthy goal is flagged, not silently accepted.
+  // Men aren't asked about pregnancy.
+  await expect(dialog.getByLabel("Pregnant or breastfeeding")).toHaveCount(0);
+  // An unhealthy goal is flagged, not silently accepted: just under the
+  // healthy range, the plan holds until the athlete confirms.
   await dialog.getByLabel("Goal weight (kg)").fill("58");
   await expect(plan).toContainText("below the healthy range");
+  await expect(plan).toContainText("Hold around 88 kg");
+  const confirm = dialog.getByLabel("I still want to lose weight, slowly");
+  await confirm.check();
+  await expect(plan).toContainText("Lose about 0.44 kg a week towards 58 kg");
+  await expect(plan).toContainText("As you've confirmed it");
+  await page.screenshot({ path: info.outputPath("goals-confirmed.png") });
   await dialog.getByLabel("Goal weight (kg)").fill("81");
+  await expect(confirm).toHaveCount(0);
   await dialog.getByRole("button", { name: "Save goals" }).click();
   await expect(dialog).toHaveCount(0);
   const row = page.getByRole("region", { name: "Your goals" });
@@ -58,6 +68,54 @@ test("goals are set from Today, preview the plan and become the daily food targe
       () => document.documentElement.scrollWidth <= innerWidth + 1,
     ),
   ).toBe(true);
+});
+
+test("under 18 the form asks no body fat, and breastfeeding holds weight", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#today");
+  await page
+    .getByRole("region", { name: "Your goals" })
+    .getByRole("button", { name: "Fill in yourself" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Your goals" });
+  await dialog.getByLabel("Age").fill("16");
+  await dialog.getByLabel("Height (cm)").fill("165");
+  await dialog.getByLabel("Sex").selectOption("female");
+  await dialog.getByLabel("Weight now (kg)").fill("60");
+  await dialog.getByLabel("Goal weight (kg)").fill("55");
+  await dialog.getByLabel("Days I can train").fill("3");
+  await expect(dialog.getByLabel("Body fat now (%, optional)")).toHaveCount(0);
+  await expect(dialog.getByLabel("Goal body fat (%, optional)")).toHaveCount(0);
+  const plan = dialog.getByRole("status");
+  await expect(plan).toContainText("Hold around 60 kg");
+  await expect(plan).toContainText(
+    "Under 18 the plan doesn't set a calorie deficit",
+  );
+  // An adult loses weight, unless she is breastfeeding.
+  await dialog.getByLabel("Age").fill("31");
+  await expect(dialog.getByLabel("Body fat now (%, optional)")).toBeVisible();
+  await expect(plan).toContainText("Lose about");
+  await dialog
+    .getByLabel("Pregnant or breastfeeding")
+    .selectOption("breastfeeding");
+  await expect(plan).toContainText("Hold around 60 kg");
+  await expect(plan).toContainText("milk supply");
+  await expect(dialog).toContainText("choose Neither to remove it");
+  await page.screenshot({ path: info.outputPath("goals-breastfeeding.png") });
+  await dialog.getByRole("button", { name: "Save goals" }).click();
+  await expect(dialog).toHaveCount(0);
+  // The form remembers it, and Neither clears it.
+  await page
+    .getByRole("region", { name: "Your goals" })
+    .getByRole("button")
+    .click();
+  await expect(dialog.getByLabel("Pregnant or breastfeeding")).toHaveValue(
+    "breastfeeding",
+  );
+  await dialog.getByLabel("Pregnant or breastfeeding").selectOption("neither");
+  await expect(plan).toContainText("Lose about");
 });
 
 test("with voice on, goals can be set up by talking to Coach", async ({

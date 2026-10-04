@@ -84,7 +84,11 @@ export function GoalsCard({
 }
 
 type Draft = Record<
-  keyof BodyGoalsInput | "focus" | "bodyFatPercent" | "targetBodyFatPercent",
+  | keyof BodyGoalsInput
+  | "focus"
+  | "bodyFatPercent"
+  | "targetBodyFatPercent"
+  | "pregnancy",
   string
 >;
 const focusLabels: Record<BodyFocus, string> = {
@@ -123,23 +127,39 @@ function GoalsForm({
     targetBodyFatPercent: String(
       state.profile.bodyTargets?.targetBodyFatPercent ?? "",
     ),
+    pregnancy: state.profile.goalChecks?.pregnancy ?? "",
   }));
+  // A loss towards a weight just under the healthy range, confirmed for
+  // the saved goal weight.
+  const [confirmed, setConfirmed] = useState(
+    body != null &&
+      state.profile.goalChecks?.lowWeightConfirmedKg === body.targetWeightKg,
+  );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const number = (v: string) => (v.trim() ? Number(v) : NaN);
   const optional = (v: string) => (v.trim() ? Number(v) : undefined);
   const knownFat = latestBodyFat(state, today())?.percent;
+  // Under 18 the plan uses no body fat, so the form doesn't ask for it.
+  const minor = number(draft.age) < 18;
+  // Asked of anyone who isn't male, up to 55, and kept while it's set.
+  const asksPregnancy =
+    Boolean(draft.pregnancy) ||
+    (draft.sex !== "male" && !(number(draft.age) > 55));
   const parsed = bodyGoalsRequestSchema.safeParse({
     ...draft,
     focus: draft.focus || undefined,
     // Record a body fat reading only when it changed.
     bodyFatPercent:
-      optional(draft.bodyFatPercent) === knownFat
+      minor || optional(draft.bodyFatPercent) === knownFat
         ? undefined
         : optional(draft.bodyFatPercent),
-    targetBodyFatPercent: draft.targetBodyFatPercent.trim()
-      ? Number(draft.targetBodyFatPercent)
-      : null,
+    targetBodyFatPercent: minor
+      ? undefined
+      : draft.targetBodyFatPercent.trim()
+        ? Number(draft.targetBodyFatPercent)
+        : null,
+    pregnancy: draft.pregnancy || undefined,
     age: number(draft.age),
     heightCm: number(draft.heightCm),
     weightKg: number(draft.weightKg),
@@ -149,13 +169,23 @@ function GoalsForm({
     sessionMinutes: number(draft.sessionMinutes),
   });
   const split = parsed.success ? splitGoals(parsed.data) : null;
-  const plan = split
-    ? planGoals(split.goals, today(), {
+  const preview =
+    split &&
+    ((lowWeightConfirmed: boolean) =>
+      planGoals(split.goals, today(), {
         focus: split.composition.focus,
         targetBodyFatPercent: split.composition.targetBodyFatPercent,
         bodyFatPercent: optional(draft.bodyFatPercent) ?? null,
-      })
-    : null;
+        pregnancy:
+          draft.pregnancy === "pregnant" || draft.pregnancy === "breastfeeding"
+            ? draft.pregnancy
+            : null,
+        lowWeightConfirmed,
+      }));
+  // A loss towards a weight just under the healthy range waits for the
+  // athlete to confirm it.
+  const asksConfirmation = preview ? preview(false).confirmToLose : false;
+  const plan = preview ? preview(asksConfirmation && confirmed) : null;
   const field = (key: keyof Draft) => ({
     value: draft[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -171,7 +201,14 @@ function GoalsForm({
         setError("");
         try {
           await journal.update((s) => {
-            applyGoals(s, parsed.data, today());
+            applyGoals(
+              s,
+              {
+                ...parsed.data,
+                confirmLowWeight: asksConfirmation && confirmed,
+              },
+              today(),
+            );
           });
           onDone();
         } catch (e) {
@@ -235,14 +272,29 @@ function GoalsForm({
             ))}
           </select>
         </label>
-        <label>
-          Body fat now (%, optional)
-          <input inputMode="decimal" {...field("bodyFatPercent")} />
-        </label>
-        <label>
-          Goal body fat (%, optional)
-          <input inputMode="decimal" {...field("targetBodyFatPercent")} />
-        </label>
+        {!minor && (
+          <>
+            <label>
+              Body fat now (%, optional)
+              <input inputMode="decimal" {...field("bodyFatPercent")} />
+            </label>
+            <label>
+              Goal body fat (%, optional)
+              <input inputMode="decimal" {...field("targetBodyFatPercent")} />
+            </label>
+          </>
+        )}
+        {asksPregnancy && (
+          <label>
+            Pregnant or breastfeeding
+            <select {...field("pregnancy")}>
+              <option value="">Prefer not to say</option>
+              <option value="neither">Neither</option>
+              <option value="pregnant">Pregnant</option>
+              <option value="breastfeeding">Breastfeeding</option>
+            </select>
+          </label>
+        )}
         <label>
           Experience
           <select {...field("experience")}>
@@ -252,6 +304,12 @@ function GoalsForm({
           </select>
         </label>
       </div>
+      {asksPregnancy && (
+        <p className="fine-print">
+          Optional. Kept with your goals only so the plan never sets a deficit
+          in pregnancy or while breastfeeding; choose Neither to remove it.
+        </p>
+      )}
       {plan && split ? (
         <div className="goals-plan" role="status">
           <strong>{describePlan(split.goals, plan)}</strong>
@@ -265,6 +323,16 @@ function GoalsForm({
         <p className="fine-print">
           Fill in the numbers to see your daily plan.
         </p>
+      )}
+      {asksConfirmation && (
+        <label className="goals-check">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+          />
+          I still want to lose weight, slowly
+        </label>
       )}
       {error && (
         <p className="notice warning" role="alert">

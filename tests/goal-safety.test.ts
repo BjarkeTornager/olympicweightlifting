@@ -8,7 +8,7 @@ import {
   planGoals,
   planTargets,
   TARGETS_DIFFER,
-  type BodyGoalsInput,
+  type BodyGoals,
   type GoalPlan,
 } from "../lib/body-goals";
 import { leannessLimits, saveBodyFat } from "../lib/body-composition";
@@ -25,7 +25,9 @@ import { elevenLabsTools } from "../lib/voice-elevenlabs";
 // The safety limits every goal plan keeps, wherever it is set: the website
 // form, Coach, the voice coach and the iPhone all go through planGoals.
 const today = "2026-09-26";
-const athlete: BodyGoalsInput = {
+// Goals as profile.body saves them.
+type Goals = Omit<BodyGoals, "updatedAt">;
+const athlete: Goals = {
   age: 34,
   sex: "male",
   heightCm: 182,
@@ -37,14 +39,14 @@ const athlete: BodyGoalsInput = {
   sessionMinutes: 75,
   experience: "developing",
 };
-const teen: BodyGoalsInput = {
+const teen: Goals = {
   ...athlete,
   age: 16,
   heightCm: 175,
   weightKg: 70,
   targetWeightKg: 65,
 };
-const mother: BodyGoalsInput = {
+const mother: Goals = {
   ...athlete,
   age: 31,
   sex: "female",
@@ -579,14 +581,19 @@ test("a target date under a week away, or past, holds weight with a note", () =>
 
 test("on a wide grid every plan keeps to the floor, the gates and the deficit cap, and states the rate its calories give", () => {
   const bmi = (kg: number, cm: number) => kg / (cm / 100) ** 2;
-  const factor = { low: 1.4, moderate: 1.55, high: 1.75 };
+  const factor = { low: 1.4, moderate: 1.55, high: 1.75, very_high: 2 };
   let plans = 0;
   for (const age of [14, 16, 17, 18, 30, 50, 80])
     for (const sex of ["male", "female", "unspecified"] as const)
       for (const heightCm of [150, 165, 180, 200])
         for (const weightKg of [40, 55, 70, 90, 120, 160, 200])
           for (const change of [-0.2, -0.1, 0, 0.1, 0.2])
-            for (const activity of ["low", "moderate", "high"] as const)
+            for (const activity of [
+              "low",
+              "moderate",
+              "high",
+              "very_high",
+            ] as const)
               for (let trainingDays = 0; trainingDays <= 7; trainingDays++)
                 for (const sessionMinutes of [30, 75, 120, 180])
                   for (const bodyFatPercent of [null, 15, 35]) {
@@ -661,7 +668,7 @@ test("on a wide grid every plan keeps to the floor, the gates and the deficit ca
                         `${plan.weeklyChangeKg} kg a week from ${deficit} kcal: ${where}`,
                       );
                   }
-  assert.equal(plans, 7 * 3 * 4 * 7 * 5 * 3 * 8 * 4 * 3);
+  assert.equal(plans, 7 * 3 * 4 * 7 * 5 * 4 * 8 * 4 * 3);
 });
 
 test("pregnancy and breastfeeding never plan a deficit, and pregnancy no target, across the grid", () => {
@@ -887,7 +894,7 @@ test("old saved targets that break a hard limit follow the plan again, once; oth
   // Goals saved before the limits, on 1 September, with the targets the old
   // plan gave for them.
   const saved = (
-    goals: BodyGoalsInput,
+    goals: Goals,
     targets: ReturnType<typeof emptyJournal>["nutrition"]["targets"],
   ) => {
     const state = emptyJournal();

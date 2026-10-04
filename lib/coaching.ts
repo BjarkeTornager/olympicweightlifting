@@ -1,4 +1,4 @@
-import { athleteAge, planForState } from "./body-goals";
+import { athleteAge, goalsForState, planForState } from "./body-goals";
 import { bodyFatTrend, latestBodyFat, weightTrend } from "./body-composition";
 import { z } from "zod";
 import type { JournalState } from "./model";
@@ -223,7 +223,7 @@ export function coachingContext(state: JournalState, date: string) {
     ...(state.profile.body && plan
       ? {
           goals: {
-            ...state.profile.body,
+            ...goalsForState(state),
             focus: state.profile.bodyTargets?.focus,
             targetBodyFatPercent: plan.targetBodyFatPercent ?? undefined,
             // In pregnancy the plan sets no calorie or macro targets, so

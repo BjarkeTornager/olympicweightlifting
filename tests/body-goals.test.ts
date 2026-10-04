@@ -4,14 +4,19 @@ import { emptyJournal } from "../lib/domain";
 import {
   applyGoals,
   ASSUMED_SESSION,
+  bodyGoalsSchema,
   describePlan,
+  goalsForState,
+  planForState,
   planGoals,
   proteinPerKg,
   weeklyRates,
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
+import { coachingContext } from "../lib/coaching";
 import { LIFTING_MET, LIFTING_NET_KCAL_PER_KG_HOUR } from "../lib/energy";
+import { journalSchema } from "../lib/model";
 import { voiceAction } from "../lib/voice-actions";
 
 const today = "2026-09-26";
@@ -246,7 +251,7 @@ test("sessions follow the days available, with no floor of 2", () => {
   );
 });
 
-test("everyday movement counts 1.4, 1.55 or 1.75 times resting energy, never less than 1.4", () => {
+test("everyday movement counts 1.4, 1.55, 1.75 or 2.0 times resting energy, never less than 1.4", () => {
   const resting = 1852.5;
   // 4 sessions of 75 min at 4 kcal/kg/h net, at 88 kg, over 7 days.
   const training = (4 * 1.25 * 4 * 88) / 7;
@@ -255,6 +260,7 @@ test("everyday movement counts 1.4, 1.55 or 1.75 times resting energy, never les
     ["low", 1.4],
     ["moderate", 1.55],
     ["high", 1.75],
+    ["very_high", 2],
   ] as const)
     assert.equal(
       planGoals({ ...athlete, activity }, today).maintenanceKcal,
@@ -382,4 +388,30 @@ test("a goal change through Coach or the voice coach keeps the saved session len
       today,
     ).detail.includes(ASSUMED_SESSION),
   );
+});
+
+test("heavy manual work counts 2.0 and is saved in a shape older versions of the app still read", () => {
+  const state = emptyJournal();
+  const plan = applyGoals(state, { ...athlete, activity: "very_high" }, today);
+  // 1,852.5 × 2.0 + 251 kcal of training.
+  assert.equal(plan.maintenanceKcal, 3960);
+  // profile.body keeps the three levels older versions accept, with a flag
+  // beside it.
+  assert.deepEqual(bodyGoalsSchema.shape.activity.options, [
+    "low",
+    "moderate",
+    "high",
+  ]);
+  assert.equal(state.profile.body?.activity, "high");
+  assert.equal(state.profile.heavyManualWork, true);
+  const saved = journalSchema.parse(structuredClone(state));
+  assert.equal(goalsForState(saved)?.activity, "very_high");
+  assert.equal(planForState(saved, today)?.maintenanceKcal, 3960);
+  const context = coachingContext(saved, today);
+  assert.ok("goals" in context && context.goals?.activity === "very_high");
+  // Another level clears the flag.
+  applyGoals(state, athlete, today);
+  assert.equal(state.profile.heavyManualWork, undefined);
+  assert.equal(goalsForState(state)?.activity, "moderate");
+  assert.equal(planForState(state, today)?.maintenanceKcal, 3120);
 });

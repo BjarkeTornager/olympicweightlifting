@@ -3,6 +3,7 @@ import { EXERCISES } from "./domain";
 import { cardioActivities } from "./cardio";
 import { foodGroups } from "./nutrition";
 import {
+  activityLevels,
   athleteAge,
   describePlan,
   planForState,
@@ -189,7 +190,7 @@ How to run the check-in:
 - log_meal: estimate calories, protein, carbs and fat yourself from the foods and portions; never ask the athlete for numbers.
 - You can fix things yourself, but never change anything the athlete didn't ask about without saying so. Leave an old unfinished workout alone unless the athlete asks or a save is refused because of it; then tell them in one sentence and call clear_unfinished_workout (it saves any logged sets to history, or removes an empty draft), and save again. If the athlete corrects something you just saved, call undo_save with its save_id and save the corrected version. Never send the athlete to another screen to fix it.
 - If a save is refused for another reason, say briefly why in plain words and what you will do, then try once more with the fix.
-- Goals: when the athlete wants to set or change goals, ask one short question at a time for age, sex, height, current weight, goal weight, a target date if they have one, how active they are outside training (low, moderate, high), how many days a week they can train, how long a session usually lasts, and their experience (new, developing, experienced); and, only if it isn't clear from the goal weight, whether they want to lose fat, build muscle, recompose or maintain. Pass their current and target body fat only if they know them and are 18 or over. If they say they are pregnant or breastfeeding, pass that too. Never guess these. Then call set_goals. If the result says the plan holds their weight until they confirm, read that note kindly, and only if they say they still want to lose weight call set_goals again with confirmLowWeight true.
+- Goals: when the athlete wants to set or change goals, ask one short question at a time for age, sex, height, current weight, goal weight, a target date if they have one, how active they are outside training (low, moderate, high, or very_high for heavy manual work), how many days a week they can train, how long a session usually lasts, and their experience (new, developing, experienced); and, only if it isn't clear from the goal weight, whether they want to lose fat, build muscle, recompose or maintain. Pass their current and target body fat only if they know them and are 18 or over. If they say they are pregnant or breastfeeding, pass that too. Never guess these. Then call set_goals. If the result says the plan holds their weight until they confirm, read that note kindly, and only if they say they still want to lose weight call set_goals again with confirmLowWeight true.
 - Targets: the athlete's daily targets are dailyTargets in the day's record, shown on Food and in the iPhone app. The Goals line above is the app's recalculation from their saved goals, and the website's Goals card on Today shows its calories, which can differ. When they ask about their targets, use dailyTargets; if they ask about the Goals card's number, say it's the app's recalculation from their goals and offer it as an update to review. Mention a difference only when it matters, and change goals only when they ask.
 - Body fat: when the athlete gives a body fat reading, call log_body_fat with the method if they say it (scale, dexa, calipers, tape or estimate). Treat it as one reading: methods and days vary, so talk about the trend, not a single number. Bodyweight goes in the check-in. The app calculates daily calories, macros and sessions a week; read the result back in two short sentences, including any warning, and do not invent your own numbers.
 - Calories burned: activities and timed workouts carry calories_kcal, measured by a watch or, when calories_estimated is true, estimated by the app from the activity, bodyweight and duration; burnedInTraining is the day's total. Quote these figures (say "about" for an estimate); never work one out yourself and never pass a guess as log_activity's calories. They never change the food targets.
@@ -681,8 +682,9 @@ export function voiceTools(
               targetDate: text("YYYY-MM-DD, only if the athlete gave one"),
               activity: {
                 type: "STRING",
-                enum: ["low", "moderate", "high"],
-                description: "Movement outside training",
+                enum: [...activityLevels],
+                description:
+                  "Movement outside training: low (mostly sitting), moderate (on their feet some), high (physical work), very_high (heavy manual work)",
               },
               trainingDays: {
                 type: "INTEGER",

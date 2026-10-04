@@ -200,14 +200,16 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
-    // (PR 4, maintenance and training): goal setup also asks the usual
-    // session length, which the plan now uses to count training energy for
-    // the sessions it sets. Only the goal-setup paragraph changed: "training
+    // (PR 4, maintenance and training), in the goal-setup paragraph only:
+    // goal setup also asks the usual session length, which the plan now
+    // uses to count training energy for the sessions it sets ("training
     // days available and experience" and "training days and experience"
-    // gain session length. Restoring those two phrases reproduces the
-    // previous hash (74336db6…). Health, privacy and evidence text is
-    // unchanged.
-    "abb29d3abad8d826a578ff5f639d0e0fe8039fbd8b0332bc89be0ad201a9961b",
+    // gain session length), and everyday activity gains very_high for heavy
+    // manual work, which the plan counts at 2.0 times resting energy
+    // ("(low/moderate/high)" gains it). Restoring those three phrases
+    // reproduces the previous hash (74336db6…). Health, privacy and
+    // evidence text is unchanged.
+    "fff4bd2881d26793b989a3661b211f0126f6d1fd64f4af5c0be1ffa3a1e3c19d",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

@@ -19,22 +19,37 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await expect(
     dialog.getByText("Fill in the numbers to see your daily plan."),
   ).toBeVisible();
+  // Sex and everyday activity are the athlete's to choose: nothing is
+  // preselected, and there is no plan until both are chosen.
+  await expect(dialog.getByLabel("Sex")).toHaveValue("");
+  await expect(dialog.getByLabel("Active outside training")).toHaveValue("");
   await expect(dialog.getByLabel("Session length (min)")).toHaveValue("75");
   await dialog.getByLabel("Age").fill("34");
   await dialog.getByLabel("Height (cm)").fill("182");
   await dialog.getByLabel("Sex").selectOption("male");
   await dialog.getByLabel("Weight now (kg)").fill("88");
   await dialog.getByLabel("Goal weight (kg)").fill("81");
-  await dialog.getByLabel("Active outside training").selectOption("moderate");
   await dialog.getByLabel("Days I can train").fill("4");
+  await expect(
+    dialog.getByText("Fill in the numbers to see your daily plan."),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Save goals" }),
+  ).toBeDisabled();
+  await dialog.getByLabel("Active outside training").selectOption("moderate");
   const plan = dialog.getByRole("status");
   await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
   await expect(plan).toContainText("2,640 kcal a day");
   await expect(plan).toContainText("4 training sessions a week");
-  // Longer sessions count more energy.
+  // Longer sessions and heavy manual work count more energy.
   await dialog.getByLabel("Session length (min)").fill("120");
   await expect(plan).toContainText("2,790 kcal a day");
   await dialog.getByLabel("Session length (min)").fill("75");
+  await dialog
+    .getByLabel("Active outside training")
+    .selectOption("Heavy manual work");
+  await expect(plan).toContainText("3,470 kcal a day");
+  await dialog.getByLabel("Active outside training").selectOption("moderate");
   await expect(plan).toContainText("2,640 kcal a day");
   const axe = await new AxeBuilder({ page })
     .include('[role="dialog"]')
@@ -91,6 +106,7 @@ test("under 18 the form asks no body fat, and breastfeeding holds weight", async
   await dialog.getByLabel("Sex").selectOption("female");
   await dialog.getByLabel("Weight now (kg)").fill("60");
   await dialog.getByLabel("Goal weight (kg)").fill("55");
+  await dialog.getByLabel("Active outside training").selectOption("moderate");
   await dialog.getByLabel("Days I can train").fill("3");
   await expect(dialog.getByLabel("Body fat now (%, optional)")).toHaveCount(0);
   await expect(dialog.getByLabel("Goal body fat (%, optional)")).toHaveCount(0);

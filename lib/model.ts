@@ -141,6 +141,9 @@ export const journalSchema = z
         coaching: coachingSchema.optional(),
         lifting: liftingBriefSchema.nullable().optional(),
         body: bodyGoalsSchema.optional(),
+        // Heavy manual work outside training, which profile.body saves as
+        // high (goalsForState).
+        heavyManualWork: z.boolean().optional(),
         // Focus and target body fat beside the weight goal.
         bodyTargets: bodyTargetsSchema.optional(),
         // Pregnancy, and a confirmed low goal weight, for the plan's limits.

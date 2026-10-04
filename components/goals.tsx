@@ -5,6 +5,7 @@ import {
   bodyGoalsRequestSchema,
   describePlan,
   describeSessions,
+  goalsForState,
   planForState,
   planGoals,
   savedTraining,
@@ -114,16 +115,18 @@ function GoalsForm({
   onDone: () => void;
 }) {
   const state = journal.state!;
-  const body = state.profile.body;
+  const body = goalsForState(state);
   const training = savedTraining(state);
+  // Sex and everyday activity are left for the athlete to choose: a default
+  // would quietly change the plan.
   const [draft, setDraft] = useState<Draft>(() => ({
     age: String(body?.age ?? (state.profile.age || "")),
-    sex: body?.sex ?? "unspecified",
+    sex: body?.sex ?? "",
     heightCm: String(body?.heightCm ?? ""),
     weightKg: String(body?.weightKg ?? (state.profile.bodyweight || "")),
     targetWeightKg: String(body?.targetWeightKg ?? ""),
     targetDate: body?.targetDate ?? "",
-    activity: body?.activity ?? "moderate",
+    activity: body?.activity ?? "",
     trainingDays: String(
       body?.trainingDays ?? state.profile.lifting?.daysPerWeek ?? 3,
     ),
@@ -149,10 +152,12 @@ function GoalsForm({
   const knownFat = latestBodyFat(state, today())?.percent;
   // Under 18 the plan uses no body fat, so the form doesn't ask for it.
   const minor = number(draft.age) < 18;
-  // Asked of anyone who isn't male, up to 55, and kept while it's set.
+  // Asked of women and anyone who'd rather not say, up to 55, and kept
+  // while it's set.
   const asksPregnancy =
     Boolean(draft.pregnancy) ||
-    (draft.sex !== "male" && !(number(draft.age) > 55));
+    ((draft.sex === "female" || draft.sex === "unspecified") &&
+      !(number(draft.age) > 55));
   const parsed = bodyGoalsRequestSchema.safeParse({
     ...draft,
     focus: draft.focus || undefined,
@@ -242,7 +247,10 @@ function GoalsForm({
         </label>
         <label>
           Sex
-          <select {...field("sex")}>
+          <select required {...field("sex")}>
+            <option value="" disabled>
+              Choose
+            </option>
             <option value="male">Male</option>
             <option value="female">Female</option>
             <option value="unspecified">Prefer not to say</option>
@@ -262,10 +270,14 @@ function GoalsForm({
         </label>
         <label>
           Active outside training
-          <select {...field("activity")}>
+          <select required {...field("activity")}>
+            <option value="" disabled>
+              Choose
+            </option>
             <option value="low">Mostly sitting</option>
             <option value="moderate">On my feet some</option>
             <option value="high">Physical work</option>
+            <option value="very_high">Heavy manual work</option>
           </select>
         </label>
         <label>

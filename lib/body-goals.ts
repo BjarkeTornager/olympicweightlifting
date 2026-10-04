@@ -12,6 +12,10 @@ import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
 
 const sessionMinutes = z.number().int().min(15).max(240);
 const experience = z.enum(["new", "developing", "experienced"]);
+// Movement outside training: desk job, on feet, physical work, heavy manual
+// work.
+const savedActivities = ["low", "moderate", "high"] as const;
+export const activityLevels = [...savedActivities, "very_high"] as const;
 
 // The athlete's body and goal details, and the daily plan derived from them.
 // Numbers are estimates for everyday planning, not a clinical prescription.
@@ -23,14 +27,18 @@ export const bodyGoalsInputSchema = z
     weightKg: z.number().min(30).max(300),
     targetWeightKg: z.number().min(30).max(300),
     targetDate: foodDate.nullable().default(null),
-    // Movement outside training: desk job, on feet, physical work.
-    activity: z.enum(["low", "moderate", "high"]),
+    activity: z.enum(activityLevels),
     trainingDays: z.number().int().min(0).max(7),
     sessionMinutes: sessionMinutes.default(75),
     experience: experience.default("developing"),
   })
   .strict();
+// Saved as profile.body, whose shape older versions of the app check
+// strictly (a server still draining a deploy, or a rollback): heavy manual
+// work is saved as "high" with profile.heavyManualWork beside it, and
+// goalsForState puts the two back together.
 export const bodyGoalsSchema = bodyGoalsInputSchema.extend({
+  activity: z.enum(savedActivities),
   updatedAt: z.iso.datetime(),
 });
 export type BodyGoalsInput = z.infer<typeof bodyGoalsInputSchema>;
@@ -120,10 +128,10 @@ export function splitGoals(input: BodyGoalsRequest) {
 
 // Everyday movement before training, as a multiple of resting energy (the
 // physical activity level): about 1.4 for a desk job with little else, 1.55
-// on your feet some of the day and 1.75 in physical work (NNR 2023,
-// FAO/WHO/UNU 2004, NASEM 2023). Free-living adults sustain at least 1.4,
-// so maintenance is never set below that.
-const everydayActivity = { low: 1.4, moderate: 1.55, high: 1.75 };
+// on your feet some of the day, 1.75 in physical work and 2.0 in heavy
+// manual work (NNR 2023, FAO/WHO/UNU 2004, NASEM 2023). Free-living adults
+// sustain at least 1.4, so maintenance is never set below that.
+const everydayActivity = { low: 1.4, moderate: 1.55, high: 1.75, very_high: 2 };
 const LOWEST_ACTIVITY = 1.4;
 // Training counts for at most 1,000 kcal a day, a plausible ceiling for
 // lifting; five 4-hour sessions a week would count more at 88 kg.
@@ -610,7 +618,7 @@ export function notesForTargets(
 // The plan for the saved goals, with the focus, target, latest body fat and
 // the safety checks given with them.
 export function planForState(state: JournalState, today: string) {
-  const body = state.profile.body;
+  const body = goalsForState(state);
   if (!body) return null;
   const checks = state.profile.goalChecks;
   return planGoals(body, today, {
@@ -626,6 +634,17 @@ export function planForState(state: JournalState, today: string) {
 // Both coaches get it: supplement, caffeine and sleep advice depend on it.
 export function athleteAge(state: JournalState) {
   return state.profile.body?.age || state.profile.age || null;
+}
+
+// The saved goals, with heavy manual work put back (bodyGoalsSchema).
+export function goalsForState(
+  state: JournalState,
+): (BodyGoalsInput & { updatedAt: string }) | null {
+  const body = state.profile.body;
+  if (!body) return null;
+  return state.profile.heavyManualWork && body.activity === "high"
+    ? { ...body, activity: "very_high" }
+    : body;
 }
 
 // Session length and experience as saved with the goals, else from the
@@ -713,7 +732,14 @@ export function applyGoals(
       updatedAt: stamp,
     };
   }
-  state.profile.body = { ...goals, updatedAt: stamp };
+  const { activity, ...rest } = goals;
+  state.profile.body = {
+    ...rest,
+    activity: activity === "very_high" ? "high" : activity,
+    updatedAt: stamp,
+  };
+  if (activity === "very_high") state.profile.heavyManualWork = true;
+  else delete state.profile.heavyManualWork;
   const plan = planForState(state, today)!;
   state.profile.age = goals.age;
   state.profile.bodyweight = goals.weightKg;

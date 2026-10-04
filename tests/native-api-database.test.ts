@@ -404,6 +404,7 @@ test(
         estimated: true,
         count: 1,
         untimed: 0,
+        unestimated: 0,
       });
       // Deleted in Apple Health while waiting: it never comes in.
       const other = { ...lifting, id: crypto.randomUUID() };
@@ -422,6 +423,93 @@ test(
       );
       assert.deepEqual(gone.workouts, [{ id: other.id, result: "removed" }]);
       assert.equal((await receipt(other.id)).status, "removed");
+    } finally {
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);
+
+test(
+  "an activity's calories keep where they came from through older browsers and syncs",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db");
+    const { readJournal, writeJournal } = await import("../lib/server");
+    const { syncHealth } = await import("../lib/health-sync");
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Calories source test',$1||'@example.test',true)",
+      [id],
+    );
+    const run = {
+      id: crypto.randomUUID(),
+      kind: "running",
+      name: "Running",
+      start: "2026-09-26T07:00:00+02:00",
+      end: "2026-09-26T07:50:00+02:00",
+      durationSeconds: 3000,
+      distanceKm: 10,
+      caloriesKcal: 612,
+    };
+    try {
+      await syncHealth(id, { timezone: tz, workouts: [run] }, now);
+      let journal = await readJournal(id);
+      assert.equal(
+        journal.state.cardio.sessions[0].caloriesSource,
+        "apple-health",
+      );
+      const title = journal.state.cardio.sessions[0].title;
+      // An older browser leaves the source out: an unchanged figure keeps it.
+      const older = structuredClone(journal.state);
+      delete older.cardio.sessions[0].caloriesSource;
+      older.cardio.sessions[0].title = "Morning run";
+      journal = await writeJournal(id, {
+        state: older,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      assert.equal(
+        journal.state.cardio.sessions[0].caloriesSource,
+        "apple-health",
+      );
+      // Imported before sources were kept, and untouched since: the next
+      // sync labels it once.
+      const untouched = structuredClone(journal.state);
+      untouched.cardio.sessions[0].title = title;
+      journal = await writeJournal(id, {
+        state: untouched,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      await pool.query(
+        "UPDATE journals SET state = state #- '{cardio,sessions,0,caloriesSource}' WHERE user_id = $1",
+        [id],
+      );
+      assert.equal(
+        (await readJournal(id)).state.cardio.sessions[0].caloriesSource,
+        undefined,
+      );
+      const labelled = await syncHealth(id, { timezone: tz }, now);
+      assert.equal(labelled.changed, true);
+      journal = await readJournal(id);
+      assert.equal(
+        journal.state.cardio.sessions[0].caloriesSource,
+        "apple-health",
+      );
+      const again = await syncHealth(id, { timezone: tz }, now);
+      assert.equal(again.changed, false);
+      // An older browser that changes the figure makes it the athlete's.
+      const corrected = structuredClone(journal.state);
+      delete corrected.cardio.sessions[0].caloriesSource;
+      corrected.cardio.sessions[0].caloriesKcal = 500;
+      journal = await writeJournal(id, {
+        state: corrected,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      assert.equal(journal.state.cardio.sessions[0].caloriesSource, undefined);
     } finally {
       await pool.query("DELETE FROM users WHERE id = $1", [id]);
     }

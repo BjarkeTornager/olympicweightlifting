@@ -140,6 +140,7 @@ export function cardioFromWorkout(
     effort: existing?.effort ?? null,
     elevationGainM: round(w.elevationGainM, 0),
     caloriesKcal: round(w.caloriesKcal, 0),
+    ...(w.caloriesKcal != null ? { caloriesSource: "apple-health" } : {}),
     notes: "",
     createdAt: existing?.createdAt ?? stamp,
     updatedAt: stamp,
@@ -276,7 +277,13 @@ export function applyWorkout(
           ? entry.maxHeartRate
           : null),
       elevationGainM: match.elevationGainM ?? entry.elevationGainM,
-      caloriesKcal: match.caloriesKcal ?? entry.caloriesKcal,
+      // The athlete's figure stays theirs; one the import fills is its own.
+      ...(match.caloriesKcal == null && entry.caloriesKcal != null
+        ? {
+            caloriesKcal: entry.caloriesKcal,
+            caloriesSource: entry.caloriesSource,
+          }
+        : {}),
       updatedAt: now.toISOString(),
     });
     state.cardio.sessions = state.cardio.sessions.map((s) =>
@@ -313,6 +320,29 @@ export function applyWorkout(
       workout: null,
     },
   };
+}
+
+// Calories imported before entries kept their source are Apple Health's,
+// unless the athlete has changed the entry since. Returns whether any was
+// labelled, so the journal is saved once and later syncs write nothing.
+export function labelImportedCalories(
+  state: JournalState,
+  imports: { cardioId: string | null; entryDigest: string | null }[],
+) {
+  const digests = new Map(imports.map((r) => [r.cardioId, r.entryDigest]));
+  let labelled = false;
+  state.cardio.sessions = state.cardio.sessions.map((entry) => {
+    if (
+      entry.caloriesKcal == null ||
+      entry.caloriesSource ||
+      !digests.has(entry.id) ||
+      entryDigest(entry) !== digests.get(entry.id)
+    )
+      return entry;
+    labelled = true;
+    return { ...entry, caloriesSource: "apple-health" };
+  });
+  return labelled;
 }
 
 // A scale's body fat reading for a day, kept beside anything the athlete
@@ -480,19 +510,22 @@ export async function syncHealth(
             ),
           )
       : [];
+    const imports = await tx
+      .select({
+        cardioId: healthWorkoutImports.cardioId,
+        entryDigest: healthWorkoutImports.entryDigest,
+      })
+      .from(healthWorkoutImports)
+      .where(
+        and(
+          eq(healthWorkoutImports.userId, userId),
+          eq(healthWorkoutImports.status, "imported"),
+        ),
+      );
     const importedIds = new Set(
-      (
-        await tx
-          .select({ cardioId: healthWorkoutImports.cardioId })
-          .from(healthWorkoutImports)
-          .where(
-            and(
-              eq(healthWorkoutImports.userId, userId),
-              eq(healthWorkoutImports.status, "imported"),
-            ),
-          )
-      ).flatMap((r) => (r.cardioId ? [r.cardioId] : [])),
+      imports.flatMap((r) => (r.cardioId ? [r.cardioId] : [])),
     );
+    if (labelImportedCalories(state, imports)) changed = true;
     const workouts: {
       id: string;
       result: Exclude<WorkoutImportResult, "deferred">;

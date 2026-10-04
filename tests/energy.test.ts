@@ -38,31 +38,66 @@ function aged(s: JournalState, age: number, sex: "male" | "female" = "male") {
 
 test("a recorded figure is an estimate too, marked with where it came from", () => {
   const s = journal();
+  // Typed in: kept as given, on every screen and for Coach alike.
   const e = activity(s, {
     activity: "rowing",
     durationSeconds: 900,
     caloriesKcal: 88,
   });
-  // The website and Coach can't tell a watch's figure from a typed one.
+  assert.equal(e.caloriesSource, "entered");
   assert.deepEqual(cardioBurn(s, e), {
     kcal: 88,
     estimated: true,
-    method: "recorded",
+    method: "entered",
   });
-  assert.equal(burnText(cardioBurn(s, e)), "~88 kcal · as recorded");
-  assert.equal(burnText(cardioBurn(s, e, false)), "~88 kcal · as entered");
+  assert.equal(burnText(cardioBurn(s, e)), "~88 kcal · as entered");
+  // Saved before sources were kept: it can't be told apart.
+  const older = { ...e, caloriesSource: undefined };
+  assert.equal(burnText(cardioBurn(s, older)), "~88 kcal · as recorded");
   // From Apple Health: the watch's own estimate, to the nearest 10 kcal.
+  const watch = {
+    ...activity(s, {
+      activity: "running",
+      durationSeconds: 3000,
+      caloriesKcal: 612,
+    }),
+    caloriesSource: "apple-health" as const,
+  };
+  assert.deepEqual(cardioBurn(s, watch), {
+    kcal: 610,
+    estimated: true,
+    method: "watch",
+  });
+  assert.equal(burnText(cardioBurn(s, watch)), "~610 kcal · watch");
+  // Read from a photo when Coach logs it from one.
+  const photo = saveCardio(
+    s,
+    { date, activity: "cycling", durationSeconds: 1800, caloriesKcal: 240 },
+    date,
+    undefined,
+    "photo",
+  );
+  assert.equal(burnText(cardioBurn(s, photo)), "~240 kcal · from the photo");
+});
+
+test("an entry's calories keep their source until the athlete changes them", () => {
+  const s = journal();
   const watch = activity(s, {
     activity: "running",
     durationSeconds: 3000,
     caloriesKcal: 612,
   });
-  assert.deepEqual(cardioBurn(s, watch, true), {
-    kcal: 610,
-    estimated: true,
-    method: "watch",
-  });
-  assert.equal(burnText(cardioBurn(s, watch, true)), "~610 kcal · watch");
+  s.cardio.sessions = [{ ...watch, caloriesSource: "apple-health" }];
+  // A new title keeps the watch's figure as the watch's.
+  const renamed = saveCardio(s, { title: "Long run" }, date, watch.id);
+  assert.equal(renamed.caloriesSource, "apple-health");
+  // A typed correction is the athlete's own.
+  const corrected = saveCardio(s, { caloriesKcal: 500 }, date, watch.id);
+  assert.equal(corrected.caloriesSource, "entered");
+  assert.equal(burnText(cardioBurn(s, corrected)), "~500 kcal · as entered");
+  // Cleared: no figure, so no source.
+  const cleared = saveCardio(s, { caloriesKcal: null }, date, watch.id);
+  assert.equal(cleared.caloriesSource, undefined);
 });
 
 test("a recorded 0 for a workout of five minutes or more is a gap, not a reading", () => {
@@ -72,13 +107,13 @@ test("a recorded 0 for a workout of five minutes or more is a gap, not a reading
     durationSeconds: 1800,
     caloriesKcal: 0,
   });
-  assert.equal(cardioBurn(s, long, true)?.method, "activity and duration");
+  assert.equal(cardioBurn(s, long)?.method, "activity and duration");
   const short = activity(s, {
     activity: "walking",
     durationSeconds: 120,
     caloriesKcal: 0,
   });
-  assert.equal(cardioBurn(s, short, true)?.kcal, 0);
+  assert.equal(cardioBurn(s, short)?.kcal, 0);
 });
 
 test("the app's estimates are net of rest, to the nearest 10 kcal", () => {
@@ -502,7 +537,7 @@ test("Coach sees each activity's calories and the day's total", () => {
       a.calories_estimated_from,
     ]),
     [
-      [88, true, "recorded by a watch or app, or typed in"],
+      [88, true, "typed in"],
       [220, true, "activity and duration"],
     ],
   );
@@ -516,6 +551,7 @@ test("Coach sees each activity's calories and the day's total", () => {
     estimated: true,
     count: 2,
     untimed: 0,
+    unestimated: 0,
   });
   assert.match(describeDay(day), /about 220 kcal estimated/);
   assert.match(describeDay(day), /15 min, about 88 kcal/);
@@ -531,7 +567,7 @@ test("Today shows Apple Health's active energy and training apart, as estimates"
   });
   assert.deepEqual(burnedToday(s, date), {
     active: null,
-    training: { kcal: 220, count: 1, untimed: 0 },
+    training: { kcal: 220, count: 1, untimed: 0, unestimated: 0 },
   });
   s.health.vitals = [
     { date, activeEnergyKcal: 612, updatedAt: "2026-09-28T12:00:00.000Z" },
@@ -598,4 +634,51 @@ test("an entry's figure is the same wherever it is read", () => {
   });
   const burn = cardioBurn(s, e)!;
   assert.equal(dayForCoach(s, date).activities[0].calories_kcal, burn.kcal);
+});
+
+test("a session left open overnight is untimed, and nothing is left out unsaid", (t) => {
+  // First set at 18:00, Finish the next morning: not a 14-hour session.
+  t.mock.timers.enable({ apis: ["Date"], now: at("2026-09-28T16:00:00Z") });
+  const s = journal(88);
+  s.activeWorkout = lift(s, "2026-09-28T16:00:00.000Z");
+  const started = hasLoggedSet(s.activeWorkout);
+  logFirstSet(s.activeWorkout);
+  startClock(s.activeWorkout, started);
+  t.mock.timers.setTime(at("2026-09-29T06:00:00Z").getTime());
+  const done = finishWorkout(s);
+  assert.equal(done.sessions[0].durationMinutes, null);
+  assert.deepEqual(burnedLines(burnedToday(done, date)!), [
+    {
+      label: "Training",
+      kcal: 0,
+      text: "",
+      note: "No estimate for 1 session without a recorded length",
+    },
+  ]);
+  // A stated length too long to estimate, and an activity too long to be
+  // one, are named beside the figure rather than dropped from it.
+  done.sessions[0].durationMinutes = 270;
+  activity(done, { activity: "walking", durationSeconds: 8 * 3600 });
+  activity(done, { activity: "running", durationSeconds: 1800 });
+  assert.deepEqual(dayBurn(done, date), {
+    kcal: 390,
+    estimated: true,
+    count: 1,
+    untimed: 0,
+    unestimated: 2,
+  });
+  const [training] = burnedLines(burnedToday(done, date)!);
+  assert.equal(
+    training.note,
+    "Estimated, not counting 2 entries too short or long to estimate",
+  );
+  const day = dayForCoach(done, date);
+  assert.equal(day.burnedInTraining?.entries_without_estimate, 2);
+  assert.match(
+    describeDay(day),
+    /training about 390 kcal estimated, not counting 2 entries too short or long to estimate/,
+  );
+  // Without a weight nothing is estimated, so nothing is said to be missing.
+  done.profile.bodyweight = undefined as never;
+  assert.equal(dayBurn(done, date).unestimated, 0);
 });

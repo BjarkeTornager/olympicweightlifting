@@ -3,6 +3,7 @@ import {
   burnFields,
   burnedToday,
   cardioBurn,
+  notCounted,
   strengthBurn,
 } from "./energy";
 import { sessionMinutes } from "./session-length";
@@ -230,6 +231,10 @@ export function dayForCoach(
           ...(burned.training.untimed
             ? { lifting_sessions_without_length: burned.training.untimed }
             : {}),
+          // Too short or long for the app to estimate.
+          ...(burned.training.unestimated
+            ? { entries_without_estimate: burned.training.unestimated }
+            : {}),
         }
       : null,
   };
@@ -288,11 +293,17 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
     ].filter(Boolean);
     if (heart.length) parts.push(`From Apple Health: ${heart.join(", ")}`);
   }
+  const training = day.burnedInTraining;
+  const left = notCounted(
+    training?.lifting_sessions_without_length ?? 0,
+    training?.entries_without_estimate ?? 0,
+  );
   const burned = [
     day.activeEnergy &&
       `active energy about ${day.activeEnergy.kcal} kcal so far from Apple Health`,
-    day.burnedInTraining?.kcal != null &&
-      `training about ${day.burnedInTraining.kcal} kcal estimated`,
+    training?.kcal != null
+      ? `training about ${training.kcal} kcal estimated${left ? `, not counting ${left}` : ""}`
+      : left && `no training estimate for ${left}`,
   ].filter(Boolean);
   if (burned.length) parts.push(`Burned: ${burned.join("; ")}`);
   const target = day.dailyTargets.calories;

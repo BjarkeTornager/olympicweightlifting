@@ -95,8 +95,14 @@ export const cardioPatchSchema = z
   .partial()
   .strict()
   .refine((v) => Object.keys(v).length > 0, "Include an activity correction");
+// Where an entry's calories came from, kept beside them so every screen and
+// Coach label the figure alike. The app sets it, never Coach: Apple Health's
+// import, a photo Coach read, or typed in. Older entries have none.
+export const caloriesSources = ["apple-health", "photo", "entered"] as const;
+export type CaloriesSource = (typeof caloriesSources)[number];
 export const cardioEntrySchema = cardioInputSchema.safeExtend({
   id: z.string().uuid(),
+  caloriesSource: z.enum(caloriesSources).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -112,11 +118,15 @@ export const cardioSchema = z
 export type CardioEntry = z.infer<typeof cardioEntrySchema>;
 export type CardioInput = z.infer<typeof cardioInputSchema>;
 export type CardioPatch = z.infer<typeof cardioPatchSchema>;
+// Saves an activity. Calories given or changed here are labelled as typed
+// in, or as read from a photo when Coach logs them from one; unchanged ones
+// keep their source.
 export function saveCardio(
   state: JournalState,
   raw: unknown,
   currentDate: string,
   id?: string,
+  caloriesFrom: "entered" | "photo" = "entered",
 ): CardioEntry {
   const existing = id
     ? state.cardio.sessions.find((s) => s.id === id)
@@ -125,7 +135,8 @@ export function saveCardio(
   const previous = existing
     ? Object.fromEntries(
         Object.entries(existing).filter(
-          ([key]) => !["id", "createdAt", "updatedAt"].includes(key),
+          ([key]) =>
+            !["id", "caloriesSource", "createdAt", "updatedAt"].includes(key),
         ),
       )
     : {};
@@ -145,9 +156,16 @@ export function saveCardio(
     throw Error(
       "This activity photo is already linked to a saved activity. Read and update that activity instead of logging it again.",
     );
+  const caloriesSource =
+    input.caloriesKcal == null
+      ? undefined
+      : existing && input.caloriesKcal === existing.caloriesKcal
+        ? existing.caloriesSource
+        : caloriesFrom;
   const entry = cardioEntrySchema.parse({
     ...input,
     id: existing?.id ?? crypto.randomUUID(),
+    ...(caloriesSource ? { caloriesSource } : {}),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   });

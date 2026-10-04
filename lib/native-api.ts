@@ -740,8 +740,7 @@ function activity(
     averageHeartRate: e.averageHeartRate,
     maxHeartRate: e.maxHeartRate,
     caloriesKcal: e.caloriesKcal,
-    caloriesText:
-      burnText(cardioBurn(state, e, fromAppleHealth.has(e.id))) || undefined,
+    caloriesText: burnText(cardioBurn(state, e)) || undefined,
     fromAppleHealth: fromAppleHealth.has(e.id),
     hasRoute: routes.has(e.id),
     routeText: routeText(routes.get(e.id)),
@@ -872,7 +871,7 @@ export function buildToday(
     state.health.vitals?.find((v) => v.date === date) ??
     state.health.vitals?.find((v) => v.date === offsetDate(date, -1));
   const checkin = health.checkin;
-  const burned = burnedToday(state, date, fromAppleHealth);
+  const burned = burnedToday(state, date);
   const supplements = supplementsForDay(state, date);
   const next = state.activeWorkout ? null : nextTraining(state, date);
   return todayView.parse(
@@ -1061,7 +1060,7 @@ export function buildJournal(
         formatDuration(e.durationSeconds),
         e.distanceKm != null ? kmText(e.distanceKm) : "",
         e.averageHeartRate != null ? `${e.averageHeartRate} bpm avg` : "",
-        burnText(cardioBurn(state, e, fromAppleHealth.has(e.id))),
+        burnText(cardioBurn(state, e)),
       ]
         .filter(Boolean)
         .join(" · "),

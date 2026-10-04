@@ -23,6 +23,16 @@ export function foodSnapshotForClient<T extends Snapshot>(
     for (const entry of snapshot.state.cardio.sessions) delete entry.photoIds;
   }
   if (
+    request.headers.get("x-calories-source-version") !== "1" &&
+    snapshot.state.cardio.sessions.some(
+      (entry) => entry.caloriesSource !== undefined,
+    )
+  ) {
+    snapshot = structuredClone(snapshot);
+    for (const entry of snapshot.state.cardio.sessions)
+      delete entry.caloriesSource;
+  }
+  if (
     request.headers.get("x-coach-journal-version") !== "1" &&
     (snapshot.state.profile.coaching?.memories !== undefined ||
       snapshot.state.profile.coaching?.plans !== undefined ||

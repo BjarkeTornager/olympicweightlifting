@@ -154,27 +154,23 @@ const recordedKcal = (entry: CardioEntry) =>
     : null;
 
 // An activity's calories: its recorded figure, labelled with where it came
-// from when the caller knows (Apple Health's workouts carry the watch's or
-// the recording app's own estimate), else the app's estimate from heart rate
-// or the activity's table value.
+// from (Apple Health's workouts carry the watch's or the recording app's own
+// estimate), else the app's estimate from heart rate or the activity's table
+// value. The source is kept on the entry, so every screen and Coach give an
+// entry the same figure and label.
 export function cardioBurn(
   state: JournalState,
   entry: CardioEntry,
-  fromAppleHealth?: boolean,
 ): Burn | null {
   const recorded = recordedKcal(entry);
-  if (recorded != null)
-    return fromAppleHealth
+  if (recorded != null) {
+    // Saved before sources were kept: a photo, or else unknown.
+    const source =
+      entry.caloriesSource ?? (entry.photoIds?.length ? "photo" : "recorded");
+    return source === "apple-health"
       ? { kcal: tens(recorded), estimated: true, method: "watch" }
-      : {
-          kcal: Math.round(recorded),
-          estimated: true,
-          method: entry.photoIds?.length
-            ? "photo"
-            : fromAppleHealth === false
-              ? "entered"
-              : "recorded",
-        };
+      : { kcal: Math.round(recorded), estimated: true, method: source };
+  }
   const weight = bodyweightKg(state, entry.date);
   const hours = entry.durationSeconds / 3600;
   // Longer than six hours is more likely a typing slip than one activity.
@@ -224,27 +220,28 @@ export function strengthBurn(
   };
 }
 
-// Recorded training on a day, net of rest. Lifting without a recorded length
-// is counted apart, so a total never silently leaves it out.
-export function dayBurn(
-  state: JournalState,
-  date: string,
-  fromAppleHealth?: Set<string>,
-) {
+// Recorded training on a day, net of rest. Entries without a figure are
+// counted apart, so a total never silently leaves them out: lifting without a
+// recorded length, and, when the weight is known, a session or activity too
+// short or long for the app to estimate.
+export function dayBurn(state: JournalState, date: string) {
   const lifting = state.sessions.filter((s) => s.date === date);
   const burns = [
     ...state.cardio.sessions
       .filter((c) => c.date === date)
-      .map((c) => cardioBurn(state, c, fromAppleHealth?.has(c.id))),
+      .map((c) => cardioBurn(state, c)),
     ...lifting.map((s) => strengthBurn(state, s)),
-  ].filter((b): b is Burn => b != null);
+  ];
+  const counted = burns.filter((b): b is Burn => b != null);
+  const untimed = lifting.filter((s) => sessionMinutes(s) == null).length;
   return {
-    // Each to the nearest 10, so the total is the same whether or not the
-    // caller knows which figures came from Apple Health.
-    kcal: burns.reduce((sum, b) => sum + tens(b.kcal), 0),
+    kcal: tens(counted.reduce((sum, b) => sum + b.kcal, 0)),
     estimated: true,
-    count: burns.length,
-    untimed: lifting.filter((s) => sessionMinutes(s) == null).length,
+    count: counted.length,
+    untimed,
+    unestimated: bodyweightKg(state, date)
+      ? burns.length - counted.length - untimed
+      : 0,
   };
 }
 
@@ -258,7 +255,12 @@ export type DayBurned = {
     unusual: boolean;
     syncedAt: string;
   } | null;
-  training: { kcal: number; count: number; untimed: number } | null;
+  training: {
+    kcal: number;
+    count: number;
+    untimed: number;
+    unestimated: number;
+  } | null;
 };
 // Apple Health's active energy for a day, kept within 0-10,000 kcal.
 export const activeEnergyKcal = (kcal: number) =>
@@ -268,7 +270,6 @@ export const unusualActiveEnergy = (kcal: number) => kcal > 6000;
 export function burnedToday(
   state: JournalState,
   date: string,
-  fromAppleHealth?: Set<string>,
 ): DayBurned | null {
   const vitals = state.health.vitals?.find((v) => v.date === date);
   const active =
@@ -279,10 +280,10 @@ export function burnedToday(
           syncedAt: vitals.updatedAt,
         }
       : null;
-  const day = dayBurn(state, date, fromAppleHealth);
+  const { kcal, count, untimed, unestimated } = dayBurn(state, date);
   const training =
-    day.count || day.untimed
-      ? { kcal: day.kcal, count: day.count, untimed: day.untimed }
+    count || untimed || unestimated
+      ? { kcal, count, untimed, unestimated }
       : null;
   return active || training ? { active, training } : null;
 }
@@ -291,13 +292,25 @@ const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 const kcalText = (kcal: number) => `~${kcal.toLocaleString("en-GB")}`;
 
+// What a training figure leaves out, in words: "1 session without a recorded
+// length and 2 entries too short or long to estimate", or "".
+export const notCounted = (untimed: number, unestimated: number) =>
+  [
+    untimed &&
+      `${plural(untimed, "session", "sessions")} without a recorded length`,
+    unestimated &&
+      `${plural(unestimated, "entry", "entries")} too short or long to estimate`,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+
 // Today's burned figures line by line, the first one leading: what the
 // website and the iPhone print.
 export type BurnedLine = {
   label: string;
   kcal: number;
   // "~610": the figure as printed, always marked as an estimate; empty when
-  // lifting was logged without a length, so there is no figure.
+  // nothing recorded that day has a figure.
   text: string;
   note: string;
 };
@@ -313,17 +326,17 @@ export function burnedLines(b: DayBurned): BurnedLine[] {
         : "Apple Health, so far",
     });
   if (b.training) {
-    const { kcal, count, untimed } = b.training;
-    const without = `${plural(untimed, "session", "sessions")} without a recorded length`;
+    const { kcal, count, untimed, unestimated } = b.training;
+    const left = notCounted(untimed, unestimated);
     lines.push({
       label: "Training",
       kcal,
       text: count ? kcalText(kcal) : "",
-      note: !untimed
+      note: !left
         ? "Estimated"
         : count
-          ? `Estimated, not counting ${without}`
-          : `No estimate for ${without}`,
+          ? `Estimated, not counting ${left}`
+          : `No estimate for ${left}`,
     });
   }
   return lines;
@@ -339,6 +352,14 @@ const recordedText: Record<string, string> = {
   recorded: "as recorded",
 };
 
+// Where a recorded figure came from, as the coaches read it.
+const recordedFrom: Record<string, string> = {
+  watch: "the watch or app that recorded it, through Apple Health",
+  photo: "read from a photo",
+  entered: "typed in",
+  recorded: "recorded by a watch or app, or typed in",
+};
+
 // Calories burned as the coaches see them: always an estimate, with where it
 // came from.
 export const burnFields = (
@@ -352,10 +373,7 @@ export const burnFields = (
     ? {
         calories_kcal: burn.kcal,
         calories_estimated: burn.estimated,
-        calories_estimated_from:
-          burn.method === "recorded"
-            ? "recorded by a watch or app, or typed in"
-            : burn.method,
+        calories_estimated_from: recordedFrom[burn.method] ?? burn.method,
       }
     : {};
 

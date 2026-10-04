@@ -201,10 +201,17 @@ export function prepareCardio(
       detail: `Removes ${cardioTitle(cardio)} on ${cardio.date}. Review the activity being removed below. Other entries are kept.`,
     };
   }
+  // Calories Coach gives for an activity with a photo were read from it.
+  const photoIds =
+    action.kind === "record_cardio"
+      ? action.cardio.photoIds
+      : (action.changes.photoIds ??
+        next.cardio.sessions.find((s) => s.id === action.cardioId)?.photoIds);
+  const from = photoIds?.length ? "photo" : "entered";
   const cardio =
     action.kind === "record_cardio"
-      ? saveCardio(next, action.cardio, currentDate)
-      : saveCardio(next, action.changes, currentDate, action.cardioId);
+      ? saveCardio(next, action.cardio, currentDate, undefined, from)
+      : saveCardio(next, action.changes, currentDate, action.cardioId, from);
   return {
     cardio,
     title:

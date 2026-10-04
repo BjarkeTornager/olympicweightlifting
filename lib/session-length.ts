@@ -6,12 +6,19 @@ import type { Workout } from "./model";
 // sets never stamp it again. Types only here: energy and the journal model
 // both read it.
 
+// Longer than five hours from the first set to Finish is a session left open,
+// not one that long: it is saved untimed rather than as a length that never
+// happened.
+const LONGEST_TIMED_SESSION_MINUTES = 300;
+
 // Minutes between two times, kept only when they could be one session: a
 // workout entered in one go after training spans no time at all.
 export function timedMinutes(from?: string, to?: string) {
   if (!from || !to) return null;
   const minutes = Math.round((Date.parse(to) - Date.parse(from)) / 60000);
-  return minutes >= 5 && minutes <= 1440 ? minutes : null;
+  return minutes >= 5 && minutes <= LONGEST_TIMED_SESSION_MINUTES
+    ? minutes
+    : null;
 }
 // A session's saved length, or for one finished before lengths were saved,
 // the span from its first set (or the draft) to its finish.

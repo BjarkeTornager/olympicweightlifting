@@ -11,6 +11,7 @@ import {
   cardioFromWorkout,
   entryDigest,
   healthSyncSchema,
+  labelImportedCalories,
   type HealthWorkout,
 } from "../lib/health-sync";
 import { addDrink } from "../lib/hydration";
@@ -193,6 +194,7 @@ test("Today and the journal feed describe the day for the app", () => {
   assert.equal(today.vitals?.activeEnergyKcal, 540);
   assert.equal(today.vitals?.activeEnergyUnusual, undefined);
   assert.equal(today.activities[0].fromAppleHealth, true);
+  assert.equal(today.activities[0].caloriesText, "~610 kcal · watch");
   assert.equal(today.activities[0].averageHeartRate, 148);
   assert.equal(today.activeWorkout?.title, days[0].title);
   assert.equal(today.nextSession, undefined);
@@ -620,6 +622,49 @@ test("a workout already logged by hand is enriched rather than duplicated", () =
   assert.equal(state.cardio.sessions[0].title, "Morning run");
   assert.equal(state.cardio.sessions[0].averageHeartRate, 148);
   assert.equal(state.cardio.sessions[0].caloriesKcal, 612);
+  // The import filled the calories, so they are the watch's.
+  assert.equal(state.cardio.sessions[0].caloriesSource, "apple-health");
+  // A figure the athlete typed stays theirs, and is labelled so everywhere.
+  const typed = emptyJournal();
+  typed.cardio.sessions.push({
+    ...manual,
+    id: crypto.randomUUID(),
+    caloriesKcal: 350,
+    caloriesSource: "entered",
+  });
+  const run = workout({ id: crypto.randomUUID() });
+  assert.equal(
+    applyWorkout(typed, run, undefined, new Set(), tz, now).result,
+    "matched",
+  );
+  assert.equal(typed.cardio.sessions[0].caloriesKcal, 350);
+  assert.equal(typed.cardio.sessions[0].caloriesSource, "entered");
+  const today = buildToday(typed, 3, date, new Set([run.id]));
+  assert.equal(today.activities[0].caloriesText, "~350 kcal · as entered");
+});
+
+test("calories imported before sources were kept are labelled once, unless edited since", () => {
+  const state = emptyJournal();
+  const imported = cardioFromWorkout(workout(), tz, now);
+  delete imported.caloriesSource;
+  const edited = {
+    ...cardioFromWorkout(workout({ id: crypto.randomUUID() }), tz, now),
+    caloriesSource: undefined,
+  };
+  const receipts = [
+    { cardioId: imported.id, entryDigest: entryDigest(imported) },
+    { cardioId: edited.id, entryDigest: entryDigest(edited) },
+  ];
+  edited.caloriesKcal = 500;
+  state.cardio.sessions = [imported, edited];
+  assert.equal(labelImportedCalories(state, receipts), true);
+  assert.deepEqual(
+    state.cardio.sessions.map((s) => s.caloriesSource),
+    ["apple-health", undefined],
+  );
+  // Labelling doesn't count as an edit, so Apple Health may still update it.
+  assert.equal(entryDigest(state.cardio.sessions[0]), receipts[0].entryDigest);
+  assert.equal(labelImportedCalories(state, receipts), false);
 });
 
 test("strength workouts on a logged lifting day are skipped; future workouts wait", () => {

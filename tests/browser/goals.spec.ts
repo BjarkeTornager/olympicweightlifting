@@ -97,29 +97,38 @@ test("under 18 the form asks no body fat, and breastfeeding holds weight", async
   await dialog.getByLabel("Age").fill("31");
   await expect(dialog.getByLabel("Body fat now (%, optional)")).toBeVisible();
   await expect(plan).toContainText("Lose about");
-  await dialog.getByLabel("Pregnant or breastfeeding").selectOption("pregnant");
+  const status = dialog.getByLabel("Pregnant or breastfeeding");
+  await status.selectOption("pregnant");
   await expect(plan).toContainText(
     "No weight goal, and no daily calorie or macro targets, while you're pregnant",
   );
   await expect(plan).toContainText("midwife or doctor");
-  await dialog
-    .getByLabel("Pregnant or breastfeeding")
-    .selectOption("breastfeeding");
+  await status.selectOption("breastfeeding");
   await expect(plan).toContainText("Hold around 60 kg");
   await expect(plan).toContainText("milk supply");
-  await expect(dialog).toContainText("choose Neither to remove it");
+  await expect(dialog).toContainText(
+    "choose Neither or Prefer not to say to remove it",
+  );
   await page.screenshot({ path: info.outputPath("goals-breastfeeding.png") });
   await dialog.getByRole("button", { name: "Save goals" }).click();
   await expect(dialog).toHaveCount(0);
-  // The form remembers it, and Neither clears it.
-  await page
-    .getByRole("region", { name: "Your goals" })
-    .getByRole("button")
-    .click();
-  await expect(dialog.getByLabel("Pregnant or breastfeeding")).toHaveValue(
-    "breastfeeding",
-  );
-  await dialog.getByLabel("Pregnant or breastfeeding").selectOption("neither");
+  // The form remembers it. Neither clears it, and so does Prefer not to
+  // say: what the preview shows is what is saved.
+  const reopen = () =>
+    page
+      .getByRole("region", { name: "Your goals" })
+      .getByRole("button")
+      .click();
+  await reopen();
+  await expect(status).toHaveValue("breastfeeding");
+  await status.selectOption("neither");
+  await expect(plan).toContainText("Lose about");
+  await status.selectOption("");
+  await expect(plan).toContainText("Lose about");
+  await dialog.getByRole("button", { name: "Save goals" }).click();
+  await expect(dialog).toHaveCount(0);
+  await reopen();
+  await expect(status).toHaveValue("");
   await expect(plan).toContainText("Lose about");
 });
 

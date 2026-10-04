@@ -166,7 +166,11 @@ function GoalsForm({
       : draft.targetBodyFatPercent.trim()
         ? Number(draft.targetBodyFatPercent)
         : null,
-    pregnancy: draft.pregnancy || undefined,
+    // "Prefer not to say" keeps no status, so it removes a saved one, as
+    // the preview shows.
+    pregnancy:
+      draft.pregnancy ||
+      (state.profile.goalChecks?.pregnancy ? "neither" : undefined),
     age: number(draft.age),
     heightCm: number(draft.heightCm),
     weightKg: number(draft.weightKg),
@@ -314,8 +318,8 @@ function GoalsForm({
       {asksPregnancy && (
         <p className="fine-print">
           Optional. Kept with your goals only so the plan sets no targets in
-          pregnancy and no deficit while breastfeeding; choose Neither to remove
-          it.
+          pregnancy and no deficit while breastfeeding; choose Neither or Prefer
+          not to say to remove it.
         </p>
       )}
       {plan && split ? (

@@ -10,6 +10,7 @@ import {
 import { prepareAction } from "../lib/agent/actions";
 import { localClock } from "../lib/agent/time-context";
 import {
+  forVoiceClient,
   goalsConfirmId,
   goalsReadBack,
   voiceAction,
@@ -224,6 +225,37 @@ test("by voice a deficit, a note or a changed answer is read back before saving,
     energyQuestions.eating,
   ]);
   assert.ok(!feeding.ask_first?.some((q) => /period/.test(q)));
+});
+
+test("an older app gets a goals read-back as a refusal, so it never shows one as saved", () => {
+  const readBack = {
+    ok: true as const,
+    data: { saved: false, confirm_id: "3f2a9c1d7e4b", next: "Not saved yet." },
+  };
+  const app = (version?: string) =>
+    new Headers(version ? { "X-Voice-Client": version } : {});
+  // Version 5 on leaves no receipt for it, so it goes as it is.
+  assert.deepEqual(forVoiceClient(readBack, app("5")), readBack);
+  // Older apps mark any ok result saved: they get it as not saved, with the
+  // plan, its confirm_id and what to do next for the coach to read.
+  for (const version of [undefined, "3", "4"]) {
+    const older = forVoiceClient(readBack, app(version));
+    assert.equal(older.ok, false);
+    assert.ok(!older.ok);
+    assert.match(older.error, /^Not saved yet: read this plan back first/);
+    assert.match(older.error, /"confirm_id":"3f2a9c1d7e4b"/);
+  }
+  // Saves, reads and refusals are the same for every app.
+  const saved = {
+    ok: true as const,
+    saveId: "a1",
+    title: "Set your goals",
+    detail: "",
+  };
+  const read = { ok: true as const, data: { meals: [] } };
+  const refused = { ok: false as const, error: "That could not be saved." };
+  for (const result of [saved, read, refused])
+    assert.deepEqual(forVoiceClient(result, app("4")), result);
 });
 
 test("by voice a low goal weight is confirmed after the plan read back asks, then read back again", () => {

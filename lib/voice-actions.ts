@@ -46,7 +46,11 @@ import {
   type CoachVisual,
   type SavedVisual,
 } from "./coach-visuals";
-import { voiceCardKinds, voiceClientShowsCards } from "./voice-checkin";
+import {
+  voiceCardKinds,
+  voiceClientReadsBack,
+  voiceClientShowsCards,
+} from "./voice-checkin";
 import {
   PICTURE_DRAWING,
   PICTURE_UNAVAILABLE,
@@ -716,6 +720,25 @@ export type VoiceResult =
   // A card, and the picture to draw once the reply has gone (never sent).
   | { ok: true; data: unknown; visual?: SavedVisual; job?: PictureJob }
   | { ok: false; error: string };
+
+// An app before VOICE_READ_BACK_CLIENT marks any ok result saved, with a
+// success haptic, so a goals plan read back before saving reaches it as a
+// refusal: its receipt never claims a save, and the coach still gets the
+// plan to read, its confirm_id and what to do next.
+export function forVoiceClient(
+  result: VoiceResult,
+  headers: Headers,
+): VoiceResult {
+  if (!result.ok || !("data" in result) || voiceClientReadsBack(headers))
+    return result;
+  const data = result.data as { saved?: unknown } | null;
+  return data?.saved === false
+    ? {
+        ok: false,
+        error: `Not saved yet: read this plan back first, as its next says. ${JSON.stringify(data)}`,
+      }
+    : result;
+}
 
 export async function runVoiceTool(
   userId: string,

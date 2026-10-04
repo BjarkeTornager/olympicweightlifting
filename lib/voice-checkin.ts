@@ -53,6 +53,13 @@ export const VOICE_CARDS_CLIENT = 4;
 export function voiceClientShowsCards(headers: Headers) {
   return Number(headers.get("x-voice-client") ?? 0) >= VOICE_CARDS_CLIENT;
 }
+// Apps from this voice version on leave no receipt for a goals plan read
+// back before it is saved (ok, with saved false); older ones mark any ok
+// result saved, so they get it as a refusal (forVoiceClient).
+export const VOICE_READ_BACK_CLIENT = 5;
+export function voiceClientReadsBack(headers: Headers) {
+  return Number(headers.get("x-voice-client") ?? 0) >= VOICE_READ_BACK_CLIENT;
+}
 
 const loggedSets = (w: Workout) =>
   w.exercises.reduce(

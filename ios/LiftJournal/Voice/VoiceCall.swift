@@ -81,8 +81,9 @@ final class VoiceCall {
   /// After the coach's goodbye, how long the athlete has to keep talking.
   static let endingGrace: Duration = .seconds(12)
   /// 4: draws show_card's cards and their pictures, so the server offers
-  /// the tools.
-  static let clientVersion = "4"
+  /// the tools. 5: leaves no receipt for goals read back before saving
+  /// (`unsaved`), so the server sends that read-back as it is.
+  static let clientVersion = "5"
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
     "update_meal": "Meal updated", "delete_meal": "Meal deleted", "log_sleep": "Sleep",

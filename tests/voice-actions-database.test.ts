@@ -740,6 +740,44 @@ test(
       assert.equal(turns[0].fromVoice, true);
       assert.equal(turns[0].question, "How did I sleep this week?");
       assert.deepEqual(turns[0].visuals, [shown.card]);
+
+      // A goals plan read back before saving goes as it is to an app that
+      // leaves no receipt for it (voice version 5), and as not saved to an
+      // older one, which would show any ok result as saved.
+      const setGoals = async (voice: string) => {
+        const response = await action(
+          new Request(`${origin}/api/voice/action`, {
+            method: "POST",
+            headers: headers(voice),
+            body: JSON.stringify({
+              id: crypto.randomUUID(),
+              name: "set_goals",
+              args: {
+                summary: "Down to 81",
+                age: 34,
+                sex: "male",
+                heightCm: 182,
+                weightKg: 88,
+                targetWeightKg: 81,
+                activity: "moderate",
+                trainingDays: 4,
+              },
+              timezone: "Europe/Copenhagen",
+            }),
+          }),
+        );
+        assert.equal(response.status, 200);
+        return response.json();
+      };
+      const readBack = await setGoals("5");
+      assert.equal(readBack.ok, true);
+      assert.equal(readBack.data.saved, false);
+      const older = await setGoals("4");
+      assert.equal(older.ok, false);
+      assert.match(older.error, /^Not saved yet/);
+      assert.ok(
+        older.error.includes(`"confirm_id":"${readBack.data.confirm_id}"`),
+      );
     } finally {
       if (allowed === undefined) delete process.env.ALLOWED_EMAILS;
       else process.env.ALLOWED_EMAILS = allowed;

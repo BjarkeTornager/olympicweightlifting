@@ -72,9 +72,11 @@ const displayTools = new Set(["show_card", "show_picture"]);
 const MAX_CALL_MINUTES = 30;
 // After the coach's goodbye, how long the athlete has to keep talking.
 const ENDING_GRACE_MS = 12000;
-// The server refuses calls from an app older than this voice protocol, and
-// offers cards (show_card) and their pictures (show_picture) from version 4.
-export const VOICE_CLIENT_VERSION = "4";
+// The server refuses calls from an app older than this voice protocol,
+// offers cards (show_card) and their pictures (show_picture) from version 4,
+// and from version 5 sends a goals plan read back before saving as it is,
+// knowing the app leaves no receipt for it.
+export const VOICE_CLIENT_VERSION = "5";
 
 type Session = {
   id: string;

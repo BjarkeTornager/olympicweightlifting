@@ -609,6 +609,8 @@ const correctSet = z
         weight: z.number().min(0).max(1000).optional(),
         reps: int.min(0).max(1000).optional(),
         result: z.enum(["success", "miss"]).optional(),
+        // How hard the set was, 1-10; the app asks after the last set.
+        rpe: z.number().min(1).max(10).optional(),
       })
       .strict()
       .register(nativeRequests, { id: "SetChanges" }),
@@ -685,6 +687,28 @@ const useProgramme = z
   })
   .strict()
   .register(nativeRequests, { id: "UseProgrammeAction" });
+// App-only: recovery for the workout in progress; "limited" repeats the
+// previous loads.
+const setWorkoutRecovery = z
+  .object({
+    kind: z.literal("set_workout_recovery"),
+    recovery: z.enum(["auto", "limited"]),
+  })
+  .strict()
+  .register(nativeRequests, { id: "SetWorkoutRecoveryAction" });
+// App-only: under 18, a coach checked technique today, so increases apply.
+const confirmTechnique = z
+  .object({ kind: z.literal("confirm_technique"), checked: z.boolean() })
+  .strict()
+  .register(nativeRequests, { id: "ConfirmTechniqueAction" });
+// App-only: take the reset a plan proposes, before logging the exercise.
+const takeLoadReset = z
+  .object({
+    kind: z.literal("take_load_reset"),
+    entryId: z.string().max(160),
+  })
+  .strict()
+  .register(nativeRequests, { id: "TakeLoadResetAction" });
 // App-only: whether Today shows a drinks target. The website sets this in
 // Settings.
 const setHydrationTarget = z
@@ -715,6 +739,9 @@ export const nativeAction = z
     updateProgramme,
     deleteProgramme,
     useProgramme,
+    setWorkoutRecovery,
+    confirmTechnique,
+    takeLoadReset,
     setHydrationTarget,
   ])
   .register(nativeRequests, { id: "NativeAction" });

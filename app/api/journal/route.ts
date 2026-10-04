@@ -14,7 +14,7 @@ import {
 } from "@/lib/server";
 import { planProgramDay } from "@/js/progression.js";
 import { countUse } from "@/lib/feature-use";
-import { days, program, today } from "@/lib/domain";
+import { athleteAge, days, program, today } from "@/lib/domain";
 export const dynamic = "force-dynamic";
 const schema = z.object({
   state: journalSchema,
@@ -49,6 +49,7 @@ export async function GET(request: Request) {
           sessions: snapshot.state.sessions,
           programId: program.id,
           date: today(),
+          age: athleteAge(snapshot.state),
         }),
       })),
     });

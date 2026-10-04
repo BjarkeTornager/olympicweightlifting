@@ -2,9 +2,11 @@ import LiftAPI
 import LiftTheme
 import SwiftUI
 
-/// The ongoing workout. Each exercise shows its sets; the next planned set is
-/// ready to log as Made or Miss with its weight and reps, logged sets can be
-/// corrected, and a rest timer starts after each set.
+/// The ongoing workout. Each exercise shows why its load was set and its
+/// sets; the next planned set is ready to log as Made or Miss with its weight
+/// and reps, logged sets can be corrected, and a rest timer starts after each
+/// set, as long as the exercise's rest. After the last set, one tap says how
+/// hard it was.
 struct WorkoutView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
@@ -27,15 +29,20 @@ struct WorkoutView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             header(workout)
+            plan(workout)
             let current = workout.exercises.first { $0.sets.contains { !$0.logged } }?.entryId
             ForEach(Array(workout.exercises.enumerated()), id: \.element.entryId) { index, exercise in
               ExerciseCard(number: index + 1, exercise: exercise, current: exercise.entryId == current, busy: train.busySet == exercise.entryId) { weight, reps, made in
                 Task {
                   await train.log(exercise: exercise, weight: weight, reps: reps, made: made, app)
-                  train.startRest()
+                  train.startRest(exercise.restSeconds.map { TimeInterval($0) } ?? TrainModel.defaultRest)
                 }
               } correct: { set in
                 correcting = Correction(exercise: exercise, set: set)
+              } rate: { set, rpe in
+                Task { await train.rate(workout: workout, exercise: exercise, set: set, rpe: rpe, app) }
+              } takeReset: {
+                Task { await train.takeReset(exercise, app) }
               }
             }
             Button {
@@ -116,6 +123,58 @@ struct WorkoutView: View {
     .sensoryFeedback(.success, trigger: app.saves)
   }
 
+  /// A programme workout's plan for the day: a short night's suggestion,
+  /// recovery and, under 18, the coach's technique check.
+  @ViewBuilder private func plan(_ workout: WorkoutDetail) -> some View {
+    if let hint = workout.recoveryHint {
+      VStack(alignment: .leading, spacing: 12) {
+        Text(hint)
+          .font(.subheadline)
+          .foregroundStyle(Theme.ink)
+          .fixedSize(horizontal: false, vertical: true)
+        Button("Hold Loads Today", systemImage: "pause.circle") {
+          Task { await train.setRecovery(limited: true, app) }
+        }
+        .buttonStyle(SecondaryButtonStyle())
+      }
+      .card()
+    }
+    if workout.recovery != nil || workout.techniqueCheck != nil {
+      VStack(alignment: .leading, spacing: 12) {
+        if let recovery = workout.recovery {
+          Toggle(
+            isOn: Binding(
+              get: { recovery == "limited" },
+              set: { limited in Task { await train.setRecovery(limited: limited, app) } })
+          ) {
+            toggleLabel("Limited recovery", "Repeat previous loads today")
+          }
+        }
+        if let checked = workout.techniqueCheck {
+          if workout.recovery != nil { Divider() }
+          Toggle(
+            isOn: Binding(
+              get: { checked },
+              set: { checked in Task { await train.confirmTechnique(checked, app) } })
+          ) {
+            toggleLabel(
+              "Coach checked my technique",
+              "Under 18, loads go up only once a coach has checked your technique today")
+          }
+        }
+      }
+      .tint(Theme.accent)
+      .card()
+    }
+  }
+
+  private func toggleLabel(_ title: String, _ detail: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title).font(.body).foregroundStyle(Theme.ink)
+      Text(detail).font(.footnote).foregroundStyle(Theme.inkSecondary)
+    }
+  }
+
   /// The day and the sets logged so far, counted in marks, like the Ledger.
   private func header(_ workout: WorkoutDetail) -> some View {
     let sets = workout.exercises.flatMap(\.sets)
@@ -134,7 +193,8 @@ struct WorkoutView: View {
   }
 }
 
-/// One exercise: its sets, and the next planned set ready to log.
+/// One exercise: why its load, its sets, and the next planned set ready to
+/// log.
 private struct ExerciseCard: View {
   let number: Int
   let exercise: Components.Schemas.WorkoutExercise
@@ -143,6 +203,8 @@ private struct ExerciseCard: View {
   let busy: Bool
   let log: (Double, Int, Bool) -> Void
   let correct: (Components.Schemas.WorkoutSet) -> Void
+  let rate: (Components.Schemas.WorkoutSet, Double) -> Void
+  let takeReset: () -> Void
 
   @State private var weight: Double = 0
   @State private var reps: Int = 1
@@ -150,6 +212,9 @@ private struct ExerciseCard: View {
 
   private var next: Components.Schemas.WorkoutSet? { exercise.sets.first { !$0.logged } }
   private var lastLogged: Components.Schemas.WorkoutSet? { exercise.sets.last(where: \.logged) }
+  private var lastMade: Components.Schemas.WorkoutSet? {
+    exercise.sets.last { $0.logged && $0.result != "miss" }
+  }
   private var finished: Bool { !exercise.sets.isEmpty && exercise.sets.allSatisfy(\.logged) }
 
   var body: some View {
@@ -173,6 +238,16 @@ private struct ExerciseCard: View {
           }
         }
       }
+      if let progression = exercise.progression, !finished {
+        Text(progression.reason)
+          .font(.footnote)
+          .foregroundStyle(Theme.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+        if let reset = progression.resetWeight {
+          Button("Reset to \(Format.decimal(reset)) kg", systemImage: "arrow.down.right", action: takeReset)
+            .buttonStyle(SecondaryButtonStyle())
+        }
+      }
       VStack(spacing: 0) {
         ForEach(Array(exercise.sets.enumerated()), id: \.element.id) { index, set in
           SetRow(number: index + 1, set: set, isNext: current && set.id == next?.id)
@@ -180,6 +255,10 @@ private struct ExerciseCard: View {
             .onTapGesture { if set.logged { correct(set) } }
           if index < exercise.sets.count - 1 { Divider().padding(.leading, 34) }
         }
+      }
+      // Effort decides the programme's next load, so its lifts ask for it.
+      if finished, exercise.progression != nil, let last = lastMade {
+        effort(last)
       }
       if next != nil || exercise.sets.allSatisfy(\.logged) {
         logger
@@ -219,6 +298,41 @@ private struct ExerciseCard: View {
         .buttonStyle(PrimaryButtonStyle(height: 50))
       }
       .disabled(busy)
+    }
+  }
+
+  /// One tap for how hard the last set was, on the RPE scale.
+  private func effort(_ set: Components.Schemas.WorkoutSet) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("How hard was the last set?").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
+      HStack(spacing: 8) {
+        ForEach([7, 8, 9, 10], id: \.self) { rpe in
+          let chosen = set.rpe == Double(rpe)
+          Button {
+            rate(set, Double(rpe))
+          } label: {
+            Text("\(rpe)")
+              .font(.headline.monospacedDigit())
+              .foregroundStyle(chosen ? Theme.onAccentFill : Theme.ink)
+              .frame(maxWidth: .infinity, minHeight: 44)
+              .background {
+                if chosen {
+                  Capsule().fill(Theme.accentFill)
+                } else {
+                  Capsule().strokeBorder(Theme.rule, lineWidth: 1)
+                }
+              }
+              .contentShape(.capsule)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("RPE \(rpe)")
+          .accessibilityAddTraits(chosen ? .isSelected : [])
+        }
+      }
+      .sensoryFeedback(.selection, trigger: set.rpe)
+      Text("RPE 10 was a maximum; 8 left about 2 reps in reserve.")
+        .font(.caption)
+        .foregroundStyle(Theme.inkSecondary)
     }
   }
 

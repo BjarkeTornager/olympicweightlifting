@@ -18,6 +18,7 @@ final class TrainModel {
   /// The rest in progress, shared with the lock screen's Live Activity.
   var restStarted: Date?
   var restEnds: Date?
+  /// For a server that doesn't say where an exercise's rest starts.
   static let defaultRest: TimeInterval = 120
 
   func load(_ app: AppModel) async {
@@ -91,6 +92,34 @@ final class TrainModel {
         .init(
           kind: .correctWorkoutSet, workoutId: workout.id, entryId: exercise.entryId, setId: set.id,
           setChanges: .init(weight: weight, reps: reps, result: made ? .success : .miss))), app)
+  }
+
+  /// How hard an exercise's last set was, asked once it is logged. It decides
+  /// whether the next session's load goes up.
+  func rate(
+    workout: WorkoutDetail, exercise: Components.Schemas.WorkoutExercise, set: Components.Schemas.WorkoutSet,
+    rpe: Double, _ app: AppModel
+  ) async {
+    await run(
+      .correctWorkoutSet(
+        .init(
+          kind: .correctWorkoutSet, workoutId: workout.id, entryId: exercise.entryId, setId: set.id,
+          setChanges: .init(rpe: rpe))), app)
+  }
+
+  /// Limited recovery repeats the previous loads for exercises not started.
+  func setRecovery(limited: Bool, _ app: AppModel) async {
+    await run(.setWorkoutRecovery(.init(kind: .setWorkoutRecovery, recovery: limited ? .limited : .auto)), app)
+  }
+
+  /// Under 18, loads go up only once a coach has checked technique.
+  func confirmTechnique(_ checked: Bool, _ app: AppModel) async {
+    await run(.confirmTechnique(.init(kind: .confirmTechnique, checked: checked)), app)
+  }
+
+  /// Take the lighter load the plan proposes after two failed sessions.
+  func takeReset(_ exercise: Components.Schemas.WorkoutExercise, _ app: AppModel) async {
+    await run(.takeLoadReset(.init(kind: .takeLoadReset, entryId: exercise.entryId)), app)
   }
 
   // MARK: Rest

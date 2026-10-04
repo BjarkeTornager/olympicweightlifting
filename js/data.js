@@ -48,7 +48,7 @@ export const PROGRAM_DEFINITION = Object.freeze({
   loadingRules: [
     "Keep technical lifts crisp and stop adding weight when positions or timing deteriorate.",
     "Keep squats at 1–3 reps in reserve in most sessions.",
-    "Add 2 kg total (1 kg per side) after all prescribed work is completed successfully. Automatic targets use whole kilograms. Misses, high RPE or limited recovery hold the load.",
+    "Add 2 kg total (1 kg per side) after all prescribed work is made with the top set at RPE 8 or lower or, with no RPE recorded, after two sessions in a row made at the same load. Automatic targets use whole kilograms. Misses, high RPE or limited recovery hold the load, and after more than 4 weeks away the load restarts lighter.",
     "Plan near-max attempts instead of taking them every session.",
     "Tuesday, Thursday and Sunday are recovery days; easy cycling, walking or mobility is fine if it does not impair lifting.",
   ],

@@ -248,6 +248,9 @@ const exercisesParameter = {
               type: "BOOLEAN",
               description: "False for a missed lift.",
             },
+            rpe: number(
+              "How hard the set felt, RPE 1 to 10, only if the athlete said it ('the last one felt like a 7').",
+            ),
           },
           required: ["weight_kg", "reps", "made"],
         },

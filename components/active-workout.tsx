@@ -1,9 +1,19 @@
 "use client";
 import { useState } from "react";
 import { Check, ChevronDown, Dumbbell, Plus } from "@/components/ui/icons";
-import { today, createEntry, finishWorkout, replanDraft } from "@/lib/domain";
+import {
+  today,
+  createEntry,
+  finishWorkout,
+  followsProgramme,
+  replanDraft,
+  setTechniqueChecked,
+  setWorkoutRecovery,
+} from "@/lib/domain";
 import { isValidLoggedSet } from "@/js/progression.js";
-import type { Entry, JournalState, ProgramExercise } from "@/lib/model";
+import { restSeconds } from "@/lib/exercises";
+import { shortSleepHint } from "@/lib/training";
+import type { Entry, JournalState, Plan, ProgramExercise } from "@/lib/model";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { ExercisePicker } from "./exercise-picker";
@@ -64,9 +74,8 @@ export function ActiveWorkout({
         "",
     ),
     [reviewingSets, setReviewingSets] = useState<Record<string, string>>({}),
-    [restDuration, setRestDuration] = useState(
-      state.preferences.restSeconds ?? 90,
-    ),
+    // A rest chosen during the workout applies to the rest of it.
+    [restChoice, setRestChoice] = useState<number | null>(null),
     [finish, setFinish] = useState(false),
     [discard, setDiscard] = useState(false),
     [add, setAdd] = useState(""),
@@ -92,6 +101,18 @@ export function ActiveWorkout({
       0,
     ),
     total = draft.exercises.reduce((n, e) => n + e.sets.length, 0);
+  // Under 18, increases wait for a coach to check technique; the check
+  // shows while one is waiting, or once given so it can be taken back.
+  const techniqueCheck =
+    draft.techniqueChecked === true ||
+    draft.exercises.some(
+      (e) =>
+        (e.prescribed.progression as Plan | undefined)?.status === "confirm",
+    );
+  const sleepHint =
+    followsProgramme(draft) && draft.recovery === "auto"
+      ? shortSleepHint(state, draft.date)
+      : undefined;
   const complete = async () => {
     try {
       let found: [string, number][] = [];
@@ -127,6 +148,35 @@ export function ActiveWorkout({
       <div className="session-progress">
         <span style={{ width: `${total ? (logged / total) * 100 : 0}%` }} />
       </div>
+      {sleepHint && (
+        <div className="notice recovery-hint">
+          <p>{sleepHint}</p>
+          <Button
+            variant="secondary"
+            onClick={() => save((s) => setWorkoutRecovery(s, "limited"))}
+          >
+            Hold loads today
+          </Button>
+        </div>
+      )}
+      {techniqueCheck && (
+        <label className="notice check-label technique-check">
+          <input
+            type="checkbox"
+            checked={draft.techniqueChecked === true}
+            onChange={(e) => {
+              const checked = e.currentTarget.checked;
+              save((s) => setTechniqueChecked(s, checked));
+            }}
+          />
+          <span>
+            <strong>My coach checked my technique today</strong>
+            <br />
+            Under 18, the load goes up only once a coach has checked your
+            technique.
+          </span>
+        </label>
+      )}
       <div className="exercise-stack">
         {draft.exercises.map((entry, index) => (
           <WorkoutExercise
@@ -144,8 +194,10 @@ export function ActiveWorkout({
             active={expanded === entry.id}
             reviewingSetId={reviewingSets[entry.id]}
             accountId={accountId}
-            restDuration={restDuration}
-            onRestDurationChange={setRestDuration}
+            restDuration={
+              restChoice ?? restSeconds(entry, state.preferences.restSeconds)
+            }
+            onRestDurationChange={setRestChoice}
             onToggle={() => {
               setReviewingSets({});
               setExpanded(expanded === entry.id ? "" : entry.id);
@@ -209,13 +261,10 @@ export function ActiveWorkout({
             Recovery today
             <select
               value={draft.recovery}
-              onChange={(e) =>
-                save((s) => {
-                  s.activeWorkout!.recovery = e.target.value as
-                    "auto" | "limited";
-                  replanDraft(s);
-                })
-              }
+              onChange={(e) => {
+                const recovery = e.target.value as "auto" | "limited";
+                save((s) => setWorkoutRecovery(s, recovery));
+              }}
             >
               <option value="auto">Automatic · follow programme</option>
               <option value="limited">Limited · repeat previous loads</option>

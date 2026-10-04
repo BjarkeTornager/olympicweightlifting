@@ -41,6 +41,7 @@ export function journalForVoice(
             weight_kg: x.weight,
             reps: x.reps,
             made: x.result !== "miss",
+            ...(x.rpe != null && x.rpe !== "" ? { rpe: x.rpe } : {}),
           })),
       }))
       .filter((e) => e.sets.length > 0);

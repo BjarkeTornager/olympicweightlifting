@@ -335,31 +335,43 @@ const REFERENCE_PROTEIN_PER_KG = 0.8;
 export const ENERGY_CHECK_DAYS = 91;
 // The three low-energy questions, asked before a plan cuts or aims very
 // lean: pragmatic routing to a professional, not a validated test or a
-// diagnosis (IOC REDs CAT2 primary and secondary indicators). The first is
-// for women and anyone who'd rather not give their sex, when they don't
-// use hormonal contraception.
+// diagnosis (IOC REDs CAT2 primary and secondary indicators). The periods
+// one is for women and anyone who'd rather not give their sex, when they
+// don't use hormonal contraception, and never in pregnancy or while
+// breastfeeding, when periods normally stop.
 export const energyQuestions = {
   periods:
-    "Have you missed a period, or had cycles longer than 35 days, in the last 3 months? (Skip this if you use hormonal contraception.)",
+    "Have you missed a period, or had cycles longer than 35 days, in the last 3 months? (Skip this if you use hormonal contraception or gave birth in the last few months.)",
   fracture: "Have you had a stress fracture in the last 2 years?",
   eating:
     "Have you had an eating disorder, or does eating often feel out of your control?",
 };
+const asksPeriods = (
+  sex: BodyGoalsInput["sex"],
+  pregnancy?: Pregnancy | null,
+) => sex !== "male" && !pregnancy;
 // The questions for this athlete, in the order Coach asks them.
-export function energyQuestionsFor(sex: BodyGoalsInput["sex"]) {
+export function energyQuestionsFor(
+  sex: BodyGoalsInput["sex"],
+  pregnancy?: Pregnancy | null,
+) {
   return [
     energyQuestions.fracture,
     energyQuestions.eating,
-    ...(sex === "male" ? [] : [energyQuestions.periods]),
+    ...(asksPeriods(sex, pregnancy) ? [energyQuestions.periods] : []),
   ];
 }
 // What they ask about, for the notes: "stress fractures, eating and
 // periods", or with "or" for any one of them.
-function screenTopics(sex: BodyGoalsInput["sex"], joiner: "and" | "or") {
+function screenTopics(
+  sex: BodyGoalsInput["sex"],
+  joiner: "and" | "or",
+  pregnancy?: Pregnancy | null,
+) {
   const topics = [
     "stress fractures",
     "eating",
-    ...(sex === "male" ? [] : ["periods"]),
+    ...(asksPeriods(sex, pregnancy) ? ["periods"] : []),
   ];
   return `${topics.slice(0, -1).join(", ")} ${joiner} ${topics.at(-1)}`;
 }
@@ -681,16 +693,24 @@ export function planGoals(
   // The low-energy questions, before a plan that cuts or aims very lean:
   // any yes holds the weight at maintenance and points to a professional,
   // never a diagnosis (IOC REDs CAT2 routing). Without answers in force the
-  // plan says they are due, and Coach asks them.
+  // plan says they are due, and Coach asks them. A yes kept from before,
+  // beside a plan that doesn't cut (under 18, in pregnancy, gaining), still
+  // points to who can help.
   const veryLeanTarget =
     targetBodyFat != null && targetBodyFat < limits.veryLean;
   const screened = cut || veryLeanTarget;
-  if (screened && composition.energySigns === true) {
-    warn(
-      `You answered yes to one of the questions on ${screenTopics(g.sex, "or")}, so the plan holds your weight at maintenance for now. These can have many causes, and a sports doctor or sports dietitian can help you look into them and plan any change safely.`,
-    );
-    cut = false;
-    direction = "maintain";
+  if (composition.energySigns === true) {
+    const answered = `You answered yes to one of the questions on ${screenTopics(g.sex, "or", pregnancy)}`;
+    if (screened) {
+      warn(
+        `${answered}, so the plan holds your weight at maintenance for now. These can have many causes, and a sports doctor or sports dietitian can help you look into them and plan any change safely.`,
+      );
+      cut = false;
+      direction = "maintain";
+    } else
+      warn(
+        `${answered}. These can have many causes, and ${pregnant ? "your midwife or doctor" : "a sports doctor or sports dietitian"} can help you look into them.`,
+      );
   }
   if (!cut && direction === "lose") direction = "maintain";
 
@@ -1275,7 +1295,7 @@ export function applyGoals(
     plan.notes.push(`Your own protein target of ${own} g stays as it is.`);
   if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);
   const weeksAfter = babyWeeks(state, today);
-  const topics = screenTopics(goals.sex, "and");
+  const topics = screenTopics(goals.sex, "and", pregnancy);
   const changes = [
     health?.limitProtein &&
       !limitProtein &&

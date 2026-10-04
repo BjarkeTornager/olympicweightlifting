@@ -675,7 +675,8 @@ export function goalsReadBack(
   today: string,
   confirmId?: string,
 ) {
-  const plan = applyGoals(structuredClone(state), bodyGoals, today);
+  const next = structuredClone(state);
+  const plan = applyGoals(next, bodyGoals, today);
   const quiet =
     plan.dailyTargets &&
     plan.direction === "maintain" &&
@@ -699,7 +700,12 @@ export function goalsReadBack(
         }
       : {}),
     ...(plan.energyCheckDue
-      ? { ask_first: energyQuestionsFor(goals.sex) }
+      ? {
+          ask_first: energyQuestionsFor(
+            goals.sex,
+            next.profile.goalChecks?.pregnancy,
+          ),
+        }
       : {}),
     next: `Not saved yet. Say each of changes first and ask whether it's right. Then read the plan's calories and every safety note in full, kindly; other notes can be summed up. ${plan.energyCheckDue ? "Before that, ask the ask_first questions, saying they're optional and kept only as a yes or no with the date so the plan stays safe, then call set_goals again with energySigns (true for any yes, false for no to all, left out if they'd rather not answer). " : ""}Then ask "Shall I save that?", and only after a yes call set_goals again with the same details and this confirm_id.`,
   };

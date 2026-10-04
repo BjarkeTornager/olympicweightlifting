@@ -456,6 +456,10 @@ function GoalsForm({
           <ul>
             {energyQuestionsFor(
               draft.sex === "male" ? "male" : "unspecified",
+              draft.pregnancy === "pregnant" ||
+                draft.pregnancy === "breastfeeding"
+                ? draft.pregnancy
+                : null,
             ).map((question) => (
               <li key={question}>{question}</li>
             ))}

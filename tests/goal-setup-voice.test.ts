@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { emptyJournal } from "../lib/domain";
 import {
   applyGoals,
+  energyQuestions,
   energyQuestionsFor,
   type BodyGoals,
 } from "../lib/body-goals";
@@ -201,6 +202,28 @@ test("by voice a deficit, a note or a changed answer is read back before saving,
     today,
   )!;
   assert.match(removal.changes[0], /^Removes your answer about kidney disease/);
+  // While breastfeeding, with a gentle loss allowed, the questions leave out
+  // periods, which normally stop then.
+  const nursing = {
+    ...action.bodyGoals,
+    sex: "female" as const,
+    heightCm: 165,
+    weightKg: 70,
+    targetWeightKg: 64,
+    pregnancy: "breastfeeding" as const,
+    weeksSinceBirth: 10,
+  };
+  const feeding = goalsReadBack(
+    state,
+    nursing,
+    prepareAction(state, { kind: "set_body_goals", bodyGoals: nursing }, today),
+    today,
+  )!;
+  assert.deepEqual(feeding.ask_first, [
+    energyQuestions.fracture,
+    energyQuestions.eating,
+  ]);
+  assert.ok(!feeding.ask_first?.some((q) => /period/.test(q)));
 });
 
 test("by voice a low goal weight is confirmed after the plan read back asks, then read back again", () => {

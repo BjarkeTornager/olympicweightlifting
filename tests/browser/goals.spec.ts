@@ -255,10 +255,21 @@ test("before a deficit the form asks the low-energy questions, and a weight clas
   await expect(plan).toContainText("a sports doctor or sports dietitian");
   await answer.selectOption("no");
   await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
-  // Women and anyone who'd rather not say are asked about periods too.
+  // Saved, the plan agrees a check of the weight trend about 3 weeks on, as
+  // with Coach.
+  await expect(plan).toContainText(
+    "These numbers are a starting estimate: from",
+  );
+  // Women and anyone who'd rather not say are asked about periods too,
+  // though not while breastfeeding, when periods normally stop.
   await dialog.getByLabel("Sex").selectOption("unspecified");
   await expect(questions.getByRole("listitem")).toHaveCount(3);
   await expect(questions).toContainText("hormonal contraception");
+  const pregnancy = dialog.getByLabel("Pregnant or breastfeeding");
+  await pregnancy.selectOption("breastfeeding");
+  await expect(questions.getByRole("listitem")).toHaveCount(2);
+  await expect(questions).not.toContainText("period");
+  await pregnancy.selectOption("");
   await dialog.getByLabel("Sex").selectOption("male");
   // A weight class with its weigh-in in three weeks: too soon to make
   // safely, so the plan heads towards it, never promising it, and says

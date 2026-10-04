@@ -285,7 +285,22 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Removing that paragraph and those goal-setup additions reproduces
     // the previous hash (d1edcd61…). Health, privacy and evidence text is
     // otherwise unchanged.
-    "13c7f73ce9690aeb0ae4fa89fd995ed4a1d10bfa19ce749c086ad0b89d02c1bf",
+    // Revised 2026-10-04, deliberate and reviewed, from the review of PR 13,
+    // in the goal-setup paragraph only:
+    // - The low-energy questions are asked only of athletes 18 or over and
+    //   passed never under 18 or in pregnancy, when the plan sets no
+    //   deficit, so no answer is collected that changes nothing; the
+    //   periods question leaves out anyone pregnant, breastfeeding or within
+    //   a few months of giving birth, when periods normally stop
+    //   (energyQuestionsFor in body-goals.ts).
+    // - goals.plan.energyCheckDue's questions may also be asked when the
+    //   athlete asks to go through them, as Coach's new opening offers
+    //   about every 3 months while a deficit is saved, passed with
+    //   set_body_goals and the saved goals.
+    // Restoring those two sentences reproduces the previous hash
+    // (13c7f73c…). Health, privacy and evidence text is otherwise
+    // unchanged.
+    "9344b50ca1362553faaef017e621a02da4668f15b2956892ef61265c065e2247",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -500,13 +515,18 @@ test("goal setup asks the weight class and the low-energy questions, and the goa
   // and kept only as a yes or no with the date.
   assert.ok(
     setup.includes(
-      "When the goal loses weight, recomposes or aims for very lean body fat, also ask three optional yes/no questions, saying the answers are kept only as a yes or no with the date so the plan stays safe, never as a diagnosis",
+      "When the goal loses weight, recomposes or aims for very lean body fat and they're 18 or over, also ask three optional yes/no questions, saying the answers are kept only as a yes or no with the date so the plan stays safe, never as a diagnosis",
     ),
   );
   assert.match(setup, /any stress fracture in the last 2 years/);
   assert.match(
     setup,
-    /who don't use hormonal contraception, whether they've missed a period or had cycles longer than 35 days in the last 3 months/,
+    /who don't use hormonal contraception and aren't pregnant, breastfeeding or within a few months of giving birth, whether they've missed a period or had cycles longer than 35 days in the last 3 months/,
+  );
+  // Never collected where the plan sets no deficit anyway.
+  assert.match(
+    setup,
+    /never under 18 or in pregnancy, when the plan sets no deficit/,
   );
   assert.match(
     setup,

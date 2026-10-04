@@ -109,12 +109,22 @@ test("any yes to the low-energy questions yields maintenance, across the grid", 
                         );
                       }
                       // Otherwise a yes changes the plan only to hold it,
-                      // and its note says why.
+                      // or only adds its note, which always points to who
+                      // can help.
+                      if (!yesNote(yes)) assert.fail(`a yes unsaid: ${where}`);
                       const same = (plan: GoalPlan) =>
                         JSON.stringify({ ...plan, energyCheckDue: null });
+                      const unsaid = (plan: GoalPlan) => ({
+                        ...plan,
+                        notes: plan.notes.filter((n) => n !== yesNote(plan)),
+                        safetyNotes: plan.safetyNotes.filter(
+                          (n) => n !== yesNote(plan),
+                        ),
+                      });
                       if (
                         same(yes) !== same(unasked) &&
-                        !(holdsAtMaintenance(yes) && yesNote(yes))
+                        !holdsAtMaintenance(yes) &&
+                        same(unsaid(yes)) !== same(unasked)
                       )
                         assert.fail(`a yes that changes more: ${where}`);
                       // No to all leaves the plan as it was.
@@ -124,7 +134,7 @@ test("any yes to the low-energy questions yields maintenance, across the grid", 
   assert.ok(screened > 1000);
 });
 
-test("the questions come only before a deficit or a very lean goal, and the periods one only for women and anyone who'd rather not say", () => {
+test("the questions come only before a deficit or a very lean goal, and the periods one only for women and anyone who'd rather not say, never in pregnancy or while breastfeeding", () => {
   assert.equal(planGoals(lifter, today).energyCheckDue, true);
   // Holding, gaining, under 18 and in pregnancy there is no deficit.
   assert.equal(
@@ -172,6 +182,29 @@ test("the questions come only before a deficit or a very lean goal, and the peri
     energyQuestions.periods,
   ]);
   assert.match(energyQuestions.periods, /hormonal contraception/);
+  // Periods normally stop in pregnancy and while breastfeeding, so a yes
+  // there would only hold a gentle loss for nothing.
+  for (const pregnancy of ["pregnant", "breastfeeding"] as const)
+    assert.deepEqual(energyQuestionsFor("female", pregnancy), [
+      energyQuestions.fracture,
+      energyQuestions.eating,
+    ]);
+  assert.match(energyQuestions.periods, /gave birth in the last few months/);
+  const nursing = planGoals(woman, today, {
+    pregnancy: "breastfeeding",
+    weeksSinceBirth: 10,
+  });
+  assert.equal(nursing.energyCheckDue, true);
+  assert.match(
+    yesNote(
+      planGoals(woman, today, {
+        pregnancy: "breastfeeding",
+        weeksSinceBirth: 10,
+        energySigns: true,
+      }),
+    )!,
+    /questions on stress fractures or eating, so the plan holds/,
+  );
   assert.match(
     yesNote(planGoals(lifter, today, { energySigns: true }))!,
     /questions on stress fractures or eating,/,
@@ -179,6 +212,22 @@ test("the questions come only before a deficit or a very lean goal, and the peri
   assert.match(
     yesNote(planGoals(woman, today, { energySigns: true }))!,
     /questions on stress fractures, eating or periods,/,
+  );
+  // A yes kept beside a plan that doesn't cut still points to who can help,
+  // holding nothing: under 18, and in pregnancy to the midwife.
+  const teenYes = planGoals({ ...lifter, age: 16 }, today, {
+    energySigns: true,
+  });
+  assert.equal(
+    yesNote(teenYes),
+    "You answered yes to one of the questions on stress fractures or eating. These can have many causes, and a sports doctor or sports dietitian can help you look into them.",
+  );
+  assert.ok(teenYes.safetyNotes.includes(yesNote(teenYes)!));
+  assert.match(
+    yesNote(
+      planGoals(woman, today, { pregnancy: "pregnant", energySigns: true }),
+    )!,
+    /^You answered yes to one of the questions on stress fractures or eating\. These can have many causes, and your midwife or doctor can help you look into them\.$/,
   );
   // Never a diagnosis, nor a word for the condition.
   for (const plan of [

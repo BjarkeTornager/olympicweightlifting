@@ -276,6 +276,28 @@ private struct AthleteCard: View {
   }
 }
 
+/// The drinks targets as Account lists them.
+enum DrinksTargets {
+  /// A rest day's drinks and a lifting day's, or the day's alone from a
+  /// server older than both; marked as estimated while no weight is known.
+  static func line(_ water: Components.Schemas.Hydration) -> String {
+    if water.targetHidden == true { return "Hidden on Today" }
+    let estimated = water.estimatedTarget ? ", estimated" : ""
+    if let rest = water.restDayTargetMl, let lifting = water.liftingDayTargetMl {
+      return "\(FoodSection.litres(rest)) L rest · \(FoodSection.litres(lifting)) L lifting\(estimated)"
+    }
+    let (litres, unit) = Format.litres(water.targetMl)
+    return "\(litres) \(unit) a day\(estimated)"
+  }
+
+  /// What the target rests on: a general base until a weight is known.
+  static func basis(_ water: Components.Schemas.Hydration) -> String {
+    water.estimatedTarget
+      ? "a general estimate until your weight is known"
+      : "an estimate from your weight and the day's training"
+  }
+}
+
 /// The targets Coach and the athlete have agreed on, and the drinks target,
 /// which follows weight and training and can be hidden.
 private struct GoalsSection: View {
@@ -322,24 +344,14 @@ private struct GoalsSection: View {
       VStack(alignment: .leading, spacing: 6) {
         ForEach(body?.goalNotes ?? [], id: \.self) { Text($0) }
         Text(
-          "Ask Coach to change the weight, body fat, energy and protein targets. The drinks target is an estimate from your weight and the day's training, not a minimum."
+          "Ask Coach to change the weight, body fat, energy and protein targets. The drinks target is \(DrinksTargets.basis(today.hydration)), not a minimum."
         )
       }
     }
     .themedRows()
   }
 
-  /// A rest day's drinks and a lifting day's, or the day's alone from a
-  /// server older than both.
-  private var drinks: String {
-    let water = today.hydration
-    if water.targetHidden == true { return "Hidden on Today" }
-    if let rest = water.restDayTargetMl, let lifting = water.liftingDayTargetMl {
-      return "\(FoodSection.litres(rest)) L rest · \(FoodSection.litres(lifting)) L lifting"
-    }
-    let (litres, unit) = Format.litres(water.targetMl)
-    return "\(litres) \(unit) a day\(water.estimatedTarget ? ", estimated" : "")"
-  }
+  private var drinks: String { DrinksTargets.line(today.hydration) }
 
   private var shown: Binding<Bool> {
     Binding(

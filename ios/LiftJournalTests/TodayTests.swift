@@ -211,6 +211,23 @@ struct TodayTests {
     #expect(Format.count(12) == "12")
   }
 
+  @Test("Account marks the drinks targets as estimated while no weight is known, and says so")
+  func drinksTargets() {
+    func water(estimated: Bool, hidden: Bool? = nil, rest: Int? = 2000, lifting: Int? = 2750)
+      -> Components.Schemas.Hydration
+    {
+      .init(
+        totalMl: 0, targetMl: hidden == true ? 0 : 2000, estimatedTarget: estimated, drinks: [],
+        targetHidden: hidden, restDayTargetMl: rest, liftingDayTargetMl: lifting)
+    }
+    #expect(DrinksTargets.line(water(estimated: true)) == "2 L rest · 2.75 L lifting, estimated")
+    #expect(DrinksTargets.basis(water(estimated: true)) == "a general estimate until your weight is known")
+    #expect(DrinksTargets.line(water(estimated: false)) == "2 L rest · 2.75 L lifting")
+    #expect(DrinksTargets.basis(water(estimated: false)) == "an estimate from your weight and the day's training")
+    #expect(DrinksTargets.line(water(estimated: true, rest: nil, lifting: nil)) == "2 L a day, estimated")
+    #expect(DrinksTargets.line(water(estimated: true, hidden: true)) == "Hidden on Today")
+  }
+
   @Test("A target of 0 is no target: no Account row, no line in Trends, no meter on Today")
   func zeroTarget() {
     #expect(Format.target(1900) == 1900)

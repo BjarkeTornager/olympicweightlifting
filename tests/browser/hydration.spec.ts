@@ -43,7 +43,10 @@ test("water is one tap from Today, adds up, can be undone and survives reload", 
   await page.screenshot({ path: info.outputPath("drinks-today.png") });
   // Hidden in Settings: drinks still add up, with no target or meter.
   await page.goto("/#data");
-  await page.getByLabel("Show a daily drinks target").uncheck();
+  // The setting saves to the journal, then shows as unticked.
+  const shown = page.getByLabel("Show a daily drinks target");
+  await shown.click();
+  await expect(shown).not.toBeChecked();
   await page.goto("/#today");
   const hidden = page.getByRole("region", { name: "Drinks today" });
   await expect(hidden).toContainText("0.5 L");

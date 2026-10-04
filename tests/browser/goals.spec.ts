@@ -26,12 +26,21 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await expect(dialog.getByLabel("Session length (min)")).toHaveValue("75");
   await dialog.getByLabel("Age").fill("34");
   await dialog.getByLabel("Height (cm)").fill("182");
-  await dialog.getByLabel("Sex").selectOption("male");
   await dialog.getByLabel("Weight now (kg)").fill("88");
   await dialog.getByLabel("Goal weight (kg)").fill("81");
   await dialog.getByLabel("Days I can train").fill("4");
+  // With every number in, the form names the choices still to make, as
+  // Save stays disabled.
   await expect(
-    dialog.getByText("Fill in the numbers to see your daily plan."),
+    dialog.getByText(
+      "Choose your sex and how active you are outside training to see your daily plan.",
+    ),
+  ).toBeVisible();
+  await dialog.getByLabel("Sex").selectOption("male");
+  await expect(
+    dialog.getByText(
+      "Choose how active you are outside training to see your daily plan.",
+    ),
   ).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "Save goals" }),

@@ -9,6 +9,7 @@ import {
   energyQuestionsFor,
   energySigns,
   goalsForState,
+  goalsHeading,
   planForState,
   planGoals,
   POSTPARTUM_WEEKS,
@@ -422,6 +423,9 @@ function GoalsForm({
         lowWeightConfirmed,
         energySigns: answered ? (split.checks.energySigns ?? null) : null,
         weightClass: split.checks.weightClass ?? false,
+        // As the saved goals will head, so the preview's notes are the
+        // saved plan's.
+        heading: goalsHeading(split.goals, split.checks.weightClass ?? false),
       }));
   // A loss towards a weight just under the healthy range waits for the
   // athlete to confirm it.

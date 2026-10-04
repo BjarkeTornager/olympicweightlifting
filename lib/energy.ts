@@ -1,5 +1,6 @@
 import type { JournalState, Workout } from "./model";
 import type { CardioEntry } from "./cardio";
+import { currentWeightKg } from "./target-history";
 
 // Calories burned. A watch measurement is used as recorded; otherwise the
 // app estimates, in code rather than by a model, and says it is an estimate.
@@ -7,16 +8,11 @@ import type { CardioEntry } from "./cardio";
 
 export type Burn = { kcal: number; estimated: boolean; method: string };
 
-// Latest known bodyweight on or before the date.
+// The athlete's weight on the date, the one the goals plan uses too
+// (currentWeightKg): the last week's weigh-ins, else the latest, else the
+// weight given with the goals or in Settings.
 export function bodyweightKg(state: JournalState, date: string) {
-  return (
-    state.profile.body?.weightKg ||
-    state.profile.bodyweight ||
-    [...state.health.checkins]
-      .filter((c) => c.date <= date && c.bodyweight != null)
-      .sort((a, b) => b.date.localeCompare(a.date))[0]?.bodyweight ||
-    null
-  );
+  return currentWeightKg(state, date);
 }
 
 // Metabolic equivalents from the Compendium of Physical Activities (2024),

@@ -64,7 +64,11 @@ test("no bodyweight means no estimate rather than a guess", () => {
 
 test("heart rate refines the estimate when age and sex are known", () => {
   const s = journal(80);
-  s.profile.body = { ...(s.profile.body ?? {}), age: 35, sex: "male" } as never;
+  s.profile.body = {
+    age: 35,
+    sex: "male",
+    updatedAt: "2026-09-01T07:00:00.000Z",
+  } as never;
   const e = saveCardio(
     s,
     { date, activity: "cycling", durationSeconds: 1800, averageHeartRate: 140 },

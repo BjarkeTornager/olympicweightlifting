@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { emptyJournal } from "../lib/domain";
 import {
   applyGoals,
+  goalsHeading,
   maintainBandKg,
   planForState,
   planGoals,
@@ -10,6 +11,9 @@ import {
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import { saveBodyFat, weighIns } from "../lib/body-composition";
+import { saveCardio } from "../lib/cardio";
+import { bodyweightKg, cardioBurn } from "../lib/energy";
+import { hydrationTargetMl } from "../lib/hydration";
 import { saveCheckin } from "../lib/health";
 import { applyBodyMassImport } from "../lib/health-sync";
 import { prepareAction } from "../lib/agent/actions";
@@ -466,4 +470,75 @@ test("the history keeps where each target came from, and its length", () => {
     2000 + TARGET_HISTORY_MAX + 4,
   );
   journalSchema.parse(state);
+});
+
+test("a goal below a lean athlete's safer weight isn't reached as it is set", () => {
+  // 80 kg at 7 % body fat aiming for 74 kg: the plan holds at 80 kg, and
+  // the lean mass note says why; nothing is reached.
+  const lean = { ...athlete, heightCm: 180, weightKg: 80, targetWeightKg: 74 };
+  const state = emptyJournal();
+  const saved = applyGoals(state, { ...lean, bodyFatPercent: 7 }, today);
+  assert.equal(saved.direction, "maintain");
+  assert.equal(saved.reachedGoal, false);
+  assert.ok(!saved.notes.some((n) => /You've reached/.test(n)));
+  assert.ok(saved.notes.some((n) => /won't go below a safer weight/.test(n)));
+  // The form's preview, heading the way the saved goals will, says the
+  // same.
+  assert.deepEqual(
+    planGoals(lean, today, {
+      bodyFatPercent: 7,
+      heading: goalsHeading(lean, false),
+    }).notes,
+    saved.notes,
+  );
+  // From 90 kg at 17 % the safer weight, 81.2 kg, is somewhere to head,
+  // and reaching it is: at 81 kg and 8.5 %, it is 80.6 kg.
+  const heavier = emptyJournal();
+  applyGoals(heavier, { ...lean, weightKg: 90, bodyFatPercent: 17 }, today);
+  assert.equal(planForState(heavier, today)!.towardsKg, 81.2);
+  const later = "2027-03-01";
+  saveCheckin(heavier, { date: later, bodyweight: 81 }, later);
+  saveBodyFat(heavier, { date: later, percent: 8.5, method: "dexa" }, later);
+  const reached = planForState(heavier, later)!;
+  assert.equal(reached.towardsKg, 80.6);
+  assert.equal(reached.reachedGoal, true);
+  assert.match(reached.notes.join(" "), /You've reached the 80\.6 kg/);
+});
+
+test("the drinks target and burn estimates use the current weight, as the plan does", () => {
+  // Goals saved at 88 kg, and a week of weigh-ins around 81 kg since.
+  const state = emptyJournal();
+  applyGoals(state, athlete, "2026-09-01");
+  const heavier = cardioBurn(
+    state,
+    saveCardio(
+      structuredClone(state),
+      { date: today, activity: "rowing", durationSeconds: 1800 },
+      today,
+    ),
+  )!.kcal;
+  weigh(state, [
+    ["2026-09-22", 81.2],
+    ["2026-09-24", 80.8],
+    ["2026-09-26", 81],
+  ]);
+  assert.equal(bodyweightKg(state, today), 81);
+  // The same as goals saved at 81 kg.
+  const lighter = emptyJournal();
+  applyGoals(lighter, { ...athlete, weightKg: 81 }, "2026-09-01");
+  assert.deepEqual(
+    hydrationTargetMl(state, today),
+    hydrationTargetMl(lighter, today),
+  );
+  const row = {
+    date: today,
+    activity: "rowing",
+    durationSeconds: 1800,
+  } as const;
+  const burn = cardioBurn(state, saveCardio(state, row, today))!.kcal;
+  assert.equal(
+    burn,
+    cardioBurn(lighter, saveCardio(lighter, row, today))!.kcal,
+  );
+  assert.ok(burn < heavier);
 });

@@ -241,6 +241,10 @@ export type Composition = {
   // (planForState): once the weight reaches the goal, or passes it, the
   // plan holds it there rather than turning round.
   heading?: "lose" | "gain";
+  // The weight given with the saved goals, for the plan at the current
+  // weight: a safer weight the plan heads for instead of the goal is
+  // somewhere to reach only when it is below that.
+  startKg?: number;
 };
 
 export function splitGoals(input: BodyGoalsRequest) {
@@ -575,13 +579,12 @@ export function planGoals(
   // A goal weight is checked against lean mass. Below the lowest healthy
   // body fat, the plan heads only as far as the very lean limit.
   let towards = g.targetWeightKg;
+  let safer: number | null = null;
   if (lean != null && wanted === "lose") {
     const implied = 100 * (1 - lean / g.targetWeightKg);
     if (implied < limits.minimum) {
-      towards = Math.min(
-        g.weightKg,
-        Math.round((lean / (1 - limits.veryLean / 100)) * 10) / 10,
-      );
+      safer = Math.round((lean / (1 - limits.veryLean / 100)) * 10) / 10;
+      towards = Math.min(g.weightKg, safer);
       warn(
         `${g.targetWeightKg <= lean ? "That goal weight is below your lean mass and can't be reached without losing muscle" : `That goal weight would take your body fat below the lowest healthy level (${lowestHealthy})`}, so the plan won't go below a safer weight. Talk it through with a doctor or sports dietitian.`,
       );
@@ -605,15 +608,20 @@ export function planGoals(
 
   const remaining = towards - g.weightKg;
   // At the goal, or at the safer weight the plan heads for instead, or past
-  // it, since the goals were saved.
+  // it, since the goals were saved. A safer weight at or above the weight
+  // given with the goals was never somewhere to head: the plan has held
+  // the weight from the start, so nothing is reached.
   const passedTowards =
     composition.heading === "lose"
       ? g.weightKg <= towards
       : composition.heading === "gain" && g.weightKg >= towards;
+  const heldFromStart =
+    safer != null && safer >= (composition.startKg ?? g.weightKg);
   const reachedGoal =
     composition.heading != null &&
     !pregnant &&
-    (steady(difference) || passedTowards || steady(remaining));
+    (steady(difference) ||
+      (!heldFromStart && (passedTowards || steady(remaining))));
   if (reachedGoal && !withinClass)
     notes.push(
       `You've reached ${towards === g.targetWeightKg ? "your goal weight" : `the ${towards} kg the plan heads for`}, so the plan holds your weight there. Review your goals to set a new one.`,
@@ -1159,15 +1167,17 @@ export function liveGoals(
     : { ...body, weightKg: Math.min(300, Math.max(30, now)) };
 }
 
-// Which way the saved goals head, from the weight given with them: none
-// when that was already at the goal (maintainBandKg), and always down to a
-// weight class above it.
-function heading(state: JournalState, body: BodyGoalsInput) {
+// Which way goals head, from the weight given with them: none when that
+// was already at the goal (maintainBandKg), and always down to a weight
+// class above it. The goals form plans with it too, so its preview says
+// what the saved plan will.
+export function goalsHeading(
+  body: Pick<BodyGoalsInput, "weightKg" | "targetWeightKg">,
+  weightClass: boolean,
+) {
   const change = body.targetWeightKg - body.weightKg;
   const lose =
-    change < 0 &&
-    (state.profile.weighIn?.classKg === body.targetWeightKg ||
-      -change >= maintainBandKg(body.weightKg));
+    change < 0 && (weightClass || -change >= maintainBandKg(body.weightKg));
   return lose
     ? "lose"
     : change >= maintainBandKg(body.weightKg)
@@ -1178,15 +1188,18 @@ function heading(state: JournalState, body: BodyGoalsInput) {
 // The plan for the saved goals at the current weight (liveGoals), with the
 // focus, target, latest body fat and the safety checks given with them. It
 // suggests new targets (target-proposals.ts); the saved ones stay until the
-// athlete takes them.
+// athlete takes them. signs plans with that answer to the low-energy
+// questions instead of the one in force, as a suggestion's review shows.
 export function planForState(
   state: JournalState,
   today: string,
   weightKg?: number,
+  signs?: boolean | null,
 ) {
   const body = goalsForState(state);
   if (!body) return null;
   const checks = state.profile.goalChecks;
+  const weightClass = state.profile.weighIn?.classKg === body.targetWeightKg;
   return planGoals(liveGoals(state, today, weightKg)!, today, {
     focus: state.profile.bodyTargets?.focus,
     targetBodyFatPercent: state.profile.bodyTargets?.targetBodyFatPercent,
@@ -1195,9 +1208,10 @@ export function planForState(
     weeksSinceBirth: babyWeeks(state, today),
     limitProtein: Boolean(state.profile.goalHealth?.limitProtein),
     lowWeightConfirmed: checks?.lowWeightConfirmedKg === body.targetWeightKg,
-    energySigns: energySigns(state, today),
-    weightClass: state.profile.weighIn?.classKg === body.targetWeightKg,
-    heading: heading(state, body),
+    energySigns: signs === undefined ? energySigns(state, today) : signs,
+    weightClass,
+    heading: goalsHeading(body, weightClass),
+    startKg: body.weightKg,
   });
 }
 

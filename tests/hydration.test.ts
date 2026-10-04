@@ -31,7 +31,12 @@ const withBody = (
   weightKg: number,
   extra: Record<string, unknown> = {},
 ) => {
-  s.profile.body = { sex, weightKg, ...extra } as never;
+  s.profile.body = {
+    sex,
+    weightKg,
+    updatedAt: "2026-09-01T07:00:00.000Z",
+    ...extra,
+  } as never;
   return s;
 };
 

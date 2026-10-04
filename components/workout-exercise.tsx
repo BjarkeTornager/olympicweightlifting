@@ -10,13 +10,13 @@ import {
   Trash2,
   X,
 } from "@/components/ui/icons";
-import { exerciseName } from "@/lib/domain";
+import { exerciseName, proposedReset, takeReset } from "@/lib/domain";
 import {
   isValidLoggedSet,
   updatePendingSets,
   wholeKilograms,
 } from "@/js/progression.js";
-import type { Entry } from "@/lib/model";
+import type { Entry, Plan } from "@/lib/model";
 import { exerciseLoggingNotes } from "@/lib/exercises";
 import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
@@ -275,6 +275,10 @@ export function WorkoutExercise({
   );
   const nextSet = entry.sets[nextSetIndex];
   const allRecorded = entry.sets.every(isValidLoggedSet);
+  // Why the programme set this load; a choice of your own needs none.
+  const plan = entry.prescribed.progression as Plan | undefined;
+  const why = plan && plan.status !== "manual" ? plan.reason : "";
+  const reset = proposedReset(entry);
   return (
     <article className={`exercise-card ${active ? "expanded" : ""}`}>
       <button
@@ -306,6 +310,14 @@ export function WorkoutExercise({
       </button>
       {active && (
         <div className="exercise-body">
+          {reset != null && (
+            <div className="notice reset-proposal">
+              <p>{why}</p>
+              <Button variant="secondary" onClick={() => onChange(takeReset)}>
+                Reset to {reset} kg
+              </Button>
+            </div>
+          )}
           {nextSet && (
             <>
               <div className="current-set-heading">
@@ -430,6 +442,9 @@ export function WorkoutExercise({
               ))}
             </div>
             <p className="muted">{entry.prescribed.notes}</p>
+            {why && reset == null && (
+              <p className="previous">Why this load: {why}</p>
+            )}
             {previous && (
               <p className="previous">
                 Last session:{" "}

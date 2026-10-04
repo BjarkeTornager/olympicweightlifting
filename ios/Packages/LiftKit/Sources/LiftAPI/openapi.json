@@ -1093,6 +1093,24 @@
           "title"
         ]
       },
+      "ConfirmTechniqueAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "confirm_technique"
+            ]
+          },
+          "checked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "checked"
+        ]
+      },
       "CorrectSetAction": {
         "type": "object",
         "properties": {
@@ -2040,6 +2058,15 @@
             "$ref": "#/components/schemas/UseProgrammeAction"
           },
           {
+            "$ref": "#/components/schemas/SetWorkoutRecoveryAction"
+          },
+          {
+            "$ref": "#/components/schemas/ConfirmTechniqueAction"
+          },
+          {
+            "$ref": "#/components/schemas/TakeLoadResetAction"
+          },
+          {
             "$ref": "#/components/schemas/SetHydrationTargetAction"
           }
         ],
@@ -2064,6 +2091,9 @@
             "update_training_program": "#/components/schemas/UpdateProgrammeAction",
             "delete_training_program": "#/components/schemas/DeleteProgrammeAction",
             "use_programme": "#/components/schemas/UseProgrammeAction",
+            "set_workout_recovery": "#/components/schemas/SetWorkoutRecoveryAction",
+            "confirm_technique": "#/components/schemas/ConfirmTechniqueAction",
+            "take_load_reset": "#/components/schemas/TakeLoadResetAction",
             "set_hydration_target": "#/components/schemas/SetHydrationTargetAction"
           }
         }
@@ -2700,6 +2730,11 @@
               "success",
               "miss"
             ]
+          },
+          "rpe": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
           }
         }
       },
@@ -2719,6 +2754,28 @@
         "required": [
           "kind",
           "hidden"
+        ]
+      },
+      "SetWorkoutRecoveryAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "set_workout_recovery"
+            ]
+          },
+          "recovery": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "limited"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "recovery"
         ]
       },
       "Sleep": {
@@ -2774,6 +2831,11 @@
                     "awake",
                     "inBed"
                   ]
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
                 }
               },
               "required": [
@@ -2787,6 +2849,33 @@
         "required": [
           "date",
           "samples"
+        ]
+      },
+      "SleepNote": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "observation": {
+            "type": "string"
+          },
+          "invitation": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "observation",
+          "invitation",
+          "prompt"
         ]
       },
       "SleepSyncResult": {
@@ -2907,6 +2996,25 @@
           "usual"
         ]
       },
+      "TakeLoadResetAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "take_load_reset"
+            ]
+          },
+          "entryId": {
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "kind",
+          "entryId"
+        ]
+      },
       "Today": {
         "type": "object",
         "properties": {
@@ -2921,6 +3029,9 @@
           },
           "sleep": {
             "$ref": "#/components/schemas/Sleep"
+          },
+          "sleepNote": {
+            "$ref": "#/components/schemas/SleepNote"
           },
           "vitals": {
             "$ref": "#/components/schemas/Vitals"
@@ -3513,6 +3624,15 @@
             "items": {
               "$ref": "#/components/schemas/WorkoutExercise"
             }
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "recoveryHint": {
+            "type": "string"
+          },
+          "techniqueCheck": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -3546,6 +3666,12 @@
             "items": {
               "$ref": "#/components/schemas/WorkoutSet"
             }
+          },
+          "progression": {
+            "$ref": "#/components/schemas/WorkoutProgression"
+          },
+          "restSeconds": {
+            "type": "integer"
           }
         },
         "required": [
@@ -3553,6 +3679,24 @@
           "exerciseId",
           "name",
           "sets"
+        ]
+      },
+      "WorkoutProgression": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resetWeight": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "status",
+          "reason"
         ]
       },
       "WorkoutSet": {
@@ -3572,6 +3716,9 @@
           },
           "logged": {
             "type": "boolean"
+          },
+          "rpe": {
+            "type": "number"
           }
         },
         "required": [

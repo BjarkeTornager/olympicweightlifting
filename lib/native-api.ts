@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
 import { dailyHealth, formatSleepDuration, offsetDate } from "./health";
+import { shortSleep, sleepShortOpening } from "./sleep";
 import {
   drinkKinds,
   formatLitres,
@@ -293,6 +294,20 @@ const burnedView = z
   .strict()
   .register(nativeResponses, { id: "Burned" });
 
+// Coach's note on short sleep over the last two weeks, as the website's
+// opening has it. The app may hide it for a week.
+const sleepNoteView = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    observation: z.string(),
+    invitation: z.string(),
+    // What to send Coach to talk it through.
+    prompt: z.string(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "SleepNote" });
+
 // A new person's steps to a full day: Apple Health brings sleep and
 // movement, a meal brings food, and goals give the rings their targets.
 const firstStepsView = z
@@ -310,6 +325,8 @@ export const todayView = z
     revision: int,
     name: z.string().optional(),
     sleep: sleepView,
+    // Optional: only while sleep has been short, and older builds ignore it.
+    sleepNote: sleepNoteView.optional(),
     vitals: vitalsView.optional(),
     checkin: checkinView.optional(),
     // Optional: builds from before body composition must still decode.
@@ -592,6 +609,8 @@ const correctSet = z
         weight: z.number().min(0).max(1000).optional(),
         reps: int.min(0).max(1000).optional(),
         result: z.enum(["success", "miss"]).optional(),
+        // How hard the set was, 1-10; the app asks after the last set.
+        rpe: z.number().min(1).max(10).optional(),
       })
       .strict()
       .register(nativeRequests, { id: "SetChanges" }),
@@ -668,6 +687,28 @@ const useProgramme = z
   })
   .strict()
   .register(nativeRequests, { id: "UseProgrammeAction" });
+// App-only: recovery for the workout in progress; "limited" repeats the
+// previous loads.
+const setWorkoutRecovery = z
+  .object({
+    kind: z.literal("set_workout_recovery"),
+    recovery: z.enum(["auto", "limited"]),
+  })
+  .strict()
+  .register(nativeRequests, { id: "SetWorkoutRecoveryAction" });
+// App-only: under 18, a coach checked technique today, so increases apply.
+const confirmTechnique = z
+  .object({ kind: z.literal("confirm_technique"), checked: z.boolean() })
+  .strict()
+  .register(nativeRequests, { id: "ConfirmTechniqueAction" });
+// App-only: take the reset a plan proposes, before logging the exercise.
+const takeLoadReset = z
+  .object({
+    kind: z.literal("take_load_reset"),
+    entryId: z.string().max(160),
+  })
+  .strict()
+  .register(nativeRequests, { id: "TakeLoadResetAction" });
 // App-only: whether Today shows a drinks target. The website sets this in
 // Settings.
 const setHydrationTarget = z
@@ -698,6 +739,9 @@ export const nativeAction = z
     updateProgramme,
     deleteProgramme,
     useProgramme,
+    setWorkoutRecovery,
+    confirmTechnique,
+    takeLoadReset,
     setHydrationTarget,
   ])
   .register(nativeRequests, { id: "NativeAction" });
@@ -792,6 +836,14 @@ function bodyForToday(state: JournalState, date: string) {
   return Object.keys(body).length ? body : undefined;
 }
 
+// Short sleep, unless the athlete asked for advice only when they ask.
+function sleepNote(state: JournalState, date: string) {
+  const short = shortSleep(state, date);
+  return short && state.profile.coaching?.initiative !== "on-request"
+    ? sleepShortOpening(short)
+    : undefined;
+}
+
 // What a new journal has done of its first steps, for its first two weeks;
 // undefined once they're all done or the journal is older.
 export function firstSteps(state: JournalState, date: string) {
@@ -882,6 +934,7 @@ export function buildToday(
         averageHours: health.sleepAverage,
         nights: health.sleepSamples,
       }),
+      sleepNote: sleepNote(state, date),
       vitals: vitals
         ? defined({
             date: vitals.date,
@@ -1024,7 +1077,9 @@ function sleepDetails(
           ]
         : []),
     ],
-    footnote: night ? "From Apple Health" : "Reported by you",
+    footnote: night
+      ? `From Apple Health${night.source ? `, ${night.source}` : ""}`
+      : "Reported by you",
   });
 }
 

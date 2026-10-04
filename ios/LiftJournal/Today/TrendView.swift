@@ -122,10 +122,14 @@ struct TrendView: View {
   @ViewBuilder
   private var headline: some View {
     VStack(alignment: .leading, spacing: 8) {
-      CardLabel(title: trend == .body ? "Latest" : "Average", key: trend.category.tint)
+      CardLabel(title: headlineTitle, key: trend.category.tint)
       switch trend {
       case .sleep:
-        figure(average(\.sleepHours).map(Format.hours), nil)
+        figure(
+          sleepAverage.map(Format.hours), nil,
+          empty: sleepNights == 0
+            ? "Nothing logged in this range"
+            : "An average needs \(Format.count(DaySummary.nightsForAverage)) nights; \(Format.count(sleepNights)) logged")
       case .heart:
         HStack(alignment: .firstTextBaseline, spacing: 20) {
           figure(average { $0.restingHeartRate.map(Double.init) }.map(Format.number), "bpm resting")
@@ -148,6 +152,21 @@ struct TrendView: View {
         }
       }
     }
+  }
+
+  /// "Average", or for sleep, with how many nights: "Average of 9 nights".
+  private var headlineTitle: String {
+    switch trend {
+    case .body: "Latest"
+    case .sleep where sleepAverage != nil: "Average of \(sleepNights) nights"
+    default: "Average"
+    }
+  }
+
+  /// Logged nights in the range, and their average from at least five.
+  private var sleepNights: Int { days.compactMap(\.sleepHours).count }
+  private var sleepAverage: Double? {
+    sleepNights >= DaySummary.nightsForAverage ? average(\.sleepHours) : nil
   }
 
   /// A value in the serif, or a sentence when there is none, naming the
@@ -178,7 +197,7 @@ struct TrendView: View {
   private var chart: some View {
     switch trend {
     case .sleep:
-      bars(\.sleepHours, unit: "hours", average: average(\.sleepHours))
+      bars(\.sleepHours, unit: "hours", average: sleepAverage)
     case .activity:
       bars({ $0.steps.map(Double.init) }, unit: "steps", average: average { $0.steps.map(Double.init) })
     case .water:

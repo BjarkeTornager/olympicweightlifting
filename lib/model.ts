@@ -104,6 +104,8 @@ export const workoutSchema = z
     editingSessionId: z.string().nullish(),
     activeExerciseId: z.string().optional(),
     recovery: z.enum(["auto", "limited"]).default("auto"),
+    // Under 18: a coach checked technique, so increases may apply today.
+    techniqueChecked: z.boolean().optional(),
     athleteNotes: text.default(""),
     coachNotes: text.default(""),
     exercises: z.array(entrySchema).max(50),

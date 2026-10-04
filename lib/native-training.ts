@@ -3,12 +3,16 @@ import {
   days,
   EXERCISES,
   exerciseName,
+  followsProgramme,
   PR_DEFINITIONS,
   program,
+  proposedReset,
 } from "./domain";
-import type { JournalState, Workout } from "./model";
+import { restSeconds } from "./exercises";
+import type { JournalState, Plan, Workout } from "./model";
 import { nativeResponses } from "./native-api";
 import { nextTraining } from "./next-training";
+import { shortSleepHint } from "./training";
 import {
   plannedCardioText,
   prescriptionText,
@@ -30,9 +34,24 @@ const workoutSet = z
     // "success", "miss", or "" for a planned set not yet done.
     result: z.string(),
     logged: z.boolean(),
+    rpe: z.number().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "WorkoutSet" });
+// Why the programme set today's load, for the workout in progress.
+const workoutProgression = z
+  .object({
+    // "increase", "hold", "return" after a break, "confirm" (under 18,
+    // waiting for a coach's technique check), "reset", "initial", "choose"
+    // or "limit".
+    status: z.string(),
+    reason: z.string(),
+    // A lighter load the plan proposes after two failed sessions, until a
+    // set is logged.
+    resetWeight: z.number().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "WorkoutProgression" });
 const workoutExercise = z
   .object({
     entryId: z.string(),
@@ -41,6 +60,9 @@ const workoutExercise = z
     target: z.string().optional(),
     notes: z.string().optional(),
     sets: z.array(workoutSet),
+    progression: workoutProgression.optional(),
+    // Where the rest timer starts after a set.
+    restSeconds: int.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "WorkoutExercise" });
@@ -52,6 +74,14 @@ export const workoutDetail = z
     finished: z.boolean(),
     notes: z.string().optional(),
     exercises: z.array(workoutExercise),
+    // For a programme workout in progress: "auto", or "limited" to repeat
+    // the previous loads.
+    recovery: z.string().optional(),
+    // A short night before the session, suggesting limited recovery.
+    recoveryHint: z.string().optional(),
+    // Under 18, while an increase waits for a coach's technique check:
+    // whether it was confirmed for this workout.
+    techniqueCheck: z.boolean().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "WorkoutDetail" });
@@ -168,7 +198,19 @@ const defined = <T extends Record<string, unknown>>(value: T) =>
     Object.entries(value).filter(([, v]) => v !== null && v !== undefined),
   ) as T;
 
-export function workoutView(w: Workout, finished: boolean) {
+const planOf = (e: Workout["exercises"][number]) =>
+  e.prescribed?.progression as Plan | undefined;
+
+// A workout as the app shows it. The journal is passed for the workout in
+// progress, which also carries its plan: why each load, rest, recovery and
+// the under-18 technique check.
+export function workoutView(
+  w: Workout,
+  finished: boolean,
+  state?: JournalState,
+) {
+  const ongoing = !finished && state ? state : undefined;
+  const programme = ongoing != null && followsProgramme(w);
   return workoutDetail.parse(
     defined({
       id: w.id,
@@ -176,6 +218,17 @@ export function workoutView(w: Workout, finished: boolean) {
       date: w.date,
       finished,
       notes: w.athleteNotes || undefined,
+      recovery: programme ? w.recovery : undefined,
+      recoveryHint:
+        programme && w.recovery === "auto"
+          ? shortSleepHint(ongoing, w.date)
+          : undefined,
+      techniqueCheck:
+        ongoing &&
+        (w.techniqueChecked === true ||
+          w.exercises.some((e) => planOf(e)?.status === "confirm"))
+          ? w.techniqueChecked === true
+          : undefined,
       exercises: w.exercises.map((e) => {
         const target = e.prescribed?.targetSets
           ? `${e.prescribed.targetSets} × ${e.prescribed.reps ?? e.prescribed.targetReps ?? ""}${
@@ -184,6 +237,7 @@ export function workoutView(w: Workout, finished: boolean) {
                 : ""
             }`
           : undefined;
+        const plan = planOf(e);
         return defined({
           entryId: e.id,
           exerciseId: e.exerciseId,
@@ -197,8 +251,20 @@ export function workoutView(w: Workout, finished: boolean) {
               reps: number(s.reps),
               result: s.result ?? "",
               logged: isValidLoggedSet(s),
+              rpe: number(s.rpe),
             }),
           ),
+          progression:
+            ongoing && plan && plan.status !== "manual" && plan.reason
+              ? defined({
+                  status: plan.status,
+                  reason: plan.reason,
+                  resetWeight: proposedReset(e),
+                })
+              : undefined,
+          restSeconds: ongoing
+            ? restSeconds(e, ongoing.preferences.restSeconds)
+            : undefined,
         });
       }),
     }),
@@ -377,7 +443,7 @@ export function buildTraining(
     defined({
       revision,
       activeWorkout: state.activeWorkout
-        ? workoutView(state.activeWorkout, false)
+        ? workoutView(state.activeWorkout, false, state)
         : undefined,
       next: next
         ? {
@@ -421,7 +487,7 @@ export function buildTraining(
 
 export function findSession(state: JournalState, id: string) {
   if (state.activeWorkout?.id === id)
-    return workoutView(state.activeWorkout, false);
+    return workoutView(state.activeWorkout, false, state);
   const session = state.sessions.find((s) => s.id === id);
   return session ? workoutView(session, true) : null;
 }

@@ -186,14 +186,16 @@ export function SettingsView({
           <label>
             Default rest timer
             <select
-              value={state.preferences.restSeconds ?? 90}
+              value={state.preferences.restSeconds ?? ""}
               onChange={(e) => {
-                const seconds = Number(e.currentTarget.value);
+                const seconds = Number(e.currentTarget.value) || undefined;
                 void update((s) => {
-                  s.preferences.restSeconds = seconds;
+                  if (seconds) s.preferences.restSeconds = seconds;
+                  else delete s.preferences.restSeconds;
                 });
               }}
             >
+              <option value="">By exercise type</option>
               {[60, 90, 120, 180, 300].map((n) => (
                 <option value={n} key={n}>
                   {n / 60} minutes
@@ -201,6 +203,11 @@ export function SettingsView({
               ))}
             </select>
           </label>
+          <p className="muted">
+            By exercise type, rest is 3 minutes for the Olympic lifts, squats
+            and pulls, 2 minutes for other barbell work and 90 seconds for
+            accessories. A programme’s own rest always comes first.
+          </p>
           <p className="muted">
             You can also use your browser’s text size and zoom settings.
           </p>

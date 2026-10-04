@@ -1,6 +1,6 @@
 import type { JournalState } from "./model";
 import { foodDate, totalNutrients } from "./nutrition";
-import { offsetDate } from "./health";
+import { offsetDate, sleepAverage } from "./health";
 
 // Only explicit complete-day declarations enter nutrition averages. Zero and
 // absent measurements remain distinct; dates are calendar dates, independent of DST.
@@ -37,7 +37,8 @@ export function weeklyReview(state: JournalState, endDate: string) {
       strengthSessions: days.reduce((n, d) => n + d.strength.length, 0),
       cardioSessions: days.reduce((n, d) => n + d.cardio.length, 0),
       sleepNights: sleep.length,
-      averageSleepHours: average(sleep),
+      // From at least five logged nights.
+      averageSleepHours: sleepAverage(sleep),
       foodLoggedDays: days.filter((d) => d.meals.length > 0).length,
       completeFoodDays: complete.length,
       averageCalories: average(complete.map((d) => d.nutrients.calories)),
@@ -61,6 +62,6 @@ export function weeklyReview(state: JournalState, endDate: string) {
       cardioSessions: current.cardioSessions - previous.cardioSessions,
     },
     interpretation:
-      "These are recorded entries, not a complete account of activity. Sleep averages use logged nights only. Food averages use days the person explicitly marked complete; portions may still be estimated. Different coverage limits comparisons. Changes do not establish causes or health outcomes.",
+      "These are recorded entries, not a complete account of activity. Sleep averages use logged nights only, and need at least five of them. Food averages use days the person explicitly marked complete; portions may still be estimated. Different coverage limits comparisons. Changes do not establish causes or health outcomes.",
   };
 }

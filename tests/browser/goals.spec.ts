@@ -19,6 +19,7 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await expect(
     dialog.getByText("Fill in the numbers to see your daily plan."),
   ).toBeVisible();
+  await expect(dialog.getByLabel("Session length (min)")).toHaveValue("75");
   await dialog.getByLabel("Age").fill("34");
   await dialog.getByLabel("Height (cm)").fill("182");
   await dialog.getByLabel("Sex").selectOption("male");
@@ -30,6 +31,11 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
   await expect(plan).toContainText("2,640 kcal a day");
   await expect(plan).toContainText("4 training sessions a week");
+  // Longer sessions count more energy.
+  await dialog.getByLabel("Session length (min)").fill("120");
+  await expect(plan).toContainText("2,790 kcal a day");
+  await dialog.getByLabel("Session length (min)").fill("75");
+  await expect(plan).toContainText("2,640 kcal a day");
   const axe = await new AxeBuilder({ page })
     .include('[role="dialog"]')
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])

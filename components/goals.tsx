@@ -7,6 +7,7 @@ import {
   describeSessions,
   planForState,
   planGoals,
+  savedTraining,
   splitGoals,
   type BodyGoalsInput,
 } from "@/lib/body-goals";
@@ -114,6 +115,7 @@ function GoalsForm({
 }) {
   const state = journal.state!;
   const body = state.profile.body;
+  const training = savedTraining(state);
   const [draft, setDraft] = useState<Draft>(() => ({
     age: String(body?.age ?? (state.profile.age || "")),
     sex: body?.sex ?? "unspecified",
@@ -125,10 +127,8 @@ function GoalsForm({
     trainingDays: String(
       body?.trainingDays ?? state.profile.lifting?.daysPerWeek ?? 3,
     ),
-    sessionMinutes: String(
-      body?.sessionMinutes ?? state.profile.lifting?.minutesPerSession ?? 75,
-    ),
-    experience: body?.experience ?? "developing",
+    sessionMinutes: String(training.sessionMinutes ?? 75),
+    experience: training.experience ?? "developing",
     focus: state.profile.bodyTargets?.focus ?? "",
     bodyFatPercent: String(latestBodyFat(state, today())?.percent ?? ""),
     targetBodyFatPercent: String(
@@ -271,6 +271,10 @@ function GoalsForm({
         <label>
           Days I can train
           <input inputMode="numeric" required {...field("trainingDays")} />
+        </label>
+        <label>
+          Session length (min)
+          <input inputMode="numeric" required {...field("sessionMinutes")} />
         </label>
         <label>
           Focus

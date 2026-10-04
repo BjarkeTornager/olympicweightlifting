@@ -10,6 +10,9 @@ import {
 } from "./body-composition";
 import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
 
+const sessionMinutes = z.number().int().min(15).max(240);
+const experience = z.enum(["new", "developing", "experienced"]);
+
 // The athlete's body and goal details, and the daily plan derived from them.
 // Numbers are estimates for everyday planning, not a clinical prescription.
 export const bodyGoalsInputSchema = z
@@ -23,10 +26,8 @@ export const bodyGoalsInputSchema = z
     // Movement outside training: desk job, on feet, physical work.
     activity: z.enum(["low", "moderate", "high"]),
     trainingDays: z.number().int().min(0).max(7),
-    sessionMinutes: z.number().int().min(15).max(240).default(75),
-    experience: z
-      .enum(["new", "developing", "experienced"])
-      .default("developing"),
+    sessionMinutes: sessionMinutes.default(75),
+    experience: experience.default("developing"),
   })
   .strict();
 export const bodyGoalsSchema = bodyGoalsInputSchema.extend({
@@ -81,7 +82,14 @@ export const goalChecksSchema = z
     updatedAt: z.iso.datetime(),
   })
   .strict();
+// A goal change. Session length and experience, which a change to the goal
+// often leaves out, keep their saved values (applyGoals) rather than
+// falling back to 75 minutes and "developing".
 export const bodyGoalsRequestSchema = bodyGoalsInputSchema
+  .extend({
+    sessionMinutes: sessionMinutes.optional(),
+    experience: experience.optional(),
+  })
   .extend(bodyCompositionInputSchema.shape)
   .extend(goalChecksInputSchema.shape);
 export type BodyGoalsRequest = z.infer<typeof bodyGoalsRequestSchema>;
@@ -104,7 +112,7 @@ export function splitGoals(input: BodyGoalsRequest) {
     ...goals
   } = bodyGoalsRequestSchema.parse(input);
   return {
-    goals: goals as BodyGoalsInput,
+    goals,
     composition: { focus, bodyFatPercent, targetBodyFatPercent },
     checks: { pregnancy, confirmLowWeight },
   };
@@ -188,10 +196,14 @@ export type GoalPlan = {
 
 const round = (value: number, step = 1) => Math.round(value / step) * step;
 // Saved goals carry updatedAt; nothing else is accepted.
-const plannedGoalsSchema = bodyGoalsSchema.partial({ updatedAt: true });
+const plannedGoalsSchema = bodyGoalsInputSchema.extend({
+  updatedAt: z.iso.datetime().optional(),
+});
+// Goals as given or saved, before the defaults fill in.
+export type GoalsGiven = z.input<typeof plannedGoalsSchema>;
 
 export function planGoals(
-  input: BodyGoalsInput | BodyGoals,
+  input: GoalsGiven,
   today: string,
   composition: Composition = {},
 ): GoalPlan {
@@ -616,9 +628,31 @@ export function athleteAge(state: JournalState) {
   return state.profile.body?.age || state.profile.age || null;
 }
 
+// Session length and experience as saved with the goals, else from the
+// lifting brief, its session length kept within the goals' 15 to 240
+// minutes; undefined when neither says.
+export function savedTraining(state: JournalState) {
+  const body = state.profile.body;
+  const brief = state.profile.lifting;
+  const minutes = brief?.minutesPerSession;
+  return {
+    sessionMinutes:
+      body?.sessionMinutes ??
+      (minutes == null ? undefined : Math.min(240, Math.max(15, minutes))),
+    experience:
+      body?.experience ??
+      (brief && brief.experience !== "unknown" ? brief.experience : undefined),
+  };
+}
+
+// The note when no session length was given or known.
+export const ASSUMED_SESSION =
+  "The plan assumes 75-minute sessions; say how long yours usually last to fine-tune it.";
+
 // Saves the goals and the daily targets they imply. The lifting brief is the
 // athlete's own record of the days they have and changes only through its
-// own review, so the plan's sessions never overwrite it. Body fat stated
+// own review, so the plan's sessions never overwrite it. Session length and
+// experience left out keep what was saved (savedTraining). Body fat stated
 // with the goals is recorded as today's reading. Pregnancy and a confirmed
 // low goal weight carry over when not given again, the confirmation only
 // while the goal weight stays the same.
@@ -627,7 +661,16 @@ export function applyGoals(
   input: BodyGoalsInput | BodyGoalsRequest,
   today: string,
 ) {
-  const { goals, composition, checks } = splitGoals(input);
+  const split = splitGoals(input);
+  const { composition, checks } = split;
+  const known = savedTraining(state);
+  const assumed =
+    split.goals.sessionMinutes == null && known.sessionMinutes == null;
+  const goals = bodyGoalsInputSchema.parse({
+    ...split.goals,
+    sessionMinutes: split.goals.sessionMinutes ?? known.sessionMinutes,
+    experience: split.goals.experience ?? known.experience,
+  });
   const stamp = new Date().toISOString();
   const before = state.profile.goalChecks;
   const pregnancy =
@@ -675,10 +718,11 @@ export function applyGoals(
   state.profile.age = goals.age;
   state.profile.bodyweight = goals.weightKg;
   state.nutrition.targets = planTargets(plan);
+  if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);
   return plan;
 }
 
-export function describePlan(goals: BodyGoalsInput, plan: GoalPlan) {
+export function describePlan(goals: GoalsGiven, plan: GoalPlan) {
   if (!plan.dailyTargets)
     return `No weight goal, and no daily calorie or macro targets, while you're pregnant. ${describeSessions(plan.sessionsPerWeek, "training session")}.`;
   const change =

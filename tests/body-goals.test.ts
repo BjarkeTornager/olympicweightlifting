@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { emptyJournal } from "../lib/domain";
 import {
   applyGoals,
+  ASSUMED_SESSION,
   describePlan,
   planGoals,
   proteinPerKg,
@@ -11,6 +12,7 @@ import {
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
 import { LIFTING_MET, LIFTING_NET_KCAL_PER_KG_HOUR } from "../lib/energy";
+import { voiceAction } from "../lib/voice-actions";
 
 const today = "2026-09-26";
 const athlete: BodyGoalsInput = {
@@ -304,4 +306,80 @@ test("training counts the planned sessions and their length, net of rest, at mos
     ),
   );
   assert.ok(!planGoals(athlete, today).notes.some((n) => /at most/.test(n)));
+});
+
+test("a goal change through Coach or the voice coach keeps the saved session length and experience", () => {
+  const state = emptyJournal();
+  applyGoals(
+    state,
+    { ...athlete, sessionMinutes: 120, experience: "experienced" },
+    today,
+  );
+  // A new goal weight, with the required details and nothing else.
+  const stated: Partial<BodyGoalsInput> &
+    Omit<BodyGoalsInput, "sessionMinutes" | "experience"> = { ...athlete };
+  delete stated.sessionMinutes;
+  delete stated.experience;
+  const typed = prepareAction(
+    state,
+    { kind: "set_body_goals", bodyGoals: { ...stated, targetWeightKg: 84 } },
+    today,
+  );
+  assert.equal(typed.state.profile.body?.targetWeightKg, 84);
+  assert.equal(typed.state.profile.body?.sessionMinutes, 120);
+  assert.equal(typed.state.profile.body?.experience, "experienced");
+  assert.ok(!typed.detail.includes(ASSUMED_SESSION));
+  const spoken = voiceAction(
+    "set_goals",
+    { ...stated, targetWeightKg: 84, targetDate: "", summary: "Goal 84 kg" },
+    state,
+    today,
+  );
+  const body = prepareAction(state, spoken, today).state.profile.body;
+  assert.equal(body?.sessionMinutes, 120);
+  assert.equal(body?.experience, "experienced");
+  // Given again, they change.
+  applyGoals(
+    state,
+    { ...stated, sessionMinutes: 60, experience: "new" },
+    today,
+  );
+  assert.equal(state.profile.body?.sessionMinutes, 60);
+  assert.equal(state.profile.body?.experience, "new");
+  // With no goals saved, the lifting brief's, its 10 minutes brought up to
+  // the goals' 15.
+  const briefed = emptyJournal();
+  briefed.profile.lifting = {
+    goal: "Snatch 80 kg",
+    why: "",
+    experience: "new",
+    daysPerWeek: 3,
+    minutesPerSession: 10,
+    equipment: "",
+    constraints: "",
+    priority: "",
+    targetDate: null,
+    updatedAt: new Date().toISOString(),
+  };
+  applyGoals(briefed, stated, today);
+  assert.equal(briefed.profile.body?.sessionMinutes, 15);
+  assert.equal(briefed.profile.body?.experience, "new");
+  // With neither, 75 minutes and "developing", and the review says the
+  // length was assumed.
+  const fresh = prepareAction(
+    emptyJournal(),
+    { kind: "set_body_goals", bodyGoals: stated },
+    today,
+  );
+  assert.equal(fresh.state.profile.body?.sessionMinutes, 75);
+  assert.equal(fresh.state.profile.body?.experience, "developing");
+  assert.ok(fresh.detail.includes(ASSUMED_SESSION));
+  // Not when no lifting days are planned.
+  assert.ok(
+    !prepareAction(
+      emptyJournal(),
+      { kind: "set_body_goals", bodyGoals: { ...stated, trainingDays: 0 } },
+      today,
+    ).detail.includes(ASSUMED_SESSION),
+  );
 });

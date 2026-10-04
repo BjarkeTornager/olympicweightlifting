@@ -26,6 +26,11 @@ export const sleepImportSchema = z
   })
   .strict();
 
+// An Apple Watch night counts when it has at least this share of the longest
+// source's time asleep. Less is a watch that ran flat or came off, or only a
+// nap, while another tracker or app recorded the whole night.
+const WATCH_SHARE = 0.75;
+
 // Overlapping stages and samples merge into one stretch of sleep.
 function mergeIntervals(intervals: [number, number][]) {
   const merged: [number, number][] = [];
@@ -73,8 +78,9 @@ export function calculateImportedSleep(raw: unknown, now = new Date()) {
   }
   // One source per night: two trackers, or a tracker and an app, record the
   // same night differently, and their union would overstate it. An Apple
-  // Watch is preferred; otherwise the source with the most time asleep.
-  const chosen = [...bySource]
+  // Watch is preferred when it recorded most of the night; otherwise the
+  // source with the most time asleep.
+  const sources = [...bySource]
     .map(([source, intervals]) => {
       const merged = mergeIntervals(intervals);
       return {
@@ -83,11 +89,12 @@ export function calculateImportedSleep(raw: unknown, now = new Date()) {
         asleep: merged.reduce((sum, [a, b]) => sum + b - a, 0),
       };
     })
-    .sort(
-      (a, b) =>
-        Number(b.source === "Apple Watch") -
-          Number(a.source === "Apple Watch") || b.asleep - a.asleep,
-    )[0];
+    .sort((a, b) => b.asleep - a.asleep);
+  const watch = sources.find((s) => s.source === "Apple Watch");
+  const chosen =
+    watch && watch.asleep >= sources[0].asleep * WATCH_SHARE
+      ? watch
+      : sources[0];
   if (!chosen)
     throw Error(
       "No time asleep was found. Awake and in-bed samples do not count as sleep.",

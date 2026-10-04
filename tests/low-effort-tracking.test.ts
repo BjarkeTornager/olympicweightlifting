@@ -111,6 +111,63 @@ test("sleep import takes one source per night, preferring an Apple Watch", () =>
     calculateImportedSleep(payload([{ ...app, source: "x".repeat(61) }]), now),
   );
 });
+test("a watch that recorded only part of the night gives way to a full one from an app", () => {
+  const from = (source: string, start: string, end: string, value: string) => ({
+    ...sample(start, end, value),
+    source,
+  });
+  const ring = from(
+    "Oura",
+    "2026-09-18T23:00:00+02:00",
+    "2026-09-19T07:00:00+02:00",
+    "asleep",
+  );
+  // The watch ran flat at 01:30.
+  const flat = calculateImportedSleep(
+    payload([
+      ring,
+      from(
+        "Apple Watch",
+        "2026-09-18T23:00:00+02:00",
+        "2026-09-19T01:30:00+02:00",
+        "core",
+      ),
+    ]),
+    now,
+  );
+  assert.equal(flat.source, "Oura");
+  assert.equal(flat.hours, 8);
+  // Only a 25-minute nap on the watch the afternoon before.
+  const nap = calculateImportedSleep(
+    payload([
+      ring,
+      from(
+        "Apple Watch",
+        "2026-09-18T15:00:00+02:00",
+        "2026-09-18T15:25:00+02:00",
+        "asleep",
+      ),
+    ]),
+    now,
+  );
+  assert.equal(nap.source, "Oura");
+  assert.equal(nap.hours, 8);
+  // Three quarters of the ring's night is enough for the watch.
+  const most = calculateImportedSleep(
+    payload([
+      ring,
+      from(
+        "Apple Watch",
+        "2026-09-18T23:00:00+02:00",
+        "2026-09-19T05:00:00+02:00",
+        "core",
+      ),
+    ]),
+    now,
+  );
+  assert.equal(most.source, "Apple Watch");
+  assert.equal(most.hours, 6);
+});
 test("an imported night keeps its source, which older web clients don't see", () => {
   const night = calculateImportedSleep(
     payload([

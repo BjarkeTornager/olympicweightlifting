@@ -33,6 +33,7 @@ import {
   prepareTrainingProgram,
 } from "./prepare-plans";
 import {
+  prepareAddExercise,
   prepareFinishWorkout,
   prepareDiscardWorkout,
   prepareLogSets,
@@ -189,6 +190,8 @@ function applyAction(
       return prepareSetCorrection(next, action, currentDate);
     case "log_sets":
       return prepareLogSets(next, action, currentDate);
+    case "add_workout_exercise":
+      return prepareAddExercise(next, action);
     case "finish_workout":
       return prepareFinishWorkout(next, currentDate, action.workoutId);
     case "discard_workout":

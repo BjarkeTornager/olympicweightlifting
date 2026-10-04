@@ -9,7 +9,7 @@ import {
   uid,
 } from "../domain";
 import type { JournalState, Workout } from "../model";
-import { startTemplate, templateFromWorkout } from "../training";
+import { plannedEntry, startTemplate, templateFromWorkout } from "../training";
 import type { trainingInputSchema } from "./action-schema";
 import type { ActionOf, PreparedChange } from "./actions";
 
@@ -291,6 +291,64 @@ export function prepareLogSets(
     title: `Log ${action.sets.length} ${exerciseName(action.exerciseId)} sets`,
     detail:
       "Fills the next unlogged sets, then adds extra sets if needed. Previously logged sets are preserved. The workout stays ongoing until you finish it.",
+  };
+}
+
+// An exercise added to the workout in progress with targets still to do,
+// nothing logged. One already in the workout gets the new sets after its own.
+export function prepareAddExercise(
+  next: JournalState,
+  action: ActionOf<"add_workout_exercise">,
+): PreparedChange {
+  if (!next.activeWorkout)
+    throw Error(
+      "There is no workout in progress to add to. Use plan_workout to start a workout draft with this exercise, or log_workout_progress for sets already done.",
+    );
+  const draft = inProgress(next, action.workoutId);
+  const matches = draft.exercises.filter(
+    (e) => e.exerciseId === action.exerciseId,
+  );
+  if (matches.length > 1)
+    throw Error(
+      "This movement appears more than once. Edit the intended exercise in Train before adding sets.",
+    );
+  const planned = plannedEntry({
+    exerciseId: action.exerciseId,
+    sets: action.plannedSets.map((s) => ({
+      weight: s.weight ?? "",
+      reps: s.reps,
+    })),
+  });
+  const name = exerciseName(action.exerciseId);
+  const entry = matches[0];
+  if (entry) {
+    entry.sets.push(...planned.sets);
+    entry.completed = false;
+    if (action.note)
+      entry.coachCue = [entry.coachCue, action.note].filter(Boolean).join("\n");
+  } else {
+    // The target Train and the iPhone show: 4 × 8–10, with the load when
+    // every set has the same one.
+    const reps = action.plannedSets.map((s) => s.reps);
+    const [low, high] = [Math.min(...reps), Math.max(...reps)];
+    const [weight, ...others] = new Set(
+      action.plannedSets.map((s) => s.weight),
+    );
+    planned.prescribed = {
+      targetSets: reps.length,
+      reps: low === high ? String(low) : `${low}–${high}`,
+      ...(weight != null && !others.length ? { targetWeight: weight } : {}),
+    };
+    planned.coachCue = action.note ?? "";
+    draft.exercises.push(planned);
+  }
+  return {
+    workout: draft,
+    title: entry
+      ? `Add ${planned.sets.length} ${name} set${planned.sets.length === 1 ? "" : "s"} to your workout`
+      : `Add ${name} to your workout`,
+    detail:
+      "Adds planned sets to the workout in progress. Nothing is logged until you do them, and sets you have logged stay as they are.",
   };
 }
 

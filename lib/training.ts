@@ -35,22 +35,28 @@ export function startTemplate(
     recovery: "auto",
     athleteNotes: "",
     coachNotes: "",
-    exercises: template.exercises.map((e) => ({
+    exercises: template.exercises.map(plannedEntry),
+  };
+}
+// An exercise still to do, every set unlogged.
+export function plannedEntry(
+  exercise: WorkoutTemplate["exercises"][number],
+): Workout["exercises"][number] {
+  return {
+    id: uid(),
+    exerciseId: exercise.exerciseId,
+    loggingVersion: 1,
+    completed: false,
+    athleteNotes: "",
+    coachCue: "",
+    prescribed: { targetSets: exercise.sets.length },
+    sets: exercise.sets.map((s) => ({
       id: uid(),
-      exerciseId: e.exerciseId,
-      loggingVersion: 1,
-      completed: false,
-      athleteNotes: "",
-      coachCue: "",
-      prescribed: { targetSets: e.sets.length },
-      sets: e.sets.map((s) => ({
-        id: uid(),
-        weight: s.weight,
-        reps: s.reps,
-        result: "",
-        logged: false,
-        touched: false,
-      })),
+      weight: s.weight,
+      reps: s.reps,
+      result: "",
+      logged: false,
+      touched: false,
     })),
   };
 }

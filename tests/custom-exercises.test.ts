@@ -9,7 +9,9 @@ import {
   resolveExerciseId,
 } from "../lib/exercises";
 import { prepareAction } from "../lib/agent/actions";
+import { guardChange } from "../lib/agent/change-guards";
 import { newTurnReads, runReadTool } from "../lib/agent/read-tools";
+import { isValidLoggedSet } from "../js/progression.js";
 import type { JournalState } from "../lib/model";
 import { mixedProgram } from "./fixtures/training-programs";
 
@@ -328,6 +330,120 @@ test("routines and programmes save the athlete's own spelling too", () => {
       planned.training.after.days[0].exercises[1].exerciseId,
     "custom:Landmine squat",
   );
+});
+
+test("add_workout_exercise adds planned sets to the workout in progress", () => {
+  const add = {
+    kind: "add_workout_exercise",
+    exerciseId: "custom:standing cable reverse fly",
+    plannedSets: [
+      { weight: 10, reps: 10 },
+      { weight: 15, reps: 10 },
+      { weight: 15, reps: 8 },
+      { weight: null, reps: 8 },
+    ],
+    note: "Superset with face pulls.",
+  };
+  assert.throws(
+    () => prepareAction(emptyJournal(), add, today),
+    /no workout in progress.*plan_workout/,
+  );
+  const started = prepareAction(
+    withWorkout(),
+    logSets("back_squat", [done(100, 5)]),
+    today,
+  ).state;
+  assert.throws(
+    () => prepareAction(started, { ...add, workoutId: "w-old" }, today),
+    /isn't the workout in progress/,
+  );
+  const added = prepareAction(
+    started,
+    { ...add, workoutId: started.activeWorkout!.id },
+    today,
+  );
+  assert.equal(added.title, "Add Standing cable reverse fly to your workout");
+  assert.equal(added.workoutReview?.status, "ongoing");
+  const [squat, entry] = added.state.activeWorkout!.exercises;
+  assert.equal(squat.sets.filter(isValidLoggedSet).length, 1);
+  assert.equal(entry.exerciseId, fly);
+  assert.equal(entry.coachCue, "Superset with face pulls.");
+  assert.deepEqual(entry.prescribed, { targetSets: 4, reps: "8–10" });
+  assert.deepEqual(
+    entry.sets.map((s) => [s.weight, s.reps, isValidLoggedSet(s)]),
+    [
+      [10, 10, false],
+      [15, 10, false],
+      [15, 8, false],
+      ["", 8, false],
+    ],
+  );
+  // More of an exercise already there joins its entry after its own sets.
+  const logged = prepareAction(
+    added.state,
+    logSets(fly, [done(10, 10)]),
+    today,
+  );
+  const more = prepareAction(
+    logged.state,
+    {
+      kind: "add_workout_exercise",
+      exerciseId: fly,
+      plannedSets: [{ weight: 15, reps: 8 }],
+    },
+    today,
+  );
+  assert.equal(
+    more.title,
+    "Add 1 Standing cable reverse fly set to your workout",
+  );
+  const flies = more.state.activeWorkout!.exercises.filter(
+    (e) => e.exerciseId === fly,
+  );
+  assert.equal(flies.length, 1);
+  assert.deepEqual(
+    flies[0].sets.map((s) => [s.weight, s.reps, isValidLoggedSet(s)]),
+    [
+      [10, 10, true],
+      [15, 10, false],
+      [15, 8, false],
+      ["", 8, false],
+      [15, 8, false],
+    ],
+  );
+  assert.equal(flies[0].completed, false);
+  // Planned sets are targets: finishing keeps only what was logged.
+  const finished = prepareAction(more.state, { kind: "finish_workout" }, today);
+  assert.deepEqual(
+    finished.state.sessions[0].exercises.map((e) => [
+      e.exerciseId,
+      e.sets.length,
+    ]),
+    [
+      ["back_squat", 1],
+      [fly, 1],
+    ],
+  );
+});
+
+test("Coach reads the workout in progress before adding to it", async () => {
+  const ctx = {
+    userId: "u",
+    state: withWorkout(),
+    reads: newTurnReads(),
+    viewedImageIds: new Set<string>(),
+    message: "Add standing cable reverse fly to my workout",
+    recent: [],
+    saving: false,
+  };
+  const add = {
+    kind: "add_workout_exercise" as const,
+    exerciseId: fly,
+    plannedSets: [{ weight: 10, reps: 10 }],
+  };
+  await assert.rejects(guardChange(add, ctx), /Read the current workout first/);
+  ctx.reads.draft = true;
+  await assert.doesNotReject(guardChange(add, ctx));
 });
 
 test("the exercises tool offers the athlete's own exercises and a ready id for a movement the catalogue lacks", async () => {

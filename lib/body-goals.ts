@@ -225,11 +225,17 @@ export function planGoals(
     );
   const fat = round(Math.max(g.weightKg * 0.8, (calories * 0.25) / 9));
   const carbs = round(Math.max(0, (calories - protein * 4 - fat * 9) / 4));
+  // Sessions on the days available, up to what suits the experience; none
+  // when no days are free.
   const recommended = { new: 3, developing: 4, experienced: 5 }[g.experience];
-  const sessionsPerWeek = Math.min(recommended, Math.max(g.trainingDays, 2));
+  const sessionsPerWeek = Math.min(recommended, g.trainingDays);
   if (g.trainingDays > recommended)
     notes.push(
       `${recommended} sessions a week is plenty at your level; use the other days for recovery or light movement.`,
+    );
+  if (g.trainingDays === 1)
+    notes.push(
+      "One heavy session a week can usually hold your strength; older lifters may need 2. WHO and ACSM advise at least 2 a week for gains and health.",
     );
   return {
     direction,
@@ -272,9 +278,10 @@ export function planForState(state: JournalState, today: string) {
   });
 }
 
-// Saves the goals and the daily targets they imply; the lifting brief's
-// training days follow when a brief exists. Body fat stated with the goals
-// is recorded as today's reading.
+// Saves the goals and the daily targets they imply. The lifting brief is the
+// athlete's own record of the days they have and changes only through its
+// own review, so the plan's sessions never overwrite it. Body fat stated
+// with the goals is recorded as today's reading.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
@@ -309,11 +316,6 @@ export function applyGoals(
   state.profile.age = goals.age;
   state.profile.bodyweight = goals.weightKg;
   state.nutrition.targets = planTargets(plan);
-  if (state.profile.lifting)
-    state.profile.lifting = {
-      ...state.profile.lifting,
-      daysPerWeek: plan.sessionsPerWeek,
-    };
   return plan;
 }
 
@@ -330,5 +332,12 @@ export function describePlan(goals: BodyGoalsInput, plan: GoalPlan) {
       : plan.targetBodyFatPercent != null
         ? ` Towards ${plan.targetBodyFatPercent}% body fat.`
         : "";
-  return `${change}. ${plan.calories.toLocaleString("en-GB")} kcal a day: ${plan.protein} g protein, ${plan.carbs} g carbs, ${plan.fat} g fat. ${plan.sessionsPerWeek} training sessions a week.${composition}`;
+  return `${change}. ${plan.calories.toLocaleString("en-GB")} kcal a day: ${plan.protein} g protein, ${plan.carbs} g carbs, ${plan.fat} g fat. ${describeSessions(plan.sessionsPerWeek, "training session")}.${composition}`;
+}
+
+// "4 sessions a week", "1 session a week", or none planned.
+export function describeSessions(sessions: number, noun = "session") {
+  return sessions === 0
+    ? "No lifting days planned"
+    : `${sessions} ${noun}${sessions === 1 ? "" : "s"} a week`;
 }

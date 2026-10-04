@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyJournal } from "../lib/domain";
-import { applyGoals, planGoals, type BodyGoalsInput } from "../lib/body-goals";
+import {
+  applyGoals,
+  describePlan,
+  planGoals,
+  type BodyGoalsInput,
+} from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
 
 const today = "2026-09-26";
@@ -85,7 +90,7 @@ test("warnings: underweight goals and too little energy", () => {
   assert.equal(eager.sessionsPerWeek, 3);
 });
 
-test("saving goals sets profile, daily targets and the brief's training days", () => {
+test("saving goals sets profile and daily targets and leaves the lifting brief alone", () => {
   const state = emptyJournal();
   state.profile.lifting = {
     goal: "Snatch 80 kg",
@@ -115,7 +120,9 @@ test("saving goals sets profile, daily targets and the brief's training days", (
     carbs: 253,
     fat: 70,
   });
-  assert.equal(next.profile.lifting?.daysPerWeek, 4);
+  // The brief is the athlete's own: the plan's 4 sessions don't replace
+  // the 5 days they said they have.
+  assert.deepEqual(next.profile.lifting, state.profile.lifting);
   assert.match(prepared.detail, /2,350 kcal a day/);
   // The original state is untouched until the change is saved.
   assert.equal(state.profile.body, undefined);
@@ -124,4 +131,26 @@ test("saving goals sets profile, daily targets and the brief's training days", (
   const fresh = emptyJournal();
   applyGoals(fresh, athlete, today);
   assert.equal(fresh.profile.lifting, undefined);
+  const brief = structuredClone(state.profile.lifting);
+  applyGoals(state, { ...athlete, trainingDays: 2 }, today);
+  assert.deepEqual(state.profile.lifting, brief);
+});
+
+test("sessions follow the days available, with no floor of 2", () => {
+  const none = planGoals({ ...athlete, trainingDays: 0 }, today);
+  assert.equal(none.sessionsPerWeek, 0);
+  assert.match(describePlan(athlete, none), /No lifting days planned\.$/);
+  const one = planGoals({ ...athlete, trainingDays: 1 }, today);
+  assert.equal(one.sessionsPerWeek, 1);
+  assert.match(describePlan(athlete, one), /1 training session a week\.$/);
+  assert.ok(one.notes.some((n) => /One heavy session a week/.test(n)));
+  assert.equal(
+    planGoals({ ...athlete, trainingDays: 3 }, today).sessionsPerWeek,
+    3,
+  );
+  // Up to what suits the experience.
+  assert.equal(
+    planGoals({ ...athlete, trainingDays: 6 }, today).sessionsPerWeek,
+    4,
+  );
 });

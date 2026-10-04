@@ -4,6 +4,7 @@ import {
   applyGoals,
   bodyGoalsRequestSchema,
   describePlan,
+  describeSessions,
   planForState,
   planGoals,
   splitGoals,
@@ -41,8 +42,8 @@ export function GoalsCard({
             <span>
               <strong>Goals</strong>
               <small>
-                {body.targetWeightKg} kg goal · {plan.sessionsPerWeek} sessions
-                a week
+                {body.targetWeightKg} kg goal ·{" "}
+                {describeSessions(plan.sessionsPerWeek).toLowerCase()}
               </small>
             </span>
             <span className="today-record-value">

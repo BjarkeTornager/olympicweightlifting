@@ -1,6 +1,6 @@
 import { createWorkout, days, emptyJournal } from "./domain";
 import { cardioFromWorkout } from "./health-sync";
-import { buildTraining } from "./native-training";
+import { buildTraining, workoutView } from "./native-training";
 import { addDrink } from "./hydration";
 import type { CoachVisual } from "./coach-visuals";
 import { addSupplement } from "./supplements";
@@ -104,6 +104,7 @@ export function nativeFixtures() {
   state.sessions.push(lift);
   const imported = new Set([run.id]);
   return {
+    "workout.json": workoutInProgress(state),
     "today.json": buildToday(state, 12, date, imported),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
     "trends.json": buildTrends(state, date, 7),
@@ -297,4 +298,49 @@ export function nativeFixtures() {
       now,
     ),
   };
+}
+
+// Monday's programme in progress for a 16-year-old after a 5 h 30 min night:
+// the snatch waits for a coach's technique check, the snatch pull proposes a
+// reset after two sessions with a miss, and one set carries an RPE.
+function workoutInProgress(journal: ReturnType<typeof emptyJournal>) {
+  const state = structuredClone(journal);
+  const monday = days.find((d) => d.id === "monday")!;
+  state.profile.age = 16;
+  state.health.checkins[0].sleepHours = 5.5;
+  for (const [i, sessionDate] of ["2026-09-14", "2026-09-21"].entries()) {
+    const done = createWorkout(state, monday, sessionDate);
+    done.id = `monday-${i + 1}`;
+    done.finishedAt = `${sessionDate}T18:00:00.000Z`;
+    done.exercises = done.exercises.slice(0, 2);
+    for (const [weight, entry] of [60, 80].map(
+      (w, j) => [w, done.exercises[j]] as const,
+    )) {
+      entry.prescribed.targetWeight = weight;
+      entry.sets.forEach((s) => {
+        Object.assign(s, {
+          weight: String(weight),
+          rpe: "8",
+          result: "success",
+          logged: true,
+        });
+      });
+    }
+    done.exercises[1].sets[3].result = "miss";
+    state.sessions.push(done);
+  }
+  const active = createWorkout(state, monday, date);
+  active.id = "0e5f3f8e-2a51-4c1e-9d0b-0c1f7c1e2a17";
+  active.exercises.forEach((entry, i) => {
+    entry.id = `entry-${i + 1}`;
+    entry.sets.forEach((s, j) => (s.id = `set-${i + 1}-${j + 1}`));
+  });
+  Object.assign(active.exercises[2].sets[0], {
+    weight: "100",
+    result: "success",
+    logged: true,
+    rpe: 7,
+  });
+  state.activeWorkout = active;
+  return workoutView(active, false, state);
 }

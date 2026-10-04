@@ -116,6 +116,13 @@ test("every action the app can send is a valid journal action", () => {
       setChanges: { reps: 3 },
     },
     {
+      kind: "correct_workout_set",
+      workoutId: "w",
+      entryId: "e",
+      setId: "s",
+      setChanges: { rpe: 8 },
+    },
+    {
       kind: "create_training_program",
       trainingProgram: {
         name: "Block",
@@ -144,9 +151,15 @@ test("every action the app can send is a valid journal action", () => {
     },
     { kind: "delete_training_program", trainingProgramId: crypto.randomUUID() },
   ];
-  // "use_programme" is the app's own action, not a Coach action.
+  // The app's own actions are not Coach actions.
+  const appOnly = [
+    { kind: "use_programme", programmeId: "stability-power-base-v1" },
+    { kind: "set_workout_recovery", recovery: "limited" },
+    { kind: "confirm_technique", checked: true },
+    { kind: "take_load_reset", entryId: "e" },
+  ];
   assert.equal(
-    new Set(examples.map((e) => e.kind)).size + 1,
+    new Set(examples.map((e) => e.kind)).size + appOnly.length,
     nativeAction.options.length,
   );
   for (const action of examples) {
@@ -161,11 +174,10 @@ test("every action the app can send is a valid journal action", () => {
     });
     assert.doesNotThrow(() => actionSchema.parse(action), action.kind);
   }
-  actionRequest.parse({
-    id: crypto.randomUUID(),
-    timezone: tz,
-    action: { kind: "use_programme", programmeId: "stability-power-base-v1" },
-  });
+  for (const action of appOnly) {
+    actionRequest.parse({ id: crypto.randomUUID(), timezone: tz, action });
+    assert.equal(actionSchema.safeParse(action).success, false, action.kind);
+  }
 });
 
 test("Today and the journal feed describe the day for the app", () => {

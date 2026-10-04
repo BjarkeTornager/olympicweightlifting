@@ -1,0 +1,201 @@
+{
+  "id": "0e5f3f8e-2a51-4c1e-9d0b-0c1f7c1e2a17",
+  "title": "Snatch + Back Squat",
+  "date": "2026-09-26",
+  "finished": false,
+  "exercises": [
+    {
+      "entryId": "entry-1",
+      "exerciseId": "snatch",
+      "name": "Snatch",
+      "target": "6 × 1–2 · 60 kg",
+      "sets": [
+        {
+          "id": "set-1-1",
+          "weight": 60,
+          "reps": 1,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-1-2",
+          "weight": 60,
+          "reps": 1,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-1-3",
+          "weight": 60,
+          "reps": 1,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-1-4",
+          "weight": 60,
+          "reps": 1,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-1-5",
+          "weight": 60,
+          "reps": 1,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-1-6",
+          "weight": 60,
+          "reps": 1,
+          "result": "",
+          "logged": false
+        }
+      ],
+      "progression": {
+        "status": "confirm",
+        "reason": "Under 18, the load goes up only once a coach has checked your technique. When your coach has checked it, confirm it in this workout to add 2 kg."
+      },
+      "restSeconds": 180
+    },
+    {
+      "entryId": "entry-2",
+      "exerciseId": "snatch_pull",
+      "name": "Snatch pull",
+      "target": "4 × 3 · 80 kg",
+      "sets": [
+        {
+          "id": "set-2-1",
+          "weight": 80,
+          "reps": 3,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-2-2",
+          "weight": 80,
+          "reps": 3,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-2-3",
+          "weight": 80,
+          "reps": 3,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-2-4",
+          "weight": 80,
+          "reps": 3,
+          "result": "",
+          "logged": false
+        }
+      ],
+      "progression": {
+        "status": "hold",
+        "reason": "The previous workout included a miss. Repeat this load. Two sessions in a row at 80 kg ended with a miss or an RPE above 8. A common coaching convention, not a rule, is to reset to about 90%: 72 kg. Take the reset, or repeat 80 kg.",
+        "resetWeight": 72
+      },
+      "restSeconds": 180
+    },
+    {
+      "entryId": "entry-3",
+      "exerciseId": "back_squat",
+      "name": "Back squat",
+      "target": "4 × 4",
+      "sets": [
+        {
+          "id": "set-3-1",
+          "weight": 100,
+          "reps": 4,
+          "result": "success",
+          "logged": true,
+          "rpe": 7
+        },
+        {
+          "id": "set-3-2",
+          "reps": 4,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-3-3",
+          "reps": 4,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-3-4",
+          "reps": 4,
+          "result": "",
+          "logged": false
+        }
+      ],
+      "progression": {
+        "status": "choose",
+        "reason": "Choose a comfortable starting weight. Completed, logged work establishes your baseline for automatic progression."
+      },
+      "restSeconds": 180
+    },
+    {
+      "entryId": "entry-4",
+      "exerciseId": "upper_back",
+      "name": "Rows / pull-ups",
+      "target": "3 × 6–10",
+      "sets": [
+        {
+          "id": "set-4-1",
+          "reps": 8,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-4-2",
+          "reps": 8,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-4-3",
+          "reps": 8,
+          "result": "",
+          "logged": false
+        }
+      ],
+      "restSeconds": 90
+    },
+    {
+      "entryId": "entry-5",
+      "exerciseId": "trunk",
+      "name": "Trunk work",
+      "target": "3 × Controlled",
+      "sets": [
+        {
+          "id": "set-5-1",
+          "reps": 10,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-5-2",
+          "reps": 10,
+          "result": "",
+          "logged": false
+        },
+        {
+          "id": "set-5-3",
+          "reps": 10,
+          "result": "",
+          "logged": false
+        }
+      ],
+      "restSeconds": 90
+    }
+  ],
+  "recovery": "auto",
+  "recoveryHint": "You slept 5 h 30 min before this session. Under 6 hours can lower performance, so you may want to hold today’s loads.",
+  "techniqueCheck": false
+}

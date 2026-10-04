@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { foodDate, type dietTargetsSchema } from "./nutrition";
+import { dailyTarget, foodDate, type dietTargetsSchema } from "./nutrition";
 import type { JournalState } from "./model";
 import {
   bodyFocuses,
@@ -529,6 +529,31 @@ export function planTargets(plan: GoalPlan): z.infer<typeof dietTargetsSchema> {
     carbs: set ? plan.carbs : null,
     fat: set ? plan.fat : null,
   };
+}
+
+// The line shown with the goals in place of the plan's notes when the saved
+// daily targets aren't the plan's: set by hand, or saved before the plan
+// changed (a target date passed, a new limit, a much changed body fat).
+export const TARGETS_DIFFER =
+  "Your daily targets aren't the ones your goals give now. Ask Coach to review them with you.";
+
+// The plan's notes describe the saved daily targets only when they are the
+// plan's: the same goal, and calories within 100 kcal, as each new body fat
+// reading moves the plan by a few. Otherwise one line says they differ, so
+// a note never contradicts the target shown beside it.
+export function notesForTargets(
+  plan: GoalPlan,
+  targets: z.infer<typeof dietTargetsSchema>,
+) {
+  const planned = planTargets(plan).calories;
+  const saved = dailyTarget(targets.calories);
+  const close =
+    planned == null || saved == null
+      ? planned === saved
+      : Math.abs(planned - saved) <= 100;
+  return plan.direction === targets.goal && close
+    ? plan.notes
+    : [TARGETS_DIFFER];
 }
 
 // The plan for the saved goals, with the focus, target, latest body fat and

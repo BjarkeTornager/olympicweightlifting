@@ -31,7 +31,7 @@ import {
   latestBodyFat,
   weightTrend,
 } from "./body-composition";
-import { planForState } from "./body-goals";
+import { notesForTargets, planForState } from "./body-goals";
 import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
@@ -253,7 +253,9 @@ const bodyView = z
     targetWeightKg: z.number().optional(),
     targetBodyFatPercent: z.number().optional(),
     // The goal plan's notes, shown with the goals: why it holds weight or
-    // loses more slowly, and who to talk to. Optional, as new fields are.
+    // loses more slowly, and who to talk to. When the saved daily targets
+    // aren't the plan's, one line saying so instead. Optional, as new
+    // fields are.
     goalNotes: z.array(z.string()).optional(),
   })
   .strict()
@@ -738,6 +740,8 @@ function bodyForToday(state: JournalState, date: string) {
     .sort((a, b) => a.date.localeCompare(b.date));
   const weight = weights.at(-1);
   const plan = planForState(state, date);
+  // Shown beside the saved targets, so only notes that describe them.
+  const notes = plan ? notesForTargets(plan, state.nutrition.targets) : [];
   const body = defined({
     bodyFatPercent: fat?.percent,
     bodyFatDate: fat?.date,
@@ -753,7 +757,7 @@ function bodyForToday(state: JournalState, date: string) {
     focus: plan?.focus,
     targetWeightKg: state.profile.body?.targetWeightKg,
     targetBodyFatPercent: plan?.targetBodyFatPercent ?? undefined,
-    goalNotes: plan?.notes.length ? plan.notes : undefined,
+    goalNotes: notes.length ? notes : undefined,
   });
   return Object.keys(body).length ? body : undefined;
 }

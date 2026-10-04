@@ -7,10 +7,11 @@ import {
   planForState,
   planGoals,
   planTargets,
+  TARGETS_DIFFER,
   type BodyGoalsInput,
   type GoalPlan,
 } from "../lib/body-goals";
-import { leannessLimits } from "../lib/body-composition";
+import { leannessLimits, saveBodyFat } from "../lib/body-composition";
 import { prepareAction } from "../lib/agent/actions";
 import { coachingContext } from "../lib/coaching";
 import { journalSchema } from "../lib/model";
@@ -771,4 +772,74 @@ test("Coach and the voice coach pass pregnancy to the same plan; a confirmation 
     "neither",
   ]);
   assert.equal(setGoals.parameters.properties.confirmLowWeight.type, "boolean");
+});
+
+test("the iPhone shows the plan's notes only beside the plan's own targets", () => {
+  // Never a note that contradicts the target shown with it: the plan's
+  // notes come only with its goal and calories, within 100 kcal.
+  const consistent = (state: ReturnType<typeof emptyJournal>, date: string) => {
+    const today = buildToday(state, 1, date, new Set());
+    const notes = today.body?.goalNotes ?? [];
+    const plan = planForState(state, date)!;
+    if (notes.join() === TARGETS_DIFFER) return notes;
+    assert.deepEqual(notes, plan.notes);
+    assert.equal(state.nutrition.targets.goal, plan.direction);
+    assert.ok(Math.abs(today.nutrition.targetCalories! - plan.calories) <= 100);
+    return notes;
+  };
+  // Saved with a date in December: on the day, the plan's own targets and
+  // notes.
+  const state = emptyJournal();
+  applyGoals(state, { ...athlete, targetDate: "2026-12-01" }, today);
+  assert.equal(state.nutrition.targets.calories, 2350);
+  assert.match(consistent(state, today).join(), /keeps to a sustainable/);
+  // Once the date has passed the plan holds at 2,830, but the saved target
+  // is still 2,350, so the iPhone says they differ rather than that the
+  // plan holds his weight.
+  const later = "2026-12-05";
+  assert.match(planForState(state, later)!.notes.join(), /date has passed/);
+  const native = buildToday(state, 1, later, new Set());
+  assert.equal(native.nutrition.targetCalories, 2350);
+  assert.deepEqual(native.body?.goalNotes, [TARGETS_DIFFER]);
+  consistent(state, later);
+  // A teenager's target saved before the limits (1,730 kcal, lose) gets the
+  // same line, not "Under 18 ... it holds your weight" beside a deficit.
+  const teenager = emptyJournal();
+  teenager.profile.body = {
+    ...teen,
+    sex: "female",
+    heightCm: 165,
+    weightKg: 60,
+    targetWeightKg: 55,
+    trainingDays: 3,
+    updatedAt: "2026-09-01T10:00:00.000Z",
+  };
+  teenager.nutrition.targets = {
+    goal: "lose",
+    calories: 1730,
+    protein: 120,
+    carbs: 204,
+    fat: 48,
+  };
+  assert.deepEqual(consistent(teenager, today), [TARGETS_DIFFER]);
+  // A scale's reading the next day moves the plan by a few kcal: still its
+  // notes.
+  applyGoals(state, { ...athlete, bodyFatPercent: 18 }, today);
+  const next = "2026-09-27";
+  saveBodyFat(
+    state,
+    { date: next, percent: 17.4, method: "scale" },
+    next,
+    "apple-health",
+  );
+  assert.notEqual(
+    planForState(state, next)!.calories,
+    state.nutrition.targets.calories,
+  );
+  assert.notDeepEqual(consistent(state, next), [TARGETS_DIFFER]);
+  // Targets set by hand, or none, get the line.
+  state.nutrition.targets.calories = 2800;
+  assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+  state.nutrition.targets.calories = 0;
+  assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
 });

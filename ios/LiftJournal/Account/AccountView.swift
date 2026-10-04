@@ -306,7 +306,8 @@ private struct GoalsSection: View {
       Text("Goals")
     } footer: {
       // The plan's own notes come first: why it holds weight or loses more
-      // slowly, and who to talk to.
+      // slowly, and who to talk to. The server sends them only beside the
+      // plan's own targets, and otherwise a line saying the targets differ.
       VStack(alignment: .leading, spacing: 6) {
         ForEach(body?.goalNotes ?? [], id: \.self) { Text($0) }
         Text("Set with Coach. Ask Coach to change any of them.")

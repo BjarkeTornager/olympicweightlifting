@@ -5,6 +5,7 @@ import {
   applyGoals,
   planForState,
   planGoals,
+  TARGETS_DIFFER,
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import {
@@ -332,6 +333,9 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
     new Date(),
   );
 
+  // The first reading moves the plan from Mifflin–St Jeor to lean mass,
+  // about 200 kcal above the targets saved without one, so the iPhone says
+  // they differ instead of showing the plan's notes.
   const body = buildToday(state, 1, today, new Set()).body;
   assert.deepEqual(body, {
     bodyFatPercent: 14,
@@ -345,6 +349,7 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
     focus: "recomposition",
     targetWeightKg: 85,
     targetBodyFatPercent: 11,
+    goalNotes: [TARGETS_DIFFER],
   });
   const journal = buildJournal(state, 1, "2026-09-27", 14, new Set());
   assert.deepEqual(

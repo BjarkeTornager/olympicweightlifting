@@ -18,6 +18,9 @@ import {
   startTrainingDay,
 } from "../lib/training-programs";
 import { shortSleepHint } from "../lib/training";
+import { prepareAction } from "../lib/agent/actions";
+import { voiceAction } from "../lib/voice-actions";
+import { journalForVoice } from "../lib/journal-summary";
 import {
   updatePendingSets,
   upgradeProgramDraft,
@@ -172,6 +175,60 @@ test("a proposed reset is taken only before logging, and replanning keeps it", (
   assert.throws(
     () => takeLoadReset(again, again.activeWorkout!.exercises[1].id),
     /already logged/,
+  );
+});
+
+test("an RPE said to the voice coach reaches the logged set, so one session can unlock the increase", () => {
+  // Monday's programme workout is open; the athlete reports six singles at
+  // 45 kg, all made. The model sends 0 or null for an RPE nobody said.
+  const spoken = (rpe: number | null) => {
+    const state = emptyJournal();
+    state.activeWorkout = createWorkout(state, monday, "2026-09-28");
+    const action = voiceAction(
+      "log_training",
+      {
+        summary: "Six singles at 45, the last one felt like a 7",
+        date: "2026-09-28",
+        title: "Snatch",
+        exercises: [
+          {
+            exercise: "snatch",
+            sets: [...Array(6)].map((_, i) => ({
+              weight_kg: 45,
+              reps: 1,
+              made: true,
+              rpe: i === 5 ? rpe : 0,
+            })),
+          },
+        ],
+      },
+      state,
+      "2026-09-28",
+    );
+    assert.equal(action.kind, "log_workout_progress");
+    return prepareAction(state, action, "2026-09-28").state;
+  };
+  const rated = spoken(7);
+  const snatch = rated.sessions[0].exercises[0];
+  assert.equal(snatch.exerciseId, "snatch");
+  assert.equal(snatch.sets[5].rpe, 7);
+  assert.equal(snatch.sets[0].rpe, "", "Only the RPE that was said");
+  // The voice coach reads it back, so it can explain a hold or an increase.
+  const read = journalForVoice(rated, "2026-09-28", "2026-09-28");
+  assert.equal(read.workouts[0].exercises[0].sets[5].rpe, 7);
+  assert.equal("rpe" in read.workouts[0].exercises[0].sets[0], false);
+  assert.equal(
+    createWorkout(rated, monday, "2026-10-05").exercises[0].prescribed
+      .targetWeight,
+    47,
+  );
+  // Without it, the load waits for a second completed session.
+  const unrated = spoken(null);
+  assert.equal(unrated.sessions[0].exercises[0].sets[5].rpe, "");
+  assert.equal(
+    createWorkout(unrated, monday, "2026-10-05").exercises[0].prescribed
+      .targetWeight,
+    45,
   );
 });
 

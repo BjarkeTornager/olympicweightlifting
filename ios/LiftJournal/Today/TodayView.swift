@@ -12,6 +12,8 @@ struct TodayView: View {
   @Environment(AppModel.self) private var model
   @State private var healthNeedsAccess = false
   @AppStorage(FirstStepsCard.hiddenKey) private var firstStepsHidden = false
+  /// Coach's note on short sleep, hidden for a week from the day saved here.
+  @AppStorage(SleepNote.hiddenKey) private var sleepNoteHidden = ""
   /// The last seven days, for the small charts and the weekly sleep average.
   @State private var week: Components.Schemas.Trends?
   /// The first day of this journal on this iPhone, for the issue number
@@ -145,10 +147,10 @@ struct TodayView: View {
     return dates.map { $0.formatted(.dateTime.weekday(.narrow).locale(Format.locale)) }
   }
 
-  /// The average of the nights before last night, from at least three.
+  /// The average of the nights before last night, from at least five.
   private func priorSleepAverage(_ today: Today) -> Double? {
     let before = weekDays.filter { $0.date != today.date }.compactMap(\.sleepHours)
-    return before.count >= 3 ? before.reduce(0, +) / Double(before.count) : nil
+    return before.count >= DaySummary.nightsForAverage ? before.reduce(0, +) / Double(before.count) : nil
   }
 
   // MARK: The page
@@ -262,6 +264,10 @@ struct TodayView: View {
       }
       .buttonStyle(CardButtonStyle())
       .padding(.top, Theme.Space.s)
+      if let note = today.sleepNote, !SleepNote.hidden(note.id, saved: sleepNoteHidden, today: today.date) {
+        SleepNoteCard(note: note) { sleepNoteHidden = SleepNote.hide(note.id, today: today.date) }
+          .padding(.top, Theme.Space.l)
+      }
       // The first steps include connecting Apple Health.
       if model.health.available && !model.health.connected && (firstStepsHidden || today.firstSteps == nil) {
         NavigationLink {
@@ -284,10 +290,13 @@ struct TodayView: View {
   }
 
   private func sleepCell(_ today: Today) -> some View {
-    let average = today.sleep.nights > 1 ? today.sleep.averageHours : nil
+    // From at least five nights, with how many: "9-night average 7 h 12 min".
+    let nights = today.sleep.nights
+    let average = nights >= DaySummary.nightsForAverage ? today.sleep.averageHours : nil
     return MetricCell(
       title: "Sleep", category: .sleep, value: today.sleep.hours.map(Format.hours),
-      note: average.map { "Average \(Format.hours($0))" }, empty: "Tap to add last night", chartHeight: 58
+      note: average.map { "\(nights)-night average \(Format.hours($0))" }, empty: "Tap to add last night",
+      chartHeight: 58
     ) {
       Sparkline(values: series { $0.sleepHours }, tint: Category.sleep.tint, days: initials, average: average)
     }

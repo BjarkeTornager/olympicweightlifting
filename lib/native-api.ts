@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
 import { dailyHealth, formatSleepDuration, offsetDate } from "./health";
+import { shortSleep, sleepShortOpening } from "./sleep";
 import {
   drinkKinds,
   formatLitres,
@@ -273,6 +274,20 @@ const burnedView = z
   .strict()
   .register(nativeResponses, { id: "Burned" });
 
+// Coach's note on short sleep over the last two weeks, as the website's
+// opening has it. The app may hide it for a week.
+const sleepNoteView = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    observation: z.string(),
+    invitation: z.string(),
+    // What to send Coach to talk it through.
+    prompt: z.string(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "SleepNote" });
+
 // A new person's steps to a full day: Apple Health brings sleep and
 // movement, a meal brings food, and goals give the rings their targets.
 const firstStepsView = z
@@ -290,6 +305,8 @@ export const todayView = z
     revision: int,
     name: z.string().optional(),
     sleep: sleepView,
+    // Optional: only while sleep has been short, and older builds ignore it.
+    sleepNote: sleepNoteView.optional(),
     vitals: vitalsView.optional(),
     checkin: checkinView.optional(),
     // Optional: builds from before body composition must still decode.
@@ -762,6 +779,14 @@ function bodyForToday(state: JournalState, date: string) {
   return Object.keys(body).length ? body : undefined;
 }
 
+// Short sleep, unless the athlete asked for advice only when they ask.
+function sleepNote(state: JournalState, date: string) {
+  const short = shortSleep(state, date);
+  return short && state.profile.coaching?.initiative !== "on-request"
+    ? sleepShortOpening(short)
+    : undefined;
+}
+
 // What a new journal has done of its first steps, for its first two weeks;
 // undefined once they're all done or the journal is older.
 export function firstSteps(state: JournalState, date: string) {
@@ -847,6 +872,7 @@ export function buildToday(
         averageHours: health.sleepAverage,
         nights: health.sleepSamples,
       }),
+      sleepNote: sleepNote(state, date),
       vitals: vitals
         ? defined({
             date: vitals.date,

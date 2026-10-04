@@ -2748,6 +2748,33 @@
           "samples"
         ]
       },
+      "SleepNote": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "observation": {
+            "type": "string"
+          },
+          "invitation": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "observation",
+          "invitation",
+          "prompt"
+        ]
+      },
       "SleepSyncResult": {
         "type": "object",
         "properties": {
@@ -2880,6 +2907,9 @@
           },
           "sleep": {
             "$ref": "#/components/schemas/Sleep"
+          },
+          "sleepNote": {
+            "$ref": "#/components/schemas/SleepNote"
           },
           "vitals": {
             "$ref": "#/components/schemas/Vitals"

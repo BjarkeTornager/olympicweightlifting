@@ -96,11 +96,15 @@ test("breastfeeding: maintenance plus the allowance, no deficit before 6 weeks o
     assert.match(feedingNote(plan), /no deficit until your baby is 6 weeks/);
     assert.match(feedingNote(plan), /milk supply/);
     assert.match(feedingNote(plan), /midwife or health visitor/);
-    // Without its age, the note says how to plan a gentle loss later.
+    // Without its age, the note says how to plan a gentle loss later,
+    // with the plan, not the baby, as what loses.
     assert.equal(
-      /Say how old your baby is/.test(feedingNote(plan)),
+      feedingNote(plan).includes(
+        "If you'd like the plan to include a gentle loss once your baby is 6 weeks old, say how old your baby is.",
+      ),
       weeksSinceBirth == null,
     );
+    assert.doesNotMatch(feedingNote(plan), /like it to lose/);
   }
   // From 6 weeks a gentle loss: 0.5 % of 76 kg is within 500 kcal a day.
   for (const weeksSinceBirth of [6, 12, 40]) {

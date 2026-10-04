@@ -157,7 +157,9 @@ test("under 18 the form asks no body fat, and breastfeeding holds weight", async
   );
   // No deficit until the baby is 6 weeks old, then a gentle one.
   const baby = dialog.getByLabel("Baby’s age (weeks, optional)");
-  await expect(plan).toContainText("Say how old your baby is");
+  await expect(plan).toContainText(
+    "If you'd like the plan to include a gentle loss once your baby is 6 weeks old, say how old your baby is.",
+  );
   await baby.fill("3");
   await expect(plan).toContainText("no deficit until your baby is 6 weeks");
   await expect(plan).toContainText("Hold around 60 kg");

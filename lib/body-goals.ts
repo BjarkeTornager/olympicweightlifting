@@ -464,7 +464,7 @@ export function planGoals(
         : `keeps any deficit gentle (at most about ${bmiNow >= 25 ? "0.5" : "0.25"} kg a week)`;
     const askAge =
       asks && weeks == null
-        ? ` Say how old your baby is if you'd like it to lose gently after ${POSTPARTUM_WEEKS} weeks.`
+        ? ` If you'd like the plan to include a gentle loss once your baby is ${POSTPARTUM_WEEKS} weeks old, say how old your baby is.`
         : "";
     notes.push(
       `While you're breastfeeding the plan adds about ${LACTATION_KCAL} kcal a day for making milk and ${deficit}, with no protein target.${askAge} Keep an eye on your milk supply, and talk to your midwife or health visitor before trying to lose weight.`,

@@ -168,6 +168,43 @@ export function customExerciseIds(state: JournalState) {
   return [...new Set(ids.filter((id) => id.startsWith(CUSTOM)))];
 }
 
+// The athlete's own exercises to choose from, one per movement in the
+// spelling changes reuse, sorted by name.
+export function ownExercises(state: JournalState) {
+  const keys = new Set<string>();
+  return customExerciseIds(state)
+    .filter((id) => {
+      const key = exerciseKey(id);
+      if (!key || keys.has(key)) return false;
+      keys.add(key);
+      return true;
+    })
+    .map((id) => ({ id, name: id.slice(CUSTOM.length).trim() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// What a picker offers for a typed name the catalogue and the athlete's
+// own exercises don't have exactly: the id that saves it as a new exercise
+// of their own, or nothing when it names a catalogue exercise or one of
+// theirs, or can't be a name.
+export function newExerciseFor(state: JournalState, typed: string) {
+  const key = exerciseKey(typed);
+  if (
+    !key ||
+    catalogueMatches(typed).length ||
+    customExerciseIds(state).some((id) => exerciseKey(id) === key)
+  )
+    return undefined;
+  try {
+    const id = resolveExerciseId(state, CUSTOM + typed);
+    return id.startsWith(CUSTOM)
+      ? { id, name: id.slice(CUSTOM.length) }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Catalogue ids by the key of each id, name and alias. "Overhead press" is
 // an alias of two lifts, so it names neither on its own. A placeholder for
 // a group of movements in the built-in programme has no muscles, and its id

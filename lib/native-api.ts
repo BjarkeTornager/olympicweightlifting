@@ -1102,7 +1102,7 @@ export function buildJournal(
       kind: "strength",
       title: s.title,
       detail: [
-        `${s.exercises.length} exercises · ${loggedSets(s)} sets`,
+        `${s.exercises.length} exercise${s.exercises.length === 1 ? "" : "s"} · ${loggedSets(s)} set${loggedSets(s) === 1 ? "" : "s"}`,
         burnText(strengthBurn(state, s)),
       ]
         .filter(Boolean)

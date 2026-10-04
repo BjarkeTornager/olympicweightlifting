@@ -6,8 +6,11 @@ import {
   customExerciseId,
   customExerciseIds,
   exerciseKey,
+  newExerciseFor,
+  ownExercises,
   resolveExerciseId,
 } from "../lib/exercises";
+import { buildTraining } from "../lib/native-training";
 import { prepareAction } from "../lib/agent/actions";
 import { receiptEntryView } from "../lib/native-api";
 import { plannedSetsText } from "../lib/training";
@@ -863,4 +866,52 @@ test("a history search reads every spelling of one exercise, and asks which of t
     ctx,
   )) as { sessions: number };
   assert.equal(summary.sessions, 2);
+});
+
+test("pickers list the athlete's own exercises once and offer a typed new one", () => {
+  const state = emptyJournal();
+  session(state, "2026-09-01", "custom:cable thing");
+  session(state, "2026-09-20", "custom:Cable thing");
+  session(state, "2026-09-21", fly);
+  session(state, "2026-09-22", "back_squat");
+  // One per movement, in the spelling changes reuse, by name.
+  assert.deepEqual(ownExercises(state), [
+    { id: "custom:Cable thing", name: "Cable thing" },
+    { id: fly, name: "Standing cable reverse fly" },
+  ]);
+  assert.equal(
+    resolveExerciseId(state, "custom:CABLE THING"),
+    "custom:Cable thing",
+  );
+  // A typed name nobody has yet is saved tidily as the athlete's own.
+  assert.deepEqual(newExerciseFor(state, "  landmine   press "), {
+    id: "custom:Landmine press",
+    name: "Landmine press",
+  });
+  // Nothing new for a library name or alias, plural or not, one of theirs,
+  // or something that can't be a name.
+  for (const typed of [
+    "back squat",
+    "Front squats",
+    "RDL",
+    "cable things",
+    "standing cable reverse fly",
+    "",
+    "\u3164",
+    "x".repeat(121),
+  ])
+    assert.equal(newExerciseFor(state, typed), undefined, typed);
+});
+
+test("the iPhone's exercise list adds the athlete's own after the library", () => {
+  const state = emptyJournal();
+  session(state, "2026-09-21", fly);
+  const { exercises } = buildTraining(state, 0, today);
+  const rdl = exercises.find((e) => e.id === "romanian_deadlift");
+  assert.ok(rdl?.aliases?.includes("RDL"));
+  assert.deepEqual(exercises.at(-1), {
+    id: fly,
+    name: "Standing cable reverse fly",
+    category: "Your exercises",
+  });
 });

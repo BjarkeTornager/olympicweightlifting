@@ -176,6 +176,16 @@ struct ContractTests {
     #expect(older.bests == nil && older.weeks == nil)
   }
 
+  @Test("The exercise list has the library's other names and the athlete's own exercises")
+  func exerciseOptions() throws {
+    let training = try fixture("training", as: Components.Schemas.Training.self)
+    let rdl = try #require(training.exercises.first { $0.id == "romanian_deadlift" })
+    #expect(rdl.aliases?.contains("RDL") == true)
+    let own = try #require(training.exercises.first { $0.category == "Your exercises" })
+    #expect(own.id == "custom:Standing cable reverse fly" && own.name == "Standing cable reverse fly")
+    #expect(own.aliases == nil)
+  }
+
   @Test("A response this build can't read is told apart from other failures")
   func unreadable() {
     let decoding = DecodingError.keyNotFound(

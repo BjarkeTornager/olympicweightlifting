@@ -903,15 +903,19 @@ export const ASSUMED_SESSION =
 // weeks given only when they differ from the saved age, so saving the
 // goals again never moves it. A protein target saved beside a plan that set
 // none is the athlete's own, their doctor's or dietitian's figure perhaps,
-// and is kept while the plan still sets none.
+// and is kept while the plan still sets none. changes names a removed
+// kidney answer or a changed baby's age, for the review and the voice
+// read-back to say first: a voice save has no review, and a model filling
+// every field could change them unasked.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
   today: string,
-) {
+): GoalPlan & { changes: string[] } {
   const split = splitGoals(input);
   const { composition, checks } = split;
   const earlier = planForState(state, today);
+  const weeksBefore = babyWeeks(state, today);
   const known = savedTraining(state);
   const assumed =
     split.goals.sessionMinutes == null && known.sessionMinutes == null;
@@ -1001,7 +1005,19 @@ export function applyGoals(
   if (keepsOwn)
     plan.notes.push(`Your own protein target of ${own} g stays as it is.`);
   if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);
-  return plan;
+  const weeksAfter = babyWeeks(state, today);
+  const changes = [
+    health?.limitProtein &&
+      !limitProtein &&
+      `Removes your answer about kidney disease or a doctor's limit on protein${plan.proteinTarget ? `, so the plan sets ${plan.protein} g of protein a day` : ""}.`,
+    weeksBefore != null &&
+      pregnancy === "breastfeeding" &&
+      weeksAfter !== weeksBefore &&
+      (weeksAfter == null
+        ? "Removes your baby's age."
+        : `Saves your baby's age as ${weeksAfter} week${weeksAfter === 1 ? "" : "s"}, not ${weeksBefore}.`),
+  ].filter((line): line is string => Boolean(line));
+  return Object.assign(plan, { changes });
 }
 
 export function describePlan(goals: GoalsGiven, plan: GoalPlan) {

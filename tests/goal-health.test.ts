@@ -528,13 +528,20 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
     notesForTargets(planForState(next, today)!, next.nutrition.targets),
     planForState(next, today)!.notes,
   );
-  // Once the plan sets protein again, its own replaces it.
+  // Once the plan sets protein again, its own replaces it, and the review
+  // says why first.
   const removed = prepareAction(
     next,
     { kind: "set_body_goals", bodyGoals: { ...man, limitProtein: false } },
     today,
   );
   assert.equal(removed.state.nutrition.targets.protein, 180);
+  assert.ok(
+    removed.detail.startsWith(
+      "Removes your answer about kidney disease or a doctor's limit on protein, so the plan sets 180 g of protein a day. Lose about",
+    ),
+    removed.detail,
+  );
   // A protein target set before the answer isn't one for it, so the answer
   // removes it.
   const earlier = emptyJournal();
@@ -547,6 +554,103 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
   const answered = applyGoals(handSet, { ...man, limitProtein: true }, today);
   assert.equal(handSet.nutrition.targets.protein, null);
   assert.ok(!answered.notes.some((n) => n.startsWith("Your own protein")));
+  assert.deepEqual(answered.changes, []);
+});
+
+test("a voice goals save that removes the kidney answer or changes the baby's age says so first", () => {
+  // The model fills every field of a call that changes only the goal
+  // weight, the answers with false and 0.
+  const filled = {
+    summary: "Goals",
+    targetDate: "",
+    focus: "",
+    bodyFatPercent: 0,
+    targetBodyFatPercent: 0,
+    weeksSinceBirth: 0,
+    limitProtein: false,
+    confirmLowWeight: false,
+  };
+  const kidney = emptyJournal();
+  applyGoals(kidney, { ...man, limitProtein: true }, today);
+  const removed = prepareAction(
+    kidney,
+    voiceAction(
+      "set_goals",
+      { ...man, ...filled, targetWeightKg: 80 },
+      kidney,
+      today,
+    ),
+    today,
+  );
+  assert.ok(
+    removed.detail.startsWith(
+      "Removes your answer about kidney disease or a doctor's limit on protein, so the plan sets 180 g of protein a day. Lose about",
+    ),
+    removed.detail,
+  );
+  // While breastfeeding, the removal says no more, as the plan still sets
+  // no protein target, and a changed age is named too.
+  const feeding = emptyJournal();
+  applyGoals(
+    feeding,
+    {
+      ...mother,
+      pregnancy: "breastfeeding",
+      weeksSinceBirth: 10,
+      limitProtein: true,
+    },
+    today,
+  );
+  const changed = prepareAction(
+    feeding,
+    voiceAction(
+      "set_goals",
+      { ...mother, ...filled, pregnancy: "breastfeeding", targetWeightKg: 66 },
+      feeding,
+      today,
+    ),
+    today,
+  );
+  assert.ok(
+    changed.detail.startsWith(
+      "Removes your answer about kidney disease or a doctor's limit on protein. Saves your baby's age as 0 weeks, not 10. Hold around 76 kg.",
+    ),
+    changed.detail,
+  );
+  assert.equal(changed.state.profile.goalHealth?.babyBornOn, today);
+  // The same answers again change nothing, and say nothing.
+  const same = prepareAction(
+    feeding,
+    voiceAction(
+      "set_goals",
+      {
+        ...mother,
+        ...filled,
+        pregnancy: "breastfeeding",
+        weeksSinceBirth: 10,
+        limitProtein: true,
+      },
+      feeding,
+      today,
+    ),
+    today,
+  );
+  assert.ok(same.detail.startsWith("Lose about"), same.detail);
+  assert.equal(
+    same.state.profile.goalHealth?.babyBornOn,
+    feeding.profile.goalHealth?.babyBornOn,
+  );
+  // The voice coach reads it first, and undoes it if it isn't right.
+  const instruction = voiceInstruction(
+    voiceContext(emptyJournal(), today),
+    localClock(`${today}T09:00:00Z`, "UTC"),
+    "Sam",
+  );
+  assert.ok(
+    instruction.includes(
+      "If the result starts by saying it removes or changes one of their health answers, say that first and ask whether it's right; if it isn't, call undo_save with its save_id and save again leaving that answer out.",
+    ),
+  );
 });
 
 test("saving the goals again keeps the baby's birth day, so a gentle deficit can start at 6 weeks", () => {
@@ -561,7 +665,7 @@ test("saving the goals again keeps the baby's birth day, so a gentle deficit can
   // The form sends back the age it shows, in whole weeks, on every save.
   for (let day = 6; day <= 60; day += 6) {
     const date = offsetDate(born, day);
-    applyGoals(
+    const plan = applyGoals(
       state,
       {
         ...mother,
@@ -571,6 +675,7 @@ test("saving the goals again keeps the baby's birth day, so a gentle deficit can
       date,
     );
     assert.equal(state.profile.goalHealth?.babyBornOn, born, date);
+    assert.deepEqual(plan.changes, [], date);
   }
   assert.equal(
     planForState(state, offsetDate(born, 41))?.direction,
@@ -579,7 +684,8 @@ test("saving the goals again keeps the baby's birth day, so a gentle deficit can
   assert.equal(planForState(state, offsetDate(born, 42))?.direction, "lose");
   // A different age is a new answer, and moves the day.
   const date = offsetDate(born, 60);
-  applyGoals(state, { ...mother, weeksSinceBirth: 6 }, date);
+  const plan = applyGoals(state, { ...mother, weeksSinceBirth: 6 }, date);
   assert.equal(babyWeeks(state, date), 6);
   assert.equal(state.profile.goalHealth?.babyBornOn, offsetDate(date, -42));
+  assert.deepEqual(plan.changes, ["Saves your baby's age as 6 weeks, not 8."]);
 });

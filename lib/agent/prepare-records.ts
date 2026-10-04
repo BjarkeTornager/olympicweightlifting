@@ -175,7 +175,10 @@ export function prepareBodyGoals(
     targets: next.nutrition.targets,
     targetsBefore: before,
     title: "Set your goals",
+    // A removed or changed health answer comes first, so the review and the
+    // voice read-back never leave it out.
     detail: [
+      ...plan.changes,
       describePlan(splitGoals(action.bodyGoals).goals, plan),
       ...plan.notes,
     ].join(" "),

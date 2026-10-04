@@ -95,8 +95,8 @@ function workoutPlanChange(raw: NativeActionInput) {
 }
 
 // The journal change for an app action. Most are Coach actions and go
-// through the same schema and rules; "use_programme" and the workout plan
-// changes are the app's own.
+// through the same schema and rules; "use_programme", "set_hydration_target"
+// and the workout plan changes are the app's own.
 function preparer(
   raw: NativeActionInput,
   today: string,
@@ -127,6 +127,27 @@ function preparer(
         title: "Follow this programme",
         detail: "Train suggests its next session.",
       };
+    };
+  }
+  if (raw.kind === "set_hydration_target") {
+    const hidden = raw.hidden;
+    return (state) => {
+      const next = structuredClone(state);
+      if (hidden) next.preferences.hideHydrationTarget = true;
+      else delete next.preferences.hideHydrationTarget;
+      next.updatedAt = new Date().toISOString();
+      return hidden
+        ? {
+            state: next,
+            title: "Hide the drinks target",
+            detail:
+              "Drinks still add up; Today shows no target and water reminders stop.",
+          }
+        : {
+            state: next,
+            title: "Show the drinks target",
+            detail: "Today shows the day's drinks range again.",
+          };
     };
   }
   const action = actionSchema.parse(

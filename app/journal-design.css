@@ -2591,7 +2591,8 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
     white-space: nowrap;
   }
 }
-.hydration-row > .notice { margin: 0 16px; }
+.hydration-row > .notice,
+.hydration-row > .fine-print { margin: 0 16px; }
 @media (prefers-reduced-motion: reduce) { .hydration-progress > span { transition: none; } }
 .supplement-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0 16px; list-style: none; }
 .supplement-chips li { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 12px; border-radius: 999px; background: var(--accent-soft); font-size: 0.9rem; }

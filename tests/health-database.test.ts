@@ -94,24 +94,24 @@ test(
       step = 0;
       const update = await runTurn(
         a,
-        { ...input(2), message: "Record my total water today as 750 ml" },
+        { ...input(2), message: "Record my weight today as 80.4 kg" },
         async () =>
           ++step === 1
             ? tool("health_overview", { date: "2026-09-06" })
             : tool("prepare_change", {
                 kind: "record_checkin",
-                checkin: { date: "2026-09-06", waterMl: 750 },
+                checkin: { date: "2026-09-06", bodyweight: 80.4 },
               }),
       );
       const result = await applyProposal(a, update.proposals[0].id);
       assert.equal(result.state.health.checkins[0].sleepHours, 7);
-      assert.equal(result.state.health.checkins[0].waterMl, 750);
+      assert.equal(result.state.health.checkins[0].bodyweight, 80.4);
       assert.equal(
         result.state.health.checkins[0].notes,
         "Keep my original note",
       );
       const undo = await applyProposal(a, update.proposals[0].id, true);
-      assert.equal(undo.state.health.checkins[0].waterMl, null);
+      assert.equal(undo.state.health.checkins[0].bodyweight, null);
       assert.equal(undo.state.health.checkins[0].sleepHours, 7);
     } finally {
       await pool.query("DELETE FROM users WHERE id=ANY($1::text[])", [[a, b]]);

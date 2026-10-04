@@ -1315,13 +1315,16 @@
           },
           "kind": {
             "type": "string",
-            "description": "One of: water, sparkling water, coffee, tea, energy drink, sports drink, milk, juice, soft drink, protein shake, other. Treat others as unknown."
+            "description": "One of: water, sparkling water, coffee, tea, energy drink, sports drink, milk, juice, soft drink, protein shake, beer, wine, spirits, other. Treat others as unknown."
           },
           "name": {
             "type": "string"
           },
           "at": {
             "type": "string"
+          },
+          "estimated": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -1662,6 +1665,24 @@
             "items": {
               "$ref": "#/components/schemas/Drink"
             }
+          },
+          "targetLowMl": {
+            "type": "integer"
+          },
+          "targetHighMl": {
+            "type": "integer"
+          },
+          "targetHidden": {
+            "type": "boolean"
+          },
+          "restDayTargetMl": {
+            "type": "integer"
+          },
+          "liftingDayTargetMl": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
           }
         },
         "required": [
@@ -1824,6 +1845,9 @@
                   "juice",
                   "soft drink",
                   "protein shake",
+                  "beer",
+                  "wine",
+                  "spirits",
                   "other"
                 ]
               },
@@ -2041,6 +2065,9 @@
           },
           {
             "$ref": "#/components/schemas/TakeLoadResetAction"
+          },
+          {
+            "$ref": "#/components/schemas/SetHydrationTargetAction"
           }
         ],
         "discriminator": {
@@ -2066,7 +2093,8 @@
             "use_programme": "#/components/schemas/UseProgrammeAction",
             "set_workout_recovery": "#/components/schemas/SetWorkoutRecoveryAction",
             "confirm_technique": "#/components/schemas/ConfirmTechniqueAction",
-            "take_load_reset": "#/components/schemas/TakeLoadResetAction"
+            "take_load_reset": "#/components/schemas/TakeLoadResetAction",
+            "set_hydration_target": "#/components/schemas/SetHydrationTargetAction"
           }
         }
       },
@@ -2710,6 +2738,24 @@
           }
         }
       },
+      "SetHydrationTargetAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "set_hydration_target"
+            ]
+          },
+          "hidden": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "hidden"
+        ]
+      },
       "SetWorkoutRecoveryAction": {
         "type": "object",
         "properties": {
@@ -3196,6 +3242,9 @@
           },
           "waterTargetMl": {
             "type": "integer"
+          },
+          "waterTargetHidden": {
+            "type": "boolean"
           }
         },
         "required": [

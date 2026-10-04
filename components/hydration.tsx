@@ -4,7 +4,9 @@ import { today } from "@/lib/domain";
 import {
   addDrink,
   formatLitres,
+  formatLitresRange,
   hydrationForDay,
+  hydrationNote,
   removeDrink,
 } from "@/lib/hydration";
 import type { JournalController } from "./journal";
@@ -12,6 +14,7 @@ import { Button } from "./ui/button";
 import { Droplets, Undo2 } from "./ui/icons";
 
 // Today's drinks at a glance, with one-tap water: the easiest record to keep.
+// The target is a range from drinks, unless the athlete hid it in Settings.
 export function HydrationRow({ journal }: { journal: JournalController }) {
   const date = today();
   const day = hydrationForDay(journal.state!, date);
@@ -46,22 +49,25 @@ export function HydrationRow({ journal }: { journal: JournalController }) {
         <span>
           <strong>Drinks</strong>
           <small>
-            {day.recorded ? `${day.drinks.length || 1} logged` : "Nothing yet"}{" "}
-            · aim for about {formatLitres(day.targetMl)}
+            {day.recorded ? `${day.drinks.length} logged` : "Nothing yet"}
+            {!day.hidden &&
+              ` · about ${formatLitresRange(day.lowMl, day.highMl)} from drinks`}
           </small>
         </span>
         <span className="today-record-value">{formatLitres(day.totalMl)}</span>
       </div>
-      <div
-        className="hydration-progress"
-        role="progressbar"
-        aria-label="Drinks against today's target"
-        aria-valuemin={0}
-        aria-valuemax={day.targetMl}
-        aria-valuenow={day.totalMl}
-      >
-        <span style={{ width: `${progress * 100}%` }} />
-      </div>
+      {!day.hidden && (
+        <div
+          className="hydration-progress"
+          role="progressbar"
+          aria-label="Drinks against today's target"
+          aria-valuemin={0}
+          aria-valuemax={day.targetMl}
+          aria-valuenow={day.totalMl}
+        >
+          <span style={{ width: `${progress * 100}%` }} />
+        </div>
+      )}
       <div className="hydration-actions">
         {[250, 500].map((ml) => (
           <Button
@@ -90,6 +96,9 @@ export function HydrationRow({ journal }: { journal: JournalController }) {
           </Button>
         )}
       </div>
+      {!day.hidden && (
+        <p className="fine-print">{hydrationNote(journal.state!, date)}</p>
+      )}
       {error && (
         <p className="notice warning" role="alert">
           {error}

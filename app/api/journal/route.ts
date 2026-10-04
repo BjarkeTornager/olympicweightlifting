@@ -116,6 +116,7 @@ export async function PUT(request: Request) {
       preserveMissingCoachData: true,
       preserveMissingActivityPhotos:
         request.headers.get("x-activity-photos-version") !== "1",
+      preserveDrinkDetails: request.headers.get("x-drinks-version") !== "1",
       state: {
         ...input.state,
         // Preserve omission until the transaction can retain this additive

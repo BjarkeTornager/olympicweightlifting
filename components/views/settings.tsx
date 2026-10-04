@@ -212,6 +212,27 @@ export function SettingsView({
             You can also use your browser’s text size and zoom settings.
           </p>
         </section>
+        <section className="panel form-stack">
+          <h2>Drinks</h2>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              checked={!state.preferences.hideHydrationTarget}
+              onChange={(e) => {
+                const shown = e.currentTarget.checked;
+                void update((s) => {
+                  if (shown) delete s.preferences.hideHydrationTarget;
+                  else s.preferences.hideHydrationTarget = true;
+                });
+              }}
+            />
+            Show a daily drinks target
+          </label>
+          <p className="muted">
+            A range from your weight and the day’s training. Drinks are still
+            counted when it is hidden, and the iPhone’s water reminders stop.
+          </p>
+        </section>
         <section className="panel backup-panel">
           <span className="program-index">
             <Download size={24} />

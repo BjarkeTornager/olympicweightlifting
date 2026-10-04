@@ -199,7 +199,19 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   amount when it isn't known, as the caffeine rule already did
     //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
-    "74336db6086b85a0a50bf3c0ef71f999488710348f9dc483100082c125eecdfb",
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 11, water): the drinks paragraph only. Beer, wine and spirits join
+    // the drinks with energy that also need a record_meal (alcohol has 7
+    // kcal a gram); they count towards the drinks total, but Coach never
+    // suggests alcohol to rehydrate. A usual size saved because no volume
+    // was given is marked estimated=true. The target is an estimated range
+    // that the athlete can hide, and the sentence about record_checkin
+    // waterMl goes, since check-ins no longer hold water
+    // (hydration.test.ts). The drinks target rule above stays in the
+    // paragraph. Restoring that paragraph reproduces the previous hash
+    // (74336db6…). Health, privacy and evidence text is otherwise
+    // unchanged.
+    "2457ba00c296405fce8774f8b2c1cbafeadac8c27d0ebe0986663e635c2effb0",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

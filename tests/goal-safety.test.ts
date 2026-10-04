@@ -123,6 +123,7 @@ test("goals saved under 18 show no body fat target, and the plan's notes, everyw
   assert.equal(state.nutrition.targets.goal, "maintain");
   const body = buildToday(state, 1, today, new Set()).body;
   assert.equal(body?.targetBodyFatPercent, undefined);
+  assert.ok(body?.goalNotes?.some((n) => n.startsWith("Under 18")));
   const goals = coachingContext(state, today).goals;
   assert.equal(goals?.targetBodyFatPercent, undefined);
   assert.equal(goals?.plan.direction, "maintain");

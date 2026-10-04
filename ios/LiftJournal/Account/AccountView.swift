@@ -305,7 +305,12 @@ private struct GoalsSection: View {
     } header: {
       Text("Goals")
     } footer: {
-      Text("Set with Coach. Ask Coach to change any of them.")
+      // The plan's own notes come first: why it holds weight or loses more
+      // slowly, and who to talk to.
+      VStack(alignment: .leading, spacing: 6) {
+        ForEach(body?.goalNotes ?? [], id: \.self) { Text($0) }
+        Text("Set with Coach. Ask Coach to change any of them.")
+      }
     }
     .themedRows()
   }

@@ -252,6 +252,9 @@ const bodyView = z
     focus: z.string().optional(),
     targetWeightKg: z.number().optional(),
     targetBodyFatPercent: z.number().optional(),
+    // The goal plan's notes, shown with the goals: why it holds weight or
+    // loses more slowly, and who to talk to. Optional, as new fields are.
+    goalNotes: z.array(z.string()).optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Body" });
@@ -750,6 +753,7 @@ function bodyForToday(state: JournalState, date: string) {
     focus: plan?.focus,
     targetWeightKg: state.profile.body?.targetWeightKg,
     targetBodyFatPercent: plan?.targetBodyFatPercent ?? undefined,
+    goalNotes: plan?.notes.length ? plan.notes : undefined,
   });
   return Object.keys(body).length ? body : undefined;
 }

@@ -4,6 +4,7 @@ import { buildTraining } from "./native-training";
 import { addDrink } from "./hydration";
 import type { CoachVisual } from "./coach-visuals";
 import { addSupplement } from "./supplements";
+import { prepareBodyGoals } from "./agent/prepare-records";
 import {
   buildCoach,
   buildJournal,
@@ -103,6 +104,27 @@ export function nativeFixtures() {
   lift.id = "7a1c3f8e-2a51-4c1e-9d0b-0c1f7c1e2a11";
   state.sessions.push(lift);
   const imported = new Set([run.id]);
+  // Goals for a 16-year-old who wants to lose weight, as the real plan
+  // reviews them: held at maintenance, with its note.
+  const goals = prepareBodyGoals(
+    emptyJournal(),
+    {
+      kind: "set_body_goals",
+      bodyGoals: {
+        age: 16,
+        sex: "female",
+        heightCm: 165,
+        weightKg: 60,
+        targetWeightKg: 55,
+        targetDate: null,
+        activity: "moderate",
+        trainingDays: 3,
+        sessionMinutes: 60,
+        experience: "new",
+      },
+    },
+    date,
+  );
   return {
     "today.json": buildToday(state, 12, date, imported),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
@@ -283,6 +305,26 @@ export function nativeFixtures() {
                 carbs: 253,
                 fat: 70,
               },
+            },
+          ],
+        },
+        {
+          id: "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a24",
+          question: "I'm 16 and want to get down to 55 kg",
+          photoIds: [],
+          createdAt: now.toISOString(),
+          status: "done",
+          reply: "Here is your plan to review.",
+          visuals: [],
+          proposals: [
+            {
+              id: "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a25",
+              title: goals.title,
+              detail: goals.detail,
+              expiresAt: "2026-09-27T18:00:00.000Z",
+              workout: null,
+              targets: goals.targets,
+              targetsBefore: goals.targetsBefore,
             },
           ],
         },

@@ -1295,6 +1295,10 @@ const receipt = z
     // What was or will be saved, item by item, shown when the athlete opens
     // the receipt. Optional, as new response fields are.
     entries: z.array(receiptEntry).optional(),
+    // Health and safety notes on the change, such as a goals plan's limits
+    // and who to talk to: in detail too, for older builds, and shown in
+    // full rather than folded away with it. Optional.
+    notes: z.array(z.string()).optional(),
   })
   .strict()
   .register(nativeResponses, { id: "CoachReceipt" });
@@ -1457,7 +1461,7 @@ export function receiptEntryView(
         value,
       });
     };
-    return {
+    return defined({
       title: entry.title,
       lines: [
         defined({
@@ -1473,7 +1477,11 @@ export function receiptEntryView(
         line("Carbs", "carbs"),
         line("Fat", "fat"),
       ],
-    };
+      // The goals check agreed in the same change (followUpGoals).
+      footnote: entry.plan
+        ? `Coach checks your weight trend with you from ${entry.plan.followUpDate}.`
+        : undefined,
+    });
   }
   if (entry.memory)
     return {
@@ -1537,6 +1545,7 @@ export function receiptView(
       : structured(p)
         ? [receiptEntryView(p)]
         : undefined,
+    notes: !batch && p.notes?.length ? p.notes : undefined,
   });
 }
 // A Coach visual flattened into one shape the app decodes tolerantly: the

@@ -74,6 +74,14 @@ export function duePlans(state: JournalState, date: string) {
     .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
 }
 
+// The check Coach agrees with a goals plan that loses, gains or recomposes
+// (prepareBodyGoals): about 3 weeks on, the weight trend against the plan,
+// as its calories are only a starting estimate. Any change from it is a
+// reviewed proposal; the saved targets never change by themselves.
+export const GOALS_FOLLOW_UP_TITLE =
+  "Check my weight trend against my goals plan";
+export const GOALS_FOLLOW_UP_DAYS = 21;
+
 export type CoachSuggestion = {
   id: string;
   title: string;
@@ -107,6 +115,19 @@ export function coachSuggestion(
   hidden: readonly string[] = [],
 ): CoachSuggestion {
   const plan = duePlans(state, date)[0];
+  if (
+    plan?.title === GOALS_FOLLOW_UP_TITLE &&
+    state.profile.coaching?.initiative !== "on-request"
+  )
+    return {
+      id: `plan-${plan.id}-${plan.updatedAt}`,
+      title: "Time to check your goals plan",
+      observation:
+        "You agreed to check your weight trend against your goals plan around now.",
+      invitation:
+        "We can look at your weigh-ins and food logs together. Nothing changes unless you choose to save it.",
+      prompt: `Let’s check in on my agreed plan “${plan.title}”: compare my weight trend with my goals plan.`,
+    };
   if (plan && state.profile.coaching?.initiative !== "on-request")
     return {
       id: `plan-${plan.id}-${plan.updatedAt}`,

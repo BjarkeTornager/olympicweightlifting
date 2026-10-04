@@ -260,7 +260,32 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Removing that paragraph and those two goal-setup additions
     // reproduces the previous hash (b22e1af2…). Health, privacy and
     // evidence text is otherwise unchanged.
-    "d1edcd618961a4fb1a9ff6bfe070260c44a06a114441f1fcf4af9da5609a3656",
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 13, Coach goal-setup flow):
+    // - Goal setup's second message adds, for a goal weight below the
+    //   current one, whether it is a competition weight class and when the
+    //   weigh-in is (weightClass), and, for a goal that loses, recomposes or
+    //   aims very lean, three optional low-energy questions (stress
+    //   fracture, eating disorder or eating out of control, and for women
+    //   and anyone who'd rather not give their sex without hormonal
+    //   contraception, missed periods or cycles over 35 days), kept only as
+    //   a yes or no with the date, never as a diagnosis (energySigns).
+    //   Height and weights are passed in the athlete's own units for the
+    //   app to convert. Added sentences say what the plan then does: any
+    //   yes holds maintenance with a sports doctor or sports dietitian,
+    //   energyCheckDue asks again after 3 months at goal setup or a
+    //   follow-up only, a weight class is cut to its limit by the weigh-in
+    //   with no last-minute cut, the calories are a starting estimate, and
+    //   a plan that changes weight agrees a check about 3 weeks on.
+    // - One added goals-skill paragraph for that check: read the weight
+    //   trend and food logs, offer at most one reviewed change (current
+    //   weight, or at most 200 kcal, never below goals.plan.floorKcal),
+    //   never cut further for slow loss before checking the food logs are
+    //   complete, and ask the low-energy questions again when due.
+    // Removing that paragraph and those goal-setup additions reproduces
+    // the previous hash (d1edcd61…). Health, privacy and evidence text is
+    // otherwise unchanged.
+    "13c7f73ce9690aeb0ae4fa89fd995ed4a1d10bfa19ce749c086ad0b89d02c1bf",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -384,8 +409,11 @@ test("Coach quotes the plan's own rates and protein", () => {
   const losing = `${percent(lose.lean)}–${percent(lose.higher)} % of bodyweight a week`;
   const gaining = `${percent(gain.experienced)}–${percent(gain.new)} %`;
   const recomposing = `at most ${percent(recomposition)} %`;
-  const [setup, coaching, ...rest] = skillInstructions(["goals"]).split("\n");
+  const [setup, followUp, coaching, ...rest] = skillInstructions([
+    "goals",
+  ]).split("\n");
   assert.equal(rest.length, 0);
+  assert.ok(followUp.startsWith("At a goals follow-up"));
   // Goal setup describes the calculation.
   assert.ok(setup.includes(`losing ${losing} depending on body fat`));
   assert.ok(setup.includes(`gaining ${gaining} by experience`));
@@ -458,4 +486,50 @@ test("site help says Goals calculates calories and macros", () => {
   );
   assert.match(siteHelp.nutrition, /starting estimates, not measured needs/);
   assert.match(siteHelp.nutrition, /There is no food database integration/);
+});
+
+test("goal setup asks the weight class and the low-energy questions, and the goals check offers only reviewed changes", () => {
+  const [setup, followUp] = skillInstructions(["goals"]).split("\n");
+  // A goal below the current weight may be a weight class to make.
+  assert.ok(
+    setup.includes(
+      "whether it's a competition weight class and when the weigh-in is (weightClass, with the weigh-in as targetDate)",
+    ),
+  );
+  // Before a deficit, the three questions: optional, never a diagnosis,
+  // and kept only as a yes or no with the date.
+  assert.ok(
+    setup.includes(
+      "When the goal loses weight, recomposes or aims for very lean body fat, also ask three optional yes/no questions, saying the answers are kept only as a yes or no with the date so the plan stays safe, never as a diagnosis",
+    ),
+  );
+  assert.match(setup, /any stress fracture in the last 2 years/);
+  assert.match(
+    setup,
+    /who don't use hormonal contraception, whether they've missed a period or had cycles longer than 35 days in the last 3 months/,
+  );
+  assert.match(
+    setup,
+    /With any yes to the low-energy questions it holds their weight at maintenance and suggests a sports doctor or sports dietitian/,
+  );
+  assert.match(setup, /never in the middle of logging/);
+  // Imperial units go to the app as given.
+  assert.match(setup, /never convert them yourself/);
+  // A starting estimate, checked about 3 weeks on.
+  assert.match(setup, /Call the calories a starting estimate/);
+  assert.match(setup, /never a last-minute cut of water or food/);
+  // The check: one reviewed change, never below the floor, and never a
+  // further cut for slow loss before the food logs are checked.
+  assert.ok(followUp.startsWith("At a goals follow-up"));
+  assert.match(followUp, /offer one reviewed change/);
+  assert.match(followUp, /at most 200 kcal/);
+  assert.match(followUp, /never below goals\.plan\.floorKcal/);
+  assert.match(
+    followUp,
+    /Never answer slow loss by cutting further without first checking the food logs are complete/,
+  );
+  // A message about a weigh-in loads the goals skill.
+  assert.ok(skills.goals.signal?.test("My weigh-in is in 6 weeks"));
+  assert.ok(skills.goals.signal?.test("I compete in the 81 kg weight class"));
+  assert.ok(skills.goals.signal?.test("Indvejningen er om en måned"));
 });

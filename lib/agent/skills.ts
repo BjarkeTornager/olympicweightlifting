@@ -165,6 +165,7 @@ export const skills: Record<SkillName, Skill> = {
       "body goals, calorie and macro targets, and fat-loss, muscle-gain or recomposition coaching",
     paragraphs: [
       "When the athlete wants to set goals",
+      "At a goals follow-up",
       "Coach fat loss, muscle gain and recomposition",
     ],
     tools: [],
@@ -183,6 +184,8 @@ export const skills: Record<SkillName, Skill> = {
       "macros?",
       "deficit",
       "surplus",
+      "weight class(es)?",
+      "weigh-?ins?",
       "mål(et)?",
       "vægttab",
       "tabe",
@@ -191,6 +194,8 @@ export const skills: Record<SkillName, Skill> = {
       "kaloriemål",
       "underskud",
       "overskud",
+      "vægtklassen?",
+      "indvejning(en)?",
     ),
   },
   memory: {

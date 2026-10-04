@@ -11,7 +11,11 @@ import {
 } from "../training-program-schema";
 import { checkinPatchSchema } from "../health";
 import { mealInputSchema, dietTargetsUpdateSchema } from "../nutrition";
-import { bodyGoalsRequestSchema } from "../body-goals";
+import {
+  bodyGoalsRequestSchema,
+  coachGoalsSchema,
+  metricGoals,
+} from "../body-goals";
 import { bodyFatInputSchema } from "../body-composition";
 import { drinkInputSchema } from "../hydration";
 import { supplementInputSchema } from "../supplements";
@@ -261,7 +265,8 @@ const singleActionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("set_body_goals"),
-      bodyGoals: bodyGoalsRequestSchema,
+      // Feet and inches or pounds, as Coach may pass them, in cm and kg.
+      bodyGoals: z.preprocess(metricGoals, bodyGoalsRequestSchema),
     })
     .strict(),
   z
@@ -487,10 +492,10 @@ export const actionToolSchema = z
         "For log_supplement: one supplement as the athlete named it (vitamin D, multivitamin, creatine, fish oil, iron, magnesium…) with the amount only if they said it ('1000 IU', '5 g', '2 capsules'). Log each supplement separately.",
       ),
     supplementId: z.string().uuid().optional(),
-    bodyGoals: bodyGoalsRequestSchema
+    bodyGoals: coachGoalsSchema
       .optional()
       .describe(
-        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights. activity is movement outside training (low mostly sitting, moderate on their feet some, high physical work, very_high heavy manual work); sessionMinutes is how long a session usually lasts. sessionMinutes and experience left out keep their saved values. Optional: focus (lose_fat, build_muscle, recomposition or maintain) as they describe it, bodyFatPercent if they state a current reading, and targetBodyFatPercent if they name one (neither under 18: the plan uses no body fat then). pregnancy (pregnant, breastfeeding, or neither when they no longer are), weeksSinceBirth (while breastfeeding, the baby's age in weeks) and limitProtein (true for kidney disease or a doctor's advice to limit protein, false when they say no or no longer) only from the athlete's answers. confirmLowWeight true only after the plan's note asked them to confirm losing towards a weight just under the healthy range and they said they still want to.",
+        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights. Height and weights in the athlete's own units, never converted by you: heightCm, weightKg and targetWeightKg, or heightFeet with heightInches (or heightInches alone), weightLb and targetWeightLb, which the app converts. activity is movement outside training (low mostly sitting, moderate on their feet some, high physical work, very_high heavy manual work); sessionMinutes is how long a session usually lasts. sessionMinutes and experience left out keep their saved values. Optional: focus (lose_fat, build_muscle, recomposition or maintain) as they describe it, bodyFatPercent if they state a current reading, and targetBodyFatPercent if they name one (neither under 18: the plan uses no body fat then). pregnancy (pregnant, breastfeeding, or neither when they no longer are), weeksSinceBirth (while breastfeeding, the baby's age in weeks) and limitProtein (true for kidney disease or a doctor's advice to limit protein, false when they say no or no longer) only from the athlete's answers. confirmLowWeight true only after the plan's note asked them to confirm losing towards a weight just under the healthy range and they said they still want to. energySigns only after asking the low-energy questions: true for any yes, false for no to all, null if they'd rather not answer after all. weightClass true when they say the goal weight is a competition weight class, with the weigh-in as targetDate; false when it no longer is.",
       ),
     bodyFat: bodyFatInputSchema
       .optional()

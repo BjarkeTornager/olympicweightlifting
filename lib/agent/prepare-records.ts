@@ -13,7 +13,18 @@ import {
   supplementText,
   supplementsForDay,
 } from "../supplements";
-import { applyGoals, describePlan, splitGoals } from "../body-goals";
+import {
+  applyGoals,
+  describePlan,
+  splitGoals,
+  type GoalPlan,
+} from "../body-goals";
+import {
+  coachSettings,
+  GOALS_FOLLOW_UP_DAYS,
+  GOALS_FOLLOW_UP_TITLE,
+  type CoachPlan,
+} from "../coaching";
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
 import { offsetDate } from "../health";
 import {
@@ -164,6 +175,49 @@ export function prepareDietTargets(
   };
 }
 
+// Agrees the goals check with a plan that loses, gains or recomposes, in
+// the same review as the goals: saving them again moves an active check on
+// rather than adding another. None for a plan that holds weight, nor beside
+// ten active plans (or a hundred in all), the most the profile keeps.
+function followUpGoals(
+  state: JournalState,
+  plan: GoalPlan,
+  today: string,
+): CoachPlan | null {
+  if (!plan.dailyTargets || plan.calories === plan.maintenanceKcal) return null;
+  const coaching = coachSettings(state);
+  const plans = coaching.plans ?? [];
+  const existing = plans.find(
+    (p) => p.status === "active" && p.title === GOALS_FOLLOW_UP_TITLE,
+  );
+  if (
+    !existing &&
+    (plans.filter((p) => p.status === "active").length >= 10 ||
+      plans.length >= 100)
+  )
+    return null;
+  const change =
+    plan.direction === "maintain"
+      ? "recomposition at a steady weight"
+      : `${plan.direction === "lose" ? "losing" : "gaining"} about ${plan.weeklyChangeKg} kg a week`;
+  const now = new Date().toISOString();
+  const followUp: CoachPlan = {
+    id: existing?.id ?? uid(),
+    title: GOALS_FOLLOW_UP_TITLE,
+    notes: `Goals saved on ${today}: ${change} at ${plan.calories.toLocaleString("en-GB")} kcal a day, a starting estimate. Compare the weekly average weight with it, check the food logs are complete first, and offer any change for review.`,
+    followUpDate: offsetDate(today, GOALS_FOLLOW_UP_DAYS),
+    status: "active",
+    outcome: "",
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  coaching.plans = [...plans.filter((p) => p.id !== followUp.id), followUp];
+  return followUp;
+}
+
+// Coach's goals change: the plan, and with one that loses, gains or
+// recomposes, the agreed check of the weight trend about 3 weeks on
+// (followUpGoals), in the same review.
 export function prepareBodyGoals(
   next: JournalState,
   action: ActionOf<"set_body_goals">,
@@ -171,6 +225,7 @@ export function prepareBodyGoals(
 ): PreparedChange {
   const before = next.nutrition.targets;
   const plan = applyGoals(next, action.bodyGoals, currentDate);
+  const followUp = followUpGoals(next, plan, currentDate);
   return {
     targets: next.nutrition.targets,
     targetsBefore: before,
@@ -181,7 +236,14 @@ export function prepareBodyGoals(
       ...plan.changes,
       describePlan(splitGoals(action.bodyGoals).goals, plan),
       ...plan.notes,
+      ...(followUp
+        ? [
+            `These numbers are a starting estimate: from ${followUp.followUpDate}, about 3 weeks on, Coach can check them against your weight trend with you.`,
+          ]
+        : []),
     ].join(" "),
+    ...(followUp ? { plan: followUp } : {}),
+    ...(plan.safetyNotes.length ? { notes: plan.safetyNotes } : {}),
   };
 }
 

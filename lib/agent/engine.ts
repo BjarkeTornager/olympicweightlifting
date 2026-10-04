@@ -201,6 +201,7 @@ function prepareChange(
     ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
     ...(prepared.drink ? { drink: prepared.drink } : {}),
+    ...(prepared.notes?.length ? { notes: prepared.notes } : {}),
     ...(prepared.entries ? { entries: prepared.entries } : {}),
     ...(prepared.memory ? { memory: prepared.memory } : {}),
     ...(prepared.plan ? { plan: prepared.plan } : {}),

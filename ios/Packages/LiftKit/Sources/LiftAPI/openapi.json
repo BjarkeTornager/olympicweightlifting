@@ -822,6 +822,12 @@
             "items": {
               "$ref": "#/components/schemas/CoachReceiptEntry"
             }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

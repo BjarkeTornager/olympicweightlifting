@@ -342,6 +342,7 @@ export function nativeFixtures() {
               workout: null,
               targets: goals.targets,
               targetsBefore: goals.targetsBefore,
+              notes: goals.notes,
             },
           ],
         },

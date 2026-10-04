@@ -93,10 +93,15 @@ test("under 18 the form asks no body fat, and breastfeeding holds weight", async
   await expect(plan).toContainText(
     "Under 18 the plan doesn't set a calorie deficit",
   );
-  // An adult loses weight, unless she is breastfeeding.
+  // An adult loses weight, unless she is pregnant or breastfeeding.
   await dialog.getByLabel("Age").fill("31");
   await expect(dialog.getByLabel("Body fat now (%, optional)")).toBeVisible();
   await expect(plan).toContainText("Lose about");
+  await dialog.getByLabel("Pregnant or breastfeeding").selectOption("pregnant");
+  await expect(plan).toContainText(
+    "No weight goal, and no daily calorie or macro targets, while you're pregnant",
+  );
+  await expect(plan).toContainText("midwife or doctor");
   await dialog
     .getByLabel("Pregnant or breastfeeding")
     .selectOption("breastfeeding");

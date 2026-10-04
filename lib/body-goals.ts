@@ -150,6 +150,10 @@ export type GoalPlan = {
   // A loss towards a weight just under the healthy range waits for the
   // athlete to confirm it; until then the plan holds their weight.
   confirmToLose: boolean;
+  // False in pregnancy, when the plan sets no weight goal and saves no daily
+  // calorie or macro targets: energy needs rise by trimester, and the
+  // midwife or doctor advises on eating.
+  dailyTargets: boolean;
   sessionsPerWeek: number;
   notes: string[];
 };
@@ -167,6 +171,7 @@ export function planGoals(
   const notes: string[] = [];
   const minor = g.age < 18;
   const pregnancy = composition.pregnancy ?? null;
+  const pregnant = pregnancy === "pregnant";
   const limits = leannessLimits(g.sex);
   const lowestHealthy =
     g.sex === "male"
@@ -176,7 +181,7 @@ export function planGoals(
         : "about 5% for men, 12% for women";
   // Body fat stays out of the sums and the goals under 18, when it is
   // measured only for medical reasons, and is paused in pregnancy.
-  const usesBodyFat = !minor && pregnancy !== "pregnant";
+  const usesBodyFat = !minor && !pregnant;
   const reading = composition.bodyFatPercent ?? null;
   const bodyFat = usesBodyFat ? reading : null;
   const targetBodyFat = usesBodyFat
@@ -241,24 +246,37 @@ export function planGoals(
       );
   }
   // A reading logged under 18 isn't used, but still flags a goal far too
-  // lean for a teenager (under about 7 % for boys, 14 % for girls).
+  // lean for a teenager (under about 7 % for boys, 14 % for girls, and the
+  // girls' level without a stated sex).
   const tooLeanForTeen =
     minor &&
     reading != null &&
     wanted === "lose" &&
     100 * (1 - (g.weightKg * (1 - reading / 100)) / g.targetWeightKg) <
-      (g.sex === "male" ? 7 : g.sex === "female" ? 14 : 10.5);
+      (g.sex === "male" ? 7 : 14);
 
   const remaining = towards - g.weightKg;
+  // In pregnancy the plan sets no weight goal: gaining is a healthy part of
+  // it.
   let direction: GoalPlan["direction"] =
-    Math.abs(remaining) < 0.5 ? "maintain" : remaining < 0 ? "lose" : "gain";
+    pregnant || Math.abs(remaining) < 0.5
+      ? "maintain"
+      : remaining < 0
+        ? "lose"
+        : "gain";
   // A target date less than a week away, or past, is too close to plan a
-  // change: the plan holds the athlete's weight.
+  // change, a recomposition's small cut included: the plan holds the
+  // athlete's weight.
   const days = g.targetDate
     ? (Date.parse(g.targetDate) - Date.parse(today)) / 86400000
     : null;
   let held = false;
-  if (direction !== "maintain" && days != null && days < 7) {
+  if (
+    (direction !== "maintain" || focus === "recomposition") &&
+    !pregnant &&
+    days != null &&
+    days < 7
+  ) {
     notes.push(
       days < 0
         ? "Your target date has passed, so the plan holds your weight for now. Review your goals to set a new date, or none."
@@ -270,8 +288,9 @@ export function planGoals(
 
   // Whether the goal asks for a deficit, and whether the plan may set one.
   const cutting =
-    direction === "lose" ||
-    (focus === "recomposition" && direction === "maintain" && !held);
+    !pregnant &&
+    (direction === "lose" ||
+      (focus === "recomposition" && direction === "maintain" && !held));
   let cut = cutting;
   let confirmToLose = false;
   let slowly = false;
@@ -286,9 +305,9 @@ export function planGoals(
       );
     cut = false;
   }
-  if (pregnancy === "pregnant") {
+  if (pregnant) {
     notes.push(
-      "In pregnancy the plan sets no deficit and no body fat goal: gaining weight is a normal, healthy part of pregnancy, and energy needs rise as it goes on. Your midwife or doctor can advise you on eating and training.",
+      "In pregnancy the plan sets no weight goal and no daily calorie, protein or body fat targets: gaining weight is a normal, healthy part of pregnancy, and energy needs rise as it goes on, mostly in the second and third trimesters. Your midwife or doctor can advise you on eating and training.",
     );
     cut = false;
   } else if (pregnancy === "breastfeeding") {
@@ -305,8 +324,8 @@ export function planGoals(
   const underweightGoal =
     "That goal weight is below the healthy range for your height. Talk it through with a doctor or dietitian before aiming for it.";
   if (minor) {
-    if (bmiGoal < 18.5) notes.push(underweightGoal);
-  } else if (pregnancy !== "pregnant") {
+    if (bmiGoal < 18.5 && !pregnant) notes.push(underweightGoal);
+  } else if (!pregnant) {
     const goalLower = bmiGoal <= bmiNow;
     const lower = goalLower ? "That goal weight" : "Your weight";
     const before = goalLower ? " before aiming for it" : "";
@@ -493,18 +512,22 @@ export function planGoals(
     weeksToGoal: weeks,
     towardsKg: towards,
     confirmToLose,
+    dailyTargets: !pregnant,
     sessionsPerWeek,
     notes,
   };
 }
 
+// The daily targets the plan saves; in pregnancy none, so every surface
+// reads "No daily target".
 export function planTargets(plan: GoalPlan): z.infer<typeof dietTargetsSchema> {
+  const set = plan.dailyTargets;
   return {
     goal: plan.direction,
-    calories: plan.calories,
-    protein: plan.protein,
-    carbs: plan.carbs,
-    fat: plan.fat,
+    calories: set ? plan.calories : null,
+    protein: set ? plan.protein : null,
+    carbs: set ? plan.carbs : null,
+    fat: set ? plan.fat : null,
   };
 }
 
@@ -586,6 +609,8 @@ export function applyGoals(
 }
 
 export function describePlan(goals: BodyGoalsInput, plan: GoalPlan) {
+  if (!plan.dailyTargets)
+    return `No weight goal, and no daily calorie or macro targets, while you're pregnant. ${describeSessions(plan.sessionsPerWeek, "training session")}.`;
   const change =
     plan.direction === "maintain"
       ? plan.focus === "recomposition"

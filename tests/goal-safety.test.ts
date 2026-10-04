@@ -6,6 +6,7 @@ import {
   describePlan,
   planForState,
   planGoals,
+  planTargets,
   type BodyGoalsInput,
   type GoalPlan,
 } from "../lib/body-goals";
@@ -135,7 +136,7 @@ test("goals saved under 18 show no body fat target, and the plan's notes, everyw
   );
 });
 
-test("pregnancy and breastfeeding: no deficit, the lactation allowance and a midwife", () => {
+test("pregnancy: no weight goal and no daily targets; breastfeeding: the lactation allowance and no deficit", () => {
   const plain = planGoals(mother, today);
   assert.equal(plain.direction, "lose");
   const pregnant = planGoals(mother, today, {
@@ -146,12 +147,41 @@ test("pregnancy and breastfeeding: no deficit, the lactation allowance and a mid
   assert.ok(holds(pregnant));
   assert.equal(pregnant.bodyFatPercent, null);
   assert.equal(pregnant.targetBodyFatPercent, null);
-  assert.ok(pregnant.notes.some((n) => /midwife or doctor/.test(n)));
-  // Gaining is no deficit, so it stays as planned.
-  const gaining = planGoals({ ...mother, targetWeightKg: 76 }, today, {
-    pregnancy: "pregnant",
+  // Needs rise by trimester, so the plan saves no daily target that would
+  // turn into a deficit later on, and says so in words.
+  assert.equal(pregnant.dailyTargets, false);
+  assert.deepEqual(planTargets(pregnant), {
+    goal: "maintain",
+    calories: null,
+    protein: null,
+    carbs: null,
+    fat: null,
   });
-  assert.ok(gaining.calories > gaining.maintenanceKcal);
+  assert.match(
+    describePlan(mother, pregnant),
+    /^No weight goal, and no daily calorie or macro targets, while you're pregnant\. 4 training sessions a week\.$/,
+  );
+  const note = pregnant.notes.find((n) => n.startsWith("In pregnancy"));
+  assert.match(note ?? "", /energy needs rise as it goes on/);
+  assert.match(note ?? "", /midwife or doctor/);
+  assert.doesNotMatch(note ?? "", /deficit/);
+  // A goal weight above, a target date or recomposition plan nothing either.
+  for (const plan of [
+    planGoals({ ...mother, targetWeightKg: 76 }, today, {
+      pregnancy: "pregnant",
+    }),
+    planGoals({ ...mother, targetDate: "2026-09-20" }, today, {
+      pregnancy: "pregnant",
+    }),
+    planGoals({ ...mother, targetWeightKg: 70 }, today, {
+      pregnancy: "pregnant",
+      focus: "recomposition",
+    }),
+  ]) {
+    assert.ok(holds(plan));
+    assert.equal(planTargets(plan).calories, null);
+    assert.ok(!plan.notes.some((n) => /target date|holds your weight/.test(n)));
+  }
   // Making milk takes about 500 kcal a day, and there's no deficit.
   const feeding = planGoals(mother, today, { pregnancy: "breastfeeding" });
   assert.equal(feeding.maintenanceKcal, plain.maintenanceKcal + 500);
@@ -161,6 +191,32 @@ test("pregnancy and breastfeeding: no deficit, the lactation allowance and a mid
     feeding.notes.some(
       (n) => /milk supply/.test(n) && /midwife or health visitor/.test(n),
     ),
+  );
+});
+
+test("goals saved in pregnancy set no daily target anywhere", () => {
+  const state = emptyJournal();
+  applyGoals(state, { ...mother, pregnancy: "pregnant" }, today);
+  assert.deepEqual(state.nutrition.targets, {
+    goal: "maintain",
+    calories: null,
+    protein: null,
+    carbs: null,
+    fat: null,
+  });
+  // The iPhone shows no Energy or Protein target, and the plan's note.
+  const native = buildToday(state, 1, today, new Set());
+  assert.equal(native.nutrition.targetCalories, undefined);
+  assert.equal(native.nutrition.targetProtein, undefined);
+  assert.ok(native.body?.goalNotes?.some((n) => n.startsWith("In pregnancy")));
+  // Coach gets the plan without figures to quote as a target.
+  const plan = coachingContext(state, today).goals?.plan;
+  assert.equal(plan?.dailyTargets, false);
+  assert.equal(plan?.calories, undefined);
+  assert.equal(plan?.protein, undefined);
+  assert.match(
+    voiceContext(state, today).goals ?? "",
+    /^No weight goal, and no daily calorie or macro targets, while you're pregnant\./,
   );
 });
 
@@ -309,7 +365,10 @@ test("a goal weight is checked against lean mass and the lowest healthy body fat
       ),
     ),
   );
-  // Without a stated sex, both levels are named.
+  // Without a stated sex, both levels are named, and the women's level and
+  // very lean limit apply, so no one heads leaner than is safe for them. A
+  // woman at 60 kg and 22 % (46.8 kg lean) who leaves the default and aims
+  // for 52 kg (about 10 %) goes only to 55.7 kg, as she would as a woman.
   const unstated = planGoals(
     { ...man, sex: "unspecified", targetWeightKg: 75 },
     today,
@@ -317,6 +376,36 @@ test("a goal weight is checked against lean mass and the lowest healthy body fat
   );
   assert.ok(
     unstated.notes.some((n) => /about 5% for men, 12% for women/.test(n)),
+  );
+  const unsaid = {
+    ...athlete,
+    sex: "unspecified" as const,
+    age: 28,
+    heightCm: 168,
+    weightKg: 60,
+    targetWeightKg: 52,
+  };
+  for (const sex of ["unspecified", "female"] as const) {
+    const plan = planGoals({ ...unsaid, sex }, today, {
+      bodyFatPercent: 22,
+      lowWeightConfirmed: true,
+    });
+    assert.equal(plan.towardsKg, 55.7, sex);
+    assert.ok(plan.notes.some((n) => /below the lowest healthy level/.test(n)));
+  }
+  // 8 % is below the lowest level the note names for women.
+  assert.ok(
+    planGoals(unsaid, today, { targetBodyFatPercent: 8 }).notes.some((n) =>
+      n.startsWith(
+        "8% body fat is below the lowest healthy level (about 5% for men, 12% for women)",
+      ),
+    ),
+  );
+  // Under 18 the girls' level: 53 kg would be about 12 % at 60 kg and 22 %.
+  assert.ok(
+    planGoals({ ...unsaid, age: 16, targetWeightKg: 53 }, today, {
+      bodyFatPercent: 22,
+    }).notes.some((n) => /very low body fat for a teenager/.test(n)),
   );
   // Between the lowest level and very lean: planned, with the peak note.
   const veryLean = planGoals({ ...man, targetWeightKg: 77 }, today, {
@@ -418,7 +507,8 @@ test("a target date under a week away, or past, holds weight with a note", () =>
     assert.ok(holds(soon), targetDate);
     assert.ok(soon.notes.some((n) => /less than a week away/.test(n)));
   }
-  // Gaining too, and recomposition makes no small cut meanwhile.
+  // Gaining too, and recomposition makes no small cut meanwhile, also at a
+  // steady weight.
   assert.ok(
     holds(
       planGoals(
@@ -433,6 +523,24 @@ test("a target date under a week away, or past, holds weight with a note", () =>
         focus: "recomposition",
       }),
     ),
+  );
+  for (const targetDate of ["2026-09-01", "2026-09-30"]) {
+    const steady = planGoals(
+      { ...athlete, targetWeightKg: 88, targetDate },
+      today,
+      { focus: "recomposition" },
+    );
+    assert.ok(holds(steady), targetDate);
+    assert.ok(
+      steady.notes.some((n) => /target date (has passed|is less than)/.test(n)),
+    );
+  }
+  // With no date, or one far enough off, it keeps its small cut.
+  assert.equal(
+    planGoals({ ...athlete, targetWeightKg: 88 }, today, {
+      focus: "recomposition",
+    }).calories,
+    2690,
   );
   // A week away is enough to plan, at no more than the sustainable rate.
   const week = planGoals({ ...athlete, targetDate: "2026-10-03" }, today);
@@ -515,7 +623,7 @@ test("on a wide grid every plan keeps to the floor, the gates and the deficit ca
   assert.equal(plans, 7 * 3 * 4 * 7 * 5 * 3 * 8 * 4 * 3);
 });
 
-test("pregnancy and breastfeeding never plan a deficit, across the grid", () => {
+test("pregnancy and breastfeeding never plan a deficit, and pregnancy no target, across the grid", () => {
   for (const pregnancy of ["pregnant", "breastfeeding"] as const)
     for (const sex of ["female", "unspecified"] as const)
       for (const age of [16, 25, 40, 55])
@@ -540,10 +648,24 @@ test("pregnancy and breastfeeding never plan a deficit, across the grid", () => 
                       today,
                       { pregnancy, bodyFatPercent },
                     );
+                    const where = JSON.stringify({
+                      sex,
+                      age,
+                      heightCm,
+                      weightKg,
+                      change,
+                      activity,
+                      trainingDays,
+                      bodyFatPercent,
+                    });
                     if (plan.calories < plan.maintenanceKcal)
-                      assert.fail(
-                        `${pregnancy} deficit: ${JSON.stringify({ sex, age, heightCm, weightKg, change, activity, trainingDays, bodyFatPercent })}`,
-                      );
+                      assert.fail(`${pregnancy} deficit: ${where}`);
+                    // In pregnancy no target at all, so none to fall short.
+                    if (
+                      pregnancy === "pregnant" &&
+                      planTargets(plan).calories != null
+                    )
+                      assert.fail(`a pregnancy target: ${where}`);
                   }
 });
 

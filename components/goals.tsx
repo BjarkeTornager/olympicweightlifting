@@ -47,7 +47,14 @@ export function GoalsCard({
               </small>
             </span>
             <span className="today-record-value">
-              {plan.calories.toLocaleString("en-GB")} <small>kcal/day</small>
+              {plan.dailyTargets ? (
+                <>
+                  {plan.calories.toLocaleString("en-GB")}{" "}
+                  <small>kcal/day</small>
+                </>
+              ) : (
+                <small>No daily target</small>
+              )}
             </span>
             <ChevronRight size={17} aria-hidden="true" />
           </button>
@@ -306,8 +313,9 @@ function GoalsForm({
       </div>
       {asksPregnancy && (
         <p className="fine-print">
-          Optional. Kept with your goals only so the plan never sets a deficit
-          in pregnancy or while breastfeeding; choose Neither to remove it.
+          Optional. Kept with your goals only so the plan sets no targets in
+          pregnancy and no deficit while breastfeeding; choose Neither to remove
+          it.
         </p>
       )}
       {plan && split ? (

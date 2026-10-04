@@ -11,7 +11,9 @@ import {
   goalsForState,
   planForState,
   planGoals,
+  planTargets,
   proteinPerKg,
+  TARGETS_DIFFER,
   weeklyRates,
   type BodyGoalsInput,
   type GoalPlan,
@@ -23,6 +25,7 @@ import { journalSchema } from "../lib/model";
 import { voiceAction } from "../lib/voice-actions";
 import { dayForCoach } from "../lib/journal-summary";
 import { voiceContext } from "../lib/voice-checkin";
+import { buildToday } from "../lib/native-api";
 
 const today = "2026-09-26";
 const athlete: BodyGoalsInput = {
@@ -218,6 +221,48 @@ test("carbohydrate stays at 130 g or more: fat gives first, then protein, then c
   assert.ok(!calories.notes.some((n) => /resting energy and training/.test(n)));
   // With room to spare, no note.
   assert.equal(note(planGoals(athlete, today)), undefined);
+});
+
+test("the plan's notes on macros show only beside the plan's own macros", () => {
+  const goalNotes = (state: ReturnType<typeof emptyJournal>) =>
+    buildToday(state, 1, today, new Set()).body?.goalNotes;
+  const state = emptyJournal();
+  const plan = applyGoals(
+    state,
+    {
+      ...athlete,
+      sex: "female",
+      age: 50,
+      heightCm: 150,
+      weightKg: 55,
+      targetWeightKg: 44,
+      activity: "low",
+      trainingDays: 1,
+    },
+    today,
+  );
+  assert.ok(goalNotes(state)?.some((n) => n.startsWith("To keep 130 g")));
+  // The same calories with an older plan's macros (fat at 0.8 g/kg, so
+  // 101 g of carbohydrate): the line that they differ, not the note.
+  state.nutrition.targets = {
+    ...state.nutrition.targets,
+    fat: 44,
+    carbs: 101,
+  };
+  assert.deepEqual(goalNotes(state), [TARGETS_DIFFER]);
+  // A few grams either way, as the next body fat reading moves them, keep
+  // the notes.
+  state.nutrition.targets = {
+    ...planTargets(plan),
+    protein: plan.protein + 5,
+    carbs: plan.carbs - 5,
+  };
+  assert.deepEqual(goalNotes(state), plan.notes);
+  // A protein target well off the plan's gets the line too, as does none.
+  for (const protein of [plan.protein + 30, null]) {
+    state.nutrition.targets = { ...planTargets(plan), protein };
+    assert.deepEqual(goalNotes(state), [TARGETS_DIFFER], `${protein}`);
+  }
 });
 
 test("on the safety grid the macros add up, fat stays within 20-35 % of energy (25-35 % under 18), carbohydrate is at least 130 g, and protein at most 2.0 g/kg of the adjusted weight at a BMI of 30 or more", () => {

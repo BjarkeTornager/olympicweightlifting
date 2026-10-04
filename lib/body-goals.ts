@@ -698,18 +698,26 @@ export const TARGETS_DIFFER =
 
 // The plan's notes describe the saved daily targets only when they are the
 // plan's: the same goal, and calories within 100 kcal, as each new body fat
-// reading moves the plan by a few. Otherwise one line says they differ, so
-// a note never contradicts the target shown beside it.
+// reading moves the plan by a few, with each macro within as much energy
+// (25 g of protein or carbohydrate, 11 g of fat), so a note about protein
+// or carbohydrate never sits beside a macro from an older plan. Otherwise
+// one line says they differ, so a note never contradicts the target shown
+// beside it.
 export function notesForTargets(
   plan: GoalPlan,
   targets: z.infer<typeof dietTargetsSchema>,
 ) {
-  const planned = planTargets(plan).calories;
-  const saved = dailyTarget(targets.calories);
-  const close =
-    planned == null || saved == null
-      ? planned === saved
-      : Math.abs(planned - saved) <= 100;
+  const planned = planTargets(plan);
+  const kcalPer = { calories: 1, protein: 4, carbs: 4, fat: 9 };
+  const close = (Object.keys(kcalPer) as (keyof typeof kcalPer)[]).every(
+    (key) => {
+      const a = planned[key];
+      const b = dailyTarget(targets[key]);
+      return a == null || b == null
+        ? a === b
+        : Math.abs(a - b) * kcalPer[key] <= 100;
+    },
+  );
   return plan.direction === targets.goal && close
     ? plan.notes
     : [TARGETS_DIFFER];

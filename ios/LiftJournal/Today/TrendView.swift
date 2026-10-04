@@ -280,8 +280,8 @@ struct TrendView: View {
           .interpolationMethod(.stepCenter)
           .foregroundStyle(Theme.ink.opacity(0.7))
           .lineStyle(StrokeStyle(lineWidth: 1, dash: [1.5, 2.5]))
-          .annotation(position: .top, alignment: .trailing) {
-            if index == steps.count - 1 {
+          .annotation(position: .top, alignment: .leading) {
+            if index == 0 {
               Text("Target").font(.caption2.weight(.medium)).foregroundStyle(Theme.inkSecondary)
             }
           }

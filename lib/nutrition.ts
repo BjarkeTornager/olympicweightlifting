@@ -135,6 +135,17 @@ export function mergeDietTargets(
 export function dailyTarget(value: number | null | undefined) {
   return value != null && value > 0 ? value : null;
 }
+// The saved targets as Coach reads them, with a target of 0 as none, so it
+// never compares a day against "0 kcal".
+export function dailyTargets(targets: DietTargets): DietTargets {
+  return {
+    goal: targets.goal,
+    calories: dailyTarget(targets.calories),
+    protein: dailyTarget(targets.protein),
+    carbs: dailyTarget(targets.carbs),
+    fat: dailyTarget(targets.fat),
+  };
+}
 // What is left of a daily target, or that there is none.
 export function targetProgress(
   eaten: number,
@@ -224,7 +235,7 @@ export function nutritionSummary(
   const meals = nutrition.meals.filter((m) => m.date >= from && m.date <= to);
   const dates = [...new Set(meals.map((m) => m.date))].sort();
   return {
-    targets: nutrition.targets,
+    targets: dailyTargets(nutrition.targets),
     loggedDays: dates.length,
     totals: totalNutrients(meals.flatMap((m) => m.items)),
     days: dates.map((date) => ({
@@ -332,7 +343,7 @@ export function queryFoodJournal(
     from,
     to,
     filters: filter,
-    targets: nutrition.targets,
+    targets: dailyTargets(nutrition.targets),
     totalMeals: meals.length,
     loggedDays: new Set(meals.map((m) => m.date)).size,
     explicitlyCompleteDates: (nutrition.completeDays ?? []).filter(

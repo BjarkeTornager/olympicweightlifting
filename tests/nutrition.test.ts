@@ -11,9 +11,12 @@ import { journalSchema } from "../lib/model";
 import {
   mealSchema,
   nutritionSummary,
+  queryFoodJournal,
   targetProgress,
   totalNutrients,
 } from "../lib/nutrition";
+import { dayForCoach } from "../lib/journal-summary";
+import { dailyHealth } from "../lib/health";
 import { prepareAction } from "../lib/agent/actions";
 import { normalizeFoodPhoto } from "../lib/food-photos";
 import sharp from "sharp";
@@ -207,7 +210,7 @@ test("a Coach target update changes only the targets it names", () => {
   // The journal itself is untouched until the change is saved.
   assert.equal(state.nutrition.targets.calories, 2350);
 });
-test("a daily target of 0 is no target: the Food page says so", () => {
+test("a daily target of 0 is no target: the Food page and Coach say so", () => {
   assert.equal(targetProgress(980, 0, "kcal"), "No daily target");
   assert.equal(targetProgress(980, null, "kcal"), "No daily target");
   assert.equal(targetProgress(980, 1900, "kcal"), "920\u00a0kcal remaining");
@@ -234,10 +237,35 @@ test("a daily target of 0 is no target: the Food page says so", () => {
   assert.match(html, /kcal · no daily target/);
   assert.equal(html.match(/No daily target/g)?.length, 3);
   assert.doesNotMatch(html, /of 0|<progress|above target|remaining/);
+  // Coach reads them as none too, so it never counts against "0 kcal".
+  const none = {
+    goal: "maintain",
+    calories: null,
+    protein: null,
+    carbs: null,
+    fat: null,
+  };
+  assert.deepEqual(dayForCoach(state, meal.date).dailyTargets, none);
+  assert.deepEqual(dailyHealth(state, meal.date).targets, none);
+  assert.deepEqual(
+    nutritionSummary(state.nutrition, meal.date, meal.date).targets,
+    none,
+  );
+  assert.deepEqual(
+    queryFoodJournal(state.nutrition, {}, meal.date).targets,
+    none,
+  );
+  // The saved targets are left as they are.
+  assert.equal(state.nutrition.targets.calories, 0);
   state.nutrition.targets.calories = 2300;
   state.nutrition.targets.protein = 150;
   assert.match(page(), /of 2,300\u00a0kcal/);
   assert.match(page(), /134\u00a0g remaining/);
+  assert.deepEqual(dayForCoach(state, meal.date).dailyTargets, {
+    ...none,
+    calories: 2300,
+    protein: 150,
+  });
 });
 test("photo processing rejects spoofed files, bounds size and removes metadata", async () => {
   await assert.rejects(

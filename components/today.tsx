@@ -13,7 +13,7 @@ import { SupplementsRow } from "./supplements";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
 import { Plus, ChevronRight, Flame, Mic } from "./ui/icons";
-import { burnedNote, burnedToday } from "@/lib/energy";
+import { burnedContext, burnedLines, burnedToday } from "@/lib/energy";
 import { useVoiceEnabled } from "@/lib/use-voice-checkin";
 import { BarbellIcon, BowlIcon, SleepIcon } from "./ui/journal-icons";
 
@@ -34,6 +34,8 @@ export function Today({
   const sleep = state.health.checkins.find((c) => c.date === date);
   const week = weeklyReview(state, date).current;
   const burned = burnedToday(state, date);
+  // Apple Health's active energy leads; training follows on its own line.
+  const [lead, ...more] = burned ? burnedLines(burned) : [];
   const kcal = meals.reduce(
     (total, meal) =>
       total +
@@ -115,18 +117,33 @@ export function Today({
           <Flame size={22} />
           <span>
             <strong>Burned</strong>
-            <small>
-              {burned ? burnedNote(burned) : "Training and Apple Health"}
-            </small>
-          </span>
-          <span className="today-record-value">
-            {burned ? (
+            {lead ? (
               <>
-                {burned.estimated ? "~" : ""}
-                {burned.kcal.toLocaleString("en-GB")} <small>kcal</small>
+                <small>
+                  {lead.label === "Active energy"
+                    ? `Active energy from ${lead.note}`
+                    : `Training: ${lead.note.toLowerCase()}`}
+                </small>
+                {more.map((line) => (
+                  <small key={line.label}>
+                    {line.label}
+                    {line.text ? ` ${line.text} kcal` : ""}:{" "}
+                    {line.note.toLowerCase()}
+                  </small>
+                ))}
+                <small>{burnedContext}</small>
               </>
             ) : (
-              <small>Nothing recorded yet</small>
+              <small>Training and Apple Health</small>
+            )}
+          </span>
+          <span className="today-record-value">
+            {lead?.text ? (
+              <>
+                {lead.text} <small>kcal</small>
+              </>
+            ) : (
+              <small>{lead ? "No estimate yet" : "Nothing recorded yet"}</small>
             )}
           </span>
           <ChevronRight size={17} aria-hidden="true" />

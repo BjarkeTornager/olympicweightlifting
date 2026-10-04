@@ -1,7 +1,9 @@
 import { supplementsForDay } from "./supplements";
 import {
+  activeEnergyKcal,
   burnText,
-  burnedNote,
+  burnedContext,
+  burnedLines,
   burnedToday,
   cardioBurn,
   strengthBurn,
@@ -31,6 +33,7 @@ import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
 import { exerciseName } from "./domain";
+import { sessionMinutes } from "./session-length";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -136,6 +139,9 @@ const activityView = z
     averageHeartRate: int.optional(),
     maxHeartRate: int.optional(),
     caloriesKcal: z.number().optional(),
+    // Calories burned as printed, always an estimate with where it came
+    // from: "~610 kcal · watch", "~240 kcal est.". Optional: older servers.
+    caloriesText: z.string().optional(),
     fromAppleHealth: z.boolean(),
     // A GPS route was recorded: GET /api/v1/activities/{id}/route draws it.
     hasRoute: z.boolean().optional(),
@@ -251,14 +257,30 @@ const bodyView = z
   .strict()
   .register(nativeResponses, { id: "Body" });
 
-// Calories burned today: Apple Health's active energy, or the training
-// total when that is missing. Never offsets the food target.
+// One of Today's burned figures: "Active energy", "~610", "Apple Health, so
+// far". The text is empty for lifting logged without a length.
+const burnedLineView = z
+  .object({
+    label: z.string(),
+    kcal: int,
+    text: z.string(),
+    note: z.string(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "BurnedLine" });
+// Calories burned today, never added together and never offsetting the food
+// target: kcal, source and note are the leading figure, Apple Health's active
+// energy or else the training estimate, for builds that show one line.
 const burnedView = z
   .object({
     kcal: int,
     source: z.enum(["apple-health", "training"]),
     estimated: z.boolean(),
     note: z.string(),
+    // Optional: older servers. Every figure, the leading one first.
+    lines: z.array(burnedLineView).optional(),
+    // "Doesn't include the energy your body uses at rest."
+    context: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Burned" });
@@ -697,6 +719,7 @@ const routeText = (note?: RouteNote) => {
 };
 
 function activity(
+  state: JournalState,
   e: JournalState["cardio"]["sessions"][number],
   fromAppleHealth: Set<string>,
   routes: Map<string, RouteNote>,
@@ -712,6 +735,8 @@ function activity(
     averageHeartRate: e.averageHeartRate,
     maxHeartRate: e.maxHeartRate,
     caloriesKcal: e.caloriesKcal,
+    caloriesText:
+      burnText(cardioBurn(state, e, fromAppleHealth.has(e.id))) || undefined,
     fromAppleHealth: fromAppleHealth.has(e.id),
     hasRoute: routes.has(e.id),
     routeText: routeText(routes.get(e.id)),
@@ -797,6 +822,25 @@ export function journalStartDate(
   return first;
 }
 
+// Today's burned figures, or nothing until there is one to show.
+function burnedForToday(burned: ReturnType<typeof burnedToday>) {
+  const lines = burned ? burnedLines(burned) : [];
+  const lead = lines.find((l) => l.text);
+  if (!burned || !lead) return undefined;
+  return {
+    kcal: lead.kcal,
+    source: burned.active ? ("apple-health" as const) : ("training" as const),
+    estimated: true,
+    note: burned.active
+      ? "Active energy from Apple Health, so far"
+      : lead.note === "Estimated"
+        ? "From training, estimated"
+        : `From training: ${lead.note.toLowerCase()}`,
+    lines,
+    context: burnedContext,
+  };
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
@@ -813,7 +857,7 @@ export function buildToday(
     state.health.vitals?.find((v) => v.date === date) ??
     state.health.vitals?.find((v) => v.date === offsetDate(date, -1));
   const checkin = health.checkin;
-  const burned = burnedToday(state, date);
+  const burned = burnedToday(state, date, fromAppleHealth);
   const supplements = supplementsForDay(state, date);
   const next = state.activeWorkout ? null : nextTraining(state, date);
   return todayView.parse(
@@ -872,7 +916,7 @@ export function buildToday(
           };
         }),
       }),
-      burned: burned ? { ...burned, note: burnedNote(burned) } : undefined,
+      burned: burnedForToday(burned),
       supplements: {
         taken: supplements.taken.map((s) => ({
           id: s.id,
@@ -917,7 +961,7 @@ export function buildToday(
       activities: state.cardio.sessions
         .filter((s) => s.date === date)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .map((e) => activity(e, fromAppleHealth, routes)),
+        .map((e) => activity(state, e, fromAppleHealth, routes)),
       sessionsThisWeek: health.sessionsThisWeek,
       priorities: health.priorities.map((p) => ({
         id: p.id,
@@ -985,7 +1029,8 @@ export function buildJournal(
       title: s.title,
       detail: [
         `${s.exercises.length} exercises · ${loggedSets(s)} sets`,
-        burnText(strengthBurn(state, s)),
+        burnText(strengthBurn(state, s)) ||
+          (sessionMinutes(s) == null ? "length not recorded" : ""),
       ]
         .filter(Boolean)
         .join(" · "),
@@ -1001,7 +1046,7 @@ export function buildJournal(
         formatDuration(e.durationSeconds),
         e.distanceKm != null ? kmText(e.distanceKm) : "",
         e.averageHeartRate != null ? `${e.averageHeartRate} bpm avg` : "",
-        burnText(cardioBurn(state, e)),
+        burnText(cardioBurn(state, e, fromAppleHealth.has(e.id))),
       ]
         .filter(Boolean)
         .join(" · "),
@@ -1092,7 +1137,8 @@ export function buildJournal(
             },
             v.activeEnergyKcal != null && {
               label: "Active energy",
-              value: `${v.activeEnergyKcal.toLocaleString("en-GB")} kcal`,
+              value: `~${activeEnergyKcal(v.activeEnergyKcal).toLocaleString("en-GB")} kcal`,
+              note: "Apple's estimate",
             },
           ].filter((line) => line !== false),
           footnote: "From Apple Health",
@@ -1293,7 +1339,7 @@ export function receiptEntryView(
         },
         c.caloriesKcal != null && {
           label: "Energy",
-          value: `${Math.round(c.caloriesKcal)} kcal`,
+          value: `~${Math.round(c.caloriesKcal)} kcal`,
         },
         c.effort != null && { label: "Effort", value: `${c.effort}/10` },
       ].filter((line) => line !== false),

@@ -29,7 +29,7 @@ export function CardioDetails({
 }: {
   entry: CardioEntry;
   accountId?: string;
-  // Calories burned, measured or estimated, when the journal is at hand.
+  // Calories burned, always an estimate, when the journal is at hand.
   burn?: Burn | null;
 }) {
   const rate = cardioRate(entry);
@@ -57,12 +57,14 @@ export function CardioDetails({
       "Elevation gain",
       entry.elevationGainM == null ? null : `${entry.elevationGainM} m`,
     ],
-    burn?.estimated
-      ? ["Calories burned", burnText(burn)]
-      : [
-          "Calories burned",
-          entry.caloriesKcal == null ? null : `${entry.caloriesKcal}\u00a0kcal`,
-        ],
+    [
+      "Calories burned",
+      burn !== undefined
+        ? burnText(burn) || null
+        : entry.caloriesKcal == null
+          ? null
+          : `~${entry.caloriesKcal}\u00a0kcal`,
+    ],
   ].filter(([, value]) => value != null);
   return (
     <div className="cardio-details">

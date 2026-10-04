@@ -640,7 +640,8 @@ test("a voice goals save that removes the kidney answer or changes the baby's ag
     same.state.profile.goalHealth?.babyBornOn,
     feeding.profile.goalHealth?.babyBornOn,
   );
-  // The voice coach reads it first, and undoes it if it isn't right.
+  // The voice coach says it first, before anything is saved, and leaves
+  // the answer out if it isn't right (goalsReadBack).
   const instruction = voiceInstruction(
     voiceContext(emptyJournal(), today),
     localClock(`${today}T09:00:00Z`, "UTC"),
@@ -648,7 +649,7 @@ test("a voice goals save that removes the kidney answer or changes the baby's ag
   );
   assert.ok(
     instruction.includes(
-      "If the result starts by saying it removes or changes one of their health answers, say that first and ask whether it's right; if it isn't, call undo_save with its save_id and save again leaving that answer out.",
+      "if it lists changes to their saved answers, say those first and ask whether they're right, and if one isn't, call set_goals again leaving that answer out",
     ),
   );
 });

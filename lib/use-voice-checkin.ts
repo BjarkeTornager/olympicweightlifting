@@ -798,7 +798,17 @@ export function useVoiceCheckin({
         /* Network or server restart: retry with the same id. */
       }
     }
-    if (!reading) {
+    // Goals to read back before saving (goalsReadBack) leave no receipt:
+    // nothing is saved until the athlete says yes.
+    const unsaved =
+      result.ok &&
+      "data" in result &&
+      (result.data as { saved?: unknown } | null)?.saved === false;
+    if (unsaved)
+      setLines((l) =>
+        l.filter((e) => !(e.role === "save" && e.id === call.id)),
+      );
+    else if (!reading) {
       setReceipt(call.id, result.ok ? "saved" : "failed");
       if (result.ok) onSaved();
     }

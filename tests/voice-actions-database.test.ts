@@ -194,10 +194,10 @@ test(
       );
 
       await t.test(
-        "goals set by voice save the plan as daily targets",
+        "goals set by voice with a deficit are read back first, and saved only for the plan heard",
         async () => {
           const a = await user();
-          const saved = await run(a, "set_goals", {
+          const goals = {
             summary: "34, 182 cm, 88 kg, want to get to 81",
             age: 34,
             sex: "male",
@@ -209,13 +209,72 @@ test(
             trainingDays: 4,
             sessionMinutes: 75,
             experience: "developing",
+          };
+          type ReadBack = {
+            saved: false;
+            confirm_id: string;
+            plan: string;
+            changes: string[];
+            ask_first?: string[];
+          };
+          const readBack = (result: Awaited<ReturnType<typeof run>>) => {
+            assert.ok(result.ok && "data" in result, JSON.stringify(result));
+            return result.data as ReadBack;
+          };
+          // A deficit comes back unsaved, with the low-energy questions to
+          // ask first, and leaves no receipt in Coach.
+          const first = readBack(await run(a, "set_goals", goals));
+          assert.equal(first.saved, false);
+          assert.match(first.plan, /2,640 kcal a day/);
+          assert.equal(first.ask_first?.length, 2);
+          const unchanged = await readJournal(a);
+          assert.equal(unchanged.state.profile.body, undefined);
+          assert.equal(unchanged.revision, 0);
+          assert.equal((await history(a)).length, 0);
+          // Answered, it comes back again saying it keeps the answer.
+          const answered = { ...goals, energySigns: false };
+          const second = readBack(await run(a, "set_goals", answered));
+          assert.equal(second.ask_first, undefined);
+          assert.deepEqual(second.changes, [
+            "Saves that you answered no to the questions on stress fractures and eating.",
+          ]);
+          // The first plan's confirm_id doesn't save the second.
+          readBack(
+            await run(a, "set_goals", {
+              ...answered,
+              confirm_id: first.confirm_id,
+            }),
+          );
+          const saved = await run(a, "set_goals", {
+            ...answered,
+            confirm_id: second.confirm_id,
           });
           assert.ok(saved.ok && "detail" in saved);
           assert.match(saved.detail, /2,640 kcal a day/);
+          assert.match(saved.detail, /a starting estimate/);
           const { state } = await readJournal(a);
           assert.equal(state.profile.body?.targetWeightKg, 81);
           assert.equal(state.profile.body?.targetDate, null);
           assert.equal(state.nutrition.targets.calories, 2640);
+          assert.deepEqual(state.profile.energyCheck, {
+            date: today,
+            signs: false,
+          });
+          // With the check of the weight trend about 3 weeks on.
+          assert.equal(
+            state.profile.coaching?.plans?.[0]?.followUpDate,
+            "2026-10-17",
+          );
+          // A plan that holds weight with nothing to note saves at once.
+          const steady = await run(a, "set_goals", {
+            ...goals,
+            targetWeightKg: 88,
+          });
+          assert.ok(steady.ok && "saveId" in steady && steady.saveId);
+          assert.equal(
+            (await readJournal(a)).state.nutrition.targets.goal,
+            "maintain",
+          );
           // Missing details are refused, not guessed.
           await assert.rejects(
             run(a, "set_goals", {

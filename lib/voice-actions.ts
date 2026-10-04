@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "./db";
@@ -11,7 +12,17 @@ import {
 } from "./server";
 import { cardioActivitySchema } from "./cardio";
 import { foodGroupSchema } from "./nutrition";
-import { bodyGoalsRequestSchema, planForState } from "./body-goals";
+import {
+  applyGoals,
+  bodyGoalsRequestSchema,
+  describePlan,
+  energyQuestionsFor,
+  imperialGoalsSchema,
+  metricGoals,
+  planForState,
+  splitGoals,
+  type BodyGoalsRequest,
+} from "./body-goals";
 import { bodyFatInputSchema } from "./body-composition";
 import { drinkInputSchema } from "./hydration";
 import { supplementInputSchema } from "./supplements";
@@ -346,6 +357,42 @@ export const voiceToolArgs = {
   clear_unfinished_workout: z.object({ summary: summarySchema }),
   set_goals: bodyGoalsRequestSchema.extend({
     summary: summarySchema,
+    // Height and weights in cm and kg, or in feet and inches and pounds as
+    // the athlete said them (metricGoals). A zero is no value.
+    heightCm: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.heightCm.optional(),
+    ),
+    weightKg: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.weightKg.optional(),
+    ),
+    targetWeightKg: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.targetWeightKg.optional(),
+    ),
+    heightFeet: z.preprocess(
+      (v) => v || undefined,
+      imperialGoalsSchema.shape.heightFeet,
+    ),
+    heightInches: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      imperialGoalsSchema.shape.heightInches,
+    ),
+    weightLb: z.preprocess(
+      (v) => v || undefined,
+      imperialGoalsSchema.shape.weightLb,
+    ),
+    targetWeightLb: z.preprocess(
+      (v) => v || undefined,
+      imperialGoalsSchema.shape.targetWeightLb,
+    ),
+    // The plan read back to the athlete, once they said yes to saving it
+    // (goalsReadBack).
+    confirm_id: z.preprocess(
+      (v) => v || undefined,
+      z.string().max(64).optional(),
+    ),
     // Models sometimes send an empty string for "no date", and an empty
     // value or zero for an unknown focus or body fat.
     targetDate: z.preprocess((v) => v || null, date.nullable()),
@@ -379,6 +426,16 @@ export const voiceToolArgs = {
     limitProtein: z.preprocess(
       (v) => (v === "" || v === null ? undefined : v),
       bodyGoalsRequestSchema.shape.limitProtein,
+    ),
+    // A "no" is an answer here too; only an empty value is none. Saying
+    // they'd rather not answer leaves it out, by voice.
+    energySigns: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      bodyGoalsRequestSchema.shape.energySigns,
+    ),
+    weightClass: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      bodyGoalsRequestSchema.shape.weightClass,
     ),
   }),
   undo_save: z.object({ save_id: z.string().uuid() }),
@@ -519,19 +576,35 @@ export function voiceAction(
       };
     }
     case "set_goals": {
-      // The summary is for the journal receipt, not part of the goals.
-      const details = Object.entries(voiceToolArgs.set_goals.parse(raw));
-      const goals = bodyGoalsRequestSchema.parse(
-        Object.fromEntries(details.filter(([key]) => key !== "summary")),
-      );
-      // A call saves with no review, so the model's confirmation of a low
-      // goal weight counts only after the saved plan asked for it, for that
-      // goal weight. Otherwise the plan holds and its note asks.
+      // The summary is for the journal receipt and confirm_id for the
+      // read-back, not part of the goals.
+      const {
+        summary,
+        confirm_id: heard,
+        ...details
+      } = voiceToolArgs.set_goals.parse(raw);
+      void summary;
+      const goals = bodyGoalsRequestSchema.parse(metricGoals(details));
+      // A call saves with no review card, so the model's confirmation of a
+      // low goal weight counts only after a plan asked for it, for that
+      // goal weight: the saved plan, or the plan read back in this call
+      // (its confirm_id, with the confirmation or before it). Otherwise
+      // the plan holds and its note asks.
       if (
         goals.confirmLowWeight &&
         !(
           planForState(state, today)?.confirmToLose &&
           state.profile.body?.targetWeightKg === goals.targetWeightKg
+        ) &&
+        !(
+          heard &&
+          (heard === goalsConfirmId(state, goals, today) ||
+            heard ===
+              goalsConfirmId(
+                state,
+                { ...goals, confirmLowWeight: undefined },
+                today,
+              ))
         )
       )
         delete goals.confirmLowWeight;
@@ -564,6 +637,72 @@ function allRead(state: JournalState, day: string) {
   state.nutrition.meals.forEach((m) => reads.meals.add(m.id));
   state.cardio.sessions.forEach((c) => reads.cardio.add(c.id));
   return reads;
+}
+
+// The fingerprint of a goals plan as the voice coach reads it back: what it
+// says and saves, so a yes counts only for the plan the athlete heard.
+function planFingerprint(prepared: { detail: string; targets?: unknown }) {
+  return createHash("sha256")
+    .update(JSON.stringify([prepared.detail, prepared.targets ?? null]))
+    .digest("hex")
+    .slice(0, 12);
+}
+export function goalsConfirmId(
+  state: JournalState,
+  bodyGoals: BodyGoalsRequest,
+  today: string,
+) {
+  return planFingerprint(
+    prepareAction(state, { kind: "set_body_goals", bodyGoals }, today),
+  );
+}
+
+// What the voice coach reads out before saving goals: everything but a plan
+// that holds the athlete's weight with no deficit, nothing to note and no
+// saved answer changed, which saves at once. The changes come first, then
+// the plan with its calories, every safety note in full and the other notes,
+// the agreed check about 3 weeks on, and the low-energy questions when the
+// plan cuts without answers in force. Null when the plan may be saved: a
+// quiet one, or the plan the athlete heard (confirmId).
+export function goalsReadBack(
+  state: JournalState,
+  bodyGoals: BodyGoalsRequest,
+  prepared: {
+    detail: string;
+    targets?: unknown;
+    plan?: { followUpDate: string };
+  },
+  today: string,
+  confirmId?: string,
+) {
+  const plan = applyGoals(structuredClone(state), bodyGoals, today);
+  const quiet =
+    plan.dailyTargets &&
+    plan.direction === "maintain" &&
+    plan.calories >= plan.maintenanceKcal &&
+    !plan.notes.length &&
+    !plan.changes.length;
+  const id = planFingerprint(prepared);
+  if (quiet || confirmId === id) return null;
+  const goals = splitGoals(bodyGoals).goals;
+  const safety = new Set(plan.safetyNotes);
+  return {
+    saved: false,
+    confirm_id: id,
+    changes: plan.changes,
+    plan: describePlan(goals, plan),
+    safety_notes: plan.safetyNotes,
+    other_notes: plan.notes.filter((note) => !safety.has(note)),
+    ...(prepared.plan
+      ? {
+          follow_up: `The calories are a starting estimate; from ${prepared.plan.followUpDate}, about 3 weeks on, Coach checks them against the weight trend with the athlete.`,
+        }
+      : {}),
+    ...(plan.energyCheckDue
+      ? { ask_first: energyQuestionsFor(goals.sex) }
+      : {}),
+    next: `Not saved yet. Say each of changes first and ask whether it's right. Then read the plan's calories and every safety note in full, kindly; other notes can be summed up. ${plan.energyCheckDue ? "Before that, ask the ask_first questions, saying they're optional and kept only as a yes or no with the date so the plan stays safe, then call set_goals again with energySigns (true for any yes, false for no to all, left out if they'd rather not answer). " : ""}Then ask "Shall I save that?", and only after a yes call set_goals again with the same details and this confirm_id.`,
+  };
 }
 
 export type VoiceResult =
@@ -879,6 +1018,17 @@ async function saveVoiceAction(
     saving: true,
   });
   const prepared = prepareAction(snapshot.state, action, input.today);
+  // Goals are saved only once the athlete has heard them, unless quiet.
+  if (action.kind === "set_body_goals") {
+    const readBack = goalsReadBack(
+      snapshot.state,
+      action.bodyGoals,
+      prepared,
+      input.today,
+      voiceToolArgs.set_goals.parse(input.args).confirm_id,
+    );
+    if (readBack) return { ok: true, data: readBack };
+  }
   const id = uid();
   const expiresAt = new Date(Date.now() + 86400000);
   const preview: ActionPreview = {
@@ -894,6 +1044,8 @@ async function saveVoiceAction(
       : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
     ...(prepared.drink ? { drink: prepared.drink } : {}),
+    ...(prepared.plan ? { plan: prepared.plan } : {}),
+    ...(prepared.notes?.length ? { notes: prepared.notes } : {}),
     ...(prepared.workoutReview
       ? { workoutReview: prepared.workoutReview }
       : {}),

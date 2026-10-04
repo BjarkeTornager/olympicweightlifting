@@ -196,18 +196,17 @@ struct TodayView: View {
   private func ledger(_ today: Today) -> some View {
     let food = today.nutrition
     let water = today.hydration
-    let positive = { (value: Double?) in value.flatMap { $0 > 0 ? $0 : nil } }
     let (amount, unit) = Format.litres(water.totalMl)
     let (target, targetUnit) = Format.litres(water.targetMl)
     let glasses = max(1, Int((Double(water.targetMl) / 250).rounded()))
     return Ledger(
       energy: LedgerLine(
-        title: "Energy", tint: Theme.calories, value: food.calories, target: positive(food.targetCalories),
+        title: "Energy", tint: Theme.calories, value: food.calories, target: Format.target(food.targetCalories),
         perMark: 100, number: Format.number(food.calories), unit: "kcal",
         targetText: food.targetCalories.map(Format.number), scale: "One mark = 100 kcal",
         spokenUnit: "kilocalories"),
       protein: LedgerLine(
-        title: "Protein", tint: Theme.protein, value: food.protein, target: positive(food.targetProtein),
+        title: "Protein", tint: Theme.protein, value: food.protein, target: Format.target(food.targetProtein),
         perMark: 10, number: Format.number(food.protein), unit: "g",
         targetText: food.targetProtein.map { "\(Format.number($0)) g" }, scale: "10 g a mark",
         spokenUnit: "grams"),

@@ -1,6 +1,7 @@
 "use client";
 import { Check, ChevronDown, Undo2 } from "@/components/ui/icons";
 import type { ActionPreview } from "@/lib/agent/actions";
+import { dailyTarget, type DietTargets } from "@/lib/nutrition";
 import { exerciseName } from "@/lib/domain";
 import { formatSet } from "@/lib/training";
 import { Button } from "./ui/button";
@@ -22,6 +23,45 @@ function bundleEntryTitle(
   if (entry.checkin) return `${entry.title} · ${entry.checkin.date}`;
   if (entry.cardio) return entry.title;
   return entry.workout?.title ?? entry.title;
+}
+
+const targetLabels = {
+  goal: "Goal",
+  calories: "Calories",
+  protein: "Protein",
+  carbs: "Carbs",
+  fat: "Fat",
+};
+
+// The goal and all four targets, with what each was when it changes.
+function TargetsReview({
+  after,
+  before,
+}: {
+  after: DietTargets;
+  before?: DietTargets;
+}) {
+  const amount = (key: keyof DietTargets, targets: DietTargets) => {
+    if (key === "goal") return `${targets.goal} weight`;
+    const target = dailyTarget(targets[key]);
+    return target == null
+      ? "No target"
+      : `${target.toLocaleString("en-GB")} ${key === "calories" ? "kcal" : "g"}`;
+  };
+  return (
+    <div className="meal-details">
+      {(Object.keys(targetLabels) as (keyof DietTargets)[]).map((key) => {
+        const value = amount(key, after),
+          was = before && amount(key, before);
+        return (
+          <p key={key}>
+            {targetLabels[key]}: {value}
+            {was && was !== value ? ` (was ${was})` : ""}
+          </p>
+        );
+      })}
+    </div>
+  );
 }
 
 export function CoachProposal({
@@ -119,19 +159,7 @@ export function CoachProposal({
           )}
           {p.meal && <MealDetails meal={p.meal} />}
           {p.targets && (
-            <div className="meal-details">
-              <p>Goal: {p.targets.goal} weight</p>
-              {(["calories", "protein", "carbs", "fat"] as const).map((key) => (
-                <p key={key}>
-                  {key}: {p.targets![key] ?? "No target"}
-                  {p.targets![key] != null
-                    ? key === "calories"
-                      ? " kcal"
-                      : " g"
-                    : ""}
-                </p>
-              ))}
-            </div>
+            <TargetsReview after={p.targets} before={p.targetsBefore} />
           )}
           {p.workout && (
             <>

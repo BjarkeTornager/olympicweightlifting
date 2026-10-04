@@ -20,7 +20,12 @@ import {
 } from "./hydration";
 import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
-import { mealTypes, totalNutrients } from "./nutrition";
+import {
+  dailyTarget,
+  mealTypes,
+  totalNutrients,
+  type Nutrients,
+} from "./nutrition";
 import type { SavedVisual } from "./coach-visuals";
 import { describeRoute, type RouteNote } from "./route-summary";
 import {
@@ -29,7 +34,7 @@ import {
   latestBodyFat,
   weightTrend,
 } from "./body-composition";
-import { planForState } from "./body-goals";
+import { notesForTargets, planForState } from "./body-goals";
 import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
@@ -258,6 +263,11 @@ const bodyView = z
     focus: z.string().optional(),
     targetWeightKg: z.number().optional(),
     targetBodyFatPercent: z.number().optional(),
+    // The goal plan's notes, shown with the goals: why it holds weight or
+    // loses more slowly, and who to talk to. When the saved daily targets
+    // aren't the plan's, one line saying so instead. Optional, as new
+    // fields are.
+    goalNotes: z.array(z.string()).optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Body" });
@@ -759,6 +769,8 @@ function bodyForToday(state: JournalState, date: string) {
     .sort((a, b) => a.date.localeCompare(b.date));
   const weight = weights.at(-1);
   const plan = planForState(state, date);
+  // Shown beside the saved targets, so only notes that describe them.
+  const notes = plan ? notesForTargets(plan, state.nutrition.targets) : [];
   const body = defined({
     bodyFatPercent: fat?.percent,
     bodyFatDate: fat?.date,
@@ -774,6 +786,7 @@ function bodyForToday(state: JournalState, date: string) {
     focus: plan?.focus,
     targetWeightKg: state.profile.body?.targetWeightKg,
     targetBodyFatPercent: plan?.targetBodyFatPercent ?? undefined,
+    goalNotes: notes.length ? notes : undefined,
   });
   return Object.keys(body).length ? body : undefined;
 }
@@ -789,7 +802,10 @@ export function firstSteps(state: JournalState, date: string) {
       Boolean(state.health.vitals?.length) ||
       Boolean(state.health.bodyFat?.some((b) => b.source === "apple-health")),
     meal: state.nutrition.meals.length > 0,
-    goals: state.nutrition.targets.calories != null,
+    // Goals saved in pregnancy set no calorie target, and still count.
+    goals:
+      dailyTarget(state.nutrition.targets.calories) != null ||
+      state.profile.goalChecks?.pregnancy === "pregnant",
   };
   return Object.values(steps).every(Boolean) ? undefined : steps;
 }
@@ -915,8 +931,11 @@ export function buildToday(
       body: bodyForToday(state, date),
       nutrition: defined({
         ...totalNutrients(meals.flatMap((m) => m.items)),
-        targetCalories: state.nutrition.targets?.calories,
-        targetProtein: state.nutrition.targets?.protein,
+        // A target of 0 is no target.
+        targetCalories:
+          dailyTarget(state.nutrition.targets?.calories) ?? undefined,
+        targetProtein:
+          dailyTarget(state.nutrition.targets?.protein) ?? undefined,
         meals: meals.map((m) => {
           const total = totalNutrients(m.items);
           return {
@@ -1256,6 +1275,19 @@ type StoredProposal = ReceiptSource &
 const capitalised = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 const grams = (value: number) => `${Math.round(value)} g`;
+const targetAmount = (value: number | null, key: keyof Nutrients) => {
+  const target = dailyTarget(value);
+  return target == null
+    ? "No target"
+    : key === "calories"
+      ? `${Math.round(target)} kcal`
+      : grams(target);
+};
+const dietGoalNames = {
+  maintain: "Maintain weight",
+  lose: "Lose weight",
+  gain: "Gain weight",
+};
 
 // One saved or proposed entry as the app shows it: the same facts the
 // website's review shows (meal items, sets, check-in values), as text.
@@ -1372,18 +1404,35 @@ export function receiptEntryView(
     };
   }
   if (entry.targets) {
-    const t = entry.targets;
+    // The goal and all four targets, with the old value under any that
+    // changes, so a target cleared shows as plainly as a new one.
+    const t = entry.targets,
+      before = entry.targetsBefore;
+    const line = (label: string, key: keyof Nutrients) => {
+      const value = targetAmount(t[key], key),
+        was = before && targetAmount(before[key], key);
+      return defined({
+        label,
+        note: was && was !== value ? `Was ${was}` : undefined,
+        value,
+      });
+    };
     return {
       title: entry.title,
       lines: [
-        t.calories != null && {
-          label: "Energy",
-          value: `${Math.round(t.calories)} kcal`,
-        },
-        t.protein != null && { label: "Protein", value: grams(t.protein) },
-        t.carbs != null && { label: "Carbs", value: grams(t.carbs) },
-        t.fat != null && { label: "Fat", value: grams(t.fat) },
-      ].filter((line) => line !== false),
+        defined({
+          label: "Goal",
+          note:
+            before && before.goal !== t.goal
+              ? `Was ${dietGoalNames[before.goal].toLowerCase()}`
+              : undefined,
+          value: dietGoalNames[t.goal],
+        }),
+        line("Energy", "calories"),
+        line("Protein", "protein"),
+        line("Carbs", "carbs"),
+        line("Fat", "fat"),
+      ],
     };
   }
   if (entry.memory)
@@ -1822,8 +1871,9 @@ export function buildTrends(
   return trendsView.parse(
     defined({
       days: rows,
-      targetCalories: state.nutrition.targets?.calories,
-      targetProtein: state.nutrition.targets?.protein,
+      targetCalories:
+        dailyTarget(state.nutrition.targets?.calories) ?? undefined,
+      targetProtein: dailyTarget(state.nutrition.targets?.protein) ?? undefined,
       waterTargetMl: hydrationTargetMl(state, date).targetMl,
     }),
   );

@@ -242,4 +242,12 @@ struct TodayTests {
     #expect(Format.count(2) == "two")
     #expect(Format.count(12) == "12")
   }
+
+  @Test("A target of 0 is no target: no Account row, no line in Trends, no meter on Today")
+  func zeroTarget() {
+    #expect(Format.target(1900) == 1900)
+    #expect(Format.target(0) == nil)
+    #expect(Format.target(-5) == nil)
+    #expect(Format.target(nil) == nil)
+  }
 }

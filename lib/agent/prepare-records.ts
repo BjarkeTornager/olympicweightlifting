@@ -14,6 +14,7 @@ import { applyGoals, describePlan, splitGoals } from "../body-goals";
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
 import { offsetDate } from "../health";
 import {
+  mergeDietTargets,
   repeatMeal,
   totalNutrients,
   retainFoodClassifications,
@@ -134,9 +135,14 @@ export function prepareDietTargets(
   next: JournalState,
   action: ActionOf<"set_diet_targets">,
 ): PreparedChange {
-  next.nutrition.targets = action.targets;
+  // Only the targets named change; the rest, and the goal, are kept.
+  if (!Object.keys(action.targets).length)
+    throw Error("Name the targets to change.");
+  const before = next.nutrition.targets;
+  next.nutrition.targets = mergeDietTargets(before, action.targets);
   return {
-    targets: action.targets,
+    targets: next.nutrition.targets,
+    targetsBefore: before,
     title: "Update your daily nutrition targets",
     detail:
       "These are your chosen daily targets. They are not a calculated calorie prescription.",
@@ -148,9 +154,11 @@ export function prepareBodyGoals(
   action: ActionOf<"set_body_goals">,
   currentDate: string,
 ): PreparedChange {
+  const before = next.nutrition.targets;
   const plan = applyGoals(next, action.bodyGoals, currentDate);
   return {
     targets: next.nutrition.targets,
+    targetsBefore: before,
     title: "Set your goals",
     detail: [
       describePlan(splitGoals(action.bodyGoals).goals, plan),

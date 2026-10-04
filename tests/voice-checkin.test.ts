@@ -28,6 +28,14 @@ import {
   VOICE_CREDIT_MESSAGE,
 } from "../lib/voice-live";
 import { cardRefusal, cardVisual, voiceToolArgs } from "../lib/voice-actions";
+import {
+  caffeineRule,
+  disorderedEatingRule,
+  drinksTargetRule,
+  supplementRule,
+  teenSleepRule,
+} from "../lib/agent/health-rules";
+import { applyGoals } from "../lib/body-goals";
 
 const meal = (date: string, name: string, type: "breakfast" | "dinner") =>
   mealSchema.parse({
@@ -166,6 +174,78 @@ test("voice instructions carry the date, the records and the save rules", () => 
     handle: "handle-1",
   });
   assert.deepEqual(setup.generationConfig.responseModalities, ["AUDIO"]);
+});
+
+test("the voice coach has typed Coach's health rules and referrals, and the athlete's age", () => {
+  const s = emptyJournal();
+  const clock = localClock("2026-09-25T07:30:00Z", "Europe/Copenhagen");
+  // Gemini Live, and ElevenLabs (no saved photos, with cards): the same rules.
+  for (const options of [{}, { savedPhotos: false, cards: true }]) {
+    const text = voiceInstruction(
+      voiceContext(s, clock.date),
+      clock,
+      "Sam",
+      "checkin",
+      [],
+      options,
+    );
+    for (const rule of [
+      supplementRule,
+      caffeineRule,
+      disorderedEatingRule,
+      drinksTargetRule,
+      teenSleepRule,
+    ])
+      assert.ok(text.includes(rule), rule.slice(0, 40));
+    // Referrals for pregnancy, medication and eating disorders, as typed.
+    assert.match(
+      text,
+      /For a medical condition, pregnancy or breastfeeding, regular medication, an eating disorder or a clinical diet, suggest a registered dietitian or doctor \(their midwife in pregnancy\)/,
+    );
+    assert.match(text, /suggest professional support instead of a stricter/);
+    assert.match(text, /don't claim a supplement treats or prevents/);
+    // The saved targets are the athlete's, and the Goals line is the
+    // number the website's Goals card shows.
+    assert.match(text, /the athlete's daily targets are dailyTargets/);
+    assert.match(
+      text,
+      /the website's Goals card on Today shows its calories, which can differ/,
+    );
+    // No amount before the age is known.
+    assert.match(text, /If you don't know their age, ask before describing/);
+    // No em dashes, said or written.
+    assert.doesNotMatch(text, /\u2014/);
+  }
+  // Age: from the goals, else Settings, where 0 is unknown.
+  assert.equal(voiceContext(s, clock.date).age, null);
+  assert.match(
+    voiceInstruction(voiceContext(s, clock.date), clock),
+    /The athlete's age isn't in their profile: ask before advice that depends on it/,
+  );
+  s.profile.age = 16;
+  assert.equal(voiceContext(s, clock.date).age, 16);
+  assert.match(
+    voiceInstruction(voiceContext(s, clock.date), clock),
+    /The athlete is 16\./,
+  );
+  applyGoals(
+    s,
+    {
+      age: 34,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 64,
+      targetWeightKg: 64,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 3,
+      sessionMinutes: 60,
+      experience: "developing",
+    },
+    clock.date,
+  );
+  s.profile.age = 0;
+  assert.equal(voiceContext(s, clock.date).age, 34);
 });
 
 test("an app that draws cards gets show_card and is told how to use it; older ones are told they can't", () => {

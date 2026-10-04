@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { calculateImportedSleep } from "../lib/apple-health";
+import { applySleepImport } from "../lib/apple-health-store";
 import { emptyJournal, createWorkout, days } from "../lib/domain";
 import { saveCheckin } from "../lib/health";
 import { foodSnapshotForClient } from "../lib/food-compatibility";
@@ -37,6 +39,184 @@ test("sleep import merges overlapping sources/stages without counting awake or i
   assert.equal(sleep.hours, 6.5);
   assert.equal(sleep.date, "2026-09-19");
   assert.equal(sleep.intervals.length, 2);
+});
+test("sleep import takes one source per night, preferring an Apple Watch", () => {
+  const from = (
+    source: string,
+    start: string,
+    end: string,
+    value = "core",
+  ) => ({
+    ...sample(start, end, value),
+    source,
+  });
+  const watch = [
+    from(
+      "Apple Watch",
+      "2026-09-18T23:30:00+02:00",
+      "2026-09-19T03:00:00+02:00",
+    ),
+    from(
+      "Apple Watch",
+      "2026-09-19T03:00:00+02:00",
+      "2026-09-19T03:20:00+02:00",
+      "awake",
+    ),
+    from(
+      "Apple Watch",
+      "2026-09-19T03:20:00+02:00",
+      "2026-09-19T06:30:00+02:00",
+      "rem",
+    ),
+  ];
+  // An app on the phone records a longer night, and the iPhone the time in bed.
+  const app = from(
+    "AutoSleep",
+    "2026-09-18T22:30:00+02:00",
+    "2026-09-19T07:00:00+02:00",
+    "asleep",
+  );
+  const bed = from(
+    "iPhone",
+    "2026-09-18T22:00:00+02:00",
+    "2026-09-19T07:30:00+02:00",
+    "inBed",
+  );
+  const night = calculateImportedSleep(payload([app, bed, ...watch]), now);
+  assert.equal(night.source, "Apple Watch");
+  assert.equal(night.hours, 6 + 40 / 60, "the watch's night, not the union");
+  assert.equal(night.start, "2026-09-18T21:30:00.000Z");
+  // Without a watch, the source with the most time asleep.
+  const other = from(
+    "Pillow",
+    "2026-09-18T23:00:00+02:00",
+    "2026-09-19T05:00:00+02:00",
+    "asleep",
+  );
+  const apps = calculateImportedSleep(payload([other, app, bed]), now);
+  assert.equal(apps.source, "AutoSleep");
+  assert.equal(apps.hours, 8.5);
+  // The Shortcut and older apps name no source: their samples merge as before.
+  const unnamed = calculateImportedSleep(
+    payload([sample(app.start, app.end), sample(other.start, other.end)]),
+    now,
+  );
+  assert.equal(unnamed.source, undefined);
+  assert.equal(unnamed.hours, 8.5);
+  assert.throws(
+    () => calculateImportedSleep(payload([bed]), now),
+    /No time asleep/,
+  );
+  assert.throws(() =>
+    calculateImportedSleep(payload([{ ...app, source: "x".repeat(61) }]), now),
+  );
+});
+test("a watch that recorded only part of the night gives way to a full one from an app", () => {
+  const from = (source: string, start: string, end: string, value: string) => ({
+    ...sample(start, end, value),
+    source,
+  });
+  const ring = from(
+    "Oura",
+    "2026-09-18T23:00:00+02:00",
+    "2026-09-19T07:00:00+02:00",
+    "asleep",
+  );
+  // The watch ran flat at 01:30.
+  const flat = calculateImportedSleep(
+    payload([
+      ring,
+      from(
+        "Apple Watch",
+        "2026-09-18T23:00:00+02:00",
+        "2026-09-19T01:30:00+02:00",
+        "core",
+      ),
+    ]),
+    now,
+  );
+  assert.equal(flat.source, "Oura");
+  assert.equal(flat.hours, 8);
+  // Only a 25-minute nap on the watch the afternoon before.
+  const nap = calculateImportedSleep(
+    payload([
+      ring,
+      from(
+        "Apple Watch",
+        "2026-09-18T15:00:00+02:00",
+        "2026-09-18T15:25:00+02:00",
+        "asleep",
+      ),
+    ]),
+    now,
+  );
+  assert.equal(nap.source, "Oura");
+  assert.equal(nap.hours, 8);
+  // Three quarters of the ring's night is enough for the watch.
+  const most = calculateImportedSleep(
+    payload([
+      ring,
+      from(
+        "Apple Watch",
+        "2026-09-18T23:00:00+02:00",
+        "2026-09-19T05:00:00+02:00",
+        "core",
+      ),
+    ]),
+    now,
+  );
+  assert.equal(most.source, "Apple Watch");
+  assert.equal(most.hours, 6);
+});
+test("an imported night keeps its source, which older web clients don't see", () => {
+  const night = calculateImportedSleep(
+    payload([
+      {
+        ...sample("2026-09-18T23:00:00+02:00", "2026-09-19T06:00:00+02:00"),
+        source: "Apple Watch",
+      },
+    ]),
+    now,
+  );
+  const state = emptyJournal();
+  const outcome = applySleepImport(state, undefined, night, now);
+  assert.equal(outcome.result, "imported");
+  const imported = state.health.checkins[0].sleepImport!;
+  assert.equal(imported.source, "Apple Watch");
+  // A night without a source keeps the digest it always had, so nights
+  // imported before sources are not imported again.
+  const { source, ...unnamed } = night;
+  void source;
+  const plain = applySleepImport(emptyJournal(), undefined, unnamed, now);
+  assert.equal(
+    plain.digest,
+    createHash("sha256")
+      .update(
+        JSON.stringify({
+          date: night.date,
+          timezone: night.timezone,
+          intervals: night.intervals,
+        }),
+      )
+      .digest("hex"),
+  );
+  assert.notEqual(outcome.digest, plain.digest, "the source is in the digest");
+  const snapshot = (version?: string) =>
+    foodSnapshotForClient(
+      new Request("https://journal.example.test/api/journal", {
+        headers: version ? { "X-Sleep-Import-Version": version } : {},
+      }),
+      { state, revision: 1 },
+    ).state.health.checkins[0].sleepImport;
+  assert.equal(snapshot("2")?.source, "Apple Watch");
+  assert.ok(snapshot("1"));
+  assert.equal(snapshot("1")?.source, undefined);
+  assert.equal(snapshot(), undefined);
+  assert.equal(
+    state.health.checkins[0].sleepImport?.source,
+    "Apple Watch",
+    "adapting a response leaves the stored night alone",
+  );
 });
 test("sleep import uses elapsed time across daylight-saving changes", () => {
   for (const [date, start, end, hours] of [

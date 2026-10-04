@@ -84,7 +84,8 @@ test("lifting evidence distinguishes unknown data, ongoing training and source s
   ).toBeVisible();
   const table = page.getByRole("region", { name: "Weekly training evidence" });
   await expect(table).toContainText("7/10 · 2 sets");
-  await expect(table).toContainText("7.5 h · 1 night");
+  // One night is too few for an average.
+  await expect(table).toContainText("1 night, too few to average");
   await expect(table).toContainText("Not reported");
   await expect(page.locator(".lifting-active")).toContainText(
     "Next lifting session",

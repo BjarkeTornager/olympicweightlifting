@@ -6,6 +6,7 @@ import { Dialog } from "./ui/dialog";
 import { LiftingBriefDetails } from "./lifting-brief";
 import { LiftingResources } from "./lifting-resources";
 import { today } from "@/lib/domain";
+import { formatSleepDuration } from "@/lib/health";
 import {
   liftingReview,
   liftingBriefInputSchema,
@@ -400,9 +401,11 @@ export function LiftingCoach({
                           : "Not reported"}
                       </td>
                       <td>
-                        {w.sleepNights
-                          ? `${w.averageSleepHours} h · ${w.sleepNights} night${w.sleepNights === 1 ? "" : "s"}`
-                          : "Not reported"}
+                        {w.averageSleepHours != null
+                          ? `${formatSleepDuration(w.averageSleepHours)} · ${w.sleepNights} nights`
+                          : w.sleepNights
+                            ? `${w.sleepNights} night${w.sleepNights === 1 ? "" : "s"}, too few to average`
+                            : "Not reported"}
                       </td>
                     </tr>
                   ))}

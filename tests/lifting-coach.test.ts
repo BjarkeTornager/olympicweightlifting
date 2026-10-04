@@ -35,7 +35,11 @@ test("lifting evidence separates explicit outcomes, unrated work and unknown rec
   assert.equal(report.rpeSets, 2);
   assert.equal(report.weeks[0].averageSleepHours, null);
   assert.equal(report.weeks[0].averageReportedRpe, null);
-  assert.equal(report.weeks[3].averageSleepHours, 7.5);
+  assert.equal(
+    report.weeks[3].averageSleepHours,
+    null,
+    "one night is too few for an average",
+  );
   assert.equal(report.weeks[3].sleepNights, 1);
   assert.equal(report.activeWorkout?.loggedSets, 0);
   assert.deepEqual(report.exercises[0].bestRecordedSet, {

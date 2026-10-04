@@ -4,6 +4,7 @@ import { createWorkout, days, emptyJournal } from "../lib/domain";
 import { localClock } from "../lib/agent/time-context";
 import { mealSchema } from "../lib/nutrition";
 import { addDrink } from "../lib/hydration";
+import { offsetDate, saveCheckin } from "../lib/health";
 import {
   mintVoiceToken,
   voiceClientShowsCards,
@@ -96,6 +97,117 @@ test("voice context reports only today's records and keeps missing ones unknown"
 
   s.nutrition.completeDays = ["2026-09-25"];
   assert.equal(voiceContext(s, "2026-09-25").food, "Day marked complete");
+});
+
+test("the voice coach is told on the server when sleep has been short", () => {
+  const clock = localClock("2026-09-25T19:30:00Z", "Europe/Copenhagen");
+  const s = emptyJournal();
+  const night = (offset: number, sleepHours: number) =>
+    saveCheckin(
+      s,
+      { date: offsetDate(clock.date, -offset), sleepHours },
+      clock.date,
+    );
+  const quiet = voiceContext(s, clock.date);
+  assert.equal(quiet.shortSleep, null);
+  const text = voiceInstruction(quiet, clock);
+  assert.match(text, /- Short sleep: nothing flagged/);
+  assert.match(
+    text,
+    /Call a run of nights short only when the record flags it/,
+  );
+  assert.match(text, /one short night may be acknowledged lightly/);
+  assert.doesNotMatch(text, /third short night/);
+  // Three short nights, but too few for an average over two weeks.
+  for (const offset of [0, 1, 2]) night(offset, 5.5);
+  assert.equal(
+    voiceContext(s, clock.date).shortSleep,
+    "the last three nights average 5 h 30 min.",
+  );
+  // A fortnight of short nights: Gemini and ElevenLabs both get it.
+  for (const offset of [3, 4, 5, 6, 7, 8, 9, 10]) night(offset, 6.5);
+  const context = voiceContext(s, clock.date);
+  assert.equal(
+    context.shortSleep,
+    "the last three nights average 5 h 30 min; the 11 logged nights of the last two weeks average 6 h 14 min, under the 7 hours or more adults need.",
+  );
+  for (const savedPhotos of [true, false])
+    assert.match(
+      voiceInstruction(context, clock, "Sam", "checkin", [], { savedPhotos }),
+      /- Short sleep: the last three nights average 5 h 30 min; the 11 logged nights/,
+    );
+  // Well under 6 hours, with when to see a GP; at 16, 8 hours is the need.
+  for (const offset of [3, 4, 5, 6, 7, 8, 9, 10]) night(offset, 5);
+  assert.match(
+    voiceContext(s, clock.date).shortSleep!,
+    /average 5 h 8 min, under the 7 hours .*\. Well under: a gentle word about seeing a GP/,
+  );
+  s.profile.age = 16;
+  assert.match(
+    voiceContext(s, clock.date).shortSleep!,
+    /under the 8 to 10 hours recommended at their age/,
+  );
+  // At 10, 9 to 12 hours, so 8.5 h nights are short too.
+  s.profile.age = 10;
+  for (const offset of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) night(offset, 8.5);
+  assert.equal(
+    voiceContext(s, clock.date).shortSleep,
+    "the 11 logged nights of the last two weeks average 8 h 30 min, under the 9 to 12 hours recommended at their age.",
+  );
+});
+
+test("one very short night is noted for today's training, not as a run of short nights", () => {
+  const clock = localClock("2026-09-25T19:30:00Z", "Europe/Copenhagen");
+  const s = emptyJournal();
+  for (const offset of [1, 2, 3, 4, 5, 6])
+    saveCheckin(
+      s,
+      { date: offsetDate(clock.date, -offset), sleepHours: 8 },
+      clock.date,
+    );
+  saveCheckin(s, { date: clock.date, sleepHours: 3 + 50 / 60 }, clock.date);
+  const context = voiceContext(s, clock.date);
+  assert.equal(
+    context.shortSleep,
+    "last night was 3 h 50 min: one night that short can take the edge off today's training, so a light word about that fits, not a health worry.",
+  );
+  const text = voiceInstruction(context, clock);
+  assert.match(text, /- Short sleep: last night was 3 h 50 min: one night/);
+  // 6 hours is not under 6.
+  saveCheckin(s, { date: clock.date, sleepHours: 6 }, clock.date);
+  assert.equal(voiceContext(s, clock.date).shortSleep, null);
+});
+
+test("with advice only when asked, the voice coach keeps short sleep for a question about it", () => {
+  const clock = localClock("2026-09-25T19:30:00Z", "Europe/Copenhagen");
+  const s = emptyJournal();
+  for (let offset = 0; offset < 14; offset++)
+    saveCheckin(
+      s,
+      { date: offsetDate(clock.date, -offset), sleepHours: 5.5 },
+      clock.date,
+    );
+  const gentle = voiceContext(s, clock.date).shortSleep!;
+  assert.match(gentle, /^the last three nights average 5 h 30 min; the 14/);
+  assert.match(gentle, /seeing a GP/);
+  s.profile.coaching = { initiative: "on-request", focus: "" };
+  const context = voiceContext(s, clock.date);
+  assert.equal(
+    context.shortSleep,
+    `not to bring up unasked, as they want advice only when they ask. If they ask about their sleep: ${gentle}`,
+  );
+  assert.match(
+    voiceInstruction(context, clock),
+    /- Short sleep: not to bring up unasked, as they want advice only when they ask\. If they ask about their sleep: the last three nights/,
+  );
+  // Nothing short, nothing to keep back.
+  for (let offset = 0; offset < 14; offset++)
+    saveCheckin(
+      s,
+      { date: offsetDate(clock.date, -offset), sleepHours: 7.5 },
+      clock.date,
+    );
+  assert.equal(voiceContext(s, clock.date).shortSleep, null);
 });
 
 test("voice instructions carry the date, the records and the save rules", () => {

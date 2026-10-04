@@ -14,6 +14,7 @@ import {
   type HealthWorkout,
 } from "../lib/health-sync";
 import { addDrink } from "../lib/hydration";
+import { offsetDate } from "../lib/health";
 import { journalSchema } from "../lib/model";
 import { mealSchema } from "../lib/nutrition";
 import {
@@ -296,6 +297,13 @@ test("journal items carry their full details: meals item by item, sleep with its
     { label: "Night", value: "23:40 to 07:10" },
   ]);
   assert.equal(sleep.footnote, "From Apple Health");
+  state.health.checkins[0].sleepImport!.source = "Apple Watch";
+  assert.equal(
+    buildJournal(state, 1, "2026-09-27", 14, new Set()).items.find(
+      (i) => i.kind === "sleep",
+    )!.details!.footnote,
+    "From Apple Health, Apple Watch",
+  );
   const checkin = byKind("checkin").details!;
   assert.deepEqual(
     checkin.lines.map((l) => l.label),
@@ -952,6 +960,37 @@ test("Today names the day the journal began, which the issue number counts from"
     updatedAt: now.toISOString(),
   });
   assert.equal(start(), "2026-09-12");
+});
+
+test("Today carries Coach's note on short sleep, from five nights, unless advice is only on request", () => {
+  const state = emptyJournal();
+  const night = (offset: number, sleepHours: number) =>
+    state.health.checkins.push({
+      date: offsetDate(date, -offset),
+      sleepHours,
+      energy: null,
+      soreness: null,
+      waterMl: null,
+      bodyweight: null,
+      notes: "",
+      updatedAt: now.toISOString(),
+    });
+  for (const offset of [0, 1, 2, 3]) night(offset, 6.25);
+  let today = buildToday(state, 1, date, new Set());
+  assert.equal(today.sleepNote, undefined);
+  assert.equal(today.sleep.averageHours, undefined, "four nights");
+  assert.equal(today.sleep.nights, 4);
+  night(5, 6.25);
+  today = buildToday(state, 2, date, new Set());
+  assert.equal(today.sleep.averageHours, 6.25);
+  assert.equal(today.sleepNote?.id, "sleep-short");
+  assert.match(today.sleepNote!.observation, /average 6 h 15 min/);
+  assert.match(today.sleepNote!.prompt, /more time asleep/);
+  state.profile.coaching = { initiative: "on-request", focus: "" };
+  assert.equal(buildToday(state, 3, date, new Set()).sleepNote, undefined);
+  state.profile.coaching.initiative = "gentle";
+  for (const c of state.health.checkins) c.sleepHours = 8;
+  assert.equal(buildToday(state, 4, date, new Set()).sleepNote, undefined);
 });
 
 test("A new journal's first steps show until all are done, for two weeks", () => {

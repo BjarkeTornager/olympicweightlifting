@@ -18,6 +18,7 @@ import {
   formatSleepDuration,
   offsetDate,
   saveCheckin,
+  SLEEP_AVERAGE_NIGHTS,
   type Checkin,
   type CheckinPatch,
 } from "@/lib/health";
@@ -479,13 +480,16 @@ export function HealthView({
         <section className="panel">
           <span>Sleep</span>
           <strong>
-            {view.sleepAverage ?? "–"}
-            <small>hours</small>
+            {view.sleepAverage == null
+              ? "–"
+              : formatSleepDuration(view.sleepAverage)}
           </strong>
           <p>
-            {view.sleepSamples
+            {view.sleepAverage != null
               ? `14-day average of ${view.sleepSamples} logged nights`
-              : "Log sleep to build your picture"}
+              : view.sleepSamples
+                ? `${view.sleepSamples} of ${SLEEP_AVERAGE_NIGHTS} nights logged for an average`
+                : "Log sleep to build your picture"}
           </p>
         </section>
         <section className="panel">

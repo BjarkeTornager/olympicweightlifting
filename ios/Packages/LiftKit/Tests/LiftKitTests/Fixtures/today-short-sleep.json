@@ -6,7 +6,15 @@
     "hours": 7.5,
     "text": "7 h 30 min",
     "fromAppleHealth": true,
-    "nights": 1
+    "averageHours": 6.216666666666667,
+    "nights": 7
+  },
+  "sleepNote": {
+    "id": "sleep-short",
+    "title": "Your nights have been on the short side.",
+    "observation": "Your 7 logged nights from the last two weeks average 6 h 13 min, under the 7 hours or more most adults need.",
+    "invitation": "There’s no need to chase a number. If it feels doable, we could find one small change that gives you more time asleep.",
+    "prompt": "My sleep has been on the short side lately. Help me find one realistic change that gives me more time asleep."
   },
   "vitals": {
     "date": "2026-09-26",
@@ -130,5 +138,5 @@
     "meal": true,
     "goals": false
   },
-  "journalStartDate": "2026-09-24"
+  "journalStartDate": "2026-09-20"
 }

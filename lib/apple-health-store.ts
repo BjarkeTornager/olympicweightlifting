@@ -75,6 +75,8 @@ export function applySleepImport(
         date: sleep.date,
         timezone: sleep.timezone,
         intervals: sleep.intervals,
+        // Only when the samples named one, so earlier imports keep theirs.
+        ...(sleep.source ? { source: sleep.source } : {}),
       }),
     )
     .digest("hex");
@@ -100,6 +102,7 @@ export function applySleepImport(
       start: sleep.start,
       end: sleep.end,
       importedAt: now.toISOString(),
+      ...(sleep.source ? { source: sleep.source } : {}),
     };
     result = receipt ? "updated" : "imported";
   }

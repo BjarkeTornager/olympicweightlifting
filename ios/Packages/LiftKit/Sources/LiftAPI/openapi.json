@@ -2774,6 +2774,11 @@
                     "awake",
                     "inBed"
                   ]
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
                 }
               },
               "required": [
@@ -2787,6 +2792,33 @@
         "required": [
           "date",
           "samples"
+        ]
+      },
+      "SleepNote": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "observation": {
+            "type": "string"
+          },
+          "invitation": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "observation",
+          "invitation",
+          "prompt"
         ]
       },
       "SleepSyncResult": {
@@ -2921,6 +2953,9 @@
           },
           "sleep": {
             "$ref": "#/components/schemas/Sleep"
+          },
+          "sleepNote": {
+            "$ref": "#/components/schemas/SleepNote"
           },
           "vitals": {
             "$ref": "#/components/schemas/Vitals"

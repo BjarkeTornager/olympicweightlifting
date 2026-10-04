@@ -11,6 +11,8 @@ import {
   saveCheckin,
   healthSchema,
   formatSleepDuration,
+  sleepAverage,
+  aboutSleepDifference,
 } from "../lib/health";
 import { prepareAction } from "../lib/agent/actions";
 test("sleep minutes stay precise through proposals, backups and partial daily updates", () => {
@@ -68,11 +70,19 @@ test("health check-ins preserve unspecified measurements and distinguish missing
     true,
   );
   assert.equal(view.sleepSamples, 1);
-  assert.equal(view.sleepAverage, 6.5);
+  assert.equal(view.sleepAverage, null, "one night is not an average");
   saveCheckin(state, { date: "2026-09-05", sleepHours: 0 }, "2026-09-06");
+  for (const date of ["2026-09-02", "2026-09-03"])
+    saveCheckin(state, { date, sleepHours: 7.2 }, "2026-09-06");
+  assert.equal(dailyHealth(state, "2026-09-06").sleepAverage, null);
+  saveCheckin(state, { date: "2026-09-01", sleepHours: 7.2 }, "2026-09-06");
+  saveCheckin(state, { date: "2026-09-04", sleepHours: 7 }, "2026-09-06");
+  const average = dailyHealth(state, "2026-09-06");
+  assert.equal(average.sleepSamples, 6);
+  // (6.5 + 0 + 3 x 7.2 + 7) / 6: 5 h 51 min, to the minute.
   assert.equal(
-    dailyHealth(state, "2026-09-06").sleepAverage,
-    3.3,
+    average.sleepAverage,
+    351 / 60,
     "explicit zero is a recorded observation",
   );
   assert.equal(
@@ -80,6 +90,16 @@ test("health check-ins preserve unspecified measurements and distinguish missing
     false,
     "yesterday's low energy is not presented as today's",
   );
+});
+test("sleep averages need five nights, and differences round to 15 minutes", () => {
+  assert.equal(sleepAverage([7, 7, 7, 7]), null);
+  assert.equal(sleepAverage([7, 7, 7, 7, 8]), 7.2);
+  assert.equal(sleepAverage([6, 6, 6, 6, 6.01]), 6);
+  assert.equal(aboutSleepDifference(0.12), null);
+  assert.equal(aboutSleepDifference(0.13), "about 15 min");
+  assert.equal(aboutSleepDifference(-0.7), "about 45 min");
+  assert.equal(aboutSleepDifference(1.2), "about 1 h 15 min");
+  assert.equal(aboutSleepDifference(2), "about 2 h");
 });
 test("health validation rejects invalid units, dates and duplicate days", () => {
   for (const patch of [

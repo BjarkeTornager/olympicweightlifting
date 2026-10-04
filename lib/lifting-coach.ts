@@ -1,7 +1,7 @@
 import type { JournalState, Workout } from "./model";
 import { EXERCISES, exerciseName } from "./domain";
 import { foodDate } from "./nutrition";
-import { offsetDate } from "./health";
+import { offsetDate, sleepAverage } from "./health";
 import { isValidLoggedSet } from "../js/progression.js";
 
 export {
@@ -141,10 +141,8 @@ export function liftingReview(
       sessions: records.length,
       ...measured(records),
       sleepNights: sleep.length,
-      averageSleepHours: sleep.length
-        ? Math.round((sleep.reduce((a, b) => a + b, 0) / sleep.length) * 10) /
-          10
-        : null,
+      // From at least five logged nights, to the minute.
+      averageSleepHours: sleepAverage(sleep),
     };
   });
   const latest = sessions[0];

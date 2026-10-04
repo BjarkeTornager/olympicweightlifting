@@ -5,6 +5,7 @@ import { addDrink } from "./hydration";
 import type { CoachVisual } from "./coach-visuals";
 import { addSupplement } from "./supplements";
 import { prepareBodyGoals } from "./agent/prepare-records";
+import { offsetDate } from "./health";
 import {
   buildCoach,
   buildJournal,
@@ -125,8 +126,23 @@ export function nativeFixtures() {
     },
     date,
   );
+  // Six reported nights of 6 hours before last night's 7 h 30 min from
+  // Apple Health: short sleep, so Today carries Coach's note on it.
+  const shortSleep = structuredClone(state);
+  for (const day of [1, 2, 3, 4, 5, 6])
+    shortSleep.health.checkins.push({
+      date: offsetDate(date, -day),
+      sleepHours: 6,
+      energy: null,
+      soreness: null,
+      waterMl: null,
+      bodyweight: null,
+      notes: "",
+      updatedAt: now.toISOString(),
+    });
   return {
     "today.json": buildToday(state, 12, date, imported),
+    "today-short-sleep.json": buildToday(shortSleep, 12, date, imported),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
     "trends.json": buildTrends(state, date, 7),
     "training.json": buildTraining(state, 12, date),

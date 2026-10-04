@@ -37,6 +37,20 @@ struct ContractTests {
     #expect(older.journalStartDate == nil && older.date == "2026-09-26")
   }
 
+  @Test("Today carries Coach's note on short sleep, and the average from five nights")
+  func todayShortSleep() throws {
+    let today = try fixture("today-short-sleep", as: Components.Schemas.Today.self)
+    #expect(today.sleep.nights == 7)
+    #expect(today.sleep.averageHours != nil)
+    let note = try #require(today.sleepNote)
+    #expect(note.id == "sleep-short")
+    #expect(note.observation.contains("7 logged nights"))
+    #expect(!note.prompt.isEmpty)
+    // One night is too few for an average, and no note.
+    let plain = try fixture("today", as: Components.Schemas.Today.self)
+    #expect(plain.sleep.nights == 1 && plain.sleep.averageHours == nil && plain.sleepNote == nil)
+  }
+
   @Test func journal() throws {
     let feed = try fixture("journal", as: Components.Schemas.JournalFeed.self)
     #expect(Set(feed.items.map(\.kind)).isSuperset(of: ["cardio", "meal", "sleep", "vitals", "strength"]))

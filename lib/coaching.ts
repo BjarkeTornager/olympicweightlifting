@@ -1,4 +1,4 @@
-import { planForState } from "./body-goals";
+import { athleteAge, planForState } from "./body-goals";
 import { bodyFatTrend, latestBodyFat, weightTrend } from "./body-composition";
 import { z } from "zod";
 import type { JournalState } from "./model";
@@ -215,6 +215,8 @@ export function coachingContext(state: JournalState, date: string) {
       initiative: preferences.initiative,
       focus: preferences.focus,
     },
+    // Null when unknown; the voice coach gets the same.
+    age: athleteAge(state),
     // Saved body goals, focus and target body fat, and the plan the app
     // derives from them with the latest body fat reading. The target is the
     // plan's, which sets none under 18 or in pregnancy.

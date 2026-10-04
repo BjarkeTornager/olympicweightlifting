@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { backup, emptyJournal, parseLegacyBackup } from "../lib/domain";
 import { journalSchema } from "../lib/model";
 import { coachSuggestion, coachingContext } from "../lib/coaching";
+import { applyGoals } from "../lib/body-goals";
+import { voiceContext } from "../lib/voice-checkin";
 import { offsetDate, saveCheckin } from "../lib/health";
 import { prepareAction } from "../lib/agent/actions";
 import { mealSchema } from "../lib/nutrition";
@@ -143,6 +145,7 @@ test("coaching preferences survive backups without changing legacy journals and 
   assert.deepEqual(restored.profile.coaching, state.profile.coaching);
   assert.deepEqual(coachingContext(restored, date), {
     preferences: state.profile.coaching,
+    age: null,
     approvedMemories: [],
     agreedPlans: [],
     startingPoint: null,
@@ -167,4 +170,35 @@ test("coaching preferences survive backups without changing legacy journals and 
       false,
     );
   }
+});
+
+test("typed Coach gets the athlete's age from the goals, else Settings, as the voice coach does", () => {
+  const state = emptyJournal();
+  // Settings' 0 means unknown, so Coach asks before describing any amount.
+  assert.equal(coachingContext(state, date).age, null);
+  // A 16-year-old who entered their age in Settings but has no goals.
+  state.profile.age = 16;
+  assert.equal(state.profile.body, undefined);
+  assert.equal(coachingContext(state, date).age, 16);
+  assert.equal(coachingContext(state, date).goals, undefined);
+  assert.equal(voiceContext(state, date).age, 16);
+  applyGoals(
+    state,
+    {
+      age: 34,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 64,
+      targetWeightKg: 64,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 3,
+      sessionMinutes: 60,
+      experience: "developing",
+    },
+    date,
+  );
+  state.profile.age = 0;
+  assert.equal(coachingContext(state, date).age, 34);
+  assert.equal(voiceContext(state, date).age, 34);
 });

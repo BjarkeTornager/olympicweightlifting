@@ -199,10 +199,43 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   amount when it isn't known, as the caffeine rule already did
     //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
-    "74336db6086b85a0a50bf3c0ef71f999488710348f9dc483100082c125eecdfb",
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // (PR 10, energy expenditure): the health paragraph's calories rule
+    // gains two sentences. activeEnergy and burnedInTraining overlap, since
+    // a watch counts the training it saw, so Coach quotes them separately,
+    // never adds them together and never subtracts either from food eaten,
+    // as the voice coach already does; and when burnedInTraining lists
+    // lifting_sessions_without_length or entries_without_estimate, Coach
+    // says its figure leaves those out. Removing them reproduces the
+    // previous hash (74336db6…). Health, privacy and action policy text is
+    // otherwise unchanged.
+    "acd4057ed5638bbbc42c03caa12ee2f16f9e49a16535418c9311fe62e5b5ac8b",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
+});
+
+test("Coach quotes active energy and training apart, as estimates, never added together", () => {
+  const prompt = systemPrompt();
+  assert.match(
+    prompt,
+    /activeEnergy \(Apple Health's estimate of all movement so far\) and burnedInTraining overlap/,
+  );
+  assert.match(
+    prompt,
+    /quote them separately, never add them together, and never subtract either from food eaten/,
+  );
+  assert.match(
+    prompt,
+    /entries_without_estimate, say its figure leaves those out/,
+  );
+  // The site help agrees with what Today shows.
+  assert.doesNotMatch(siteHelp.health, /measured when a watch recorded it/);
+  assert.match(
+    siteHelp.health,
+    /calories burned, always an estimate \(a watch's included\) of the energy used above rest/,
+  );
+  assert.match(siteHelp.health, /never added together/);
 });
 
 test("Coach policy separates reported events, previews and advice", () => {

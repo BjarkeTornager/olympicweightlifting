@@ -7,10 +7,12 @@ import {
 } from "./health";
 
 // How much sleep a night calls for (CDC, AASM, Sundhedsstyrelsen): at least
-// 7 hours for adults, 8 to 10 at 14-17. Under 6 hours the wording is firmer.
-// The thresholds for speaking up are design choices, not clinical cut-offs.
+// 7 hours for adults, 8 to 10 at 13-17 and 9 to 12 at 6-12. Under 6 hours the
+// wording is firmer. The thresholds for speaking up are design choices, not
+// clinical cut-offs.
 export const ADULT_SLEEP_HOURS = 7;
 export const TEEN_SLEEP_HOURS = 8;
+export const CHILD_SLEEP_HOURS = 9;
 export const VERY_SHORT_SLEEP_HOURS = 6;
 
 type Night = Checkin & { sleepHours: number };
@@ -41,21 +43,32 @@ function age(state: JournalState) {
   return value > 0 ? value : null;
 }
 
+// What the athlete's age calls for, with the recommended range for a child
+// or teenager. An age under 6 is more likely a slip than a lifter's, so it
+// counts as unknown, as does no age: the adult guidance.
+function sleepNeed(state: JournalState) {
+  const years = age(state);
+  if (years != null && years >= 6 && years < 13)
+    return { hours: CHILD_SLEEP_HOURS, range: "9 to 12 hours" };
+  if (years != null && years >= 13 && years < 18)
+    return { hours: TEEN_SLEEP_HOURS, range: "8 to 10 hours" };
+  return { hours: ADULT_SLEEP_HOURS, range: null };
+}
+
 // Short sleep over the last two weeks: at least five logged nights whose
 // average is under what the athlete's age calls for. Missing nights are
 // unknown, not short.
 export function shortSleep(state: JournalState, date: string) {
   const logged = nights(state, offsetDate(date, -13), date);
   const averageHours = sleepAverage(logged.map((c) => c.sleepHours));
-  const years = age(state);
-  const teen = years != null && years < 18;
-  const need = teen ? TEEN_SLEEP_HOURS : ADULT_SLEEP_HOURS;
-  if (averageHours == null || averageHours >= need) return null;
+  const need = sleepNeed(state);
+  if (averageHours == null || averageHours >= need.hours) return null;
   return {
     averageHours,
     nights: logged.length,
-    teen,
-    need,
+    // Under 18: "9 to 12 hours" or "8 to 10 hours"; null for adults.
+    recommended: need.range,
+    need: need.hours,
     veryShort: averageHours < VERY_SHORT_SLEEP_HOURS,
   };
 }
@@ -92,8 +105,8 @@ export function sleepChange(state: JournalState, date: string) {
 }
 
 const need = (short: ShortSleep) =>
-  short.teen
-    ? "the 8 to 10 hours recommended at your age"
+  short.recommended
+    ? `the ${short.recommended} recommended at your age`
     : "the 7 hours or more most adults need";
 
 // Coach's opening on short sleep over the last two weeks, gentler while the
@@ -122,16 +135,22 @@ export function sleepShortOpening(short: ShortSleep) {
 }
 
 // For the voice coach, which otherwise has only last night to go on: short
-// sleep the journal shows, decided here rather than left to the model.
+// sleep the journal shows, decided here rather than left to the model. One
+// night under 6 hours on its own is about today's training, not health.
 export function shortSleepNote(state: JournalState, date: string) {
   const change = sleepChange(state, date);
   const short = shortSleep(state, date);
+  const lastNight = state.health.checkins.find(
+    (c) => c.date === date,
+  )?.sleepHours;
   const notes = [
     change && change.recentHours < VERY_SHORT_SLEEP_HOURS
       ? `the last three nights average ${formatSleepDuration(change.recentHours)}`
-      : "",
+      : lastNight != null && lastNight < VERY_SHORT_SLEEP_HOURS
+        ? `last night was ${formatSleepDuration(lastNight)}: one night that short can take the edge off today's training, so a light word about that fits, not a health worry`
+        : "",
     short
-      ? `the ${short.nights} logged nights of the last two weeks average ${formatSleepDuration(short.averageHours)}, under ${short.teen ? "the 8 to 10 hours recommended at their age" : "the 7 hours or more adults need"}`
+      ? `the ${short.nights} logged nights of the last two weeks average ${formatSleepDuration(short.averageHours)}, under ${short.recommended ? `the ${short.recommended} recommended at their age` : "the 7 hours or more adults need"}`
       : "",
   ].filter(Boolean);
   return notes.length

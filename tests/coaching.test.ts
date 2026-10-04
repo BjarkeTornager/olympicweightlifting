@@ -208,6 +208,37 @@ test("short sleep needs five logged nights, and is firmer under 6 h and for teen
   assert.equal(coachSuggestion(teen, date).id, "get-to-know-you");
 });
 
+test("under 13, short sleep is measured against the 9 to 12 hours a child needs", () => {
+  const state = emptyJournal();
+  nights(state, fortnight, 8.5);
+  state.profile.age = 10;
+  const child = coachSuggestion(state, date);
+  assert.equal(child.id, "sleep-short");
+  assert.match(
+    child.observation,
+    /average 8 h 30 min, under the 9 to 12 hours recommended at your age\.$/,
+  );
+  // 8.5 h is enough at 13 and 17, and 7.5 h is short at 12.
+  for (const age of [13, 17]) {
+    state.profile.age = age;
+    assert.equal(coachSuggestion(state, date).id, "get-to-know-you");
+  }
+  nights(state, fortnight, 7.5);
+  state.profile.age = 12;
+  assert.match(
+    coachSuggestion(state, date).observation,
+    /under the 9 to 12 hours recommended at your age/,
+  );
+  state.profile.age = 13;
+  assert.match(
+    coachSuggestion(state, date).observation,
+    /under the 8 to 10 hours recommended at your age/,
+  );
+  // An age under 6 is taken as unknown: adult guidance, so 7.5 h is enough.
+  state.profile.age = 4;
+  assert.equal(coachSuggestion(state, date).id, "get-to-know-you");
+});
+
 test("three nights under 6 h fire sleep-change on their own, with their own wording", () => {
   const state = emptyJournal();
   nights(state, [-2, -1, 0], 5.5);

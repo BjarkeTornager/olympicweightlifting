@@ -8,7 +8,7 @@ import {
   type BodyGoals,
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
-import { actionSchema } from "../lib/agent/action-schema";
+import { actionSchema, actionToolSchema } from "../lib/agent/action-schema";
 import { skillsFor } from "../lib/agent/skills";
 import {
   coachSuggestion,
@@ -61,6 +61,30 @@ test("typed Coach passes feet, inches and pounds, and the review saves cm and kg
   const saved = prepareAction(emptyJournal(), action, today).state;
   assert.equal(saved.profile.body?.weightKg, 86.2);
   assert.equal(saved.profile.body?.targetWeightKg, 81.6);
+  // The zeros a model fills in for the units it didn't use pass the tool's
+  // own check too, as the app ignores them, so no round is lost to them.
+  for (const bodyGoals of [
+    {
+      ...lifter,
+      heightFeet: 0,
+      heightInches: 0,
+      weightLb: 0,
+      targetWeightLb: 0,
+    },
+    { ...imperial, heightCm: 0, weightKg: 0, targetWeightKg: 0 },
+  ]) {
+    const tool = actionToolSchema.safeParse({
+      kind: "set_body_goals",
+      bodyGoals,
+    });
+    assert.ok(tool.success, JSON.stringify(tool.error?.issues));
+    const parsed = actionSchema.parse({
+      kind: "set_body_goals",
+      bodyGoals: tool.data.bodyGoals,
+    });
+    assert.ok(parsed.kind === "set_body_goals");
+    assert.ok([178, 177.8].includes(parsed.bodyGoals.heightCm));
+  }
 });
 
 test("Coach's review carries the safety notes, and the iPhone receipt shows them in full", () => {

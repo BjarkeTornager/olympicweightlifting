@@ -176,14 +176,22 @@ export const bodyGoalsRequestSchema = bodyGoalsInputSchema
   .extend(goalChecksInputSchema.shape);
 export type BodyGoalsRequest = z.infer<typeof bodyGoalsRequestSchema>;
 // A goal change as Coach gives it: height and weights in cm and kg, or in
-// feet and inches and pounds as the athlete said them (metricGoals).
-export const coachGoalsSchema = bodyGoalsRequestSchema
-  .extend({
-    heightCm: bodyGoalsInputSchema.shape.heightCm.optional(),
-    weightKg: bodyGoalsInputSchema.shape.weightKg.optional(),
-    targetWeightKg: bodyGoalsInputSchema.shape.targetWeightKg.optional(),
-  })
-  .extend(imperialGoalsSchema.shape);
+// feet and inches and pounds as the athlete said them (metricGoals). A zero
+// in one of them, as a model filling every field sends, is no value, as
+// metricGoals takes it.
+const unlessZero = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => v || undefined, schema);
+export const coachGoalsSchema = bodyGoalsRequestSchema.extend({
+  heightCm: unlessZero(bodyGoalsInputSchema.shape.heightCm.optional()),
+  weightKg: unlessZero(bodyGoalsInputSchema.shape.weightKg.optional()),
+  targetWeightKg: unlessZero(
+    bodyGoalsInputSchema.shape.targetWeightKg.optional(),
+  ),
+  heightFeet: unlessZero(imperialGoalsSchema.shape.heightFeet),
+  heightInches: imperialGoalsSchema.shape.heightInches,
+  weightLb: unlessZero(imperialGoalsSchema.shape.weightLb),
+  targetWeightLb: unlessZero(imperialGoalsSchema.shape.targetWeightLb),
+});
 
 // Coach's goal change with any feet and inches or pounds in cm and kg, to
 // 0.1, and the imperial fields gone; anything else passes through for the

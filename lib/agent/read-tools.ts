@@ -15,6 +15,7 @@ import {
   catalogueMatches,
   customExerciseIds,
   exerciseKey,
+  exerciseResolver,
   resolveExerciseId,
   searchExercises,
 } from "../exercises";
@@ -106,26 +107,45 @@ const PAGE = 20;
 const nextOffset = (offset: number, total: number) =>
   offset + PAGE < total ? offset + PAGE : null;
 
-// Muscle, equipment, category and training-style words, singular or plural:
-// a search for "chest" or "dumbbell" is not the name of a new exercise.
-const catalogueTerms = new Set(
-  EXERCISES.flatMap((e) => [
-    ...e.muscles,
-    ...e.equipment,
-    e.category,
-    ...e.disciplines,
-  ]).flatMap((term) => [
-    exerciseKey(term),
-    exerciseKey(term).replace(/s$/, ""),
-  ]),
+// Muscle, equipment, category and training-style words, and words for a
+// kind of training: a search for "chest", "dumbbell" or "cardio" is not the
+// name of a new exercise.
+const notMovements = new Set(
+  [
+    ...EXERCISES.flatMap((e) => [
+      ...e.muscles,
+      ...e.equipment,
+      e.category,
+      ...e.disciplines,
+    ]),
+    "upper body",
+    "lower body",
+    "full body",
+    "cardio",
+    "conditioning",
+    "mobility",
+    "stretching",
+    "warm up",
+    "cool down",
+  ].map(exerciseKey),
 );
+
+// The movement an id names, so every spelling of it reads together:
+// custom:Back squat is back_squat, custom:cable thing is custom:Cable thing.
+const movement = (id: string) => {
+  if (!id.startsWith("custom:")) return id;
+  const known = catalogueMatches(id);
+  return known.length === 1 ? known[0] : `custom:${exerciseKey(id)}`;
+};
 
 // An exercise filter that matches no id returns nothing, and Coach then tells
 // the athlete they never did the lift. Models often pass the name ("back
-// squat") instead of the id, so a name resolves to the one id this journal or
-// the catalogue uses for it; anything else is refused with ids to use. The
-// athlete's own exercise (custom:) matches another spelling of it, and one
-// not logged yet is an honest empty answer.
+// squat") instead of the id, so a name resolves to the one exercise this
+// journal or the catalogue uses for it; anything else is refused with ids to
+// use. The filter is every id the athlete logged that exercise under, so
+// another spelling of it (custom:Cable fly and custom:cable fly, or an older
+// custom:Back squat beside back_squat) reads the whole history, and their own
+// exercise not logged yet is an honest empty answer.
 function exerciseFilter(state: JournalState, requested?: string) {
   if (!requested) return undefined;
   const logged = new Set(
@@ -134,20 +154,18 @@ function exerciseFilter(state: JournalState, requested?: string) {
       ...(state.activeWorkout ? [state.activeWorkout] : []),
     ].flatMap((w) => w.exercises.map((e) => e.exerciseId)),
   );
+  const spellings = (ids: string[]) => {
+    const movements = new Set(ids.map(movement));
+    return [
+      ...new Set([
+        ...ids,
+        ...[...logged].filter((id) => movements.has(movement(id))),
+      ]),
+    ];
+  };
   if (logged.has(requested) || EXERCISES.some((e) => e.id === requested))
-    return requested;
+    return spellings([requested]);
   const words = exerciseKey(requested);
-  if (isCustomExerciseId(requested)) {
-    const spelled = [...logged].find(
-      (id) => id.startsWith("custom:") && exerciseKey(id) === words,
-    );
-    if (spelled) return spelled;
-    try {
-      return resolveExerciseId(state, requested);
-    } catch {
-      // Not a name an exercise can have: refused below.
-    }
-  }
   const names = (id: string) => {
     const known = EXERCISES.find((e) => e.id === id);
     return [id, ...(known ? [known.name, ...known.aliases] : [])].map(
@@ -161,10 +179,17 @@ function exerciseFilter(state: JournalState, requested?: string) {
   const matches = all.some((id) => logged.has(id))
     ? all.filter((id) => logged.has(id))
     : all;
-  if (matches.length === 1) return matches[0];
+  if (matches.length && new Set(matches.map(movement)).size === 1)
+    return spellings(matches);
+  if (!matches.length && isCustomExerciseId(requested))
+    try {
+      return [resolveExerciseId(state, requested)];
+    } catch {
+      // Not a name an exercise can have: refused below.
+    }
   const ids = matches.length
     ? matches
-    : searchExercises(words.replace(/s\b/g, "")).map((e) => e.id);
+    : searchExercises(words).map((e) => e.id);
   throw Error(
     `No exercise has the id "${requested}". Use an exact exerciseId` +
       (ids.length
@@ -410,8 +435,8 @@ export async function runReadTool(
     }
     case "find_sessions": {
       const a = specifications.find_sessions.schema.parse(args);
-      const exerciseId = exerciseFilter(state, a.exerciseId);
-      if (!exerciseId)
+      const exerciseIds = exerciseFilter(state, a.exerciseId);
+      if (!exerciseIds)
         reads.trainingRanges.push({
           from: a.from ?? "0000-01-01",
           to: a.to ?? currentDate,
@@ -421,8 +446,8 @@ export async function runReadTool(
           (w) =>
             (!a.from || w.date >= a.from) &&
             w.date <= (a.to ?? currentDate) &&
-            (!exerciseId ||
-              w.exercises.some((e) => e.exerciseId === exerciseId)),
+            (!exerciseIds ||
+              w.exercises.some((e) => exerciseIds.includes(e.exerciseId))),
         )
         .sort((a, b) => b.date.localeCompare(a.date));
       const offset = a.offset ?? 0;
@@ -530,9 +555,28 @@ export async function runReadTool(
     case "exercises": {
       const a = specifications.exercises.schema.parse(args);
       const queries = a.queries ?? [a.query ?? ""];
+      // Catalogue exercises with every word of a query, singular or plural.
+      // When none has them all, those with all but one are near matches,
+      // listed beside the id for a new exercise rather than hidden by it.
+      const searches = queries.map((q) => {
+        const exact = searchExercises(q);
+        const words = exerciseKey(q).split(" ");
+        const near =
+          exact.length || words.length < 2
+            ? []
+            : words.flatMap((_, i) =>
+                searchExercises(words.filter((_, j) => j !== i).join(" ")),
+              );
+        return { q, exact, near: [...new Set(near.map((e) => e.id))] };
+      });
       const found = [
         ...new Map(
-          queries.flatMap((q) => searchExercises(q)).map((e) => [e.id, e]),
+          searches
+            .flatMap(({ exact, near }) => [
+              ...exact,
+              ...EXERCISES.filter((e) => near.includes(e.id)),
+            ])
+            .map((e) => [e.id, e]),
         ).values(),
       ];
       const catalogue = found.map((exercise) => ({
@@ -549,46 +593,68 @@ export async function runReadTool(
           ? `https://www.youtube.com/watch?v=${exercise.videoId}`
           : null,
       }));
-      // The athlete's own exercises with every query word, then, for a
-      // movement neither they nor the catalogue has by that name, the id
-      // that saves it as theirs: never a dead end, never a guess.
-      const own = customExerciseIds(state);
-      const theirs = own.filter((id) =>
-        queries.some((q) =>
-          exerciseKey(q)
-            .split(" ")
-            .every((word) => exerciseKey(id).includes(word)),
-        ),
+      // The athlete's own exercises with every query word, each once in the
+      // spelling changes reuse, then, for a movement neither they nor the
+      // catalogue has by that name, the id that saves it as theirs: never a
+      // dead end, never a guess.
+      const spellings = new Map<string, string[]>();
+      for (const id of customExerciseIds(state))
+        spellings.set(exerciseKey(id), [
+          ...(spellings.get(exerciseKey(id)) ?? []),
+          id,
+        ]);
+      const named = (key: string, q: string) => {
+        const words = key.split(" ");
+        return exerciseKey(q)
+          .split(" ")
+          .every((word) => words.some((w) => w.startsWith(word)));
+      };
+      const theirs = [...spellings].filter(([key]) =>
+        queries.some((q) => named(key, q)),
       );
-      const fresh = queries.flatMap((q) => {
+      const resolve = exerciseResolver(state);
+      const fresh = searches.flatMap(({ q, exact, near }) => {
         const key = exerciseKey(q);
         if (
           !key ||
-          catalogueTerms.has(key) ||
+          exact.length ||
+          notMovements.has(key) ||
           catalogueMatches(q).length ||
-          own.some((id) => exerciseKey(id) === key)
+          spellings.has(key)
         )
           return [];
         try {
-          return [resolveExerciseId(state, `custom:${q}`)];
+          return [{ id: resolve(`custom:${q}`), near }];
         } catch {
           return [];
         }
       });
+      const lacks =
+        "Only for a movement the catalogue lacks, use this id to log, plan or add it; it becomes the athlete's own exercise, not a library one.";
       return [
         ...catalogue,
-        ...[...new Set([...theirs, ...fresh])].map((id) => ({
+        ...theirs.map(([key, [id, ...older]]) => ({
           id,
           name: exerciseName(id),
-          category: theirs.includes(id)
-            ? "The athlete's own exercises"
-            : "Not in the catalogue",
+          category: "The athlete's own exercises",
           custom: true,
-          loggingNotes: theirs.includes(id)
-            ? "The athlete's own exercise, already in their journal. Reuse this exact id for it."
-            : "No catalogue exercise has this name. The catalogue is in English: if this is a catalogue exercise in another language or by another name (bænkpres is bench press), search for that and use its id. Only for a movement the catalogue lacks, use this id to log, plan or add it; it becomes the athlete's own exercise, not a library one.",
+          loggingNotes: queries.some((q) => exerciseKey(q) === key)
+            ? `The athlete's own exercise, already in their journal. Reuse this exact id for it.${older.length ? ` ${older.join(", ")} is an older spelling of it; history reads include both.` : ""}`
+            : "One of the athlete's own exercises, with a similar name. Reuse its exact id only if it is the same movement.",
           videoUrl: null,
         })),
+        ...[...new Map(fresh.map((f) => [f.id, f])).values()].map(
+          ({ id, near }) => ({
+            id,
+            name: exerciseName(id),
+            category: "Not in the catalogue",
+            custom: true,
+            loggingNotes: near.length
+              ? `No catalogue exercise has this name; the nearest are ${near.join(", ")}. If one is the same movement, use its id, and if unsure, ask the athlete which. ${lacks}`
+              : `No catalogue exercise has this name. The catalogue is in English: if this is a catalogue exercise in another language or by another name (bænkpres is bench press), search for that and use its id. ${lacks}`,
+            videoUrl: null,
+          }),
+        ),
       ];
     }
     case "site_help":

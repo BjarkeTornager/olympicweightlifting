@@ -10,6 +10,7 @@ import {
 } from "../model";
 import type { TrainingProgram } from "../training-program-schema";
 import { exerciseResolver } from "../exercises";
+import { trainingPrograms } from "../training-programs";
 import type { Checkin } from "../health";
 import type { Meal, DietTargets } from "../nutrition";
 import { actionSchema, type AgentAction } from "./action-schema";
@@ -126,24 +127,56 @@ export type PreparedChange = Omit<PreviewEntry, "workout"> & {
   workout?: Workout | null;
 };
 
+// The exercise ids already in the record an action changes: the workout in
+// progress, or the history session, routine or programme it edits.
+function changedRecord(state: JournalState, a: AgentAction) {
+  const ids = (exercises: { exerciseId: string }[] = []) =>
+    exercises.map((e) => e.exerciseId);
+  const session = (id?: string) =>
+    state.sessions.find((s) => s.id === id)?.exercises;
+  switch (a.kind) {
+    case "log_sets":
+    case "add_workout_exercise":
+      return ids(state.activeWorkout?.exercises);
+    case "log_workout_progress":
+      return ids(
+        a.sessionId ? session(a.sessionId) : state.activeWorkout?.exercises,
+      );
+    case "update_session":
+      return ids(session(a.sessionId));
+    case "update_routine":
+      return ids(state.templates.find((t) => t.id === a.routineId)?.exercises);
+    case "update_training_program":
+      return ids(
+        trainingPrograms(state)
+          .find((p) => p.id === a.trainingProgramId)
+          ?.days.flatMap((d) => d.exercises),
+      );
+    default:
+      return [];
+  }
+}
+
 // Every exercise an action names, as the journal knows it, so Coach, voice
 // and the iPhone app save one id per movement: custom:Back squat is
-// back_squat, and another spelling of the athlete's own exercise is the one
-// they already use (lib/exercises.ts). Resolving again changes nothing.
+// back_squat, another spelling of the athlete's own exercise is the one
+// they already use, and an id the journal or the changed record already
+// holds stays as it is (lib/exercises.ts). Resolving again changes nothing.
 function resolveExercises(state: JournalState, action: AgentAction) {
   const resolve = exerciseResolver(state);
-  const each = (exercises: { exerciseId: string }[] = []) => {
-    for (const e of exercises) e.exerciseId = resolve(e.exerciseId);
-  };
   const visit = (a: AgentAction) => {
-    if ("exerciseId" in a) a.exerciseId = resolve(a.exerciseId);
+    if (a.kind === "record_bundle") return a.entries.forEach(visit);
+    const record = changedRecord(state, a);
+    const each = (exercises: { exerciseId: string }[] = []) => {
+      for (const e of exercises) e.exerciseId = resolve(e.exerciseId, record);
+    };
+    if ("exerciseId" in a) a.exerciseId = resolve(a.exerciseId, record);
     if ("workout" in a) each(a.workout.exercises);
     if ("routine" in a) each(a.routine.exercises);
     if ("trainingProgram" in a)
       for (const day of a.trainingProgram.days) each(day.exercises);
     if ("programChanges" in a)
       for (const day of a.programChanges.days ?? []) each(day.exercises);
-    if (a.kind === "record_bundle") a.entries.forEach(visit);
   };
   visit(action);
   return action;

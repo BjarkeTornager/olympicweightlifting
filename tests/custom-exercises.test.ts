@@ -9,10 +9,13 @@ import {
   resolveExerciseId,
 } from "../lib/exercises";
 import { prepareAction } from "../lib/agent/actions";
+import { receiptEntryView } from "../lib/native-api";
+import { plannedSetsText } from "../lib/training";
 import { guardChange } from "../lib/agent/change-guards";
 import { newTurnReads, runReadTool } from "../lib/agent/read-tools";
 import { isValidLoggedSet } from "../js/progression.js";
 import type { JournalState } from "../lib/model";
+import { trainingPrograms } from "../lib/training-programs";
 import { mixedProgram } from "./fixtures/training-programs";
 
 const today = "2026-10-04";
@@ -82,11 +85,24 @@ test("a custom exercise name is saved as one tidy line, refused rather than cut"
     () => canonicalCustomName("custom:"),
     /Give the exercise a name/,
   );
+  // A name that shows nothing, or no letter or number, is no name: a
+  // combining mark, a variation selector, a blank filler letter, the braille
+  // blank or emoji alone.
+  for (const blank of ["\u0301", "\uFE0F", "\u3164", "\u2800 \u115F", "🏋💪"])
+    assert.throws(
+      () => canonicalCustomName(blank),
+      /Give the exercise a name/,
+      JSON.stringify(blank),
+    );
+  assert.equal(canonicalCustomName("\u3164squat\uFE0F"), "Squat");
   // 120 UTF-16 units at most: an emoji counts twice.
   assert.equal(canonicalCustomName("a".repeat(120)).length, 120);
-  assert.equal(canonicalCustomName("🏋".repeat(60)).length, 120);
+  assert.equal(canonicalCustomName(`Squat ${"🏋".repeat(57)}`).length, 120);
   assert.throws(() => canonicalCustomName("a".repeat(121)), /at most 120/);
-  assert.throws(() => canonicalCustomName("🏋".repeat(61)), /at most 120/);
+  assert.throws(
+    () => canonicalCustomName(`Squat ${"🏋".repeat(58)}`),
+    /at most 120/,
+  );
 });
 
 test("exercise keys compare names, ids and spellings", () => {
@@ -97,6 +113,15 @@ test("exercise keys compare names, ids and spellings", () => {
     "standing cable reverse fly",
   );
   assert.equal(exerciseKey("custom:custom:Cable\u200bfly"), "cablefly");
+  // Plurals and the DB short form compare with the catalogue's names.
+  assert.equal(exerciseKey("Front squats"), "front squat");
+  assert.equal(exerciseKey("Bench presses"), "bench press");
+  assert.equal(exerciseKey("cable flies"), "cable fly");
+  assert.equal(exerciseKey("Pull-ups"), exerciseKey("pull up"));
+  assert.equal(exerciseKey("RDLs"), "rdl");
+  assert.equal(exerciseKey("DB row"), "dumbbell row");
+  // A vowel sign belongs to its letter, so these two names stay apart.
+  assert.notEqual(exerciseKey("काल स्क्वाट"), exerciseKey("किल स्क्वाट"));
 });
 
 test("the athlete's own exercises come from every place they are saved", () => {
@@ -155,6 +180,22 @@ test("ids resolve to the catalogue on a whole name or alias, to the athlete's ow
     resolveExerciseId(state, "custom:overhead press"),
     "custom:Overhead press",
   );
+  // A plural or the DB short form of a catalogue name is that exercise.
+  for (const [id, catalogue] of [
+    ["custom:Front squats", "front_squat"],
+    ["custom:Deadlifts", "deadlift"],
+    ["custom:RDLs", "romanian_deadlift"],
+    ["custom:DB row", "dumbbell_row"],
+    ["custom:Pull-ups", "pull_up"],
+    ["custom:Hip thrusts", "hip_thrust"],
+  ])
+    assert.equal(resolveExerciseId(state, id), catalogue, id);
+  // A placeholder for a group of movements is not named by its id:
+  // upper_back is "Rows / pull-ups".
+  assert.equal(
+    resolveExerciseId(state, "custom:Upper back"),
+    "custom:Upper back",
+  );
   // Ids that are neither pass through, for validation to refuse.
   assert.equal(
     resolveExerciseId(state, "invented_gym_exercise"),
@@ -193,6 +234,115 @@ test("ids resolve to the catalogue on a whole name or alias, to the athlete's ow
       e.sets.length,
     ]),
     [["custom:Back squat", 2]],
+  );
+});
+
+test("an id the journal already holds stays, so editing a session keeps its entry", () => {
+  const state = emptyJournal();
+  // Saved before ids were made canonical: custom:Back squat beside the
+  // catalogue lift, and two spellings of one exercise.
+  session(state, "2026-09-01", "custom:Back squat");
+  session(state, "2026-09-02", "custom:cable thing");
+  session(state, "2026-09-03", "custom:Cable thing");
+  for (const w of state.sessions)
+    Object.assign(w.exercises[0], {
+      athleteNotes: "Knee felt fine",
+      coachCue: "Brace",
+      prescribed: { targetSets: 3 },
+    });
+  const change = (
+    kind: "update_session" | "log_workout_progress",
+    date: string,
+    exerciseId: string,
+  ) => {
+    const w = state.sessions.find((s) => s.date === date)!;
+    return prepareAction(
+      state,
+      {
+        kind,
+        sessionId: w.id,
+        ...(kind === "log_workout_progress" ? { completion: "completed" } : {}),
+        workout: {
+          title: w.title,
+          date,
+          category: "open",
+          exercises: [{ exerciseId, sets: [done(100, 5)] }],
+        },
+      },
+      today,
+    ).state.sessions.find((s) => s.date === date)!.exercises;
+  };
+  for (const [date, id, sent] of [
+    ["2026-09-01", "custom:Back squat", "custom:Back squat"],
+    ["2026-09-02", "custom:cable thing", "custom:cable thing"],
+    // Another spelling joins the session's own entry too.
+    ["2026-09-02", "custom:cable thing", "custom:CABLE THING"],
+  ]) {
+    const entry = state.sessions.find((s) => s.date === date)!.exercises[0];
+    assert.deepEqual(
+      change("update_session", date, sent).map((e) => [
+        e.id,
+        e.exerciseId,
+        e.athleteNotes,
+        e.coachCue,
+        e.prescribed,
+        e.sets.length,
+      ]),
+      [[entry.id, id, "Knee felt fine", "Brace", { targetSets: 3 }, 1]],
+      sent,
+    );
+    assert.deepEqual(
+      change("log_workout_progress", date, sent).map((e) => [
+        e.exerciseId,
+        e.sets.length,
+      ]),
+      [[id, 2]],
+      sent,
+    );
+  }
+  // An exact id from history is kept, but the workout in progress keeps
+  // its own spelling of the exercise.
+  state.activeWorkout = createWorkout(state, undefined, today);
+  assert.equal(
+    resolveExerciseId(state, "custom:cable thing"),
+    "custom:cable thing",
+  );
+  const started = prepareAction(
+    state,
+    logSets("custom:Cable thing"),
+    today,
+  ).state;
+  const joined = prepareAction(started, logSets("custom:cable thing"), today);
+  assert.deepEqual(
+    joined.state.activeWorkout!.exercises.map((e) => [
+      e.exerciseId,
+      e.sets.length,
+    ]),
+    [["custom:Cable thing", 2]],
+  );
+  // A programme saved again keeps the ids it holds.
+  const created = prepareAction(
+    emptyJournal(),
+    { kind: "create_training_program", trainingProgram: mixedProgram },
+    today,
+  ).state;
+  const programme = trainingPrograms(created).at(-1)!;
+  programme.days[0].exercises[1].exerciseId = "custom:Back squat";
+  const days = structuredClone(mixedProgram.days);
+  days[0].exercises[1].exerciseId = "custom:Back squat";
+  const resaved = prepareAction(
+    created,
+    {
+      kind: "update_training_program",
+      trainingProgramId: programme.id,
+      programChanges: { name: "Renamed", days },
+    },
+    today,
+  );
+  assert.deepEqual(
+    resaved.training?.kind === "program" &&
+      resaved.training.after.days[0].exercises.map((e) => e.exerciseId),
+    ["seated_leg_curl", "custom:Back squat"],
   );
 });
 
@@ -367,8 +517,14 @@ test("add_workout_exercise adds planned sets to the workout in progress", () => 
   const [squat, entry] = added.state.activeWorkout!.exercises;
   assert.equal(squat.sets.filter(isValidLoggedSet).length, 1);
   assert.equal(entry.exerciseId, fly);
-  assert.equal(entry.coachCue, "Superset with face pulls.");
-  assert.deepEqual(entry.prescribed, { targetSets: 4, reps: "8–10" });
+  // The note goes with the target, where Train and current_workout show
+  // it, and the review says it.
+  assert.deepEqual(entry.prescribed, {
+    targetSets: 4,
+    reps: "8–10",
+    notes: "Superset with face pulls.",
+  });
+  assert.match(added.detail, /Note: Superset with face pulls\.$/);
   assert.deepEqual(
     entry.sets.map((s) => [s.weight, s.reps, isValidLoggedSet(s)]),
     [
@@ -412,6 +568,29 @@ test("add_workout_exercise adds planned sets to the workout in progress", () => 
     ],
   );
   assert.equal(flies[0].completed, false);
+  // The target counts the new set; its reps already cover it.
+  assert.deepEqual(flies[0].prescribed, {
+    targetSets: 5,
+    reps: "8–10",
+    notes: "Superset with face pulls.",
+  });
+  // The review and the iPhone receipt tell planned sets from logged ones,
+  // and a planned set without a load says so.
+  assert.equal(
+    plannedSetsText(flies[0].sets),
+    "Planned: 1 × 10 at 15 kg, 1 × 8 at 15 kg, 1 × 8 (load to choose), 1 × 8 at 15 kg",
+  );
+  assert.deepEqual(
+    receiptEntryView({
+      title: more.title,
+      detail: more.detail,
+      workout: more.state.activeWorkout,
+    }).lines.at(-1),
+    {
+      label: "Standing cable reverse fly",
+      value: `10 kg × 10, ${plannedSetsText(flies[0].sets)}`,
+    },
+  );
   // Planned sets are targets: finishing keeps only what was logged.
   const finished = prepareAction(more.state, { kind: "finish_workout" }, today);
   assert.deepEqual(
@@ -424,6 +603,60 @@ test("add_workout_exercise adds planned sets to the workout in progress", () => 
       [fly, 1],
     ],
   );
+});
+
+test("sets added to an exercise with a target widen it, and keep its load only while they share it", () => {
+  let state = prepareAction(
+    withWorkout(),
+    logSets("back_squat", [done(100, 5)]),
+    today,
+  ).state;
+  const add = (plannedSets: { weight: number | null; reps: number }[]) => {
+    state = prepareAction(
+      state,
+      {
+        kind: "add_workout_exercise",
+        exerciseId: "custom:Band pull-apart",
+        plannedSets,
+        note: "Pause at the back",
+      },
+      today,
+    ).state;
+    return state.activeWorkout!.exercises.at(-1)!.prescribed;
+  };
+  const three = Array.from({ length: 3 }, () => ({ weight: 0, reps: 15 }));
+  assert.deepEqual(add(three), {
+    targetSets: 3,
+    reps: "15",
+    targetWeight: 0,
+    notes: "Pause at the back",
+  });
+  assert.deepEqual(add([{ weight: 0, reps: 20 }]), {
+    targetSets: 4,
+    reps: "15–20",
+    targetWeight: 0,
+    notes: "Pause at the back",
+  });
+  assert.deepEqual(add([{ weight: 5, reps: 12 }]), {
+    targetSets: 5,
+    reps: "12–20",
+    notes: "Pause at the back",
+  });
+  // An exercise logged without a target gets one from all its sets.
+  const logged = prepareAction(
+    state,
+    {
+      kind: "add_workout_exercise",
+      exerciseId: "back_squat",
+      plannedSets: [{ weight: 100, reps: 3 }],
+    },
+    today,
+  ).state.activeWorkout!.exercises[0];
+  assert.deepEqual(logged.prescribed, {
+    targetSets: 2,
+    reps: "3–5",
+    targetWeight: 100,
+  });
 });
 
 test("Coach reads the workout in progress before adding to it", async () => {
@@ -469,16 +702,61 @@ test("the exercises tool offers the athlete's own exercises and a ready id for a
     [[fly, true]],
   );
   assert.match(fresh[0].loggingNotes, /use this id to log, plan or add it/);
-  // A catalogue name or alias, an alias of two lifts, or a muscle or
-  // equipment word is never offered as a new exercise.
+  // A catalogue name or alias, singular or plural, an alias of two lifts, a
+  // muscle, equipment or kind of training, or a name the catalogue has
+  // exercises for, is never offered as a new exercise.
   for (const query of [
     "back squat",
     "rear delt fly",
     "overhead press",
     "chest",
     "dumbbell",
+    "cardio",
+    "upper body",
+    "abs",
+    "squat",
+    "squats",
+    "row",
+    "leg curl",
   ])
     assert.ok(!(await search({ query })).some((e) => e.custom), query);
+  // Plurals and short forms find the catalogue exercise first.
+  for (const [query, id] of [
+    ["front squats", "front_squat"],
+    ["deadlifts", "deadlift"],
+    ["RDLs", "romanian_deadlift"],
+    ["pull-ups", "pull_up"],
+    ["hip thrusts", "hip_thrust"],
+    ["face pulls", "face_pull"],
+    ["db row", "dumbbell_row"],
+  ]) {
+    const found = await search({ query });
+    assert.equal(found[0]?.id, id, query);
+    assert.ok(!found.some((e) => e.custom), query);
+  }
+  const programme = await search({
+    queries: ["Back squats", "Romanian deadlifts", "Face pulls", "Pull-ups"],
+  });
+  assert.ok(!programme.some((e) => e.custom));
+  for (const id of ["back_squat", "romanian_deadlift", "face_pull", "pull_up"])
+    assert.ok(
+      programme.some((e) => e.id === id),
+      id,
+    );
+  // A name the catalogue has but for one word shows those exercises beside
+  // the ready id, and the ready id's note names them.
+  const machine = await search({ query: "standing calf raise machine" });
+  assert.deepEqual(
+    machine.map((e) => [e.id, e.custom]),
+    [
+      ["standing_calf_raise", undefined],
+      ["custom:Standing calf raise machine", true],
+    ],
+  );
+  assert.match(
+    machine[1].loggingNotes,
+    /nearest are standing_calf_raise\. If one is the same movement, use its id/,
+  );
   const batch = await search({
     queries: ["back squat", "Standing cable reverse fly"],
   });
@@ -497,7 +775,27 @@ test("the exercises tool offers the athlete's own exercises and a ready id for a
   );
   const related = await search({ query: "reverse fly" });
   assert.ok(related.some((e) => e.id === "reverse_fly"));
-  assert.ok(related.some((e) => e.id === "custom:standing Cable reverse fly"));
+  const similar = related.find(
+    (e) => e.id === "custom:standing Cable reverse fly",
+  );
+  assert.match(similar!.loggingNotes, /only if it is the same movement/);
+  // Their own exercises match whole words: "row" is not in "narrow".
+  session(state, "2026-10-02", "custom:Narrow grip bench");
+  assert.ok(
+    !(await search({ query: "row" })).some((e) => e.id.startsWith("custom:")),
+  );
+  // Two spellings of one of their exercises show once, in the spelling a
+  // change reuses, naming the other.
+  session(state, "2026-09-01", "custom:standing cable reverse fly");
+  const spellings = (await search({ query: fly })).filter((e) => e.custom);
+  assert.deepEqual(
+    spellings.map((e) => e.id),
+    ["custom:standing Cable reverse fly"],
+  );
+  assert.match(
+    spellings[0].loggingNotes,
+    /custom:standing cable reverse fly is an older spelling of it/,
+  );
 });
 
 test("a history search by the athlete's own exercise is honest when it was never logged", async () => {
@@ -521,4 +819,48 @@ test("a history search by the athlete's own exercise is honest when it was never
   // custom:Back squat reads the catalogue lift, which isn't logged either.
   assert.equal((await find("custom:Back squat")).total, 0);
   assert.deepEqual(ctx.reads.trainingRanges, []);
+});
+
+test("a history search reads every spelling of one exercise, and asks which of two", async () => {
+  const state = emptyJournal();
+  const ctx = {
+    userId: "u",
+    state,
+    currentDate: today,
+    timezone: "UTC",
+    reads: newTurnReads(),
+  };
+  const find = async (exerciseId: string) =>
+    (
+      (await runReadTool("find_sessions", { exerciseId }, ctx)) as {
+        total: number;
+      }
+    ).total;
+  // A catalogue alias in the custom namespace reads the lift logged by it.
+  session(state, "2026-09-01", "strict_press");
+  session(state, "2026-09-02", "strict_press");
+  assert.equal(await find("custom:Overhead press"), 2);
+  assert.equal(await find("custom:Military press"), 2);
+  // Once both lifts with that alias are logged, Coach is asked to choose.
+  session(state, "2026-09-03", "push_press");
+  await assert.rejects(
+    find("custom:Overhead press"),
+    /such as strict_press, push_press/,
+  );
+  // Spellings saved before ids were made canonical read together.
+  session(state, "2026-09-04", "custom:Cable fly");
+  session(state, "2026-09-05", "custom:cable fly");
+  session(state, "2026-09-06", "custom:Back squat");
+  session(state, "2026-09-07", "back_squat");
+  session(state, "2026-09-08", "back_squat");
+  assert.equal(await find("custom:CABLE FLY"), 2);
+  assert.equal(await find("custom:cable fly"), 2);
+  assert.equal(await find("custom:back squat"), 3);
+  assert.equal(await find("back_squat"), 3);
+  const summary = (await runReadTool(
+    "training_summary",
+    { from: "2026-09-01", exerciseId: "custom:Cable fly" },
+    ctx,
+  )) as { sessions: number };
+  assert.equal(summary.sessions, 2);
 });

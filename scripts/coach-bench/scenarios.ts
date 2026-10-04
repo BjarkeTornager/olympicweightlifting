@@ -303,6 +303,39 @@ export const scenarios: Scenario[] = [
     ],
   },
   {
+    // The other side of the same rule: a catalogue lift named the way people
+    // say it, in the plural, is still the catalogue lift, never a new
+    // exercise of the athlete's own.
+    id: "plural-catalogue-lift",
+    title: "A catalogue lift named in the plural is logged as that lift",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, { romanian_deadlift: [[80, 8]] });
+    },
+    turns: [
+      {
+        en: "Just did front squats: 3 sets of 3 at 90 kg. Log them.",
+        da: "Har lige lavet front squats: 3 sæt af 3 på 90 kg. Gem dem.",
+        expects: "save",
+        check: (c) => [
+          ...sameSets("front squat", activeSets(c.after, "front_squat"), [
+            [90, 3, true],
+            [90, 3, true],
+            [90, 3, true],
+          ]),
+          ...expect(
+            !(c.after.activeWorkout?.exercises ?? []).some((e) =>
+              e.exerciseId.startsWith("custom:"),
+            ),
+            "Saved a catalogue lift as the athlete's own exercise",
+          ),
+          ...onlyChanged(c, ["activeWorkout"]),
+        ],
+      },
+    ],
+  },
+  {
     id: "plan-exercise-not-in-library",
     title: "An exercise still to do is added to the workout in progress",
     category: "strength",

@@ -296,6 +296,8 @@ export function prepareLogSets(
 
 // An exercise added to the workout in progress with targets still to do,
 // nothing logged. One already in the workout gets the new sets after its own.
+// The note, such as tempo or a superset, goes with the target, as a
+// programme's does, so Train and Coach show it.
 export function prepareAddExercise(
   next: JournalState,
   action: ActionOf<"add_workout_exercise">,
@@ -319,37 +321,67 @@ export function prepareAddExercise(
       reps: s.reps,
     })),
   });
+  const added = planned.sets;
+  const entry = matches[0] ?? { ...planned, sets: [], prescribed: {} };
+  if (!matches.length) draft.exercises.push(entry);
+  entry.sets.push(...added);
+  entry.completed = false;
+  extendTarget(entry, added);
+  const notes = entry.prescribed.notes ?? "";
+  if (action.note && !notes.includes(action.note))
+    entry.prescribed.notes = [notes.replace(/[.\s]+$/, ""), action.note]
+      .filter(Boolean)
+      .join(". ");
   const name = exerciseName(action.exerciseId);
-  const entry = matches[0];
-  if (entry) {
-    entry.sets.push(...planned.sets);
-    entry.completed = false;
-    if (action.note)
-      entry.coachCue = [entry.coachCue, action.note].filter(Boolean).join("\n");
-  } else {
-    // The target Train and the iPhone show: 4 × 8–10, with the load when
-    // every set has the same one.
-    const reps = action.plannedSets.map((s) => s.reps);
-    const [low, high] = [Math.min(...reps), Math.max(...reps)];
-    const [weight, ...others] = new Set(
-      action.plannedSets.map((s) => s.weight),
-    );
-    planned.prescribed = {
-      targetSets: reps.length,
-      reps: low === high ? String(low) : `${low}–${high}`,
-      ...(weight != null && !others.length ? { targetWeight: weight } : {}),
-    };
-    planned.coachCue = action.note ?? "";
-    draft.exercises.push(planned);
-  }
   return {
     workout: draft,
-    title: entry
-      ? `Add ${planned.sets.length} ${name} set${planned.sets.length === 1 ? "" : "s"} to your workout`
+    title: matches.length
+      ? `Add ${added.length} ${name} set${added.length === 1 ? "" : "s"} to your workout`
       : `Add ${name} to your workout`,
-    detail:
+    detail: [
       "Adds planned sets to the workout in progress. Nothing is logged until you do them, and sets you have logged stay as they are.",
+      action.note && `Note: ${action.note}`,
+    ]
+      .filter(Boolean)
+      .join(" "),
   };
+}
+
+// The target Train and the iPhone show, such as 4 × 8–10 · 15 kg. Sets
+// added to an exercise with a target raise its count, widen its reps and
+// keep its load only while the new sets share it. An exercise without a
+// target gets one from all its sets, with the load only when they share it.
+function extendTarget(
+  entry: Workout["exercises"][number],
+  added: Workout["exercises"][number]["sets"],
+) {
+  const target = entry.prescribed;
+  const had = target.targetSets != null;
+  target.targetSets = had
+    ? Number(target.targetSets) + added.length
+    : entry.sets.length;
+  const was = String(target.reps ?? target.targetReps ?? "");
+  const range = /^(\d+)(?:\s*[–-]\s*(\d+))?$/.exec(was);
+  // A target such as "AMRAP" stays as written.
+  if (!had || !was || range) {
+    const reps = (had && range ? added : entry.sets)
+      .map((s) => Number(s.reps))
+      .filter((n) => n > 0);
+    if (had && range) reps.push(Number(range[1]), Number(range[2] ?? range[1]));
+    const [low, high] = [Math.min(...reps), Math.max(...reps)];
+    target.reps = low === high ? String(low) : `${low}–${high}`;
+    delete target.targetReps;
+  }
+  const load = target.targetWeight;
+  if (load == null || load === "") {
+    const loads = new Set(entry.sets.map((s) => String(s.weight)));
+    const [only] = loads;
+    if (!had && loads.size === 1 && only !== "")
+      target.targetWeight = Number(only);
+  } else if (
+    added.some((s) => s.weight === "" || Number(s.weight) !== Number(load))
+  )
+    delete target.targetWeight;
 }
 
 // A workoutId from current_workout must name the workout in progress.

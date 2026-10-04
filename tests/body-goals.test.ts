@@ -37,7 +37,27 @@ test("the plan follows Mifflin–St Jeor, training energy and a sustainable rate
   assert.equal(plan.sessionsPerWeek, 4);
   assert.deepEqual(plan.notes, []);
   const kcal = plan.protein * 4 + plan.carbs * 4 + plan.fat * 9;
-  assert.ok(Math.abs(kcal - plan.calories) < 15);
+  assert.equal(kcal, plan.calories);
+});
+
+test("macros are worked out from the calories shown, so they add up to them", () => {
+  for (const change of [
+    {},
+    { targetWeightKg: 88 },
+    { targetWeightKg: 92, experience: "new" as const },
+    { sex: "female" as const, heightCm: 165, weightKg: 65, targetWeightKg: 60 },
+    { activity: "high" as const, trainingDays: 6, sessionMinutes: 120 },
+  ]) {
+    const plan = planGoals({ ...athlete, ...change }, today);
+    assert.equal(plan.calories % 10, 0);
+    assert.ok(plan.carbs > 0);
+    // Only the carbohydrate gram is rounded after the fat: within 2 kcal.
+    const kcal = plan.protein * 4 + plan.carbs * 4 + plan.fat * 9;
+    assert.ok(
+      Math.abs(kcal - plan.calories) <= 2,
+      `${kcal} vs ${plan.calories}`,
+    );
+  }
 });
 
 test("maintaining, gaining and deadlines stay within safe limits", () => {
@@ -117,7 +137,7 @@ test("saving goals sets profile and daily targets and leaves the lifting brief a
     goal: "lose",
     calories: 2350,
     protein: 176,
-    carbs: 253,
+    carbs: 254,
     fat: 70,
   });
   // The brief is the athlete's own: the plan's 4 sessions don't replace

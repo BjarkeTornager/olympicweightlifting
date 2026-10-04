@@ -223,8 +223,10 @@ export function planGoals(
     notes.push(
       `At ${targetBodyFat}% body fat with your current lean mass you would weigh about ${weightAtTarget} kg, not ${g.targetWeightKg} kg; one of the two goals will need to give.`,
     );
-  const fat = round(Math.max(g.weightKg * 0.8, (calories * 0.25) / 9));
-  const carbs = round(Math.max(0, (calories - protein * 4 - fat * 9) / 4));
+  // Macros from the calories as shown, so they add up to that number.
+  const kcal = round(calories, 10);
+  const fat = round(Math.max(g.weightKg * 0.8, (kcal * 0.25) / 9));
+  const carbs = round(Math.max(0, (kcal - protein * 4 - fat * 9) / 4));
   // Sessions on the days available, up to what suits the experience; none
   // when no days are free.
   const recommended = { new: 3, developing: 4, experienced: 5 }[g.experience];
@@ -246,7 +248,7 @@ export function planGoals(
     weightAtTargetBodyFatKg: weightAtTarget,
     restingKcal: round(resting, 10),
     maintenanceKcal: round(maintenance, 10),
-    calories: round(calories, 10),
+    calories: kcal,
     protein,
     fat,
     carbs,

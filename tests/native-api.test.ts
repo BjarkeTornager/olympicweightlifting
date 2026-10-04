@@ -671,15 +671,194 @@ test("Apple Health lifting beside an open session waits, then counts once", () =
     "imported",
   );
   assert.equal(state.cardio.sessions.length, 1);
-  // Lifting logged without times can't be told apart, so it is the same.
+  // Lifting saved without any times, as a session told to Coach is, can't
+  // be told apart, so it is the same.
   state.cardio.sessions = [];
   state.sessions = [
-    { ...session, firstSetAt: undefined, startedAt: undefined },
+    {
+      ...session,
+      firstSetAt: undefined,
+      startedAt: undefined,
+      finishedAt: undefined,
+      durationMinutes: null,
+    },
   ];
   assert.equal(
     applyWorkout(state, evening, undefined, new Set(), tz, now).result,
     "skipped",
   );
+});
+
+test("lifting logged after the watch's workout is that workout, however it was logged", async (t) => {
+  const { prepareWorkoutProgress } =
+    await import("../lib/agent/prepare-workouts");
+  const { finishWorkout, hasLoggedSet, startClock } =
+    await import("../lib/domain");
+  const { burnedToday } = await import("../lib/energy");
+  // Trained 17:00-18:30 with the watch's strength workout running.
+  const watch = workout({
+    id: crypto.randomUUID(),
+    kind: "strength",
+    name: "Traditional Strength Training",
+    start: "2026-09-26T17:00:00+02:00",
+    end: "2026-09-26T18:30:00+02:00",
+    durationSeconds: 5400,
+    distanceKm: undefined,
+    caloriesKcal: 420,
+  });
+  const fromWatch = new Set([watch.id]);
+  // Told to Coach at 19:30, before the phone synced: one go, no length.
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-26T17:30:00Z"),
+  });
+  const told = emptyJournal();
+  told.profile.bodyweight = 88;
+  prepareWorkoutProgress(
+    told,
+    {
+      kind: "log_workout_progress",
+      workout: {
+        title: "Snatch day",
+        date,
+        category: "weightlifting",
+        exercises: [
+          {
+            exerciseId: "snatch",
+            sets: [{ weight: 80, reps: 2, result: "success" }],
+          },
+        ],
+      },
+      completion: "completed",
+    },
+    date,
+  );
+  assert.equal(told.sessions[0].firstSetAt, told.sessions[0].finishedAt);
+  assert.equal(told.sessions[0].durationMinutes, null);
+  t.mock.timers.reset();
+  assert.equal(
+    applyWorkout(told, watch, undefined, fromWatch, tz, now).result,
+    "skipped",
+  );
+  assert.equal(told.cardio.sessions.length, 0);
+  // The session's own line says it has no length, rather than 420.
+  assert.equal(burnedToday(told, date)?.training?.count, 0);
+  assert.equal(burnedToday(told, date)?.training?.untimed, 1);
+  // Typed in on the website from 19:00 to 19:15: 15 minutes, never added
+  // to the watch's 420.
+  const typed = emptyJournal();
+  typed.profile.bodyweight = 88;
+  typed.activeWorkout = createWorkout(typed, days[0], date);
+  const draft = typed.activeWorkout;
+  const before = hasLoggedSet(draft);
+  Object.assign(draft.exercises[0].sets[0], {
+    weight: "60",
+    reps: "2",
+    result: "success",
+    logged: true,
+  });
+  startClock(draft, before, new Date("2026-09-26T17:00:00Z"));
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-26T17:15:00Z"),
+  });
+  const entered = finishWorkout(typed);
+  t.mock.timers.reset();
+  assert.equal(entered.sessions[0].durationMinutes, 15);
+  assert.equal(
+    applyWorkout(entered, watch, undefined, fromWatch, tz, now).result,
+    "skipped",
+  );
+  assert.equal(burnedToday(entered, date)?.training?.kcal, 90);
+  // A session finished before the watch's workout began is other lifting.
+  const morning = emptyJournal();
+  morning.sessions.push({
+    ...createWorkout(morning, days[0], date),
+    firstSetAt: "2026-09-26T06:00:00.000Z",
+    finishedAt: "2026-09-26T07:30:00.000Z",
+    durationMinutes: 90,
+  });
+  assert.equal(
+    applyWorkout(morning, watch, undefined, fromWatch, tz, now).result,
+    "imported",
+  );
+});
+
+test("an open session holds Apple Health lifting back only while it can be that lifting", () => {
+  const lifting = (day: string) =>
+    workout({
+      id: crypto.randomUUID(),
+      kind: "strength",
+      name: "Strength Training",
+      start: `${day}T17:00:00+02:00`,
+      end: `${day}T18:30:00+02:00`,
+      durationSeconds: 5400,
+      distanceKm: undefined,
+      caloriesKcal: 420,
+    });
+  const open = (day: string, logged: boolean) => {
+    const state = emptyJournal();
+    state.activeWorkout = createWorkout(state, days[0], day);
+    if (logged)
+      Object.assign(state.activeWorkout.exercises[0].sets[0], {
+        weight: "60",
+        reps: "2",
+        result: "success",
+        logged: true,
+      });
+    return state;
+  };
+  const result = (state: ReturnType<typeof open>, day: string, at: string) =>
+    applyWorkout(state, lifting(day), undefined, new Set(), tz, new Date(at))
+      .result;
+  // Started but nothing logged: it waits three hours after the workout
+  // ended, in case the athlete fills the session in afterwards.
+  assert.equal(
+    result(open(date, false), date, "2026-09-26T19:00:00Z"),
+    "deferred",
+  );
+  assert.equal(
+    result(open(date, false), date, "2026-09-26T19:31:00Z"),
+    "imported",
+  );
+  // Lifting logged in it: it waits for Finish that day.
+  assert.equal(
+    result(open(date, true), date, "2026-09-26T21:00:00Z"),
+    "deferred",
+  );
+  // Left open past its day: lifting logged in it is that workout, and an
+  // empty one holds nothing back.
+  const before = "2026-09-25";
+  assert.equal(
+    result(open(before, true), before, now.toISOString()),
+    "skipped",
+  );
+  assert.equal(
+    result(open(before, false), before, now.toISOString()),
+    "imported",
+  );
+  // Filled in after the workout and finished: the same lifting.
+  const state = open(date, false);
+  const w = lifting(date);
+  const deferred = applyWorkout(state, w, undefined, new Set(), tz, now);
+  assert.equal(deferred.result, "deferred");
+  state.sessions.push({
+    ...state.activeWorkout!,
+    firstSetAt: "2026-09-26T17:00:00.000Z",
+    finishedAt: "2026-09-26T17:20:00.000Z",
+    durationMinutes: 20,
+  });
+  state.activeWorkout = null;
+  const settled = applyWorkout(
+    state,
+    w,
+    { userId: "u", ...deferred.receipt! },
+    new Set(),
+    tz,
+    now,
+  );
+  assert.equal(settled.result, "skipped");
+  assert.equal(state.cardio.sessions.length, 0);
 });
 
 test("daily heart-rate summaries replace the day's previous summary", () => {

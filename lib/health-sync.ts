@@ -19,7 +19,7 @@ import {
   cardioEntrySchema,
   type CardioEntry,
 } from "./cardio";
-import { emptyJournal } from "./domain";
+import { emptyJournal, hasLoggedSet } from "./domain";
 import { vitalsSchema, type Vitals } from "./health";
 import { journalSchema, type JournalState } from "./model";
 import { nativeRequests } from "./native-api";
@@ -165,20 +165,26 @@ function manualMatch(
 
 type Receipt = typeof healthWorkoutImports.$inferSelect;
 
-// A strength workout from Apple Health is the logged session when their
-// times meet, give or take a quarter of an hour. Lifting logged without
-// times can't be told apart from it, so it counts as the same session.
+// A strength workout from Apple Health is the lifting logged that day, unless
+// that session was finished before the workout began, give or take a quarter
+// of an hour: lifting is logged while it happens or afterwards, never before.
+// A session told to Coach later, typed in on the website after training or
+// sent from the iPhone's offline queue carries the time it was saved, so it
+// is the same lifting; so is lifting logged in a session still open.
 function loggedLifting(state: JournalState, date: string, w: HealthWorkout) {
-  const margin = 15 * 60000;
-  const start = Date.parse(w.start) - margin;
-  const end = Date.parse(w.end) + margin;
-  return state.sessions.some((s) => {
-    if (s.date !== date) return false;
-    const from = s.firstSetAt ?? s.startedAt;
-    if (!from || !s.finishedAt) return true;
-    return Date.parse(from) < end && Date.parse(s.finishedAt) > start;
-  });
+  const began = Date.parse(w.start) - 15 * 60000;
+  const draft = state.activeWorkout;
+  return (
+    (draft?.date === date && hasLoggedSet(draft)) ||
+    state.sessions.some(
+      (s) =>
+        s.date === date && !(s.finishedAt && Date.parse(s.finishedAt) < began),
+    )
+  );
 }
+// How long an open session with nothing logged holds back a strength workout
+// after it ended, in case the athlete fills the session in afterwards.
+const EMPTY_DRAFT_WAIT = 3 * 3600000;
 
 export function applyWorkout(
   state: JournalState,
@@ -190,7 +196,8 @@ export function applyWorkout(
 ): { result: WorkoutImportResult; receipt?: Omit<Receipt, "userId"> } {
   const digest = workoutDigest(w);
   const date = localClock(new Date(w.start), timezone).date;
-  if (date > localClock(now, timezone).date) return { result: "skipped" };
+  const today = localClock(now, timezone).date;
+  if (date > today) return { result: "skipped" };
   const times = { startedAt: new Date(w.start), endedAt: new Date(w.end) };
   // A deferred workout is looked at afresh.
   if (receipt && receipt.status !== "deferred") {
@@ -216,8 +223,17 @@ export function applyWorkout(
   }
   // Lifting while a session of that day is still open in the journal waits
   // until it is finished, so the watch's figure and the session's estimate
-  // are never both counted.
-  if (w.kind === "strength" && state.activeWorkout?.date === date)
+  // are never both counted. It waits only while the session can still be
+  // that lifting: on its own day, and with nothing logged in it, for a few
+  // hours after the workout ended.
+  const draft = state.activeWorkout;
+  if (
+    w.kind === "strength" &&
+    draft?.date === date &&
+    date === today &&
+    (hasLoggedSet(draft) ||
+      now.getTime() < Date.parse(w.end) + EMPTY_DRAFT_WAIT)
+  )
     return {
       result: "deferred",
       receipt: {
@@ -503,7 +519,8 @@ export async function syncHealth(
       });
     }
     // Lifting deferred while a session was open: once that session is
-    // finished, it is matched against it or saved as separate training.
+    // finished, or no longer holds it back, it is matched against the
+    // journal's lifting or saved as separate training.
     const deferred = await tx
       .select()
       .from(healthWorkoutImports)

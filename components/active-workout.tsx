@@ -289,6 +289,7 @@ export function ActiveWorkout({
           label="Add an exercise or activity"
           value={add}
           onChange={setAdd}
+          state={state}
           includeActivities
         />
         <Button

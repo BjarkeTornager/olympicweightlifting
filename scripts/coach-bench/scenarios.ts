@@ -25,6 +25,7 @@ import {
   workout,
   type Scenario,
 } from "./bench";
+import { exerciseKey } from "../../lib/exercises";
 
 const { today, yesterday, twoDaysAgo, lastTuesday } = dates;
 const item = (
@@ -241,6 +242,131 @@ export const scenarios: Scenario[] = [
               [90, 3, true],
               [90, 3, true],
             ]),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // A real failure: Coach found no library match, would not save without
+    // guessing, and offered the athlete's own exercise only when pushed.
+    id: "exercise-not-in-library",
+    title:
+      "Sets for an exercise the library lacks are logged as the athlete's own",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, {
+        back_squat: [
+          [100, 5],
+          [100, 5],
+        ],
+      });
+    },
+    turns: [
+      {
+        en: "I just did standing cable reverse fly: 10 reps at 10 kg, 10 at 15 kg, then 8 at 15 kg twice. Log it to my workout.",
+        da: "Jeg har lige lavet standing cable reverse fly: 10 gentagelser på 10 kg, 10 på 15 kg og så 8 på 15 kg to gange. Gem det i min træning.",
+        expects: "save",
+        check: (c) => {
+          const entries = (c.after.activeWorkout?.exercises ?? []).filter(
+            (e) => exerciseKey(e.exerciseId) === "standing cable reverse fly",
+          );
+          return [
+            ...expect(
+              entries.length === 1 &&
+                entries[0].exerciseId.startsWith("custom:"),
+              `Expected one custom:Standing cable reverse fly entry, got ${JSON.stringify(entries.map((e) => e.exerciseId))}`,
+            ),
+            ...sameSets(
+              "standing cable reverse fly",
+              activeSets(c.after, entries[0]?.exerciseId ?? ""),
+              [
+                [10, 10, true],
+                [15, 10, true],
+                [15, 8, true],
+                [15, 8, true],
+              ],
+            ),
+            ...expect(
+              !activeSets(c.after, "reverse_fly").length,
+              "Logged as the dumbbell reverse fly instead",
+            ),
+            ...sameSets("back squat kept", activeSets(c.after, "back_squat"), [
+              [100, 5, true],
+              [100, 5, true],
+            ]),
+            ...onlyChanged(c, ["activeWorkout"]),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // The other side of the same rule: a catalogue lift named the way people
+    // say it, in the plural, is still the catalogue lift, never a new
+    // exercise of the athlete's own.
+    id: "plural-catalogue-lift",
+    title: "A catalogue lift named in the plural is logged as that lift",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, { romanian_deadlift: [[80, 8]] });
+    },
+    turns: [
+      {
+        en: "Just did front squats: 3 sets of 3 at 90 kg. Log them.",
+        da: "Har lige lavet front squats: 3 sæt af 3 på 90 kg. Gem dem.",
+        expects: "save",
+        check: (c) => [
+          ...sameSets("front squat", activeSets(c.after, "front_squat"), [
+            [90, 3, true],
+            [90, 3, true],
+            [90, 3, true],
+          ]),
+          ...expect(
+            !(c.after.activeWorkout?.exercises ?? []).some((e) =>
+              e.exerciseId.startsWith("custom:"),
+            ),
+            "Saved a catalogue lift as the athlete's own exercise",
+          ),
+          ...onlyChanged(c, ["activeWorkout"]),
+        ],
+      },
+    ],
+  },
+  {
+    id: "plan-exercise-not-in-library",
+    title: "An exercise still to do is added to the workout in progress",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, { back_squat: [[100, 5]] });
+    },
+    turns: [
+      {
+        en: "Add 3 sets of 12 standing cable reverse fly at 10 kg to my workout for later, after the squats.",
+        da: "Tilføj 3 sæt med 12 standing cable reverse fly på 10 kg til min træning, jeg tager dem efter squats.",
+        expects: "review",
+        check: (c) => {
+          const planned = c.proposals
+            .find((p) => !p.status)
+            ?.workout?.exercises.find(
+              (e) => exerciseKey(e.exerciseId) === "standing cable reverse fly",
+            );
+          return [
+            ...expect(
+              planned?.sets.length === 3 &&
+                planned.sets.every(
+                  (s) =>
+                    !s.logged &&
+                    !s.result &&
+                    Number(s.weight) === 10 &&
+                    Number(s.reps) === 12,
+                ),
+              `Expected 3 planned sets of 12 at 10 kg, got ${JSON.stringify(planned?.sets ?? null)}`,
+            ),
+            ...onlyChanged(c),
           ];
         },
       },

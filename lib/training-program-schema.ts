@@ -4,17 +4,22 @@ import { cardioActivitySchema } from "./cardio";
 
 const name = z.string().trim().min(1).max(120);
 const notes = z.string().trim().max(2000);
-// Custom movements have an explicit namespace. A misspelled catalogue ID must
-// not silently become a different exercise.
+// The athlete's own exercises have an explicit namespace, so a misspelled
+// catalogue ID never silently becomes a different exercise. Journals already
+// hold ids this loose; new ones are made canonical when saved
+// (resolveExerciseId in lib/exercises.ts).
+export const isCustomExerciseId = (id: string) =>
+  /^custom:[^\r\n]{1,120}$/.test(id) && id.slice(7).trim().length > 0;
 export const trainingExerciseId = z
   .string()
   .min(1)
   .max(160)
   .refine(
-    (id) =>
-      EXERCISES.some((e) => e.id === id) ||
-      (/^custom:[^\r\n]{1,120}$/.test(id) && id.slice(7).trim().length > 0),
-    "Use an exercises catalogue ID, or custom:Movement name for an explicitly named custom movement",
+    (id) => EXERCISES.some((e) => e.id === id) || isCustomExerciseId(id),
+    "Not a catalogue id. Use an id from the exercises tool, or custom:<the athlete's name for it> for any movement not in the catalogue, such as custom:Standing cable reverse fly",
+  )
+  .describe(
+    "Catalogue id from the exercises tool, or custom:<Name> for any movement not in the catalogue",
   );
 export const routineInputSchema = z
   .object({

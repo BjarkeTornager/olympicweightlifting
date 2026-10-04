@@ -226,6 +226,7 @@ export async function guardChange(
       action.kind === "log_workout_progress" ||
       action.kind === "merge_sessions" ||
       action.kind === "log_sets" ||
+      action.kind === "add_workout_exercise" ||
       action.kind === "finish_workout") &&
     !reads.draft
   )

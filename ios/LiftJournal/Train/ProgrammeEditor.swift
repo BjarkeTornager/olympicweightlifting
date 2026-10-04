@@ -163,17 +163,35 @@ private struct ExerciseEditor: View {
   }
 }
 
-/// Every exercise the journal knows, searchable and grouped by kind.
+/// Every exercise the journal knows, searchable and grouped by kind, the
+/// athlete's own first, and any other name typed, to add as their own.
 struct ExercisePicker: View {
   let exercises: [Components.Schemas.ExerciseOption]
   let pick: (String, String) -> Void
   @State private var query = ""
 
+  static let own = "Your exercises"
+
+  private static func keys(_ e: Components.Schemas.ExerciseOption) -> [String] {
+    ([e.name] + (e.aliases ?? [])).map(ExerciseName.key)
+  }
+
   private var groups: [(String, [Components.Schemas.ExerciseOption])] {
-    let words = query.lowercased().split(separator: " ").map(String.init)
-    let shown = exercises.filter { e in words.allSatisfy { e.name.lowercased().contains($0) } }
+    let words = ExerciseName.key(query).split(separator: " ")
+    let shown = exercises.filter { e in
+      let names = Self.keys(e)
+      return words.allSatisfy { word in names.contains { $0.contains(word) } }
+    }
     let grouped = Dictionary(grouping: shown, by: \.category)
-    return grouped.keys.sorted().map { ($0, grouped[$0]!) }
+    return grouped.keys.sorted { ($0 == Self.own ? 0 : 1, $0) < ($1 == Self.own ? 0 : 1, $1) }
+      .map { ($0, grouped[$0]!) }
+  }
+
+  /// The typed name as a new exercise, unless an exercise already has it.
+  private var newName: String? {
+    guard let name = ExerciseName.tidy(query) else { return nil }
+    let key = ExerciseName.key(name)
+    return exercises.contains { Self.keys($0).contains(key) } ? nil : name
   }
 
   var body: some View {
@@ -187,10 +205,20 @@ struct ExercisePicker: View {
         }
         .themedRows()
       }
+      if let newName {
+        Section {
+          Button("Add “\(newName)” as a new exercise", systemImage: "plus") {
+            pick("custom:" + newName, newName)
+          }
+        } footer: {
+          Text("It becomes your own exercise, kept in your journal, not added to the library.")
+        }
+        .themedRows()
+      }
     }
     .themedList()
     .overlay {
-      if groups.isEmpty { ContentUnavailableView.search(text: query) }
+      if groups.isEmpty && newName == nil { ContentUnavailableView.search(text: query) }
     }
     .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find an exercise")
     .navigationTitle("Exercises")

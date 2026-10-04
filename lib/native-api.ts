@@ -40,6 +40,7 @@ import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
 import { exerciseName } from "./domain";
+import { plannedSetsText } from "./training";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -1101,7 +1102,7 @@ export function buildJournal(
       kind: "strength",
       title: s.title,
       detail: [
-        `${s.exercises.length} exercises · ${loggedSets(s)} sets`,
+        `${s.exercises.length} exercise${s.exercises.length === 1 ? "" : "s"} · ${loggedSets(s)} set${loggedSets(s) === 1 ? "" : "s"}`,
         burnText(strengthBurn(state, s)),
       ]
         .filter(Boolean)
@@ -1366,12 +1367,16 @@ export function receiptEntryView(
       lines: workout.exercises.map((e) => ({
         label: exerciseName(e.exerciseId),
         value:
-          e.sets
-            .filter((s) => s.weight !== "" && s.reps !== "")
-            .map(
-              (s) =>
-                `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}`,
-            )
+          [
+            ...e.sets
+              .filter(isValidLoggedSet)
+              .map(
+                (s) =>
+                  `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}`,
+              ),
+            plannedSetsText(e.sets),
+          ]
+            .filter(Boolean)
             .join(", ") || "No sets yet",
       })),
       footnote: workout.athleteNotes || undefined,

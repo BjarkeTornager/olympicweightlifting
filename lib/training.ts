@@ -6,6 +6,31 @@ import type { JournalState, Workout, WorkoutTemplate } from "./model";
 export function formatSet(weight: string | number, reps: string | number) {
   return `${Number(weight) === 0 && weight !== "" ? "Bodyweight" : `${weight || "–"} kg`} × ${reps || "–"}`;
 }
+// The sets still to do in a review, counted, after the logged ones it lists
+// set by set: "Planned: 3 × 12 at 10 kg, 1 × 8 (load to choose)".
+export function plannedSetsText(sets: Workout["exercises"][number]["sets"]) {
+  const groups: { weight: string; reps: string; count: number }[] = [];
+  for (const s of sets.filter((s) => !isValidLoggedSet(s) && s.reps !== "")) {
+    const [weight, reps] = [String(s.weight), String(s.reps)];
+    const last = groups.at(-1);
+    if (last?.weight === weight && last.reps === reps) last.count++;
+    else groups.push({ weight, reps, count: 1 });
+  }
+  return groups.length
+    ? `Planned: ${groups
+        .map(
+          (g) =>
+            `${g.count} × ${g.reps}${
+              g.weight === ""
+                ? " (load to choose)"
+                : Number(g.weight) === 0
+                  ? " at bodyweight"
+                  : ` at ${g.weight} kg`
+            }`,
+        )
+        .join(", ")}`
+    : "";
+}
 export function templateFromWorkout(
   workout: Workout,
   name = workout.title,
@@ -35,22 +60,28 @@ export function startTemplate(
     recovery: "auto",
     athleteNotes: "",
     coachNotes: "",
-    exercises: template.exercises.map((e) => ({
+    exercises: template.exercises.map(plannedEntry),
+  };
+}
+// An exercise still to do, every set unlogged.
+export function plannedEntry(
+  exercise: WorkoutTemplate["exercises"][number],
+): Workout["exercises"][number] {
+  return {
+    id: uid(),
+    exerciseId: exercise.exerciseId,
+    loggingVersion: 1,
+    completed: false,
+    athleteNotes: "",
+    coachCue: "",
+    prescribed: { targetSets: exercise.sets.length },
+    sets: exercise.sets.map((s) => ({
       id: uid(),
-      exerciseId: e.exerciseId,
-      loggingVersion: 1,
-      completed: false,
-      athleteNotes: "",
-      coachCue: "",
-      prescribed: { targetSets: e.sets.length },
-      sets: e.sets.map((s) => ({
-        id: uid(),
-        weight: s.weight,
-        reps: s.reps,
-        result: "",
-        logged: false,
-        touched: false,
-      })),
+      weight: s.weight,
+      reps: s.reps,
+      result: "",
+      logged: false,
+      touched: false,
     })),
   };
 }
@@ -70,14 +101,15 @@ export function trainingSummary(
   state: JournalState,
   from = "0000-01-01",
   to = today(),
-  exerciseId?: string,
+  // One exercise, under every id it was logged as.
+  exerciseIds?: readonly string[],
 ) {
   const sessions = state.sessions
     .filter((w) => w.date >= from && w.date <= to)
     .map((w) => ({
       ...w,
       exercises: w.exercises.filter(
-        (e) => !exerciseId || e.exerciseId === exerciseId,
+        (e) => !exerciseIds || exerciseIds.includes(e.exerciseId),
       ),
     }))
     .filter((w) => w.exercises.length);
@@ -125,7 +157,7 @@ export function trainingSummary(
         ...workoutTotals(w),
         // For one exercise the sets answer "what did I lift", which the best
         // set per rep count leaves out.
-        ...(exerciseId
+        ...(exerciseIds
           ? {
               lifts: w.exercises.flatMap((e) =>
                 e.sets.filter(isValidLoggedSet).map((s) => ({

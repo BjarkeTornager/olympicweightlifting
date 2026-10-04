@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { formatSet, startTemplate, templateFromWorkout } from "@/lib/training";
 import { downloadBackup } from "@/lib/download-backup";
+import { exerciseKey, ownExercises } from "@/lib/exercises";
 type Props = {
   state: JournalState;
   update: JournalController["update"];
@@ -26,11 +27,26 @@ export function HistoryView({
       () => state.sessions.find((s) => s.id === sessionId)?.date ?? "",
     ),
     [remove, setRemove] = useState<Workout | null>(null);
+  // The athlete's own exercises in their history, each matching every
+  // spelling it was logged under.
+  const logged = new Set(
+    state.sessions.flatMap((s) =>
+      s.exercises
+        .filter((e) => e.exerciseId.startsWith("custom:"))
+        .map((e) => exerciseKey(e.exerciseId)),
+    ),
+  );
+  const own = ownExercises(state).filter((e) => logged.has(exerciseKey(e.id)));
+  const matches = (id: string) =>
+    id === filter ||
+    (filter.startsWith("custom:") &&
+      id.startsWith("custom:") &&
+      exerciseKey(id) === exerciseKey(filter));
   const sessions = [...state.sessions]
     .filter(
       (s) =>
         (!date || s.date === date) &&
-        (filter === "all" || s.exercises.some((e) => e.exerciseId === filter)),
+        (filter === "all" || s.exercises.some((e) => matches(e.exerciseId))),
     )
     .sort((a, b) => b.date.localeCompare(a.date));
   return (
@@ -67,11 +83,22 @@ export function HistoryView({
                 onChange={(e) => setFilter(e.target.value)}
               >
                 <option value="all">All exercises</option>
-                {EXERCISES.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
+                {own.length > 0 && (
+                  <optgroup label="Your exercises">
+                    {own.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Library">
+                  {EXERCISES.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </label>
             <label>

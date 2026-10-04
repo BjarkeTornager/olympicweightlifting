@@ -13,6 +13,9 @@ test("water is one tap from Today, adds up, can be undone and survives reload", 
   await drinks.getByRole("button", { name: "+250 ml water" }).click();
   await expect(drinks).toContainText("0.8 L");
   await expect(drinks).toContainText("2 logged");
+  // Without a weight, a general range from drinks, said to be an estimate.
+  await expect(drinks).toContainText("about 1.5 to 2.5 L from drinks");
+  await expect(drinks).toContainText("A general estimate");
   await expect(drinks.getByRole("progressbar")).toHaveAttribute(
     "aria-valuenow",
     "750",
@@ -38,4 +41,12 @@ test("water is one tap from Today, adds up, can be undone and survives reload", 
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: info.outputPath("drinks-today.png") });
+  // Hidden in Settings: drinks still add up, with no target or meter.
+  await page.goto("/#data");
+  await page.getByLabel("Show a daily drinks target").uncheck();
+  await page.goto("/#today");
+  const hidden = page.getByRole("region", { name: "Drinks today" });
+  await expect(hidden).toContainText("0.5 L");
+  await expect(hidden).not.toContainText("from drinks");
+  await expect(hidden.getByRole("progressbar")).toHaveCount(0);
 });

@@ -16,7 +16,8 @@ import { coachingContext } from "../lib/coaching";
 import { journalSchema } from "../lib/model";
 import { buildToday } from "../lib/native-api";
 import { voiceAction, voiceToolArgs } from "../lib/voice-actions";
-import { voiceContext } from "../lib/voice-checkin";
+import { voiceContext, voiceInstruction } from "../lib/voice-checkin";
+import { localClock } from "../lib/agent/time-context";
 import { elevenLabsTools } from "../lib/voice-elevenlabs";
 
 // The safety limits every goal plan keeps, wherever it is set: the website
@@ -669,7 +670,7 @@ test("pregnancy and breastfeeding never plan a deficit, and pregnancy no target,
                   }
 });
 
-test("Coach and the voice coach pass pregnancy and a confirmation to the same plan", () => {
+test("Coach and the voice coach pass pregnancy to the same plan; a confirmation by voice waits for the plan to ask", () => {
   // Models send an empty value for an unknown status.
   const args = voiceToolArgs.set_goals.parse({
     ...mother,
@@ -691,22 +692,71 @@ test("Coach and the voice coach pass pregnancy and a confirmation to the same pl
   const prepared = prepareAction(emptyJournal(), action, today);
   assert.match(prepared.detail, /midwife or doctor/);
   assert.equal(prepared.state.nutrition.targets.goal, "maintain");
-  // A confirmation from the voice coach reaches the plan too.
-  const confirm = voiceAction(
+  // A call saves with no review, so a confirmation from the voice coach
+  // counts only once the saved plan has asked for it: sent on the first
+  // call, the plan still holds and its note asks.
+  const lowGoal = {
+    ...athlete,
+    summary: "Down to 60, I'm sure",
+    targetWeightKg: 60,
+    confirmLowWeight: true,
+  };
+  const first = voiceAction("set_goals", lowGoal, emptyJournal(), today);
+  assert.ok(
+    first.kind === "set_body_goals" &&
+      first.bodyGoals.confirmLowWeight === undefined,
+  );
+  const held = prepareAction(emptyJournal(), first, today);
+  assert.equal(held.state.nutrition.targets.goal, "maintain");
+  assert.equal(held.state.profile.goalChecks, undefined);
+  assert.match(held.detail, /confirm it and the plan will lose slowly/);
+  // Asked for that goal weight, the athlete's yes reaches the plan.
+  const again = voiceAction("set_goals", lowGoal, held.state, today);
+  const confirmed = prepareAction(held.state, again, today).state;
+  assert.equal(confirmed.nutrition.targets.goal, "lose");
+  assert.equal(confirmed.profile.goalChecks?.lowWeightConfirmedKg, 60);
+  // Not for a different goal weight than the one asked about.
+  const other = voiceAction(
     "set_goals",
-    {
-      ...athlete,
-      summary: "Still want 60",
-      targetWeightKg: 60,
-      confirmLowWeight: true,
-    },
-    emptyJournal(),
+    { ...lowGoal, targetWeightKg: 59 },
+    held.state,
     today,
   );
+  assert.ok(
+    other.kind === "set_body_goals" &&
+      other.bodyGoals.confirmLowWeight === undefined,
+  );
+  // Typed Coach's review card is the confirmation, so it takes the flag.
   assert.equal(
-    prepareAction(emptyJournal(), confirm, today).state.nutrition.targets.goal,
+    prepareAction(
+      emptyJournal(),
+      {
+        kind: "set_body_goals",
+        bodyGoals: { ...athlete, targetWeightKg: 60, confirmLowWeight: true },
+      },
+      today,
+    ).state.nutrition.targets.goal,
     "lose",
   );
+  // The voice coach is told to wait for the plan's note and the athlete's
+  // yes, by both providers.
+  const clock = localClock(`${today}T09:00:00Z`, "UTC");
+  for (const instruction of [
+    voiceInstruction(voiceContext(emptyJournal(), today), clock, "Sam"),
+    voiceInstruction(
+      voiceContext(emptyJournal(), today),
+      clock,
+      "Sam",
+      "checkin",
+      [],
+      { savedPhotos: false },
+    ),
+  ])
+    assert.ok(
+      instruction.includes(
+        "If the result says the plan holds their weight until they confirm, read that note kindly, and only if they say they still want to lose weight call set_goals again with confirmLowWeight true.",
+      ),
+    );
   // Both voice providers offer the two fields.
   const setGoals = elevenLabsTools().find(
     (t) => t.name === "set_goals",

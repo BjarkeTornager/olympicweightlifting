@@ -18,6 +18,8 @@ import { coachingContext } from "../lib/coaching";
 import { LIFTING_MET, LIFTING_NET_KCAL_PER_KG_HOUR } from "../lib/energy";
 import { journalSchema } from "../lib/model";
 import { voiceAction } from "../lib/voice-actions";
+import { dayForCoach } from "../lib/journal-summary";
+import { voiceContext } from "../lib/voice-checkin";
 
 const today = "2026-09-26";
 const athlete: BodyGoalsInput = {
@@ -409,6 +411,27 @@ test("heavy manual work counts 2.0 and is saved in a shape older versions of the
   assert.equal(planForState(saved, today)?.maintenanceKcal, 3960);
   const context = coachingContext(saved, today);
   assert.ok("goals" in context && context.goals?.activity === "very_high");
+  // The day both coaches read (typed Coach's "Everything recorded today",
+  // the voice context and read_journal) says the same, so a coach that
+  // resends the saved details with a new goal weight keeps the level.
+  assert.equal(dayForCoach(saved, today).goals?.activity, "very_high");
+  const voice = voiceContext(saved, today);
+  assert.equal(voice.day.goals?.activity, "very_high");
+  const seen: Record<string, unknown> = { ...voice.day.goals };
+  delete seen.updatedAt;
+  const resent = prepareAction(
+    saved,
+    voiceAction(
+      "set_goals",
+      { ...seen, targetWeightKg: 80, targetDate: "", summary: "Goal 80 kg" },
+      saved,
+      today,
+    ),
+    today,
+  ).state;
+  assert.equal(resent.profile.body?.targetWeightKg, 80);
+  assert.equal(resent.profile.heavyManualWork, true);
+  assert.equal(planForState(resent, today)?.maintenanceKcal, 3960);
   // Another level clears the flag.
   applyGoals(state, athlete, today);
   assert.equal(state.profile.heavyManualWork, undefined);

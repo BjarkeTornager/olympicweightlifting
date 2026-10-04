@@ -6,8 +6,10 @@ import { coachingSchema } from "./coaching";
 import { liftingBriefSchema } from "./lifting-brief";
 import {
   bodyGoalsSchema,
+  energyCheckSchema,
   goalChecksSchema,
   goalHealthSchema,
+  weighInSchema,
 } from "./body-goals";
 import { bodyTargetsSchema } from "./body-composition";
 import {
@@ -157,6 +159,11 @@ export const journalSchema = z
         // Kidney disease or a limit on protein, and the baby's birth day
         // while breastfeeding, for the plan's limits too.
         goalHealth: goalHealthSchema.optional(),
+        // The day of the answers to the low-energy questions and whether
+        // any was yes, and a competition weight class the goal weight is,
+        // with its weigh-in day.
+        energyCheck: energyCheckSchema.optional(),
+        weighIn: weighInSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

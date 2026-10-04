@@ -231,7 +231,9 @@ export function coachingContext(state: JournalState, date: string) {
     focus: "",
   };
   const suggestion = coachSuggestion(state, date);
-  const plan = planForState(state, date);
+  // The safety notes are in the plan's notes too.
+  const planned = planForState(state, date);
+  const plan = planned && { ...planned, safetyNotes: undefined };
   return {
     preferences: {
       initiative: preferences.initiative,

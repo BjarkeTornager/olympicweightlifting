@@ -60,9 +60,11 @@ export const bodyCompositionInputSchema = z
   })
   .strict();
 // What the plan must know to stay safe, asked with the goals: pregnancy or
-// breastfeeding and the baby's age, and kidney disease or a doctor's limit
-// on protein (each only if the athlete chooses to say), and a confirmed wish
-// to lose weight towards a weight just under the healthy range.
+// breastfeeding and the baby's age, kidney disease or a doctor's limit on
+// protein, and the low-energy questions before a deficit (each only if the
+// athlete chooses to say), a confirmed wish to lose weight towards a weight
+// just under the healthy range, and whether the goal weight is a
+// competition weight class.
 export const pregnancyStatuses = ["pregnant", "breastfeeding"] as const;
 export type Pregnancy = (typeof pregnancyStatuses)[number];
 export const goalChecksInputSchema = z
@@ -95,6 +97,19 @@ export const goalChecksInputSchema = z
       .describe(
         "True only when the plan asked the athlete to confirm losing weight towards a weight just under the healthy range and they said they still want to.",
       ),
+    energySigns: z
+      .boolean()
+      .nullable()
+      .optional()
+      .describe(
+        "Only after asking the low-energy questions: true if the athlete answered yes to any, false if no to all; null if they'd rather not answer after all. Leave it out otherwise.",
+      ),
+    weightClass: z
+      .boolean()
+      .optional()
+      .describe(
+        "True only when the athlete says the goal weight is a competition weight class they must make, with targetDate as the weigh-in date if they know it; false when it no longer is.",
+      ),
   })
   .strict();
 // Kept beside profile.body like profile.bodyTargets. Pregnancy is sensitive
@@ -118,6 +133,37 @@ export const goalHealthSchema = z
     updatedAt: z.iso.datetime(),
   })
   .strict();
+// The answers to the low-energy questions: only the day they were given and
+// whether any was yes, never which. Sensitive health data, kept beside the
+// goals only so the plan stays safe, and removed when the athlete would
+// rather not say. A yes holds the plan at maintenance until the questions
+// are answered again; a no lasts 3 months (ENERGY_CHECK_DAYS).
+export const energyCheckSchema = z
+  .object({ date: foodDate, signs: z.boolean() })
+  .strict();
+// A competition weight class the goal weight is: its limit, and the
+// weigh-in day (the target date) when known. Kept while the goal weight is
+// the class.
+export const weighInSchema = z
+  .object({
+    classKg: z.number().min(30).max(300),
+    date: foodDate.nullable(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+// Feet and inches and pounds, as the athlete gives them: Coach passes them
+// on rather than working out cm and kg itself, and metricGoals converts.
+// Inches alone are the whole height.
+export const imperialGoalsSchema = z
+  .object({
+    heightFeet: z.number().int().min(3).max(8).optional(),
+    heightInches: z.number().min(0).max(100).optional(),
+    weightLb: z.number().positive().max(1000).optional(),
+    targetWeightLb: z.number().positive().max(1000).optional(),
+  })
+  .strict();
+const INCH_CM = 2.54;
+const POUND_KG = 0.45359237;
 // A goal change. Session length and experience, which a change to the goal
 // often leaves out, keep their saved values (applyGoals) rather than
 // falling back to 75 minutes and "developing".
@@ -129,6 +175,42 @@ export const bodyGoalsRequestSchema = bodyGoalsInputSchema
   .extend(bodyCompositionInputSchema.shape)
   .extend(goalChecksInputSchema.shape);
 export type BodyGoalsRequest = z.infer<typeof bodyGoalsRequestSchema>;
+// A goal change as Coach gives it: height and weights in cm and kg, or in
+// feet and inches and pounds as the athlete said them (metricGoals).
+export const coachGoalsSchema = bodyGoalsRequestSchema
+  .extend({
+    heightCm: bodyGoalsInputSchema.shape.heightCm.optional(),
+    weightKg: bodyGoalsInputSchema.shape.weightKg.optional(),
+    targetWeightKg: bodyGoalsInputSchema.shape.targetWeightKg.optional(),
+  })
+  .extend(imperialGoalsSchema.shape);
+
+// Coach's goal change with any feet and inches or pounds in cm and kg, to
+// 0.1, and the imperial fields gone; anything else passes through for the
+// schema to check. Given both, the athlete's own units win.
+export function metricGoals(raw: unknown): unknown {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const { heightFeet, heightInches, weightLb, targetWeightLb, ...rest } =
+    raw as Record<string, unknown>;
+  const tenth = (value: number) => Math.round(value * 10) / 10;
+  // A zero, as a model filling every field sends, is no value: 0 inches
+  // count only with feet.
+  const given = (value: unknown) =>
+    value != null && value !== "" && value !== 0;
+  const height = given(heightFeet) || given(heightInches);
+  return {
+    ...rest,
+    ...(height && {
+      heightCm: tenth(
+        (Number(heightFeet ?? 0) * 12 + Number(heightInches ?? 0)) * INCH_CM,
+      ),
+    }),
+    ...(given(weightLb) && { weightKg: tenth(Number(weightLb) * POUND_KG) }),
+    ...(given(targetWeightLb) && {
+      targetWeightKg: tenth(Number(targetWeightLb) * POUND_KG),
+    }),
+  };
+}
 export type Composition = {
   focus?: BodyFocus;
   bodyFatPercent?: number | null;
@@ -140,6 +222,12 @@ export type Composition = {
   weeksSinceBirth?: number | null;
   limitProtein?: boolean;
   lowWeightConfirmed?: boolean;
+  // The low-energy answers in force (energySigns): true for a yes, false
+  // for no to all, null when there are none or a no is over 3 months old.
+  energySigns?: boolean | null;
+  // The goal weight is a competition weight class, and the target date its
+  // weigh-in.
+  weightClass?: boolean;
 };
 
 export function splitGoals(input: BodyGoalsRequest) {
@@ -151,12 +239,21 @@ export function splitGoals(input: BodyGoalsRequest) {
     weeksSinceBirth,
     limitProtein,
     confirmLowWeight,
+    energySigns,
+    weightClass,
     ...goals
   } = bodyGoalsRequestSchema.parse(input);
   return {
     goals,
     composition: { focus, bodyFatPercent, targetBodyFatPercent },
-    checks: { pregnancy, weeksSinceBirth, limitProtein, confirmLowWeight },
+    checks: {
+      pregnancy,
+      weeksSinceBirth,
+      limitProtein,
+      confirmLowWeight,
+      energySigns,
+      weightClass,
+    },
   };
 }
 
@@ -233,6 +330,39 @@ export const pregnancyCarbsFloorG = { pregnant: 175, breastfeeding: 210 };
 // what most adults need (NASEM, NNR), and what kidney guidance gives (KDIGO),
 // so the other targets never take more for granted.
 const REFERENCE_PROTEIN_PER_KG = 0.8;
+// How long a no to the low-energy questions holds: a deficit asks them
+// again about every 3 months while it lasts.
+export const ENERGY_CHECK_DAYS = 91;
+// The three low-energy questions, asked before a plan cuts or aims very
+// lean: pragmatic routing to a professional, not a validated test or a
+// diagnosis (IOC REDs CAT2 primary and secondary indicators). The first is
+// for women and anyone who'd rather not give their sex, when they don't
+// use hormonal contraception.
+export const energyQuestions = {
+  periods:
+    "Have you missed a period, or had cycles longer than 35 days, in the last 3 months? (Skip this if you use hormonal contraception.)",
+  fracture: "Have you had a stress fracture in the last 2 years?",
+  eating:
+    "Have you had an eating disorder, or does eating often feel out of your control?",
+};
+// The questions for this athlete, in the order Coach asks them.
+export function energyQuestionsFor(sex: BodyGoalsInput["sex"]) {
+  return [
+    energyQuestions.fracture,
+    energyQuestions.eating,
+    ...(sex === "male" ? [] : [energyQuestions.periods]),
+  ];
+}
+// What they ask about, for the notes: "stress fractures, eating and
+// periods", or with "or" for any one of them.
+function screenTopics(sex: BodyGoalsInput["sex"], joiner: "and" | "or") {
+  const topics = [
+    "stress fractures",
+    "eating",
+    ...(sex === "male" ? [] : ["periods"]),
+  ];
+  return `${topics.slice(0, -1).join(", ")} ${joiner} ${topics.at(-1)}`;
+}
 
 export type GoalPlan = {
   direction: "lose" | "maintain" | "gain";
@@ -272,8 +402,17 @@ export type GoalPlan = {
   // doctor, midwife or dietitian advises on it. protein is then only the
   // amount the other macros allow for.
   proteinTarget: boolean;
+  // The goal weight is a competition weight class (Composition).
+  weightClass: boolean;
+  // The plan would set a deficit, or aims for very lean body fat, without
+  // answers to the low-energy questions in force: Coach asks them first.
+  energyCheckDue: boolean;
   sessionsPerWeek: number;
   notes: string[];
+  // The notes on health and safety, also in notes: limits that hold or
+  // slow the plan, and who to talk to. The voice coach reads every one
+  // aloud before saving, and the iPhone shows them in full.
+  safetyNotes: string[];
 };
 
 const round = (value: number, step = 1) => Math.round(value / step) * step;
@@ -293,6 +432,12 @@ export function planGoals(
 ): GoalPlan {
   const g = plannedGoalsSchema.parse(input);
   const notes: string[] = [];
+  const safetyNotes: string[] = [];
+  // A note on health or safety (GoalPlan.safetyNotes).
+  const warn = (note: string) => {
+    notes.push(note);
+    safetyNotes.push(note);
+  };
   const minor = g.age < 18;
   const pregnancy = composition.pregnancy ?? null;
   const pregnant = pregnancy === "pregnant";
@@ -354,9 +499,18 @@ export function planGoals(
     g.sex === "male" ? 1500 : 1200,
   );
 
+  // A weight class is a limit to make: any weight above it is to lose, so
+  // the plan reaches the limit rather than stopping just above it and
+  // leaving a last-minute cut. Otherwise within 0.5 kg holds.
+  const weightClass = Boolean(composition.weightClass);
+  const steady = (change: number) =>
+    !(weightClass && change < 0) && Math.abs(change) < 0.5;
   const difference = g.targetWeightKg - g.weightKg;
-  const wanted =
-    Math.abs(difference) < 0.5 ? "maintain" : difference < 0 ? "lose" : "gain";
+  const wanted = steady(difference)
+    ? "maintain"
+    : difference < 0
+      ? "lose"
+      : "gain";
   const focus: BodyFocus =
     composition.focus ??
     (wanted === "lose"
@@ -375,14 +529,14 @@ export function planGoals(
         g.weightKg,
         Math.round((lean / (1 - limits.veryLean / 100)) * 10) / 10,
       );
-      notes.push(
+      warn(
         `${g.targetWeightKg <= lean ? "That goal weight is below your lean mass and can't be reached without losing muscle" : `That goal weight would take your body fat below the lowest healthy level (${lowestHealthy})`}, so the plan won't go below a safer weight. Talk it through with a doctor or sports dietitian.`,
       );
     } else if (
       implied < limits.veryLean &&
       !(targetBodyFat != null && targetBodyFat < limits.veryLean)
     )
-      notes.push(
+      warn(
         "That goal weight would make you very lean: hard to hold, and it can cost energy, hormones and performance. Treat it as a short peak at most.",
       );
   }
@@ -400,7 +554,7 @@ export function planGoals(
   // In pregnancy the plan sets no weight goal: gaining is a healthy part of
   // it.
   let direction: GoalPlan["direction"] =
-    pregnant || Math.abs(remaining) < 0.5
+    pregnant || steady(remaining)
       ? "maintain"
       : remaining < 0
         ? "lose"
@@ -418,10 +572,12 @@ export function planGoals(
     days != null &&
     days < 7
   ) {
-    notes.push(
+    warn(
       days < 0
         ? "Your target date has passed, so the plan holds your weight for now. Review your goals to set a new date, or none."
-        : "Your target date is less than a week away, too close to plan a safe change, so the plan holds your weight. Set a later date, or none, to plan one.",
+        : weightClass
+          ? "Your weigh-in is less than a week away, too close to plan a safe cut, so the plan holds your weight."
+          : "Your target date is less than a week away, too close to plan a safe change, so the plan holds your weight. Set a later date, or none, to plan one.",
     );
     direction = "maintain";
     held = true;
@@ -437,17 +593,17 @@ export function planGoals(
   let slowly = false;
   if (minor) {
     if (cutting || tooLeanForTeen)
-      notes.push(
+      warn(
         `Under 18 the plan doesn't set a calorie deficit: a growing body needs plenty of energy for training and growth, so it holds your weight.${tooLeanForTeen ? " That goal weight would also mean very low body fat for a teenager." : ""} If you want to change your weight, talk it through with a parent, your coach or a doctor.`,
       );
     if (reading != null || composition.targetBodyFatPercent != null)
-      notes.push(
+      warn(
         "Under 18 the plan doesn't use body fat readings or set a body fat goal; while you're growing, how you train, eat and recover matters more.",
       );
     cut = false;
   }
   if (pregnant) {
-    notes.push(
+    warn(
       "In pregnancy the plan sets no weight goal and no daily calorie, protein or body fat targets: gaining weight is a normal, healthy part of pregnancy, and energy needs rise as it goes on, mostly in the second and third trimesters. Your midwife or doctor can advise you on eating and training.",
     );
     cut = false;
@@ -466,13 +622,13 @@ export function planGoals(
       asks && weeks == null
         ? ` If you'd like the plan to include a gentle loss once your baby is ${POSTPARTUM_WEEKS} weeks old, say how old your baby is.`
         : "";
-    notes.push(
+    warn(
       `While you're breastfeeding the plan adds about ${LACTATION_KCAL} kcal a day for making milk and ${deficit}, with no protein target.${askAge} Keep an eye on your milk supply, and talk to your midwife or health visitor before trying to lose weight.`,
     );
     if (early) cut = false;
   }
   if (limitProtein) {
-    notes.push(
+    warn(
       "As you have kidney disease or a doctor's advice to limit protein, the plan sets no protein target. Follow your doctor's or dietitian's advice on how much protein suits you.",
     );
   }
@@ -482,35 +638,49 @@ export function planGoals(
   const underweightGoal =
     "That goal weight is below the healthy range for your height. Talk it through with a doctor or dietitian before aiming for it.";
   if (minor) {
-    if (bmiGoal < 18.5 && !pregnant) notes.push(underweightGoal);
+    if (bmiGoal < 18.5 && !pregnant) warn(underweightGoal);
   } else if (!pregnant) {
     const goalLower = bmiGoal <= bmiNow;
     const lower = goalLower ? "That goal weight" : "Your weight";
     const before = goalLower ? " before aiming for it" : "";
     const lowest = Math.min(bmiNow, bmiGoal);
     if (lowest < 17.5) {
-      notes.push(
+      warn(
         `${lower} is well below the healthy range for your height${cut ? ", so the plan holds your weight rather than cutting" : ""}. Please talk to a doctor or dietitian about what's right for you.`,
       );
       cut = false;
     } else if (cutting && lowest < 18.5) {
       if (!cut)
-        notes.push(
+        warn(
           `${lower} is just below the healthy range for your height. Talk it through with a doctor or dietitian${before}.`,
         );
       else if (composition.lowWeightConfirmed) {
-        notes.push(
+        warn(
           `${lower} is just below the healthy range for your height. As you've confirmed it, the plan loses slowly; talk it through with a doctor or dietitian${before}.`,
         );
         slowly = true;
       } else {
-        notes.push(
+        warn(
           `${lower} is just below the healthy range for your height, so the plan holds your weight for now. Talk it through with a doctor or dietitian; if you still want to lose weight, confirm it and the plan will lose slowly.`,
         );
         cut = false;
         confirmToLose = true;
       }
-    } else if (bmiGoal < 18.5) notes.push(underweightGoal);
+    } else if (bmiGoal < 18.5) warn(underweightGoal);
+  }
+  // The low-energy questions, before a plan that cuts or aims very lean:
+  // any yes holds the weight at maintenance and points to a professional,
+  // never a diagnosis (IOC REDs CAT2 routing). Without answers in force the
+  // plan says they are due, and Coach asks them.
+  const veryLeanTarget =
+    targetBodyFat != null && targetBodyFat < limits.veryLean;
+  const screened = cut || veryLeanTarget;
+  if (screened && composition.energySigns === true) {
+    warn(
+      `You answered yes to one of the questions on ${screenTopics(g.sex, "or")}, so the plan holds your weight at maintenance for now. These can have many causes, and a sports doctor or sports dietitian can help you look into them and plan any change safely.`,
+    );
+    cut = false;
+    direction = "maintain";
   }
   if (!cut && direction === "lose") direction = "maintain";
 
@@ -664,16 +834,16 @@ export function planGoals(
     direction === "maintain" ? null : Math.ceil(Math.abs(remaining) / rate);
   const weeklyChangeKg = Math.round(rate * 100) / 100;
   if (limited === "hold")
-    notes.push(
+    warn(
       "There isn't room for a safe deficit alongside your training and recovery, so the plan holds your weight at maintenance.",
     );
   // Once carbohydrate sets the calories, its own note says so instead.
   else if (limited === "floor" && !raised)
-    notes.push(
+    warn(
       `Calories are kept at a level that covers your resting energy${breastfeeding ? ", training and making milk" : " and training"}, so the plan loses more slowly: about ${weeklyChangeKg} kg a week.`,
     );
   else if (limited === "cap" && !raised)
-    notes.push(
+    warn(
       `The deficit is kept to ${cap.toLocaleString("en-GB")} kcal a day ${breastfeeding ? "while you're breastfeeding" : "to protect training and muscle"}, so the plan loses about ${weeklyChangeKg} kg a week.`,
     );
   // Fat counts as lowered by its share as shown: losing only its 5 g
@@ -698,8 +868,35 @@ export function planGoals(
     notes.push(
       `To keep ${carbsFloor} g of carbohydrate a day, the generally recommended minimum${breastfeeding ? " while breastfeeding" : ""}, ${room.length > 1 ? `${room.slice(0, -1).join(", ")} and ${room.at(-1)}` : room[0]}.`,
     );
-  if (direction !== "maintain" && needed != null && needed - rate > 0.005)
-    notes.push(
+  // A weight class the plan won't make by the weigh-in, or at all: the
+  // safe options, and never a last-minute cut of water or food, which is
+  // for a coach or sports dietitian (ACSM, and the weigh-in only 2 hours
+  // before lifting). A weigh-in already past has its own note.
+  const classKg = g.targetWeightKg;
+  const aboveClass =
+    weightClass && g.weightKg > classKg && !(days != null && days < 0);
+  const makesClass =
+    direction === "lose" &&
+    towards <= classKg &&
+    !(needed != null && needed - rate > 0.005);
+  if (aboveClass && !makesClass) {
+    const lead = held
+      ? ""
+      : direction === "lose" && towards > classKg
+        ? `The plan stops at ${towards} kg, above the ${classKg} kg class. `
+        : direction === "lose" && needed != null && days != null
+          ? `Making the ${classKg} kg class by the weigh-in on ${g.targetDate} would need about ${needed.toFixed(2)} kg a week; at a sustainable ${rate.toFixed(2)} kg a week you'd weigh about ${Math.round((g.weightKg - (rate * days) / 7) * 10) / 10} kg then. `
+          : `This plan holds your weight${days != null ? ` up to the weigh-in on ${g.targetDate}` : ""}, above the ${classKg} kg class. `;
+    warn(
+      `${lead}Consider ${days != null ? "a later meet or " : ""}the next class up, and talk it through with your coach or a sports dietitian. The plan never includes a last-minute cut of water or food; leave any such cut to them.`,
+    );
+  } else if (
+    direction !== "maintain" &&
+    needed != null &&
+    needed - rate > 0.005 &&
+    !aboveClass
+  )
+    warn(
       `Reaching ${towards} kg by ${g.targetDate} would need ${needed.toFixed(2)} kg a week; this plan keeps to a sustainable ${rate.toFixed(2)} kg.`,
     );
   // A reading would give protein from lean mass instead; not asked for
@@ -709,7 +906,7 @@ export function planGoals(
       "Protein is an estimate from your height and weight; add a body fat reading for a better number.",
     );
   if (bodyFat != null && direction === "lose" && bodyFat <= limits.lean)
-    notes.push(
+    warn(
       `At ${bodyFat}% body fat you are already lean, so the plan loses slowly to protect muscle and training.`,
     );
   if (focus === "build_muscle" && direction === "lose")
@@ -721,11 +918,11 @@ export function planGoals(
       "Your goal weight is above your current weight, so the plan adds weight; set a lower goal weight to lose fat.",
     );
   if (targetBodyFat != null && targetBodyFat < limits.minimum)
-    notes.push(
+    warn(
       `${targetBodyFat}% body fat is below the lowest healthy level (${lowestHealthy}); it isn't a safe goal. Talk it through with a doctor.`,
     );
   else if (targetBodyFat != null && targetBodyFat < limits.veryLean)
-    notes.push(
+    warn(
       `${targetBodyFat}% body fat is very lean: hard to hold and it can cost energy, hormones and performance. Treat it as a short peak at most.`,
     );
   const weightAtTarget =
@@ -740,7 +937,7 @@ export function planGoals(
       `At ${targetBodyFat}% body fat with your current lean mass you would weigh about ${weightAtTarget} kg, not ${g.targetWeightKg} kg; one of the two goals will need to give.`,
     );
   if (trainingKcal > TRAINING_KCAL_CAP)
-    notes.push(
+    warn(
       `The plan counts your training as ${TRAINING_KCAL_CAP.toLocaleString("en-GB")} kcal a day at most, so it may be on the low side; if your weight falls faster than planned, ask Coach to review it.`,
     );
   if (g.trainingDays > recommended)
@@ -771,8 +968,16 @@ export function planGoals(
     confirmToLose,
     dailyTargets: !pregnant,
     proteinTarget,
+    weightClass,
+    // Asked only when a deficit remains once every other limit has had its
+    // say, or for a very lean goal.
+    energyCheckDue:
+      screened &&
+      composition.energySigns == null &&
+      (kcal < atMaintenance || veryLeanTarget),
     sessionsPerWeek,
     notes,
+    safetyNotes,
   };
 }
 
@@ -837,6 +1042,16 @@ export function babyWeeks(state: JournalState, today: string) {
     : null;
 }
 
+// The low-energy answers in force today: a yes until the questions are
+// answered again, a no for ENERGY_CHECK_DAYS, otherwise none (null).
+export function energySigns(state: JournalState, today: string) {
+  const check = state.profile.energyCheck;
+  if (!check) return null;
+  if (check.signs) return true;
+  const days = (Date.parse(today) - Date.parse(check.date)) / 86400000;
+  return days < ENERGY_CHECK_DAYS ? false : null;
+}
+
 // The plan for the saved goals, with the focus, target, latest body fat and
 // the safety checks given with them.
 export function planForState(state: JournalState, today: string) {
@@ -851,6 +1066,8 @@ export function planForState(state: JournalState, today: string) {
     weeksSinceBirth: babyWeeks(state, today),
     limitProtein: Boolean(state.profile.goalHealth?.limitProtein),
     lowWeightConfirmed: checks?.lowWeightConfirmedKg === body.targetWeightKg,
+    energySigns: energySigns(state, today),
+    weightClass: state.profile.weighIn?.classKg === body.targetWeightKg,
   });
 }
 
@@ -903,10 +1120,15 @@ export const ASSUMED_SESSION =
 // weeks given only when they differ from the saved age, so saving the
 // goals again never moves it. A protein target saved beside a plan that set
 // none is the athlete's own, their doctor's or dietitian's figure perhaps,
-// and is kept while the plan still sets none. changes names a removed
-// kidney answer or a changed baby's age, for the review and the voice
-// read-back to say first: a voice save has no review, and a model filling
-// every field could change them unasked.
+// and is kept while the plan still sets none. A new answer to the
+// low-energy questions is kept with today's date, the same answer while it
+// is in force keeps its day (so saving again never stretches a no past
+// 3 months), and null removes them. A weight class stays while the goal
+// weight is the class, with the target date as its weigh-in. changes names
+// a removed kidney answer, a changed baby's age, a no to the low-energy
+// questions or a removed weight class, for the review and the voice
+// read-back to say first: a model filling every field could change them
+// unasked.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
@@ -963,6 +1185,26 @@ export function applyGoals(
       updatedAt: stamp,
     };
   else delete state.profile.goalHealth;
+  const signsBefore = energySigns(state, today);
+  const checkedBefore = state.profile.energyCheck;
+  if (checks.energySigns === null) delete state.profile.energyCheck;
+  else if (
+    checks.energySigns !== undefined &&
+    checks.energySigns !== signsBefore
+  )
+    state.profile.energyCheck = { date: today, signs: checks.energySigns };
+  const weighIn = state.profile.weighIn;
+  const classKg =
+    (checks.weightClass ?? weighIn?.classKg === goals.targetWeightKg)
+      ? goals.targetWeightKg
+      : null;
+  if (classKg != null)
+    state.profile.weighIn = {
+      classKg,
+      date: goals.targetDate,
+      updatedAt: stamp,
+    };
+  else delete state.profile.weighIn;
   if (composition.bodyFatPercent != null)
     saveBodyFat(
       state,
@@ -1006,6 +1248,7 @@ export function applyGoals(
     plan.notes.push(`Your own protein target of ${own} g stays as it is.`);
   if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);
   const weeksAfter = babyWeeks(state, today);
+  const topics = screenTopics(goals.sex, "and");
   const changes = [
     health?.limitProtein &&
       !limitProtein &&
@@ -1016,6 +1259,15 @@ export function applyGoals(
       (weeksAfter == null
         ? "Removes your baby's age."
         : `Saves your baby's age as ${weeksAfter} week${weeksAfter === 1 ? "" : "s"}, not ${weeksBefore}.`),
+    checks.energySigns === false &&
+      signsBefore !== false &&
+      `Saves that you answered no to the questions on ${topics}.`,
+    checks.energySigns === null &&
+      checkedBefore &&
+      `Removes your answers to the questions on ${topics}.`,
+    weighIn &&
+      classKg == null &&
+      `Removes your weigh-in for the ${weighIn.classKg} kg class.`,
   ].filter((line): line is string => Boolean(line));
   return Object.assign(plan, { changes });
 }
@@ -1028,7 +1280,13 @@ export function describePlan(goals: GoalsGiven, plan: GoalPlan) {
       ? plan.focus === "recomposition"
         ? `Recomposition: hold around ${goals.weightKg} kg while losing fat and building muscle`
         : `Hold around ${goals.weightKg} kg`
-      : `${plan.direction === "lose" ? "Lose" : "Gain"} about ${plan.weeklyChangeKg} kg a week towards ${plan.towardsKg} kg${plan.weeksToGoal ? ` (about ${plan.weeksToGoal} weeks)` : ""}`;
+      : `${plan.direction === "lose" ? "Lose" : "Gain"} about ${plan.weeklyChangeKg} kg a week ${
+          plan.weightClass &&
+          plan.direction === "lose" &&
+          plan.towardsKg === goals.targetWeightKg
+            ? `to make the ${plan.towardsKg} kg class${goals.targetDate ? ` by the weigh-in on ${goals.targetDate}` : ""}`
+            : `towards ${plan.towardsKg} kg`
+        }${plan.weeksToGoal ? ` (about ${plan.weeksToGoal} week${plan.weeksToGoal === 1 ? "" : "s"})` : ""}`;
   const composition =
     plan.leanMassKg != null
       ? ` Based on ${plan.bodyFatPercent}% body fat, about ${plan.leanMassKg} kg lean mass${plan.targetBodyFatPercent != null ? `, towards ${plan.targetBodyFatPercent}%` : ""}.`

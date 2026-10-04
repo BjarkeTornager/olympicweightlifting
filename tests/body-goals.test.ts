@@ -192,7 +192,7 @@ test("carbohydrate stays at 130 g or more: fat gives first, then protein, then c
   assert.deepEqual(macros(protein), [1200, 100, 30, 135]);
   assert.equal(
     note(protein),
-    "To keep 130 g of carbohydrate a day, the generally recommended minimum, fat is about 23% of calories rather than a quarter and protein is a little lower.",
+    "To keep 130 g of carbohydrate a day, the generally recommended minimum, fat is about 23% of calories rather than a quarter and protein is 100 g rather than 110 g.",
   );
   // At 80, 152 cm and 69 kg, the 1,200 kcal floor with 1.6 g/kg (115 g)
   // and a fifth in fat still leaves 117.5 g: calories go up to 1,250, and
@@ -215,12 +215,41 @@ test("carbohydrate stays at 130 g or more: fat gives first, then protein, then c
   assert.equal(calories.weeksToGoal, 38);
   assert.equal(
     note(calories),
-    "To keep 130 g of carbohydrate a day, the generally recommended minimum, fat is about 22% of calories rather than a quarter, protein is a little lower and the plan loses more slowly: about 0.24 kg a week.",
+    "To keep 130 g of carbohydrate a day, the generally recommended minimum, fat is about 22% of calories rather than a quarter, protein is 115 g rather than 140 g and the plan loses more slowly: about 0.24 kg a week.",
   );
   // Carbohydrate, not the floor, sets those calories, so only its note.
   assert.ok(!calories.notes.some((n) => /resting energy and training/.test(n)));
   // With room to spare, no note.
   assert.equal(note(planGoals(athlete, today)), undefined);
+  // At 45, 158 cm, 67 to 60 kg: a quarter of 1,450 kcal is 40.3 g, 45 g to
+  // the 5 g above, which leaves 126 g of carbohydrate. Fat at 40 g, 24.8 %
+  // of energy, is still a quarter, so no note says it is less.
+  const roundUp = planGoals(
+    {
+      ...woman,
+      age: 45,
+      heightCm: 158,
+      weightKg: 67,
+      targetWeightKg: 60,
+      sessionMinutes: 60,
+    },
+    today,
+  );
+  assert.deepEqual(macros(roundUp), [1450, 135, 40, 140]);
+  assert.equal(note(roundUp), undefined);
+  // In pregnancy the plan saves no macros, so no note on them.
+  const older = {
+    ...woman,
+    age: 72,
+    heightCm: 136,
+    targetWeightKg: 55,
+    trainingDays: 0,
+  };
+  assert.ok(note(planGoals(older, today)));
+  assert.equal(
+    note(planGoals(older, today, { pregnancy: "pregnant" })),
+    undefined,
+  );
 });
 
 test("the plan's notes on macros show only beside the plan's own macros", () => {
@@ -307,6 +336,15 @@ test("on the safety grid the macros add up, fat stays within 20-35 % of energy (
                     const fatShare = (fat * 9) / calories;
                     if (fatShare < (age < 18 ? 0.25 : 0.2) || fatShare > 0.35)
                       assert.fail(`fat ${fatShare}: ${where()}`);
+                    // The note calls fat less than a quarter when it is as
+                    // shown, and only then.
+                    const underQuarter = plan.notes.some((n) =>
+                      /fat is about \d+% of calories rather than a quarter/.test(
+                        n,
+                      ),
+                    );
+                    if (underQuarter !== Math.round(fatShare * 100) < 25)
+                      assert.fail(`fat note at ${fatShare}: ${where()}`);
                     if (carbs < CARBS_FLOOR_G)
                       assert.fail(`carbohydrate ${carbs} g: ${where()}`);
                     // Within its 5 g rounding.

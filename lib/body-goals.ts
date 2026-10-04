@@ -534,7 +534,6 @@ export function planGoals(
   const fatAt = (share: number) => upTo5((kcal * share) / 900);
   let fat = fatAt(macroShares.fat);
   const carbsLeft = () => (kcal - protein * 4 - fat * 9) / 4;
-  const usualFat = fat;
   const usualProtein = protein;
   if (carbsLeft() < CARBS_FLOOR_G)
     fat = Math.max(
@@ -584,10 +583,15 @@ export function planGoals(
     notes.push(
       `The deficit is kept to ${cap.toLocaleString("en-GB")} kcal a day to protect training and muscle, so the plan loses about ${weeklyChangeKg} kg a week.`,
     );
+  // Fat counts as lowered by its share as shown: losing only its 5 g
+  // round-up still leaves a quarter. In pregnancy the plan saves no macros,
+  // so there is no note on them.
+  const fatPercent = Math.round((fat * 900) / kcal);
   const room = [
-    fat < usualFat &&
-      `fat is about ${Math.round((fat * 900) / kcal)}% of calories rather than a quarter`,
-    protein < usualProtein && "protein is a little lower",
+    fatPercent < macroShares.fat &&
+      `fat is about ${fatPercent}% of calories rather than a quarter`,
+    protein < usualProtein &&
+      `protein is ${protein} g rather than ${usualProtein} g`,
     raised &&
       (heldForCarbs
         ? "the plan holds your weight at maintenance"
@@ -595,7 +599,7 @@ export function planGoals(
           ? `the plan loses more slowly: about ${weeklyChangeKg} kg a week`
           : "calories are a little higher"),
   ].filter((part): part is string => Boolean(part));
-  if (room.length)
+  if (room.length && !pregnant)
     notes.push(
       `To keep ${CARBS_FLOOR_G} g of carbohydrate a day, the generally recommended minimum, ${room.length > 1 ? `${room.slice(0, -1).join(", ")} and ${room.at(-1)}` : room[0]}.`,
     );

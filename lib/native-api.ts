@@ -202,6 +202,9 @@ const nutritionView = z
 const hydrationView = z
   .object({
     totalMl: int,
+    // 0 while the athlete hides the target: builds from before 4 October
+    // read 0 as no target, so they show no meter and plan no reminders
+    // naming it.
     targetMl: int,
     estimatedTarget: z.boolean(),
     drinks: z.array(drinkView),
@@ -935,7 +938,7 @@ export function buildToday(
       },
       hydration: {
         totalMl: hydration.totalMl,
-        targetMl: hydration.targetMl,
+        targetMl: hydration.hidden ? 0 : hydration.targetMl,
         estimatedTarget: hydration.estimated,
         drinks: hydration.drinks.map((d) =>
           defined({
@@ -1804,6 +1807,7 @@ export const trendsView = z
     days: z.array(trendDay),
     targetCalories: z.number().optional(),
     targetProtein: z.number().optional(),
+    // 0 while hidden, so builds from before 4 October never chart it.
     waterTargetMl: int,
     // The athlete hid the drinks target; absent before 4 October.
     waterTargetHidden: z.boolean().optional(),
@@ -1856,7 +1860,7 @@ export function buildTrends(
       targetCalories:
         dailyTarget(state.nutrition.targets?.calories) ?? undefined,
       targetProtein: dailyTarget(state.nutrition.targets?.protein) ?? undefined,
-      waterTargetMl: drinksTarget.targetMl,
+      waterTargetMl: drinksTarget.hidden ? 0 : drinksTarget.targetMl,
       ...(drinksTarget.hidden ? { waterTargetHidden: true } : {}),
     }),
   );

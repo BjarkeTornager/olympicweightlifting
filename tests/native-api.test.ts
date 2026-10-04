@@ -769,11 +769,16 @@ test("Today and Trends give the drinks range and estimates, and respect a hidden
     ],
   );
   assert.equal(buildTrends(state, date, 3).waterTargetHidden, undefined);
+  assert.equal(buildTrends(state, date, 3).waterTargetMl, 2250);
   state.preferences.hideHydrationTarget = true;
   water = buildToday(state, 1, date, new Set()).hydration;
   assert.equal(water.targetHidden, true);
   assert.equal(water.totalMl, 580, "drinks still count");
-  assert.equal(buildTrends(state, date, 3).waterTargetHidden, true);
+  // Builds from before 4 October don't know targetHidden: they read a 0
+  // target as none, so they show no meter and no reminder naming it.
+  assert.equal(water.targetMl, 0);
+  const trends = buildTrends(state, date, 3);
+  assert.deepEqual([trends.waterTargetHidden, trends.waterTargetMl], [true, 0]);
 });
 
 test("Coach's view of the day includes Apple Health heart rate and workout details", async () => {

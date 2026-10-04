@@ -12,6 +12,7 @@ import {
   type GoalPlan,
 } from "../lib/body-goals";
 import { leannessLimits, saveBodyFat } from "../lib/body-composition";
+import { regateLegacyTargets } from "../lib/legacy-goal-targets";
 import { prepareAction } from "../lib/agent/actions";
 import { coachingContext } from "../lib/coaching";
 import { journalSchema } from "../lib/model";
@@ -842,4 +843,166 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
   assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
   state.nutrition.targets.calories = 0;
   assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+});
+
+test("old saved targets that break a hard limit follow the plan again, once; others are left alone", () => {
+  // Goals saved before the limits, on 1 September, with the targets the old
+  // plan gave for them.
+  const saved = (
+    goals: BodyGoalsInput,
+    targets: ReturnType<typeof emptyJournal>["nutrition"]["targets"],
+  ) => {
+    const state = emptyJournal();
+    state.profile.body = { ...goals, updatedAt: "2026-09-01T10:00:00.000Z" };
+    state.nutrition.targets = { ...targets };
+    return state;
+  };
+  const regated = (state: ReturnType<typeof emptyJournal>) => {
+    const before = structuredClone(state.nutrition.targets);
+    const changed = regateLegacyTargets(state, today, "Europe/Copenhagen");
+    if (changed) {
+      assert.notDeepEqual(state.nutrition.targets, before);
+      assert.deepEqual(
+        state.nutrition.targets,
+        planTargets(planForState(state, today)!),
+      );
+      // Once: run again, nothing changes.
+      assert.equal(
+        regateLegacyTargets(state, today, "Europe/Copenhagen"),
+        false,
+      );
+      // Now the iPhone shows the plan's notes beside them.
+      assert.deepEqual(
+        buildToday(state, 1, today, new Set()).body?.goalNotes,
+        planForState(state, today)!.notes,
+      );
+    } else assert.deepEqual(state.nutrition.targets, before);
+    return changed;
+  };
+  const girl = {
+    ...teen,
+    sex: "female" as const,
+    heightCm: 165,
+    weightKg: 60,
+    targetWeightKg: 55,
+    trainingDays: 3,
+  };
+  // Under 18: the old 1,730 kcal deficit becomes maintenance.
+  const minor = saved(girl, {
+    goal: "lose",
+    calories: 1730,
+    protein: 120,
+    carbs: 204,
+    fat: 48,
+  });
+  assert.ok(regated(minor));
+  assert.equal(minor.nutrition.targets.goal, "maintain");
+  assert.ok(minor.nutrition.targets.calories! > 1730);
+  // Fat and carbs from the rounded calories, as saved from 4 October, too.
+  assert.ok(
+    regated(
+      saved(girl, {
+        goal: "lose",
+        calories: 1730,
+        protein: 120,
+        carbs: 205,
+        fat: 48,
+      }),
+    ),
+  );
+  // A 770 kcal deficit at 140 kg is held to 500.
+  const heavy = saved(
+    { ...athlete, weightKg: 140, heightCm: 190, targetWeightKg: 120 },
+    { goal: "lose", calories: 3010, protein: 280, carbs: 221, fat: 112 },
+  );
+  assert.ok(regated(heavy));
+  const heavyPlan = planForState(heavy, today)!;
+  assert.equal(heavyPlan.maintenanceKcal - heavyPlan.calories, 500);
+  // A goal at a BMI of 17.2 holds weight.
+  const thin = saved(
+    { ...athlete, targetWeightKg: 57 },
+    { goal: "lose", calories: 2350, protein: 176, carbs: 253, fat: 70 },
+  );
+  assert.ok(regated(thin));
+  assert.equal(thin.nutrition.targets.goal, "maintain");
+  // Below resting energy plus training: up to the floor.
+  const floored = saved(
+    {
+      ...athlete,
+      sex: "female",
+      age: 30,
+      heightCm: 160,
+      weightKg: 59,
+      targetWeightKg: 55,
+      activity: "low",
+      trainingDays: 5,
+      sessionMinutes: 90,
+    },
+    { goal: "lose", calories: 1490, protein: 118, carbs: 150, fat: 47 },
+  );
+  assert.ok(regated(floored));
+  assert.equal(floored.nutrition.targets.calories, 1560);
+  // A teenager's recomposition loses its small cut.
+  const recomp = saved(
+    { ...teen, targetWeightKg: 70 },
+    { goal: "maintain", calories: 2460, protein: 140, carbs: 322, fat: 68 },
+  );
+  recomp.profile.bodyTargets = {
+    focus: "recomposition",
+    targetBodyFatPercent: null,
+    updatedAt: "2026-09-01T10:00:00.000Z",
+  };
+  assert.ok(regated(recomp));
+  // Within every limit: left as saved (2,350 kcal, 81 kg).
+  assert.equal(
+    regated(
+      saved(athlete, {
+        goal: "lose",
+        calories: 2350,
+        protein: 176,
+        carbs: 253,
+        fat: 70,
+      }),
+    ),
+    false,
+  );
+  // Set by hand, they are the athlete's own, also under 18.
+  for (const targets of [
+    {
+      goal: "lose" as const,
+      calories: 1800,
+      protein: 120,
+      carbs: 204,
+      fat: 48,
+    },
+    {
+      goal: "lose" as const,
+      calories: 1730,
+      protein: 110,
+      carbs: 204,
+      fat: 48,
+    },
+    {
+      goal: "maintain" as const,
+      calories: null,
+      protein: null,
+      carbs: null,
+      fat: null,
+    },
+  ])
+    assert.equal(regated(saved(girl, targets)), false);
+  // Goals saved with this release's checks were planned within the limits.
+  const checked = saved(girl, {
+    goal: "lose",
+    calories: 1730,
+    protein: 120,
+    carbs: 204,
+    fat: 48,
+  });
+  checked.profile.goalChecks = {
+    pregnancy: null,
+    lowWeightConfirmedKg: 55,
+    updatedAt: "2026-09-01T10:00:00.000Z",
+  };
+  assert.equal(regated(checked), false);
 });

@@ -17,7 +17,11 @@ import { hydrationTargetMl } from "../lib/hydration";
 import { offsetDate, saveCheckin } from "../lib/health";
 import { applyBodyMassImport } from "../lib/health-sync";
 import { prepareAction } from "../lib/agent/actions";
-import { coachingContext, takeTargetsProposal } from "../lib/coaching";
+import {
+  coachingContext,
+  followUpGoals,
+  takeTargetsProposal,
+} from "../lib/coaching";
 import { regateLegacyTargets } from "../lib/legacy-goal-targets";
 import { journalSchema } from "../lib/model";
 import { buildToday, buildTrends } from "../lib/native-api";
@@ -784,6 +788,86 @@ test("a goal below a lean athlete's safer weight isn't reached as it is set", ()
   assert.equal(reached.towardsKg, 80.6);
   assert.equal(reached.reachedGoal, true);
   assert.match(reached.notes.join(" "), /You've reached the 80\.6 kg/);
+});
+
+test("Coach taking the plan's suggestion leaves the same journal as Today, with its reasons and goals check", () => {
+  // Kept to what both paths decide: the targets, where they came from, and
+  // the goals check.
+  const outcome = (state: State) => ({
+    targets: state.nutrition.targets,
+    records: state.profile.targetHistory!.map(
+      ({ source, from, weightKgAtSet, calories }) => ({
+        source,
+        from,
+        weightKgAtSet,
+        calories,
+      }),
+    ),
+    checks: (state.profile.coaching?.plans ?? []).map(
+      ({ title, status, followUpDate, outcome }) => ({
+        title,
+        status,
+        followUpDate,
+        outcome,
+      }),
+    ),
+  });
+  const both = (state: State) => {
+    const proposal = targetsProposal(state, today)!;
+    const onToday = structuredClone(state);
+    takeTargetsProposal(onToday, today, proposal.targets);
+    const reviewed = prepareAction(
+      state,
+      { kind: "set_diet_targets", targets: proposal.targets },
+      today,
+    );
+    assert.deepEqual(outcome(reviewed.state), outcome(onToday));
+    return { proposal, reviewed };
+  };
+  // A DEXA reading that cuts deeper, with a no to the low-energy questions
+  // in force: the goals check is agreed, as on Today.
+  const answered = emptyJournal();
+  applyGoals(answered, { ...athlete, energySigns: false }, "2026-09-01");
+  saveBodyFat(answered, { date: today, percent: 26, method: "dexa" }, today);
+  const deeper = both(answered);
+  assert.equal(
+    deeper.reviewed.title,
+    "Take your goals plan's suggested targets",
+  );
+  assert.ok(
+    deeper.reviewed.detail.startsWith(
+      `Your goals plan's suggested targets, a starting estimate. ${deeper.proposal.reasons[0]}`,
+    ),
+  );
+  assert.match(deeper.reviewed.detail, /from 2026-10-17, about 3 weeks on/);
+  assert.equal(deeper.reviewed.plan?.followUpDate, "2026-10-17");
+  // At the goal: holding the weight closes the check agreed with the loss.
+  const reached = emptyJournal();
+  applyGoals(reached, athlete, "2026-08-01");
+  followUpGoals(reached, planForState(reached, "2026-08-01")!, "2026-08-01");
+  weigh(reached, [
+    ["2026-09-24", 81.2],
+    ["2026-09-26", 81.4],
+  ]);
+  const held = both(reached);
+  assert.equal(held.proposal.maintain, true);
+  assert.match(held.reviewed.detail, /is closed/);
+  // A deficit's suggestion with no answers in force waits for them.
+  const unanswered = emptyJournal();
+  applyGoals(unanswered, athlete, "2026-09-01");
+  saveBodyFat(unanswered, { date: today, percent: 26, method: "dexa" }, today);
+  assert.throws(
+    () =>
+      prepareAction(
+        unanswered,
+        {
+          kind: "set_diet_targets",
+          targets: targetsProposal(unanswered, today)!.targets,
+        },
+        today,
+      ),
+    /Ask them first, then prepare set_body_goals/,
+  );
 });
 
 test("the drinks target and burn estimates use the current weight, as the plan does", () => {

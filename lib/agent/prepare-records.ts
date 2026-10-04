@@ -19,6 +19,7 @@ import {
   goalsCheckClosedNote,
   goalsCheckNote,
   moveGoalsCheck,
+  takeTargetsProposal,
 } from "../coaching";
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
 import { setDailyTargets, targetsProposal } from "../target-proposals";
@@ -163,9 +164,40 @@ export function prepareDietTargets(
   if (!Object.keys(action.targets).length)
     throw Error("Name the targets to change.");
   const before = next.nutrition.targets;
+  const targets = mergeDietTargets(before, action.targets);
+  // The goals plan's suggestion, taken as on Today: recorded as the plan's,
+  // with the goals check agreed or closed in the same change.
+  const suggested = targetsProposal(next, currentDate);
+  if (suggested && sameTargets(targets, suggested.targets)) {
+    if (suggested.energyCheck)
+      throw Error(
+        "These are the goals plan's suggested targets, which set a deficit without answers to the low-energy questions. Ask them first, then prepare set_body_goals with the athlete's saved goals at goals.currentWeightKg and their answers as energySigns.",
+      );
+    const { proposal, agreed, closed } = takeTargetsProposal(
+      next,
+      currentDate,
+      targets,
+    );
+    return {
+      targets: next.nutrition.targets,
+      targetsBefore: before,
+      title: "Take your goals plan's suggested targets",
+      detail: [
+        "Your goals plan's suggested targets, a starting estimate.",
+        ...proposal.reasons,
+        ...proposal.plan.safetyNotes,
+        ...(agreed ? [goalsCheckNote(agreed.followUpDate)] : []),
+        ...(closed ? [goalsCheckClosedNote(closed.followUpDate)] : []),
+      ].join(" "),
+      ...(agreed ? { plan: agreed } : {}),
+      ...(proposal.plan.safetyNotes.length
+        ? { notes: proposal.plan.safetyNotes }
+        : {}),
+    };
+  }
   // Recorded as the plan's when they are what it gives now, otherwise as
   // the athlete's own (setDailyTargets).
-  setDailyTargets(next, mergeDietTargets(before, action.targets), currentDate);
+  setDailyTargets(next, targets, currentDate);
   // New calories at a goals check that is due move it on (moveGoalsCheck).
   const calories = next.nutrition.targets.calories;
   const followUp =

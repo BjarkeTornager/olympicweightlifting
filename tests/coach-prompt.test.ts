@@ -316,7 +316,16 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // paragraph's previous sentences reproduces the previous hash
     // (9344b50c…). Health, privacy and evidence text is otherwise
     // unchanged.
-    "174830b24bdc3d6d2da435afdfe22dab1c6f0f381c7f29c72410528e7667ad11",
+    // Revised 2026-10-04, deliberate and reviewed, from the review of PR 7,
+    // in the private-context paragraph only: one added sentence. When
+    // goals.plan.energyCheckDue, Coach asks the low-energy questions before
+    // taking a suggestion, and takes it with set_body_goals (the saved
+    // goals at goals.currentWeightKg, with energySigns) rather than
+    // set_diet_targets, which refuses a deficit's suggestion without them
+    // (one-target.test.ts), as Today asks them on the website and iPhone.
+    // Removing that sentence reproduces the previous hash (174830b2…).
+    // Health, privacy and evidence text is otherwise unchanged.
+    "c4b4cba9ef94290ed6a6c2e578300185f567ebf384f94e33f6e5ef969da70ae7",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

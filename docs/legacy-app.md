@@ -166,12 +166,34 @@ side)** when:
 - The most recent earlier workout includes the exercise.
 - Every prescribed working set is explicitly logged, with no misses.
 - Every set meets the snapshotted weight and rep targets.
-- No recorded RPE is invalid or above 8 (RPE is optional).
+- No recorded RPE is invalid or above 8.
+- The top set has an RPE of 8 or lower or, with no RPE recorded, the session
+  before was also fully made at the same load ("No RPE recorded; increase
+  based on two completed sessions"). Without RPE, loads therefore rise every
+  second session. On iPhone, one tap after an exercise's last set records it.
 - Neither the previous session nor the current session has limited recovery.
+- The lift was trained within the last 14 days.
+- For an athlete under 18, a coach has checked technique: tick **My coach
+  checked my technique today** in the workout. An age of 0 counts as unknown.
+
+These are coaching conventions rather than settled science; see
+[the evidence review](targets-evidence-review-2026-10-04.md), section 3.23.
+After more than 4 weeks without the lift (on any programme day), the next
+target restarts at about 90% of the last load, or 80% after more than 12 weeks
+or from age 65; between 15 and 28 days it holds. When two sessions in a row at
+one load end with a miss, missed reps or an RPE above 8, the plan still
+repeats the load but proposes a reset to about 90%, which the athlete can take
+with one tap before logging the exercise.
 
 Logging every prescribed set and finishing the workout is sufficient. The
 Complete exercise button advances the workout, but it is not an extra condition
 for progression. Strong-set feedback remains optional.
+
+The rest timer starts from the programme's rest when it sets one, otherwise
+from the default chosen in Settings, otherwise by exercise type: 3 minutes for
+the competition lifts and their variants, squats and pulls, 2 minutes for
+other barbell work and 90 seconds for accessories. A duration chosen during a
+workout applies to the rest of that workout.
 
 The baseline is the lightest successful working-set load, so a heavy single
 does not raise every set next time. The prescribed set count and rep target

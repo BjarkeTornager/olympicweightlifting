@@ -7,6 +7,8 @@ const monday = PROGRAM_DEFINITION.days.find(day => day.id === "monday");
 const snatch = monday.exercises[0];
 const context = { programId: PROGRAM_DEFINITION.id, dayId: "monday", date: "2026-09-14", recovery: "auto" };
 
+// A previous session that earned an increase on its own: every set made,
+// with an RPE of 8 recorded. Tests of the no-RPE rule clear it.
 function session(exercise = snatch, date = "2026-09-07") {
   const plan = planExercise(exercise, { ...context, sessions: [] });
   return {
@@ -18,7 +20,7 @@ function session(exercise = snatch, date = "2026-09-07") {
       prescribed: { targetSets: plan.sets, targetReps: plan.reps, targetWeight: plan.weight, progression: plan },
       sets: Array.from({ length: plan.sets }, (_, index) => ({
         id: "set-" + index, weight: String(plan.weight), reps: String(plan.reps),
-        rpe: "", logged: true, result: "success", touched: true,
+        rpe: "8", logged: true, result: "success", touched: true,
       })),
     }],
   };
@@ -87,6 +89,8 @@ test("logging all work qualifies without extra confirmations; invalid or high RP
   previous.exercises[0].strongSets = false;
   previous.exercises[0].completed = false;
   assert.equal(planFor(previous).status, "increase");
+  previous.exercises[0].sets.forEach(set => { set.rpe = ""; });
+  assert.equal(planFor(previous).status, "hold", "One session with no RPE is not enough");
   previous.exercises[0].sets.forEach(set => { set.rpe = "8"; });
   assert.equal(planFor(previous).weight, 47);
   for (const rpe of ["9", "0", "11", "8abc"]) {
@@ -157,19 +161,158 @@ test("explicit legacy results qualify; touched or prefilled legacy rows are only
   assert.equal(planFor(previous).status, "hold");
 });
 
-test("the program keeps increasing across eight successful sessions beyond the original range", () => {
-  const history = [];
+// Eight weekly snatch sessions, 6 x 1, each fully made at its target.
+function simulate(rpe) {
+  const history = [], weights = [];
   for (let week = 0; week < 8; week++) {
     const date = new Date(Date.UTC(2026, 8, 7 + week * 7)).toISOString().slice(0, 10);
     const plan = planExercise(snatch, { ...context, sessions: history, date });
-    assert.equal(plan.weight, 45 + week * 2);
+    weights.push(plan.weight);
     const next = session(snatch, date);
     next.id = `week-${week}`;
     next.exercises[0].strongSets = false;
     next.exercises[0].prescribed.targetWeight = plan.weight;
-    next.exercises[0].sets.forEach(set => { set.weight = String(plan.weight); });
+    next.exercises[0].sets.forEach(set => { set.weight = String(plan.weight); set.rpe = rpe; });
     history.push(next);
   }
+  return weights;
+}
+
+test("the program keeps increasing across eight successful sessions beyond the original range", () => {
+  assert.deepEqual(simulate("8"), [45, 47, 49, 51, 53, 55, 57, 59]);
+});
+
+test("with no RPE recorded, the snatch 6 x 1 simulation increases every second session", () => {
+  assert.deepEqual(simulate(""), [45, 45, 47, 47, 49, 49, 51, 51]);
+  const first = session();
+  first.exercises[0].sets.forEach(set => { set.rpe = ""; });
+  const once = planFor(first);
+  assert.equal(once.status, "hold");
+  assert.equal(once.weight, 45);
+  assert.match(once.reason, /no RPE recorded\. Repeat 45 kg/);
+  const second = structuredClone(first);
+  second.id = "second";
+  second.date = "2026-09-14";
+  const twice = planExercise(snatch, { ...context, date: "2026-09-21", sessions: [first, second] });
+  assert.equal(twice.status, "increase");
+  assert.equal(twice.weight, 47);
+  assert.match(twice.reason, /^No RPE recorded; increase based on two completed sessions at 45 kg\. The program automatically adds 2 kg total/);
+});
+
+test("two in a row means the session just before, on an earlier date, fully made at the same load", () => {
+  const plan = (earlierChange, sameDate = false) => {
+    const earlier = session(snatch, sameDate ? "2026-09-14" : "2026-09-07");
+    earlier.id = "earlier";
+    earlier.finishedAt = "2026-09-14T09:00:00Z";
+    earlier.exercises[0].sets.forEach(set => { set.rpe = ""; });
+    earlierChange(earlier.exercises[0]);
+    const last = session(snatch, "2026-09-14");
+    last.exercises[0].sets.forEach(set => { set.rpe = ""; });
+    return planExercise(snatch, { ...context, date: "2026-09-21", sessions: [earlier, last] });
+  };
+  assert.equal(plan(() => {}).weight, 47);
+  for (const change of [
+    entry => { entry.sets.forEach(set => { set.weight = "43"; }); },
+    entry => { entry.sets[0].result = "miss"; },
+    entry => { entry.sets[0].rpe = "9"; },
+    entry => { entry.sets.pop(); },
+  ]) {
+    assert.equal(plan(change).status, "hold");
+    assert.equal(plan(change).weight, 45);
+  }
+  assert.equal(plan(() => {}, true).status, "hold", "A same-day repeat is not a second session");
+});
+
+test("the top set's RPE decides; an RPE on a lighter set alone does not", () => {
+  const previous = session();
+  previous.exercises[0].sets.forEach(set => { set.rpe = ""; });
+  previous.exercises[0].sets[5].rpe = "7";
+  assert.equal(planFor(previous).status, "increase");
+  assert.match(planFor(previous).reason, /the top set at RPE 7/);
+  previous.exercises[0].sets[5].rpe = "8.5";
+  assert.equal(planFor(previous).status, "hold");
+  previous.exercises[0].sets[5].rpe = "";
+  previous.exercises[0].sets[5].weight = "50";
+  previous.exercises[0].sets[0].rpe = "6";
+  assert.equal(planFor(previous).status, "hold");
+  assert.match(planFor(previous).reason, /no RPE recorded/);
+  previous.exercises[0].sets[5].rpe = "8";
+  assert.equal(planFor(previous).weight, 47);
+});
+
+test("after a break, the plan restarts lighter or holds", () => {
+  const after = (date, extra = {}) => planExercise(snatch, { ...context, date, sessions: [session()], ...extra });
+  // 12 weeks exactly: more than 4 weeks, so about 90 %.
+  const twelveWeeks = after("2026-11-30");
+  assert.equal(twelveWeeks.status, "return");
+  assert.equal(twelveWeeks.weight, 40);
+  assert.match(twelveWeeks.reason, /12 weeks ago, on 2026-09-07\. After more than 4 weeks away, a cautious restart is about 90% of your last load: 40 kg instead of 45 kg/);
+  assert.equal(after("2026-12-07").weight, 36, "More than 12 weeks: about 80 %");
+  assert.equal(after("2026-10-12").weight, 40, "Five weeks: about 90 %");
+  assert.equal(after("2026-10-12", { age: 65 }).weight, 36, "Five weeks at 65: about 80 %");
+  assert.equal(after("2026-10-05").status, "hold", "Four weeks: hold, no increase");
+  assert.equal(after("2026-10-05").weight, 45);
+  assert.match(after("2026-10-05").reason, /28 days ago/);
+  assert.equal(after("2026-09-22").status, "hold", "15 days: hold");
+  assert.equal(after("2026-09-21").status, "increase", "Two weeks: increase as usual");
+  // The same lift on Saturday keeps Monday's snatch fresh.
+  const saturday = session(snatch, "2026-10-31");
+  saturday.id = "saturday";
+  saturday.programDayId = "saturday";
+  assert.equal(planExercise(snatch, { ...context, date: "2026-11-02", sessions: [session(), saturday] }).status, "increase");
+  // A failed last session before the break still restarts lighter.
+  const missed = session();
+  missed.exercises[0].sets[0].result = "miss";
+  assert.equal(planExercise(snatch, { ...context, date: "2026-11-30", sessions: [missed] }).weight, 40);
+});
+
+test("under 18, increases wait for a coach to check technique; an unknown age does not", () => {
+  const minor = planFor(session(), { age: 16 });
+  assert.equal(minor.status, "confirm");
+  assert.equal(minor.weight, 45);
+  assert.match(minor.reason, /Under 18, the load goes up only once a coach has checked your technique/);
+  const checked = planFor(session(), { age: 16, techniqueChecked: true });
+  assert.equal(checked.status, "increase");
+  assert.equal(checked.weight, 47);
+  assert.match(checked.reason, /^Your coach checked your technique\./);
+  for (const age of [0, 18, 40]) assert.equal(planFor(session(), { age }).weight, 47);
+  // Holds and restarts are unchanged.
+  const missed = session();
+  missed.exercises[0].sets[0].result = "miss";
+  assert.equal(planFor(missed, { age: 16 }).status, "hold");
+  const preview = planProgramDay(monday, { ...context, sessions: [session()], age: 15 });
+  assert.equal(preview.exercises[0].status, "confirm");
+});
+
+test("two failed sessions in a row at one load propose a reset to about 90 %, never impose it", () => {
+  const failed = (date, change) => {
+    const s = session(snatch, date);
+    s.id = date;
+    s.exercises[0].prescribed.targetWeight = 50;
+    s.exercises[0].sets.forEach(set => { set.weight = "50"; });
+    change(s.exercises[0]);
+    return s;
+  };
+  const miss = entry => { entry.sets[5].result = "miss"; };
+  const hard = entry => { entry.sets[5].rpe = "9.5"; };
+  const shortReps = entry => {
+    entry.prescribed.targetReps = 2;
+    entry.sets.forEach(set => { set.reps = "2"; });
+    entry.sets[2].reps = "1";
+  };
+  const plan = (...sessions) => planExercise(snatch, { ...context, date: "2026-09-21", sessions });
+  const reset = plan(failed("2026-09-07", miss), failed("2026-09-14", hard));
+  assert.equal(reset.status, "hold");
+  assert.equal(reset.weight, 50);
+  assert.equal(reset.resetWeight, 45);
+  assert.match(reset.reason, /A common coaching convention, not a rule, is to reset to about 90%: 45 kg\. Take the reset, or repeat 50 kg\./);
+  assert.equal(plan(failed("2026-09-07", shortReps), failed("2026-09-14", miss)).resetWeight, 45);
+  assert.equal(plan(failed("2026-09-07", () => {}), failed("2026-09-14", miss)).resetWeight, undefined);
+  const lighter = failed("2026-09-07", miss);
+  lighter.exercises[0].sets.forEach(set => { set.weight = "48"; });
+  assert.equal(plan(lighter, failed("2026-09-14", miss)).resetWeight, undefined);
+  // An incomplete session that stopped after a miss counts as failed.
+  assert.equal(plan(failed("2026-09-07", miss), failed("2026-09-14", entry => { miss(entry); entry.sets.splice(0, 2); })).resetWeight, 45);
 });
 
 test("next-program preview advances after today's work without compounding same-day repeats", () => {

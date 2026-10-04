@@ -15,7 +15,10 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
     .click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Sleep last night", { exact: true }).fill("6.5");
-  await dialog.getByLabel("Water today", { exact: true }).fill("500");
+  // Water is logged as drinks on Today, not in the check-in.
+  await expect(dialog.getByLabel("Water today", { exact: true })).toHaveCount(
+    0,
+  );
   await dialog.getByLabel("Bodyweight", { exact: true }).fill("80.2");
   await dialog
     .getByRole("button", { name: "Energy 2: Low", exact: true })
@@ -49,11 +52,11 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
     .locator(".today-focus")
     .getByText("More from your journal", { exact: true })
     .click();
-  await expect(page.locator(".today-more")).toContainText("500 ml water");
+  await expect(page.locator(".today-more")).toContainText("80.2 kg");
   await page
     .getByRole("button", { name: /^(Daily check-in|Update check-in)$/ })
     .click();
-  await dialog.getByLabel("Water today", { exact: true }).fill("750");
+  await dialog.getByLabel("Bodyweight", { exact: true }).fill("80.5");
   await dialog
     .getByRole("button", { name: "Save check-in", exact: true })
     .click();
@@ -65,7 +68,7 @@ test("daily check-in saves, refreshes priorities, edits the same day and deletes
   ).toBeVisible();
   await expect(page.locator(".health-records article")).toHaveCount(1);
   await expect(page.locator(".health-records article")).toContainText(
-    "750 ml water",
+    "80.5 kg",
   );
   await expect(page.locator(".health-records article")).toContainText(
     "6 h 30 min sleep",
@@ -114,7 +117,6 @@ test.describe("daily coach with a personal journal", () => {
         {
           date: offsetDate(date, -i),
           sleepHours: [7.5, 7, 8, 6.5, 8, 7.5, 7][i],
-          waterMl: i === 0 ? 1250 : 2000,
           bodyweight: 80.2,
           energy: 4,
           soreness: 2,

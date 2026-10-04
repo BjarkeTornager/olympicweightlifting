@@ -13,8 +13,11 @@ import { shortSleep, sleepShortOpening } from "./sleep";
 import {
   drinkKinds,
   formatLitres,
+  formatTargetLitres,
   hydrationForDay,
+  hydrationNote,
   hydrationTargetMl,
+  usualHydrationTargets,
 } from "./hydration";
 import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
@@ -93,6 +96,9 @@ const drinkView = z
     kind: z.enum(drinkKinds),
     name: z.string(),
     at: instant,
+    // A usual size, saved because the volume wasn't given. Absent before
+    // 4 October.
+    estimated: z.boolean().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Drink" });
@@ -192,12 +198,26 @@ const nutritionView = z
   })
   .strict()
   .register(nativeResponses, { id: "Nutrition" });
+// The target is for drinks, in quarter litres, with a range of about half a
+// litre either side. The fields after drinks are absent before 4 October.
 const hydrationView = z
   .object({
     totalMl: int,
+    // 0 while the athlete hides the target: builds from before 4 October
+    // read 0 as no target, so they show no meter and plan no reminders
+    // naming it.
     targetMl: int,
     estimatedTarget: z.boolean(),
     drinks: z.array(drinkView),
+    targetLowMl: int.optional(),
+    targetHighMl: int.optional(),
+    // The athlete chose not to see a drinks target: no meter, no reminders.
+    targetHidden: z.boolean().optional(),
+    // For Account: a rest day's target and a lifting day's.
+    restDayTargetMl: int.optional(),
+    liftingDayTargetMl: int.optional(),
+    // What the target rests on, and the everyday signs to go by.
+    note: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Hydration" });
@@ -665,6 +685,15 @@ const useProgramme = z
   })
   .strict()
   .register(nativeRequests, { id: "UseProgrammeAction" });
+// App-only: whether Today shows a drinks target. The website sets this in
+// Settings.
+const setHydrationTarget = z
+  .object({
+    kind: z.literal("set_hydration_target"),
+    hidden: z.boolean(),
+  })
+  .strict()
+  .register(nativeRequests, { id: "SetHydrationTargetAction" });
 
 export const nativeAction = z
   .discriminatedUnion("kind", [
@@ -686,6 +715,7 @@ export const nativeAction = z
     updateProgramme,
     deleteProgramme,
     useProgramme,
+    setHydrationTarget,
   ])
   .register(nativeRequests, { id: "NativeAction" });
 export const nativeActionKinds = nativeAction.options.map(
@@ -849,6 +879,11 @@ export function buildToday(
 ): TodayView {
   const health = dailyHealth(state, date);
   const hydration = hydrationForDay(state, date);
+  const usual = usualHydrationTargets(state, date);
+  const usualTargets = {
+    restDayTargetMl: usual.restDayMl,
+    liftingDayTargetMl: usual.liftingDayMl,
+  };
   const meals = state.nutrition.meals.filter((m) => m.date === date);
   const vitals =
     state.health.vitals?.find((v) => v.date === date) ??
@@ -929,15 +964,23 @@ export function buildToday(
       },
       hydration: {
         totalMl: hydration.totalMl,
-        targetMl: hydration.targetMl,
+        targetMl: hydration.hidden ? 0 : hydration.targetMl,
         estimatedTarget: hydration.estimated,
-        drinks: hydration.drinks.map((d) => ({
-          id: d.id,
-          ml: d.ml,
-          kind: d.kind,
-          name: d.name,
-          at: d.at,
-        })),
+        drinks: hydration.drinks.map((d) =>
+          defined({
+            id: d.id,
+            ml: d.ml,
+            kind: d.kind,
+            name: d.name,
+            at: d.at,
+            estimated: d.estimated,
+          }),
+        ),
+        targetLowMl: hydration.lowMl,
+        targetHighMl: hydration.highMl,
+        ...(hydration.hidden ? { targetHidden: true } : {}),
+        ...usualTargets,
+        note: hydrationNote(state, date),
       },
       activeWorkout: state.activeWorkout
         ? workoutSummary(state.activeWorkout)
@@ -1323,7 +1366,6 @@ export function receiptEntryView(
           label: "Bodyweight",
           value: `${c.bodyweight} kg`,
         },
-        c.waterMl != null && { label: "Water", value: `${c.waterMl} ml` },
       ].filter((line) => line !== false),
       footnote: c.notes || undefined,
     });
@@ -1365,8 +1407,13 @@ export function receiptEntryView(
     return {
       title: d.removed ? "Drink removed" : "Drink",
       date: d.date,
-      lines: [{ label: capitalised(d.name), value: `${d.ml} ml` }],
-      footnote: `${formatLitres(d.dayTotalMl)} of about ${formatLitres(d.dayTargetMl)} that day`,
+      lines: [
+        {
+          label: capitalised(d.name),
+          value: `${d.estimated ? "about " : ""}${d.ml} ml`,
+        },
+      ],
+      footnote: `${formatLitres(d.dayTotalMl)}${d.dayTargetMl != null ? ` of about ${formatTargetLitres(d.dayTargetMl)}` : ""} that day`,
     };
   }
   if (entry.targets) {
@@ -1788,7 +1835,10 @@ export const trendsView = z
     days: z.array(trendDay),
     targetCalories: z.number().optional(),
     targetProtein: z.number().optional(),
+    // 0 while hidden, so builds from before 4 October never chart it.
     waterTargetMl: int,
+    // The athlete hid the drinks target; absent before 4 October.
+    waterTargetHidden: z.boolean().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Trends" });
@@ -1801,6 +1851,7 @@ export function buildTrends(
   date: string,
   days: number,
 ): TrendsView {
+  const drinksTarget = hydrationTargetMl(state, date);
   const rows = Array.from({ length: days }, (_, i) =>
     offsetDate(date, i - days + 1),
   ).map((d) => {
@@ -1837,7 +1888,8 @@ export function buildTrends(
       targetCalories:
         dailyTarget(state.nutrition.targets?.calories) ?? undefined,
       targetProtein: dailyTarget(state.nutrition.targets?.protein) ?? undefined,
-      waterTargetMl: hydrationTargetMl(state, date).targetMl,
+      waterTargetMl: drinksTarget.hidden ? 0 : drinksTarget.targetMl,
+      ...(drinksTarget.hidden ? { waterTargetHidden: true } : {}),
     }),
   );
 }

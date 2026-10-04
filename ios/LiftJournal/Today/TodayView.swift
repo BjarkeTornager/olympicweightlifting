@@ -212,10 +212,11 @@ struct TodayView: View {
         perMark: 10, number: Format.number(food.protein), unit: "g",
         targetText: food.targetProtein.map { "\(Format.number($0)) g" }, scale: "10 g a mark",
         spokenUnit: "grams"),
+      // A drinks target, an estimate, unless the athlete hid it.
       water: LedgerLine(
-        title: "Water", tint: Theme.water, value: Double(water.totalMl),
-        target: water.targetMl > 0 ? Double(water.targetMl) : nil, perMark: 250, number: amount, unit: unit,
-        targetText: "\(target) \(targetUnit)",
+        title: "Drinks", tint: Theme.water, value: Double(water.totalMl),
+        target: water.targetMl > 0 && water.targetHidden != true ? Double(water.targetMl) : nil, perMark: 250,
+        number: amount, unit: unit, targetText: "about \(target) \(targetUnit)",
         scale: "\(Format.number(water.totalMl / 250)) of \(Format.number(glasses)) glasses",
         spokenUnit: "millilitres"),
       burned: today.burned.map { "\($0.estimated ? "~" : "")\(Format.number($0.kcal))" },
@@ -794,6 +795,11 @@ struct FoodSection: View {
     type.prefix(1).uppercased() + type.dropFirst()
   }
 
+  /// Litres in quarters, as the drinks target is set: "1.75", "2.5".
+  static func litres(_ ml: Int) -> String {
+    Format.decimal(Double(ml) / 1000, digits: 2)
+  }
+
   private var drinks: some View {
     VStack(alignment: .leading, spacing: 12) {
       NavigationLink(value: Trend.water) {
@@ -807,6 +813,13 @@ struct FoodSection: View {
         .contentShape(.rect)
       }
       .buttonStyle(CardButtonStyle())
+      if hydration.targetHidden != true, let low = hydration.targetLowMl, let high = hydration.targetHighMl {
+        let range = "About \(Self.litres(low)) to \(Self.litres(high)) L from drinks today."
+        Paragraph([range, hydration.note].compactMap { $0 }.joined(separator: " "), language: .english)
+          .folio(.note)
+          .foregroundStyle(Theme.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
       FlowLayout {
         ForEach([250, 500], id: \.self) { ml in
           Button {
@@ -833,7 +846,9 @@ struct FoodSection: View {
 
 /// The day's drinks of one name and size as one line of the ledger, so ten
 /// quick glasses read "Water, 10 × 250 ml" rather than ten lines of the
-/// same. The lines keep the order of each one's first drink.
+/// same. The lines keep the order of each one's first drink. A usual size
+/// Coach saved because no volume was given reads "about 250 ml", on a line
+/// of its own.
 struct DrinkLine {
   let name: String
   /// Oldest first, as the day's drinks come.
@@ -843,7 +858,8 @@ struct DrinkLine {
   var id: String { drinks[0].id }
   var latest: Components.Schemas.Drink { drinks[drinks.count - 1] }
   var amount: String {
-    drinks.count > 1 ? "\(drinks.count) × \(drinks[0].ml) ml" : "\(drinks[0].ml) ml"
+    let size = "\(drinks[0].estimated == true ? "about " : "")\(drinks[0].ml) ml"
+    return drinks.count > 1 ? "\(drinks.count) × \(size)" : size
   }
 
   static func lines(_ drinks: [Components.Schemas.Drink]) -> [DrinkLine] {
@@ -851,7 +867,9 @@ struct DrinkLine {
     for drink in drinks {
       // Unnamed, a drink goes by its kind, in sentence case: "Sparkling water".
       let name = drink.name.isEmpty ? drink.kind.prefix(1).uppercased() + drink.kind.dropFirst() : drink.name
-      if let index = lines.firstIndex(where: { $0.name == name && $0.drinks[0].ml == drink.ml }) {
+      if let index = lines.firstIndex(where: {
+        $0.name == name && $0.drinks[0].ml == drink.ml && $0.drinks[0].estimated == drink.estimated
+      }) {
         lines[index] = DrinkLine(name: name, drinks: lines[index].drinks + [drink])
       } else {
         lines.append(DrinkLine(name: name, drinks: [drink]))

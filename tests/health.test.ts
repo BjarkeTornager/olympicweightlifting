@@ -18,11 +18,7 @@ import { prepareAction } from "../lib/agent/actions";
 test("sleep minutes stay precise through proposals, backups and partial daily updates", () => {
   const state = emptyJournal(),
     date = "2026-09-06";
-  saveCheckin(
-    state,
-    { date, waterMl: 750, bodyweight: 80, notes: "Keep this note" },
-    date,
-  );
+  saveCheckin(state, { date, bodyweight: 80, notes: "Keep this note" }, date);
   const prepared = prepareAction(
     state,
     { kind: "record_checkin", checkin: { date, sleepHours: 7 + 47 / 60 } },
@@ -42,7 +38,7 @@ test("sleep minutes stay precise through proposals, backups and partial daily up
     emptyJournal(),
     parseLegacyBackup(backup(prepared.state)),
   );
-  saveCheckin(restored, { date, waterMl: 1000 }, date);
+  saveCheckin(restored, { date, soreness: 2 }, date);
   assert.equal(restored.health.checkins.length, 1);
   assert.equal(restored.health.checkins[0].sleepHours, 7 + 47 / 60);
   assert.equal(restored.health.checkins[0].bodyweight, 80);
@@ -57,13 +53,12 @@ test("health check-ins preserve unspecified measurements and distinguish missing
     {
       date: "2026-09-06",
       sleepHours: 6.5,
-      waterMl: 500,
       energy: 2,
       notes: "Tired after travel",
     },
     "2026-09-06",
   );
-  saveCheckin(state, { date: "2026-09-06", waterMl: 750 }, "2026-09-06");
+  saveCheckin(state, { date: "2026-09-06", bodyweight: 79.5 }, "2026-09-06");
   assert.equal(state.health.checkins.length, 1);
   assert.equal(state.health.checkins[0].sleepHours, 6.5);
   assert.equal(state.health.checkins[0].notes, "Tired after travel");
@@ -112,7 +107,8 @@ test("health validation rejects invalid units, dates and duplicate days", () => 
     { date: "2026-09-07", energy: 2 },
     { date: "2026-09-06", sleepHours: 25 },
     { date: "2026-09-06", energy: 0 },
-    { date: "2026-09-06", waterMl: -1 },
+    // Water is logged as drinks, not in the check-in.
+    { date: "2026-09-06", waterMl: 750 },
     { date: "2026-09-06", bodyweight: NaN },
     { date: "2026-09-06" },
   ])

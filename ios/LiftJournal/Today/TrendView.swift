@@ -201,7 +201,10 @@ struct TrendView: View {
     case .activity:
       bars({ $0.steps.map(Double.init) }, unit: "steps", average: average { $0.steps.map(Double.init) })
     case .water:
-      bars({ $0.waterMl.map(Double.init) }, unit: "ml", target: trends.map { Double($0.waterTargetMl) })
+      // No target line when the athlete hid the drinks target.
+      bars(
+        { $0.waterMl.map(Double.init) }, unit: "ml",
+        target: trends.flatMap { $0.waterTargetHidden == true ? nil : Double($0.waterTargetMl) })
     case .food:
       bars(\.calories, unit: "kcal", target: Format.target(trends?.targetCalories))
     case .heart:

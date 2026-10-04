@@ -209,9 +209,10 @@ struct Ledger: View {
   }
 
   /// "Set a target with Coach" goes on the first line without a target only,
-  /// since Coach sets them together.
+  /// since Coach sets them together. Drinks have no Coach target: theirs
+  /// follows weight and training, and is missing only when hidden.
   private func offer(_ line: LedgerLine) -> (() -> Void)? {
-    let first = [energy, protein, water].first { $0.target == nil }
+    let first = [energy, protein].first { $0.target == nil }
     return first?.title == line.title ? setTarget : nil
   }
 
@@ -474,8 +475,8 @@ private struct LedgerPreview: View {
             title: "Protein", tint: Theme.protein, value: 52, target: 130, perMark: 10, number: "52", unit: "g",
             targetText: "130 g", scale: "10 g a mark", spokenUnit: "grams"),
           water: LedgerLine(
-            title: "Water", tint: Theme.water, value: 500, target: 2450, perMark: 250, number: "500", unit: "ml",
-            targetText: "2.45 L", scale: "2 of 10 glasses", spokenUnit: "millilitres"),
+            title: "Drinks", tint: Theme.water, value: 500, target: 2250, perMark: 250, number: "500", unit: "ml",
+            targetText: "about 2.25 L", scale: "2 of 9 glasses", spokenUnit: "millilitres"),
           burned: "205")
         CheckInBlock(title: "Check in with Coach", detail: "Coach logs your day as you talk")
         FolioSection("Recovery", meta: "Seven days")

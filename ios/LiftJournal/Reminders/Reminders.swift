@@ -41,7 +41,10 @@ struct DaySnapshot: Equatable {
   /// The title of a workout still in progress.
   var workout: String?
   var waterMl: Int
+  /// The lower end of the day's drinks range: behind it is behind.
   var waterTargetMl: Int
+  /// The athlete hid the drinks target, so there are no water reminders.
+  var waterTargetHidden = false
 }
 
 extension DaySnapshot {
@@ -53,7 +56,8 @@ extension DaySnapshot {
       sleepRecorded: today.sleep.hours != nil,
       workout: today.activeWorkout?.title,
       waterMl: today.hydration.totalMl,
-      waterTargetMl: today.hydration.targetMl)
+      waterTargetMl: today.hydration.targetLowMl ?? today.hydration.targetMl,
+      waterTargetHidden: today.hydration.targetHidden == true)
   }
 }
 
@@ -79,8 +83,9 @@ struct PlannedReminder: Equatable {
 /// logged; later days can't know yet and use general wording.
 enum ReminderPlan {
   static let days = 7
-  /// When water reminders come, and the share of the day's target that is on
-  /// track by then. One comes only when the athlete is behind.
+  /// When water reminders come, and the share of the lower end of the day's
+  /// drinks range that is on track by then. One comes only when the athlete
+  /// is behind, and none while the target is hidden.
   static let water: [(hour: Int, share: Double)] = [(11, 0.35), (14, 0.6), (17, 0.8)]
 
   static func plan(
@@ -104,7 +109,7 @@ enum ReminderPlan {
           .checkIn, settings.checkIn.hour, settings.checkIn.minute, "Good morning",
           "How did you sleep, and how do you feel? A quick check-in helps Coach plan your day.")
       }
-      if settings.water {
+      if settings.water, today?.waterTargetHidden != true {
         for (hour, share) in water {
           if let known {
             guard known.waterTargetMl > 0, Double(known.waterMl) < Double(known.waterTargetMl) * share else {
@@ -112,7 +117,7 @@ enum ReminderPlan {
             }
             add(
               .water, hour, 0, "Time for some water",
-              "You're at \(litres(known.waterMl)) of \(litres(known.waterTargetMl)) today. A glass now keeps you on track."
+              "You're at \(litres(known.waterMl)) so far today. A glass now keeps you on track."
             )
           } else {
             add(.water, hour, 0, "Time for some water", "A glass now keeps you on track for today's target.")

@@ -50,7 +50,7 @@ try {
   const original = await readJournal(userId);
   saveCheckin(
     original.state,
-    { date, waterMl: 750, bodyweight: 80, notes: "Keep my daily note" },
+    { date, bodyweight: 80, notes: "Keep my daily note" },
     date,
   );
   await writeJournal(userId, {
@@ -73,7 +73,6 @@ try {
     formatSleepDuration(typed.proposals[0].checkin!.sleepHours!),
     "7 h 47 min",
   );
-  assert.equal(typed.proposals[0].checkin?.waterMl, 750);
   assert.equal(typed.proposals[0].checkin?.bodyweight, 80);
   assert.equal(typed.proposals[0].checkin?.notes, "Keep my daily note");
   assert.equal(
@@ -126,10 +125,6 @@ try {
   await applyProposal(userId, correction.proposals[0].id);
   const state = (await readJournal(userId)).state;
   assert.equal(state.health.checkins.length, 2);
-  assert.equal(
-    state.health.checkins.find((c) => c.date === date)?.waterMl,
-    750,
-  );
   assert.equal(
     state.health.checkins.find((c) => c.date === date)?.bodyweight,
     80,

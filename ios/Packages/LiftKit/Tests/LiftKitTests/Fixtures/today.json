@@ -45,7 +45,7 @@
   },
   "hydration": {
     "totalMl": 750,
-    "targetMl": 2850,
+    "targetMl": 2500,
     "estimatedTarget": false,
     "drinks": [
       {
@@ -62,7 +62,12 @@
         "name": "",
         "at": "2026-09-26T18:00:00.000Z"
       }
-    ]
+    ],
+    "targetLowMl": 2000,
+    "targetHighMl": 3000,
+    "restDayTargetMl": 2000,
+    "liftingDayTargetMl": 2750,
+    "note": "An estimate from your weight and the day's training, not a minimum. Thirst and pale urine are good everyday signs."
   },
   "burned": {
     "kcal": 540,

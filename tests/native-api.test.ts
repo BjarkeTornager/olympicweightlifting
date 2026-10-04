@@ -145,9 +145,10 @@ test("every action the app can send is a valid journal action", () => {
     },
     { kind: "delete_training_program", trainingProgramId: crypto.randomUUID() },
   ];
-  // "use_programme" is the app's own action, not a Coach action.
+  // "use_programme" and "set_hydration_target" are the app's own actions,
+  // not Coach actions.
   assert.equal(
-    new Set(examples.map((e) => e.kind)).size + 1,
+    new Set(examples.map((e) => e.kind)).size + 2,
     nativeAction.options.length,
   );
   for (const action of examples) {
@@ -166,6 +167,11 @@ test("every action the app can send is a valid journal action", () => {
     id: crypto.randomUUID(),
     timezone: tz,
     action: { kind: "use_programme", programmeId: "stability-power-base-v1" },
+  });
+  actionRequest.parse({
+    id: crypto.randomUUID(),
+    timezone: tz,
+    action: { kind: "set_hydration_target", hidden: true },
   });
 });
 
@@ -489,6 +495,29 @@ test("a receipt opens to show what was saved, item by item", () => {
   ]);
   assert.match(batch.entries![0].footnote!, /of about 2.5 L that day/);
   assert.equal(batch.entries![2].summary, "330 ml cola.");
+  // A usual size is "about"; a hidden target is left out.
+  const glass = receiptView(
+    {
+      id: "g",
+      title: "Log a drink",
+      detail: "about 250 ml water. 1.2 L on 2026-09-26.",
+      workout: null,
+      status: "saved",
+      expiresAt: now.toISOString(),
+      drink: {
+        name: "water",
+        ml: 250,
+        date,
+        estimated: true,
+        dayTotalMl: 1200,
+      },
+    },
+    now,
+  );
+  assert.deepEqual(glass.entries![0].lines, [
+    { label: "Water", value: "about 250 ml" },
+  ]);
+  assert.equal(glass.entries![0].footnote, "1.2 L that day");
 
   // Targets show the goal label and every target, with what changed.
   const targets = receiptView(
@@ -722,6 +751,42 @@ test("trends give one row per day, oldest first, with gaps left empty", () => {
   assert.equal(trends.days[2].restingHeartRate, 51);
   assert.equal(trends.days[2].cardioMinutes, 50);
   assert.equal(trends.days[2].waterMl, undefined, "no drinks is not 0 ml");
+});
+
+test("Today and Trends give the drinks range and estimates, and respect a hidden target", () => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 88;
+  addDrink(state, { date, ml: 250, kind: "water", estimated: true }, now);
+  addDrink(state, { date, ml: 330, kind: "beer" }, now);
+  let water = buildToday(state, 1, date, new Set()).hydration;
+  assert.equal(water.targetMl, 2250);
+  assert.deepEqual(
+    [water.targetLowMl, water.targetHighMl, water.targetHidden],
+    [1750, 2750, undefined],
+  );
+  assert.deepEqual(
+    [water.restDayTargetMl, water.liftingDayTargetMl],
+    [2250, 3000],
+  );
+  assert.match(water.note!, /not a minimum/);
+  assert.deepEqual(
+    water.drinks.map((d) => [d.kind, d.estimated]),
+    [
+      ["water", true],
+      ["beer", undefined],
+    ],
+  );
+  assert.equal(buildTrends(state, date, 3).waterTargetHidden, undefined);
+  assert.equal(buildTrends(state, date, 3).waterTargetMl, 2250);
+  state.preferences.hideHydrationTarget = true;
+  water = buildToday(state, 1, date, new Set()).hydration;
+  assert.equal(water.targetHidden, true);
+  assert.equal(water.totalMl, 580, "drinks still count");
+  // Builds from before 4 October don't know targetHidden: they read a 0
+  // target as none, so they show no meter and no reminder naming it.
+  assert.equal(water.targetMl, 0);
+  const trends = buildTrends(state, date, 3);
+  assert.deepEqual([trends.waterTargetHidden, trends.waterTargetMl], [true, 0]);
 });
 
 test("Coach's view of the day includes Apple Health heart rate and workout details", async () => {

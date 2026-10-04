@@ -68,7 +68,16 @@ struct ReminderTests {
     let plan = today(ReminderPlan.plan(all, today: day(water: 2000), now: at(28, 7), calendar: calendar))
     let water = plan.filter { $0.kind == .water }
     #expect(water.map(\.at.hour) == [17], "2 L is on track at 11 and 14, not at 17")
-    #expect(water.first?.body.contains("of 3 L") == true)
+    #expect(water.first?.body.contains("at 2 L so far") == true)
+  }
+
+  @Test("No water reminders while the drinks target is hidden, today or later")
+  func hiddenWater() {
+    var hidden = day(water: 0)
+    hidden.waterTargetHidden = true
+    let plan = ReminderPlan.plan(all, today: hidden, now: at(28, 7), calendar: calendar)
+    #expect(plan.allSatisfy { $0.kind != .water })
+    #expect(plan.contains { $0.kind == .windDown })
   }
 
   @Test("The evening reminder names what is missing")

@@ -21,7 +21,7 @@ const date = "2026-09-06";
 test("Cardio records exact time, missing metrics, and sport-specific rates without changing food or lifting", () => {
   const state = emptyJournal();
   state.activeWorkout = createWorkout(state, undefined, date);
-  saveCheckin(state, { date, sleepHours: 7.5, waterMl: 1000 }, date);
+  saveCheckin(state, { date, sleepHours: 7.5, energy: 4 }, date);
   const before = structuredClone(state);
   const run = saveCardio(
     state,

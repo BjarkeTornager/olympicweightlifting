@@ -5,6 +5,8 @@ import {
   applyGoals,
   describePlan,
   planGoals,
+  proteinPerKg,
+  weeklyRates,
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
@@ -83,6 +85,46 @@ test("maintaining, gaining and deadlines stay within safe limits", () => {
     today,
   );
   assert.ok(relaxed.weeklyChangeKg < 0.44);
+});
+
+test("the plan's rates and protein are the exported figures Coach quotes", () => {
+  // Coach's goals text is written from weeklyRates and proteinPerKg
+  // (coach-prompt.test.ts), so the plan must use exactly these.
+  const kgPerWeek = (rate: number, kg = athlete.weightKg) =>
+    Math.round(kg * rate * 100) / 100;
+  const plan = planGoals(athlete, today);
+  assert.equal(plan.weeklyChangeKg, kgPerWeek(weeklyRates.lose.usual));
+  assert.equal(
+    plan.protein,
+    Math.round(athlete.weightKg * proteinPerKg.bodyweight.losing),
+  );
+  // Lean (10 % for a man) loses slowest, with protein on lean mass.
+  const lean = planGoals(athlete, today, { bodyFatPercent: 10 });
+  assert.equal(lean.weeklyChangeKg, kgPerWeek(weeklyRates.lose.lean));
+  assert.equal(
+    lean.protein,
+    Math.round(athlete.weightKg * 0.9 * proteinPerKg.leanMass.losing),
+  );
+  const higher = planGoals(athlete, today, { bodyFatPercent: 30 });
+  assert.equal(higher.weeklyChangeKg, kgPerWeek(weeklyRates.lose.higher));
+  for (const experience of ["new", "developing", "experienced"] as const) {
+    const gain = planGoals(
+      { ...athlete, targetWeightKg: 95, experience },
+      today,
+    );
+    assert.equal(gain.weeklyChangeKg, kgPerWeek(weeklyRates.gain[experience]));
+    assert.equal(
+      gain.protein,
+      Math.round(athlete.weightKg * proteinPerKg.bodyweight.other),
+    );
+  }
+  const recomposition = planGoals(athlete, today, {
+    focus: "recomposition",
+  });
+  assert.equal(
+    recomposition.weeklyChangeKg,
+    kgPerWeek(weeklyRates.recomposition),
+  );
 });
 
 test("warnings: underweight goals and too little energy", () => {

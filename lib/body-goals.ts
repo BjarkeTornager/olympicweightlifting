@@ -71,6 +71,24 @@ export function splitGoals(input: BodyGoalsRequest) {
 const baseActivity = { low: 1.2, moderate: 1.375, high: 1.55 };
 const KCAL_PER_KG = 7700;
 
+// Sustainable weekly change as a share of bodyweight while training hard,
+// and protein per kg. The plan uses them and Coach quotes them
+// (knowledge.ts), so the two can't disagree.
+export const weeklyRates = {
+  // 0.5 %, up to 0.75 % with more fat to lose and 0.4 % when already lean.
+  lose: { lean: 0.004, usual: 0.005, higher: 0.0075 },
+  // Muscle comes more slowly with experience.
+  gain: { new: 0.0035, developing: 0.0025, experienced: 0.0015 },
+  // Recomposition keeps either change gentle.
+  recomposition: 0.0025,
+};
+// On lean mass when body fat is known, else on bodyweight; more while
+// losing fat or recomposing.
+export const proteinPerKg = {
+  leanMass: { losing: 2.5, other: 2.2 },
+  bodyweight: { losing: 2, other: 1.8 },
+};
+
 export type GoalPlan = {
   direction: "lose" | "maintain" | "gain";
   focus: BodyFocus;
@@ -128,25 +146,23 @@ export function planGoals(
       : direction === "gain"
         ? "build_muscle"
         : "maintain");
-  // Sustainable rates while training hard. Losing: 0.5 % of bodyweight a
-  // week, up to 0.75 % with more fat to lose and 0.4 % when already lean.
-  // Gaining: 0.35 %, 0.25 % or 0.15 % as muscle comes more slowly with
-  // experience. Recomposition keeps either change gentle, 0.25 % at most.
+  // Sustainable rates while training hard (weeklyRates).
   const loseRate =
     bodyFat == null
-      ? 0.005
+      ? weeklyRates.lose.usual
       : bodyFat >= limits.higher
-        ? 0.0075
+        ? weeklyRates.lose.higher
         : bodyFat <= limits.lean
-          ? 0.004
-          : 0.005;
-  const gainRate = { new: 0.0035, developing: 0.0025, experienced: 0.0015 }[
-    g.experience
-  ];
+          ? weeklyRates.lose.lean
+          : weeklyRates.lose.usual;
+  const gainRate = weeklyRates.gain[g.experience];
   const maxRate =
     g.weightKg *
     (focus === "recomposition"
-      ? Math.min(0.0025, direction === "lose" ? loseRate : gainRate)
+      ? Math.min(
+          weeklyRates.recomposition,
+          direction === "lose" ? loseRate : gainRate,
+        )
       : direction === "lose"
         ? loseRate
         : gainRate);
@@ -185,13 +201,12 @@ export function planGoals(
       "That goal weight is below the healthy range for your height. Talk it through with a doctor or dietitian before aiming for it.",
     );
   const losing = direction === "lose" || focus === "recomposition";
-  // Protein on lean mass when body fat is known (2.5 g/kg while losing fat,
-  // 2.2 otherwise), else on bodyweight; fat at least 25 % of energy; carbs
-  // fill the rest.
-  const protein =
-    lean != null
-      ? round(lean * (losing ? 2.5 : 2.2))
-      : round(g.weightKg * (losing ? 2 : 1.8));
+  // Protein on lean mass when body fat is known, else on bodyweight
+  // (proteinPerKg); fat at least 25 % of energy; carbs fill the rest.
+  const perKg = lean != null ? proteinPerKg.leanMass : proteinPerKg.bodyweight;
+  const protein = round(
+    (lean ?? g.weightKg) * (losing ? perKg.losing : perKg.other),
+  );
   if (bodyFat != null && direction === "lose" && bodyFat <= limits.lean)
     notes.push(
       `At ${bodyFat}% body fat you are already lean, so the plan loses slowly to protect muscle and training.`,
@@ -278,6 +293,12 @@ export function planForState(state: JournalState, today: string) {
     targetBodyFatPercent: state.profile.bodyTargets?.targetBodyFatPercent,
     bodyFatPercent: latestBodyFat(state, today)?.percent ?? null,
   });
+}
+
+// The athlete's age from the goals, else Settings, where 0 means unknown.
+// Both coaches get it: supplement, caffeine and sleep advice depend on it.
+export function athleteAge(state: JournalState) {
+  return state.profile.body?.age || state.profile.age || null;
 }
 
 // Saves the goals and the daily targets they imply. The lifting brief is the

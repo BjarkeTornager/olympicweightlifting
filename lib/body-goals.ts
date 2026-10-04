@@ -60,7 +60,8 @@ export const bodyCompositionInputSchema = z
   })
   .strict();
 // What the plan must know to stay safe, asked with the goals: pregnancy or
-// breastfeeding (only if the athlete chooses to say), and a confirmed wish
+// breastfeeding and the baby's age, and kidney disease or a doctor's limit
+// on protein (each only if the athlete chooses to say), and a confirmed wish
 // to lose weight towards a weight just under the healthy range.
 export const pregnancyStatuses = ["pregnant", "breastfeeding"] as const;
 export type Pregnancy = (typeof pregnancyStatuses)[number];
@@ -71,6 +72,21 @@ export const goalChecksInputSchema = z
       .optional()
       .describe(
         "Only if the athlete says they are pregnant or breastfeeding, or that they no longer are (neither).",
+      ),
+    weeksSinceBirth: z
+      .number()
+      .int()
+      .min(0)
+      .max(260)
+      .optional()
+      .describe(
+        "While breastfeeding: how many weeks old the baby is, only if the athlete says.",
+      ),
+    limitProtein: z
+      .boolean()
+      .optional()
+      .describe(
+        "True only if the athlete says they have kidney disease or a doctor has told them to limit protein; false only if they say they don't, or no longer do.",
       ),
     confirmLowWeight: z
       .boolean()
@@ -90,6 +106,17 @@ export const goalChecksSchema = z
     updatedAt: z.iso.datetime(),
   })
   .strict();
+// Kidney disease or a doctor's limit on protein, and while breastfeeding the
+// day the baby was born, from its age in weeks. Sensitive health data, kept
+// like pregnancy only while the athlete says it applies, and beside
+// profile.goalChecks, whose shape older versions of the app check strictly.
+export const goalHealthSchema = z
+  .object({
+    limitProtein: z.literal(true).optional(),
+    babyBornOn: foodDate.optional(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
 // A goal change. Session length and experience, which a change to the goal
 // often leaves out, keep their saved values (applyGoals) rather than
 // falling back to 75 minutes and "developing".
@@ -105,8 +132,12 @@ export type Composition = {
   focus?: BodyFocus;
   bodyFatPercent?: number | null;
   targetBodyFatPercent?: number | null;
-  // From profile.goalChecks, or the goals form as it is filled in.
+  // From profile.goalChecks and profile.goalHealth, or the goals form as it
+  // is filled in.
   pregnancy?: Pregnancy | null;
+  // While breastfeeding, the baby's age in whole weeks, when known.
+  weeksSinceBirth?: number | null;
+  limitProtein?: boolean;
   lowWeightConfirmed?: boolean;
 };
 
@@ -116,13 +147,15 @@ export function splitGoals(input: BodyGoalsRequest) {
     bodyFatPercent,
     targetBodyFatPercent,
     pregnancy,
+    weeksSinceBirth,
+    limitProtein,
     confirmLowWeight,
     ...goals
   } = bodyGoalsRequestSchema.parse(input);
   return {
     goals,
     composition: { focus, bodyFatPercent, targetBodyFatPercent },
-    checks: { pregnancy, confirmLowWeight },
+    checks: { pregnancy, weeksSinceBirth, limitProtein, confirmLowWeight },
   };
 }
 
@@ -138,7 +171,13 @@ const LOWEST_ACTIVITY = 1.4;
 const TRAINING_KCAL_CAP = 1000;
 const KCAL_PER_KG = 7700;
 // Making milk takes about 500 kcal a day in the first six months (EFSA).
-const LACTATION_KCAL = 500;
+export const LACTATION_KCAL = 500;
+// While breastfeeding, no deficit in the first weeks after the birth, nor
+// while the baby's age isn't known. After that a gentle one: at most
+// 500 kcal a day (about 0.45 kg a week) at a BMI of 25 or more, where the
+// studies of loss while breastfeeding were done, and half that below it.
+export const POSTPARTUM_WEEKS = 6;
+const breastfeedingCapKcal = { fromBmi25: 500, below: 250 };
 
 // Resting energy at 10-18 (Henry 2005, as NNR and EFSA use it), from MJ;
 // without a stated sex, the midpoint of the two equations.
@@ -185,6 +224,14 @@ export function adjustedWeightKg(weightKg: number, heightCm: number) {
 // calorie or heavy plan can't squeeze it out.
 export const macroShares = { fat: 25, leastFat: 20, leastFatUnder18: 25 };
 export const CARBS_FLOOR_G = 130;
+// More in pregnancy and while breastfeeding (NASEM).
+export const pregnancyCarbsFloorG = { pregnant: 175, breastfeeding: 210 };
+// With kidney disease or a doctor's limit on protein the plan sets no
+// protein target, and carbohydrate fills what is left after fat and about
+// 0.8 g of protein per kg (of the adjusted weight at a BMI of 30 or more):
+// what most adults need (NASEM, NNR), and what kidney guidance gives (KDIGO),
+// so the other targets never take more for granted.
+const REFERENCE_PROTEIN_PER_KG = 0.8;
 
 export type GoalPlan = {
   direction: "lose" | "maintain" | "gain";
@@ -219,6 +266,11 @@ export type GoalPlan = {
   // calorie or macro targets: energy needs rise by trimester, and the
   // midwife or doctor advises on eating.
   dailyTargets: boolean;
+  // False with kidney disease or a doctor's limit on protein, in pregnancy
+  // and while breastfeeding: the plan saves no protein target, as their
+  // doctor, midwife or dietitian advises on it. protein is then only the
+  // amount the other macros allow for.
+  proteinTarget: boolean;
   sessionsPerWeek: number;
   notes: string[];
 };
@@ -243,6 +295,8 @@ export function planGoals(
   const minor = g.age < 18;
   const pregnancy = composition.pregnancy ?? null;
   const pregnant = pregnancy === "pregnant";
+  const breastfeeding = pregnancy === "breastfeeding";
+  const limitProtein = Boolean(composition.limitProtein);
   const limits = leannessLimits(g.sex);
   const lowestHealthy =
     g.sex === "male"
@@ -260,6 +314,8 @@ export function planGoals(
     : null;
   const lean = bodyFat == null ? null : g.weightKg * (1 - bodyFat / 100);
   const heightM = g.heightCm / 100;
+  const bmiNow = g.weightKg / (heightM * heightM);
+  const bmiGoal = g.targetWeightKg / (heightM * heightM);
   // Under 18, Henry's youth equations. Otherwise Katch–McArdle from lean
   // mass when body fat is known, or Mifflin–St Jeor, and without a stated
   // sex the midpoint of its constants.
@@ -283,15 +339,17 @@ export function planGoals(
       g.weightKg) /
     7;
   const trainingPerDay = Math.min(trainingKcal, TRAINING_KCAL_CAP);
+  const milk = breastfeeding ? LACTATION_KCAL : 0;
   const maintenance =
     resting * Math.max(everydayActivity[g.activity], LOWEST_ACTIVITY) +
     trainingPerDay +
-    (pregnancy === "breastfeeding" ? LACTATION_KCAL : 0);
+    milk;
   // Resting energy alone is no minimum for someone who trains: the plan
-  // never sets less than resting energy plus training, nor under 1,200 kcal
-  // (1,500 for men), where supervised weight-loss diets start.
+  // never sets less than resting energy plus training (and making milk), nor
+  // under 1,200 kcal (1,500 for men), where supervised weight-loss diets
+  // start.
   const floor = Math.max(
-    resting + trainingPerDay,
+    resting + trainingPerDay + milk,
     g.sex === "male" ? 1500 : 1200,
   );
 
@@ -392,17 +450,34 @@ export function planGoals(
       "In pregnancy the plan sets no weight goal and no daily calorie, protein or body fat targets: gaining weight is a normal, healthy part of pregnancy, and energy needs rise as it goes on, mostly in the second and third trimesters. Your midwife or doctor can advise you on eating and training.",
     );
     cut = false;
-  } else if (pregnancy === "breastfeeding") {
+  } else if (breastfeeding) {
+    // No deficit until the baby is 6 weeks old, or while its age isn't
+    // known; then a gentle one (breastfeedingCapKcal).
+    const weeks = composition.weeksSinceBirth ?? null;
+    const early = weeks == null || weeks < POSTPARTUM_WEEKS;
+    const asks = cutting && !minor;
+    const deficit = !asks
+      ? "sets no deficit"
+      : early
+        ? `sets no deficit until your baby is ${POSTPARTUM_WEEKS} weeks old`
+        : `keeps any deficit gentle (at most about ${bmiNow >= 25 ? "0.5" : "0.25"} kg a week)`;
+    const askAge =
+      asks && weeks == null
+        ? ` Say how old your baby is if you'd like it to lose gently after ${POSTPARTUM_WEEKS} weeks.`
+        : "";
     notes.push(
-      "While you're breastfeeding the plan adds about 500 kcal a day for making milk and sets no deficit. Keep an eye on your milk supply, and talk to your midwife or health visitor before trying to lose weight.",
+      `While you're breastfeeding the plan adds about ${LACTATION_KCAL} kcal a day for making milk and ${deficit}, with no protein target.${askAge} Keep an eye on your milk supply, and talk to your midwife or health visitor before trying to lose weight.`,
     );
-    cut = false;
+    if (early) cut = false;
+  }
+  if (limitProtein) {
+    notes.push(
+      "As you have kidney disease or a doctor's advice to limit protein, the plan sets no protein target. Follow your doctor's or dietitian's advice on how much protein suits you.",
+    );
   }
   // Adult BMI, now and at the goal: under 17.5 is a high-risk level, under
   // 18.5 underweight. Under 18 the real gate is no deficit, and in
   // pregnancy BMI doesn't apply.
-  const bmiNow = g.weightKg / (heightM * heightM);
-  const bmiGoal = g.targetWeightKg / (heightM * heightM);
   const underweightGoal =
     "That goal weight is below the healthy range for your height. Talk it through with a doctor or dietitian before aiming for it.";
   if (minor) {
@@ -477,10 +552,16 @@ export function planGoals(
   if (cut && focus === "recomposition" && direction === "maintain")
     calories = maintenance * 0.95;
   // A deficit stays within 500 kcal a day, or 1,000 kcal (about 0.9 kg a
-  // week, inside the 1 kg limit) when body fat is high, and never takes
-  // calories below the floor. With the floor close to maintenance there is
-  // no room for one.
-  const cap = bodyFat != null && bodyFat >= limits.higher ? 1000 : 500;
+  // week, inside the 1 kg limit) when body fat is high, while breastfeeding
+  // within breastfeedingCapKcal, and never takes calories below the floor.
+  // With the floor close to maintenance there is no room for one.
+  const cap = breastfeeding
+    ? bmiNow >= 25
+      ? breastfeedingCapKcal.fromBmi25
+      : breastfeedingCapKcal.below
+    : bodyFat != null && bodyFat >= limits.higher
+      ? 1000
+      : 500;
   let limited: "cap" | "floor" | "hold" | null = null;
   if (calories < maintenance) {
     if (maintenance - calories > cap) {
@@ -502,7 +583,10 @@ export function planGoals(
   // 5 g (proteinPerKg). At a BMI of 30 or more without body fat it is
   // 1.6 g/kg of bodyweight, kept to at least the amount per kg of the
   // adjusted weight and at most 2.0 g/kg of it (so 2.0 g/kg of it while
-  // losing).
+  // losing). No target with kidney disease or a doctor's limit on protein,
+  // where the other macros allow for REFERENCE_PROTEIN_PER_KG, nor in
+  // pregnancy or while breastfeeding, where they allow for the usual amount.
+  const proteinTarget = !limitProtein && !pregnancy;
   const losing = direction === "lose" || focus === "recomposition";
   const adjusted = lean == null && bmiNow >= ADJUSTED_FROM_BMI;
   const basisKg =
@@ -515,39 +599,47 @@ export function planGoals(
         : proteinPerKg.bodyweight;
   const proteinFor = basisKg * (losing ? perKg.losing : perKg.other);
   let protein = round(
-    adjusted
-      ? Math.min(
-          Math.max(MODEST_PROTEIN_PER_KG * g.weightKg, proteinFor),
-          basisKg * proteinPerKg.adjusted.losing,
-        )
-      : proteinFor,
+    limitProtein
+      ? REFERENCE_PROTEIN_PER_KG *
+          (bmiNow >= ADJUSTED_FROM_BMI
+            ? adjustedWeightKg(g.weightKg, g.heightCm)
+            : g.weightKg)
+      : adjusted
+        ? Math.min(
+            Math.max(MODEST_PROTEIN_PER_KG * g.weightKg, proteinFor),
+            basisKg * proteinPerKg.adjusted.losing,
+          )
+        : proteinFor,
     5,
   );
   // Macros from the calories as shown, to 5 g, so they add up to them
   // within the carbohydrate's rounding (10 kcal). Fat is a quarter of
-  // energy and carbohydrate the rest. Short of 130 g of carbohydrate, fat
-  // goes down to a fifth of energy (not under 18), then protein to 1.6 g/kg
-  // of the weight it is set from, then calories up towards maintenance;
-  // the note says which.
+  // energy and carbohydrate the rest. Short of 130 g of carbohydrate (175 g
+  // in pregnancy, 210 g while breastfeeding), fat goes down to a fifth of
+  // energy (not under 18), then protein to 1.6 g/kg of the weight it is set
+  // from, then calories up towards maintenance; the note says which.
+  const carbsFloor = pregnancy
+    ? pregnancyCarbsFloorG[pregnancy]
+    : CARBS_FLOOR_G;
   let kcal = round(calories, 10);
   const leastFat = minor ? macroShares.leastFatUnder18 : macroShares.leastFat;
   const fatAt = (share: number) => upTo5((kcal * share) / 900);
   let fat = fatAt(macroShares.fat);
   const carbsLeft = () => (kcal - protein * 4 - fat * 9) / 4;
   const usualProtein = protein;
-  if (carbsLeft() < CARBS_FLOOR_G)
+  if (carbsLeft() < carbsFloor)
     fat = Math.max(
       fatAt(leastFat),
-      fat - upTo5(((CARBS_FLOOR_G - carbsLeft()) * 4) / 9),
+      fat - upTo5(((carbsFloor - carbsLeft()) * 4) / 9),
     );
-  if (carbsLeft() < CARBS_FLOOR_G)
+  if (carbsLeft() < carbsFloor)
     protein = Math.max(
       Math.min(protein, upTo5(MODEST_PROTEIN_PER_KG * basisKg)),
-      protein - upTo5(CARBS_FLOOR_G - carbsLeft()),
+      protein - upTo5(carbsFloor - carbsLeft()),
     );
   const atMaintenance = round(maintenance, 10);
   let raised = false;
-  while (carbsLeft() < CARBS_FLOOR_G && kcal < atMaintenance) {
+  while (carbsLeft() < carbsFloor && kcal < atMaintenance) {
     kcal += 10;
     fat = fatAt(leastFat);
     raised = true;
@@ -577,20 +669,22 @@ export function planGoals(
   // Once carbohydrate sets the calories, its own note says so instead.
   else if (limited === "floor" && !raised)
     notes.push(
-      `Calories are kept at a level that covers your resting energy and training, so the plan loses more slowly: about ${weeklyChangeKg} kg a week.`,
+      `Calories are kept at a level that covers your resting energy${breastfeeding ? ", training and making milk" : " and training"}, so the plan loses more slowly: about ${weeklyChangeKg} kg a week.`,
     );
   else if (limited === "cap" && !raised)
     notes.push(
-      `The deficit is kept to ${cap.toLocaleString("en-GB")} kcal a day to protect training and muscle, so the plan loses about ${weeklyChangeKg} kg a week.`,
+      `The deficit is kept to ${cap.toLocaleString("en-GB")} kcal a day ${breastfeeding ? "while you're breastfeeding" : "to protect training and muscle"}, so the plan loses about ${weeklyChangeKg} kg a week.`,
     );
   // Fat counts as lowered by its share as shown: losing only its 5 g
   // round-up still leaves a quarter. In pregnancy the plan saves no macros,
-  // so there is no note on them.
+  // so there is no note on them, and without a protein target none on
+  // protein.
   const fatPercent = Math.round((fat * 900) / kcal);
   const room = [
     fatPercent < macroShares.fat &&
       `fat is about ${fatPercent}% of calories rather than a quarter`,
-    protein < usualProtein &&
+    proteinTarget &&
+      protein < usualProtein &&
       `protein is ${protein} g rather than ${usualProtein} g`,
     raised &&
       (heldForCarbs
@@ -601,16 +695,15 @@ export function planGoals(
   ].filter((part): part is string => Boolean(part));
   if (room.length && !pregnant)
     notes.push(
-      `To keep ${CARBS_FLOOR_G} g of carbohydrate a day, the generally recommended minimum, ${room.length > 1 ? `${room.slice(0, -1).join(", ")} and ${room.at(-1)}` : room[0]}.`,
+      `To keep ${carbsFloor} g of carbohydrate a day, the generally recommended minimum${breastfeeding ? " while breastfeeding" : ""}, ${room.length > 1 ? `${room.slice(0, -1).join(", ")} and ${room.at(-1)}` : room[0]}.`,
     );
   if (direction !== "maintain" && needed != null && needed - rate > 0.005)
     notes.push(
       `Reaching ${towards} kg by ${g.targetDate} would need ${needed.toFixed(2)} kg a week; this plan keeps to a sustainable ${rate.toFixed(2)} kg.`,
     );
   // A reading would give protein from lean mass instead; not asked for
-  // under 18, when readings aren't used, nor in pregnancy, with no protein
-  // target.
-  if (adjusted && !minor && !pregnant)
+  // under 18, when readings aren't used, nor without a protein target.
+  if (adjusted && !minor && proteinTarget)
     notes.push(
       "Protein is an estimate from your height and weight; add a body fat reading for a better number.",
     );
@@ -676,19 +769,20 @@ export function planGoals(
     towardsKg: towards,
     confirmToLose,
     dailyTargets: !pregnant,
+    proteinTarget,
     sessionsPerWeek,
     notes,
   };
 }
 
 // The daily targets the plan saves; in pregnancy none, so every surface
-// reads "No daily target".
+// reads "No daily target", and no protein target when it sets none.
 export function planTargets(plan: GoalPlan): z.infer<typeof dietTargetsSchema> {
   const set = plan.dailyTargets;
   return {
     goal: plan.direction,
     calories: set ? plan.calories : null,
-    protein: set ? plan.protein : null,
+    protein: set && plan.proteinTarget ? plan.protein : null,
     carbs: set ? plan.carbs : null,
     fat: set ? plan.fat : null,
   };
@@ -727,17 +821,26 @@ export function notesForTargets(
     : [TARGETS_DIFFER];
 }
 
+const WEEK_MS = 7 * 86400000;
+
 // The plan for the saved goals, with the focus, target, latest body fat and
-// the safety checks given with them.
+// the safety checks given with them; the baby's age in whole weeks today.
 export function planForState(state: JournalState, today: string) {
   const body = goalsForState(state);
   if (!body) return null;
   const checks = state.profile.goalChecks;
+  const health = state.profile.goalHealth;
+  const bornOn =
+    checks?.pregnancy === "breastfeeding" ? health?.babyBornOn : undefined;
   return planGoals(body, today, {
     focus: state.profile.bodyTargets?.focus,
     targetBodyFatPercent: state.profile.bodyTargets?.targetBodyFatPercent,
     bodyFatPercent: latestBodyFat(state, today)?.percent ?? null,
     pregnancy: checks?.pregnancy ?? null,
+    weeksSinceBirth: bornOn
+      ? Math.floor((Date.parse(today) - Date.parse(bornOn)) / WEEK_MS)
+      : null,
+    limitProtein: Boolean(health?.limitProtein),
     lowWeightConfirmed: checks?.lowWeightConfirmedKg === body.targetWeightKg,
   });
 }
@@ -784,9 +887,10 @@ export const ASSUMED_SESSION =
 // athlete's own record of the days they have and changes only through its
 // own review, so the plan's sessions never overwrite it. Session length and
 // experience left out keep what was saved (savedTraining). Body fat stated
-// with the goals is recorded as today's reading. Pregnancy and a confirmed
-// low goal weight carry over when not given again, the confirmation only
-// while the goal weight stays the same.
+// with the goals is recorded as today's reading. Pregnancy, a confirmed low
+// goal weight and a limit on protein carry over when not given again, the
+// confirmation only while the goal weight stays the same and the baby's
+// birth day only while breastfeeding.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
@@ -822,6 +926,23 @@ export function applyGoals(
       updatedAt: stamp,
     };
   else delete state.profile.goalChecks;
+  const health = state.profile.goalHealth;
+  const limitProtein = checks.limitProtein ?? Boolean(health?.limitProtein);
+  const babyBornOn =
+    pregnancy !== "breastfeeding"
+      ? undefined
+      : checks.weeksSinceBirth != null
+        ? new Date(Date.parse(today) - checks.weeksSinceBirth * WEEK_MS)
+            .toISOString()
+            .slice(0, 10)
+        : health?.babyBornOn;
+  if (limitProtein || babyBornOn)
+    state.profile.goalHealth = {
+      ...(limitProtein && { limitProtein }),
+      ...(babyBornOn && { babyBornOn }),
+      updatedAt: stamp,
+    };
+  else delete state.profile.goalHealth;
   if (composition.bodyFatPercent != null)
     saveBodyFat(
       state,
@@ -875,7 +996,10 @@ export function describePlan(goals: GoalsGiven, plan: GoalPlan) {
       : plan.targetBodyFatPercent != null
         ? ` Towards ${plan.targetBodyFatPercent}% body fat.`
         : "";
-  return `${change}. ${plan.calories.toLocaleString("en-GB")} kcal a day: ${plan.protein} g protein, ${plan.carbs} g carbs, ${plan.fat} g fat. ${describeSessions(plan.sessionsPerWeek, "training session")}.${composition}`;
+  const macros = plan.proteinTarget
+    ? `${plan.protein} g protein, ${plan.carbs} g carbs, ${plan.fat} g fat`
+    : `${plan.carbs} g carbs and ${plan.fat} g fat, with no protein target`;
+  return `${change}. ${plan.calories.toLocaleString("en-GB")} kcal a day: ${macros}. ${describeSessions(plan.sessionsPerWeek, "training session")}.${composition}`;
 }
 
 // "4 sessions a week", "1 session a week", or none planned.

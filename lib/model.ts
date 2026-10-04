@@ -4,7 +4,11 @@ import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 import { coachingSchema } from "./coaching";
 import { liftingBriefSchema } from "./lifting-brief";
-import { bodyGoalsSchema, goalChecksSchema } from "./body-goals";
+import {
+  bodyGoalsSchema,
+  goalChecksSchema,
+  goalHealthSchema,
+} from "./body-goals";
 import { bodyTargetsSchema } from "./body-composition";
 import {
   storedCustomProgramSchema,
@@ -150,6 +154,9 @@ export const journalSchema = z
         bodyTargets: bodyTargetsSchema.optional(),
         // Pregnancy, and a confirmed low goal weight, for the plan's limits.
         goalChecks: goalChecksSchema.optional(),
+        // Kidney disease or a limit on protein, and the baby's birth day
+        // while breastfeeding, for the plan's limits too.
+        goalHealth: goalHealthSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

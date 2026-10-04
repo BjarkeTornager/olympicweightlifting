@@ -543,7 +543,7 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
     removed.detail,
   );
   // A protein target set before the answer isn't one for it, so the answer
-  // removes it.
+  // removes it, saying first that it replaces the athlete's own targets.
   const earlier = emptyJournal();
   applyGoals(earlier, man, today);
   const handSet = prepareAction(
@@ -554,7 +554,9 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
   const answered = applyGoals(handSet, { ...man, limitProtein: true }, today);
   assert.equal(handSet.nutrition.targets.protein, null);
   assert.ok(!answered.notes.some((n) => n.startsWith("Your own protein")));
-  assert.deepEqual(answered.changes, []);
+  assert.deepEqual(answered.changes, [
+    "Replaces your own daily targets (2,140 kcal) with your goals plan's.",
+  ]);
 });
 
 test("a voice goals save that removes the kidney answer or changes the baby's age says so first", () => {

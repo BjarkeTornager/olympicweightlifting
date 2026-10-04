@@ -9,7 +9,12 @@ import {
   type BodyFocus,
 } from "./body-composition";
 import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
-import { currentWeightKg, recordTargets } from "./target-history";
+import {
+  currentWeightKg,
+  recordTargets,
+  sameTargets,
+  targetsInForce,
+} from "./target-history";
 
 const sessionMinutes = z.number().int().min(15).max(240);
 const experience = z.enum(["new", "developing", "experienced"]);
@@ -1270,10 +1275,10 @@ export const ASSUMED_SESSION =
 // is in force keeps its day (so saving again never stretches a no past
 // 3 months), and null removes them. A weight class stays while the goal
 // weight is the class, with the target date as its weigh-in. changes names
-// a removed kidney answer, a changed baby's age, a no to the low-energy
-// questions or a removed weight class, for the review and the voice
-// read-back to say first: a model filling every field could change them
-// unasked.
+// daily targets the athlete set themselves that these replace, a removed
+// kidney answer, a changed baby's age, a no to the low-energy questions or
+// a removed weight class, for the review and the voice read-back to say
+// first: a model filling every field could change them unasked.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
@@ -1282,6 +1287,8 @@ export function applyGoals(
   const split = splitGoals(input);
   const { composition, checks } = split;
   const earlier = planForState(state, today);
+  // Targets the athlete set themselves, which these goals replace.
+  const replaced = targetsInForce(state);
   const weeksBefore = babyWeeks(state, today);
   const known = savedTraining(state);
   const assumed =
@@ -1401,7 +1408,14 @@ export function applyGoals(
   if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);
   const weeksAfter = babyWeeks(state, today);
   const topics = screenTopics(goals.sex, "and", pregnancy);
+  const ownKcal = dailyTarget(replaced.calories);
   const changes = [
+    replaced.source === "manual" &&
+      (["calories", "protein", "carbs", "fat"] as const).some(
+        (key) => dailyTarget(replaced[key]) != null,
+      ) &&
+      !sameTargets(replaced, targets) &&
+      `Replaces your own daily targets${ownKcal != null ? ` (${ownKcal.toLocaleString("en-GB")} kcal)` : ""} with your goals plan's.`,
     health?.limitProtein &&
       !limitProtein &&
       `Removes your answer about kidney disease or a doctor's limit on protein${plan.proteinTarget ? `, so the plan sets ${plan.protein} g of protein a day` : ""}.`,

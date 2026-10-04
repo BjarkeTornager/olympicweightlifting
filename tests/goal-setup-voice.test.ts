@@ -18,6 +18,7 @@ import {
 } from "../lib/voice-actions";
 import { voiceContext, voiceInstruction } from "../lib/voice-checkin";
 import { elevenLabsTools } from "../lib/voice-elevenlabs";
+import { setDailyTargets } from "../lib/target-proposals";
 
 // The voice coach's goal setup: feet, inches and pounds, and a plan read
 // back before it is saved, with every safety note, the low-energy
@@ -225,6 +226,29 @@ test("by voice a deficit, a note or a changed answer is read back before saving,
     energyQuestions.eating,
   ]);
   assert.ok(!feeding.ask_first?.some((q) => /period/.test(q)));
+});
+
+test("by voice and with Coach, goals that replace the athlete's own targets say so first", () => {
+  // Her own 2,400 kcal, set on Food after the goals.
+  const state = emptyJournal();
+  const steady = { ...lifter, targetWeightKg: 84 };
+  applyGoals(state, steady, "2026-09-01");
+  setDailyTargets(state, { ...state.nutrition.targets, calories: 2400 }, today);
+  // Restating goals that hold the weight would otherwise save at once.
+  const action = { kind: "set_body_goals" as const, bodyGoals: steady };
+  const prepared = prepareAction(state, action, today);
+  const line =
+    "Replaces your own daily targets (2,400 kcal) with your goals plan's.";
+  assert.ok(prepared.detail.startsWith(line));
+  const readBack = goalsReadBack(state, steady, prepared, today)!;
+  assert.equal(readBack.saved, false);
+  assert.deepEqual(readBack.changes, [line]);
+  // The plan's own targets are replaced without a word.
+  const plans = emptyJournal();
+  applyGoals(plans, steady, "2026-09-01");
+  assert.ok(
+    !prepareAction(plans, action, today).detail.includes("your own daily"),
+  );
 });
 
 test("an older app gets a goals read-back as a refusal, so it never shows one as saved", () => {

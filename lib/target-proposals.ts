@@ -154,8 +154,8 @@ export function targetsProposal(
   if (maintain)
     reasons.push(
       plan.reachedGoal
-        ? `Your weight is about ${weightKg ?? goals.weightKg} kg now: you've reached ${plan.towardsKg === goals.targetWeightKg ? `your goal of ${goals.targetWeightKg} kg` : `the ${plan.towardsKg} kg your goals plan heads for`}, so the plan holds your weight there.`
-        : `Your target date, ${goals.targetDate}, has passed, so your goals plan holds your weight.`,
+        ? `Your weight is about ${weightKg ?? goals.weightKg} kg now: you've reached ${plan.towardsKg === goals.targetWeightKg ? `your goal of ${goals.targetWeightKg} kg` : `the ${plan.towardsKg} kg your goals plan heads for`}.`
+        : `Your target date, ${goals.targetDate}, has passed.`,
     );
   else if (own) return null;
   else {

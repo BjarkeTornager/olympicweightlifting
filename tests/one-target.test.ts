@@ -258,7 +258,7 @@ test("reaching the goal suggests maintenance; taking it saves the plan's targets
     fat: 85,
   });
   assert.deepEqual(proposal.reasons, [
-    "Your weight is about 81.4 kg now: you've reached your goal of 81 kg, so the plan holds your weight there.",
+    "Your weight is about 81.4 kg now: you've reached your goal of 81 kg.",
   ]);
   assert.equal(
     buildToday(state, 1, today, new Set()).targetsProposal?.title,
@@ -305,7 +305,7 @@ test("passing the target date suggests maintenance", () => {
   assert.equal(proposal.maintain, true);
   assert.equal(proposal.targets.goal, "maintain");
   assert.deepEqual(proposal.reasons, [
-    "Your target date, 2026-12-01, has passed, so your goals plan holds your weight.",
+    "Your target date, 2026-12-01, has passed.",
   ]);
 });
 

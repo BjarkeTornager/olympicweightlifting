@@ -24,14 +24,26 @@ import {
   goalsCheckDate,
   goalsCheckNote,
   goalsPlanChanges,
+  takeTargetsProposal,
 } from "@/lib/coaching";
 import { today } from "@/lib/domain";
+import { dailyTarget } from "@/lib/nutrition";
+import { currentWeightKg, targetsInForce } from "@/lib/target-history";
+import {
+  keepCurrentTargets,
+  targetsProposal,
+  type TargetsProposal,
+} from "@/lib/target-proposals";
 import type { JournalController } from "./journal";
+import { TargetsReview } from "./coach-proposal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
-import { ChevronRight, Mic, TrendingUp } from "./ui/icons";
+import { ChevronRight, Mic, Sparkles, TrendingUp } from "./ui/icons";
 
-// Today's goals row: the plan at a glance, or a way to set it up.
+// Today's goals row: the goal and the saved daily target, which is the one
+// shown everywhere, or a way to set it up. When the plan, worked out again
+// at the current weight, suggests new targets, a second row offers them
+// for review; nothing changes until the athlete takes them.
 export function GoalsCard({
   journal,
   go,
@@ -42,12 +54,23 @@ export function GoalsCard({
   voiceEnabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const body = journal.state!.profile.body;
-  const plan = planForState(journal.state!, today());
+  const [reviewing, setReviewing] = useState(false);
+  const state = journal.state!;
+  const body = state.profile.body;
+  const date = today();
+  const plan = planForState(state, date);
+  const proposal = targetsProposal(state, date);
+  const calories = dailyTarget(state.nutrition.targets.calories);
+  // Targets the athlete set themselves, beside the plan's estimate.
+  const own =
+    targetsInForce(state).source === "manual" &&
+    plan?.dailyTargets &&
+    plan.calories !== calories;
+  const suggested = proposal && dailyTarget(proposal.targets.calories);
   return (
     <>
       {body && plan ? (
-        <section className="list-card" aria-label="Your goals">
+        <section className="list-card today-records" aria-label="Your goals">
           <button
             className="list-row today-record"
             onClick={() => setOpen(true)}
@@ -58,13 +81,14 @@ export function GoalsCard({
               <small>
                 {body.targetWeightKg} kg goal ·{" "}
                 {describeSessions(plan.sessionsPerWeek).toLowerCase()}
+                {own &&
+                  ` · your own target; the plan estimates about ${plan.calories.toLocaleString("en-GB")} kcal`}
               </small>
             </span>
             <span className="today-record-value">
-              {plan.dailyTargets ? (
+              {calories != null ? (
                 <>
-                  {plan.calories.toLocaleString("en-GB")}{" "}
-                  <small>kcal/day</small>
+                  {calories.toLocaleString("en-GB")} <small>kcal/day</small>
                 </>
               ) : (
                 <small>No daily target</small>
@@ -72,6 +96,28 @@ export function GoalsCard({
             </span>
             <ChevronRight size={17} aria-hidden="true" />
           </button>
+          {proposal && (
+            <button
+              className="list-row today-record"
+              onClick={() => setReviewing(true)}
+            >
+              <Sparkles size={22} />
+              <span>
+                <strong>{proposalTitle(proposal)}</strong>
+                <small>Suggested by your goals plan</small>
+              </span>
+              <span className="today-record-value">
+                {suggested != null ? (
+                  <>
+                    {suggested.toLocaleString("en-GB")} <small>kcal/day</small>
+                  </>
+                ) : (
+                  <small>No daily target</small>
+                )}
+              </span>
+              <ChevronRight size={17} aria-hidden="true" />
+            </button>
+          )}
         </section>
       ) : (
         <section className="panel goals-start" aria-label="Your goals">
@@ -100,7 +146,101 @@ export function GoalsCard({
       >
         {open && <GoalsForm journal={journal} onDone={() => setOpen(false)} />}
       </Dialog>
+      <Dialog
+        open={reviewing && proposal != null}
+        onOpenChange={setReviewing}
+        title={proposal ? proposalTitle(proposal) : "New daily targets"}
+        description="Your goals plan suggests these. Nothing changes unless you take them."
+      >
+        {reviewing && proposal && (
+          <ProposalReview
+            journal={journal}
+            proposal={proposal}
+            onDone={() => setReviewing(false)}
+          />
+        )}
+      </Dialog>
     </>
+  );
+}
+
+const proposalTitle = (proposal: TargetsProposal) =>
+  proposal.maintain ? "Hold your weight from here" : "New daily targets";
+
+// The plan's suggestion: why, the targets now and suggested, the plan's
+// notes, and the goals check that taking it agrees or closes, as the goals
+// form says. Taking it saves the plan's targets; keeping the current ones
+// means it isn't suggested again until the plan moves on.
+function ProposalReview({
+  journal,
+  proposal,
+  onDone,
+}: {
+  journal: JournalController;
+  proposal: TargetsProposal;
+  onDone: () => void;
+}) {
+  const state = journal.state!;
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const checkFrom = goalsCheckDate(state, proposal.plan, today());
+  const closes = goalsPlanChanges(proposal.plan)
+    ? undefined
+    : activeGoalsCheck(state);
+  const choose = async (take: boolean) => {
+    setSaving(true);
+    setError("");
+    try {
+      await journal.update((s) => {
+        if (take) takeTargetsProposal(s, today(), proposal.targets);
+        else keepCurrentTargets(s, today(), proposal.targets);
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save your choice.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="checkin-form goals-form">
+      <div className="goals-plan" role="status">
+        {proposal.reasons.map((reason) => (
+          <strong key={reason}>{reason}</strong>
+        ))}
+        {proposal.plan.notes
+          .filter((note) => !proposal.reasons.includes(note))
+          .map((note) => (
+            <p key={note} className="fine-print">
+              {note}
+            </p>
+          ))}
+        {checkFrom && <p className="fine-print">{goalsCheckNote(checkFrom)}</p>}
+        {closes && (
+          <p className="fine-print">
+            {goalsCheckClosedNote(closes.followUpDate)}
+          </p>
+        )}
+      </div>
+      <TargetsReview after={proposal.targets} before={proposal.current} />
+      {error && (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="button-row">
+        <Button disabled={saving} onClick={() => void choose(true)}>
+          Use these targets
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={saving}
+          onClick={() => void choose(false)}
+        >
+          Keep my current targets
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -145,7 +285,13 @@ function GoalsForm({
     age: String(body?.age ?? (state.profile.age || "")),
     sex: body?.sex ?? "",
     heightCm: String(body?.heightCm ?? ""),
-    weightKg: String(body?.weightKg ?? (state.profile.bodyweight || "")),
+    // The current weight: the last week's weigh-ins, or the weight last
+    // given (currentWeightKg).
+    weightKg: String(
+      currentWeightKg(state, today()) ??
+        body?.weightKg ??
+        (state.profile.bodyweight || ""),
+    ),
     targetWeightKg: String(body?.targetWeightKg ?? ""),
     targetDate: body?.targetDate ?? "",
     activity: body?.activity ?? "",
@@ -281,6 +427,11 @@ function GoalsForm({
   // athlete to confirm it.
   const asksConfirmation = preview ? preview(false).confirmToLose : false;
   const plan = preview ? preview(asksConfirmation && confirmed) : null;
+  // Targets the athlete set themselves, which saving the goals replaces.
+  const ownCalories =
+    targetsInForce(state).source === "manual"
+      ? dailyTarget(state.nutrition.targets.calories)
+      : null;
   // Saved, a plan that changes weight agrees a check of the weight trend
   // about 3 weeks on, as with Coach, and one that doesn't closes an active
   // check (followUpGoals).
@@ -499,6 +650,12 @@ function GoalsForm({
           {closes && (
             <p className="fine-print">
               {goalsCheckClosedNote(closes.followUpDate)}
+            </p>
+          )}
+          {ownCalories != null && (
+            <p className="fine-print">
+              Saving replaces your own daily targets (
+              {ownCalories.toLocaleString("en-GB")} kcal) with these.
             </p>
           )}
         </div>

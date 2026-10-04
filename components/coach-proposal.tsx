@@ -34,7 +34,7 @@ const targetLabels = {
 };
 
 // The goal and all four targets, with what each was when it changes.
-function TargetsReview({
+export function TargetsReview({
   after,
   before,
 }: {

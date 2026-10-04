@@ -3,6 +3,7 @@ import { bodyFatTrend, latestBodyFat, weightTrend } from "./body-composition";
 import { z } from "zod";
 import type { JournalState } from "./model";
 import { formatSleepDuration, offsetDate } from "./health";
+import { shortSleep, sleepChange, sleepShortOpening } from "./sleep";
 import { foodDate } from "./nutrition";
 import { cardioTitle } from "./cardio";
 
@@ -81,11 +82,26 @@ export type CoachSuggestion = {
   prompt: string;
 };
 
+// Openings that, once hidden, stay away for a week rather than a day: short
+// sleep changes slowly, and a daily reminder of it would nag. `hidden` maps
+// an opening's id to the date it was hidden.
+export const weeklyOpenings: readonly string[] = ["sleep-short"];
+export function quietOpenings(hidden: Record<string, string>, date: string) {
+  return Object.entries(hidden)
+    .filter(
+      ([id, day]) =>
+        weeklyOpenings.includes(id) && day <= date && date < offsetDate(day, 7),
+    )
+    .map(([id]) => id);
+}
+
 // A small, explainable opening observation. No model request, score, target or
 // journal mutation happens on opening. Missing records never imply inactivity.
 export function coachSuggestion(
   state: JournalState,
   date: string,
+  // Openings the athlete hid for a week on this device (quietOpenings).
+  hidden: readonly string[] = [],
 ): CoachSuggestion {
   const plan = duePlans(state, date)[0];
   if (plan && state.profile.coaching?.initiative !== "on-request")
@@ -116,28 +132,31 @@ export function coachSuggestion(
       prompt: "What would you suggest for today, given how I'm feeling?",
     };
 
-  const sleep = state.health.checkins.filter(
-    (c) => c.sleepHours != null && c.date <= date,
-  );
-  const recent = sleep.filter((c) => c.date >= offsetDate(date, -2));
-  const baseline = sleep.filter(
-    (c) => c.date >= offsetDate(date, -9) && c.date < offsetDate(date, -2),
-  );
-  const average = (values: typeof sleep) =>
-    values.reduce((sum, c) => sum + c.sleepHours!, 0) / values.length;
-  if (
-    recent.length === 3 &&
-    baseline.length >= 4 &&
-    average(baseline) - average(recent) >= 1
-  )
+  // A change in the last three nights first, then short sleep over two
+  // weeks, which can be hidden for a week, then three short nights alone.
+  const change = sleepChange(state, date);
+  if (change?.kind === "drop")
     return {
       id: "sleep-change",
       title: "Your recent nights look different.",
-      observation: `Your last three nights (${offsetDate(date, -2)}–${date}) average ${formatSleepDuration(average(recent))}, compared with ${formatSleepDuration(average(baseline))} across ${baseline.length} logged nights in the preceding week.`,
+      observation: `Your last three nights (${change.from}–${date}) average ${formatSleepDuration(change.recentHours)}, compared with ${formatSleepDuration(change.baselineHours)} across ${change.baselineNights} logged nights in the preceding week.`,
       invitation:
         "If you’ve felt the difference, we could choose one small change that fits your evenings.",
       prompt:
         "My recent sleep looks different. What would be one useful thing to try?",
+    };
+  const short = shortSleep(state, date);
+  if (short) {
+    if (!hidden.includes("sleep-short")) return sleepShortOpening(short);
+  } else if (change?.kind === "short")
+    return {
+      id: "sleep-change",
+      title: "Your last few nights were short.",
+      observation: `Your last three nights (${change.from}–${date}) average ${formatSleepDuration(change.recentHours)}.`,
+      invitation:
+        "Short nights add up. If you can, protect a little extra time in bed tonight, or we could look at what is getting in the way.",
+      prompt:
+        "My last few nights have been short. What would help me sleep longer?",
     };
 
   const activity = [

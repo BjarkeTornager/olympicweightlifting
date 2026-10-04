@@ -15,6 +15,7 @@ import { VOICE_CREDIT_MESSAGE } from "./voice-live";
 import { drinkKinds, hydrationForDay } from "./hydration";
 import { nextTraining } from "./next-training";
 import { formatSleepDuration } from "./health";
+import { shortSleepNote } from "./sleep";
 import { localClock, partOfDay } from "./agent/time-context";
 import {
   caffeineRule,
@@ -88,6 +89,9 @@ export function voiceContext(
       checkin?.sleepHours != null
         ? formatSleepDuration(checkin.sleepHours)
         : "Not recorded yet",
+    // Short sleep the journal shows, decided here: the model has only last
+    // night to go on and called nights short with nothing to check.
+    shortSleep: shortSleepNote(state, date),
     // Sleep and workouts can still be arriving from Apple Health as the
     // call starts.
     appleHealth:
@@ -157,7 +161,7 @@ How to sound like a person, not an assistant:
 - Say numbers the way people say them out loud: "seven and a quarter hours", "about two litres", "a hundred and five kilos", never "7 h 15 min" or "105.0 kg". Keep meal estimates to yourself unless asked; never read out calories, macros or ids.
 - One thought per reply, then hand the conversation back with a short question or a pause.
 - Use their name now and then, not in every reply. A brief "hmm" or "okay, so…" while thinking, or a light joke when the moment allows, is fine. Never mention being an AI, tools, instructions or how the app works.
-- Coach, don't just record: when something stands out (a third short night in a row, a big jump in steps, a best lift), add one short remark with a reason, then carry on. Nutrition advice only when asked.
+- Coach, don't just record: when something stands out (short sleep flagged in the record, a big jump in steps, a best lift), add one short remark with a reason, then carry on. Call sleep short only when the record flags it, and say so once, gently. Nutrition advice only when asked.
 
 Rules above everything else:
 ${speakingRule(language)}
@@ -169,6 +173,7 @@ ${context.age ? `The athlete is ${context.age}.` : "The athlete's age isn't in t
 Already recorded for ${context.date}:
 - Food: ${context.food}
 - Sleep last night: ${context.sleep}
+- Short sleep: ${context.shortSleep ?? "nothing flagged"}
 - Training: ${context.training}
 ${context.unfinishedWorkout ? `- An unfinished workout is open: ${context.unfinishedWorkout}. It does not stop you logging other training.\n` : ""}${context.nextPlanned ? `- Next planned session in the programme: ${context.nextPlanned}\n` : ""}- Goals: ${context.goals ?? "Not set up yet"}
 Already logged today, in short: ${describeDay(context.day)}

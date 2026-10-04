@@ -28,7 +28,7 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await dialog.getByLabel("Days I can train").fill("4");
   const plan = dialog.getByRole("status");
   await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
-  await expect(plan).toContainText("2,350 kcal a day");
+  await expect(plan).toContainText("2,640 kcal a day");
   await expect(plan).toContainText("4 training sessions a week");
   const axe = await new AxeBuilder({ page })
     .include('[role="dialog"]')
@@ -54,15 +54,15 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await expect(dialog).toHaveCount(0);
   const row = page.getByRole("region", { name: "Your goals" });
   await expect(row).toContainText("81 kg goal · 4 sessions a week");
-  await expect(row).toContainText("2,350");
+  await expect(row).toContainText("2,640");
   await page.reload();
   await expect(page.getByRole("region", { name: "Your goals" })).toContainText(
-    "2,350",
+    "2,640",
   );
   // The plan is now the Food page's daily target.
   await page.goto("/#food");
   await page.getByRole("button", { name: "Daily targets" }).click();
-  await expect(page.getByLabel(/calories/i).first()).toHaveValue("2350");
+  await expect(page.getByLabel(/calories/i).first()).toHaveValue("2640");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,

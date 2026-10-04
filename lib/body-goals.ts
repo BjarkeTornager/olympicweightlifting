@@ -8,6 +8,7 @@ import {
   saveBodyFat,
   type BodyFocus,
 } from "./body-composition";
+import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
 
 // The athlete's body and goal details, and the daily plan derived from them.
 // Numbers are estimates for everyday planning, not a clinical prescription.
@@ -109,7 +110,16 @@ export function splitGoals(input: BodyGoalsRequest) {
   };
 }
 
-const baseActivity = { low: 1.2, moderate: 1.375, high: 1.55 };
+// Everyday movement before training, as a multiple of resting energy (the
+// physical activity level): about 1.4 for a desk job with little else, 1.55
+// on your feet some of the day and 1.75 in physical work (NNR 2023,
+// FAO/WHO/UNU 2004, NASEM 2023). Free-living adults sustain at least 1.4,
+// so maintenance is never set below that.
+const everydayActivity = { low: 1.4, moderate: 1.55, high: 1.75 };
+const LOWEST_ACTIVITY = 1.4;
+// Training counts for at most 1,000 kcal a day, a plausible ceiling for
+// lifting; five 4-hour sessions a week would count more at 88 kg.
+const TRAINING_KCAL_CAP = 1000;
 const KCAL_PER_KG = 7700;
 // Making milk takes about 500 kcal a day in the first six months (EFSA).
 const LACTATION_KCAL = 500;
@@ -216,11 +226,22 @@ export function planGoals(
     : lean != null
       ? 370 + 21.6 * lean
       : 10 * g.weightKg + 6.25 * g.heightCm - 5 * g.age + sexTerm;
-  // Weightlifting sessions average about 0.075 kcal per kg per minute.
-  const trainingPerDay =
-    (g.trainingDays * g.sessionMinutes * 0.075 * g.weightKg) / 7;
+  // Sessions on the days available, up to what suits the experience; none
+  // when no days are free.
+  const recommended = { new: 3, developing: 4, experienced: 5 }[g.experience];
+  const sessionsPerWeek = Math.min(recommended, g.trainingDays);
+  // Training energy for those sessions, net of the resting energy the
+  // everyday level already counts, at the same cost per hour as the burn
+  // estimate (energy.ts).
+  const trainingKcal =
+    (sessionsPerWeek *
+      (g.sessionMinutes / 60) *
+      LIFTING_NET_KCAL_PER_KG_HOUR *
+      g.weightKg) /
+    7;
+  const trainingPerDay = Math.min(trainingKcal, TRAINING_KCAL_CAP);
   const maintenance =
-    resting * baseActivity[g.activity] +
+    resting * Math.max(everydayActivity[g.activity], LOWEST_ACTIVITY) +
     trainingPerDay +
     (pregnancy === "breastfeeding" ? LACTATION_KCAL : 0);
   // Resting energy alone is no minimum for someone who trains: the plan
@@ -500,10 +521,10 @@ export function planGoals(
   const kcal = round(calories, 10);
   const fat = round(Math.max(g.weightKg * 0.8, (kcal * 0.25) / 9));
   const carbs = round(Math.max(0, (kcal - protein * 4 - fat * 9) / 4));
-  // Sessions on the days available, up to what suits the experience; none
-  // when no days are free.
-  const recommended = { new: 3, developing: 4, experienced: 5 }[g.experience];
-  const sessionsPerWeek = Math.min(recommended, g.trainingDays);
+  if (trainingKcal > TRAINING_KCAL_CAP)
+    notes.push(
+      `The plan counts your training as ${TRAINING_KCAL_CAP.toLocaleString("en-GB")} kcal a day at most, so it may be on the low side; if your weight falls faster than planned, ask Coach to review it.`,
+    );
   if (g.trainingDays > recommended)
     notes.push(
       `${recommended} sessions a week is plenty at your level; use the other days for recovery or light movement.`,

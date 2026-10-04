@@ -10,6 +10,7 @@ import {
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
+import { LIFTING_MET, LIFTING_NET_KCAL_PER_KG_HOUR } from "../lib/energy";
 
 const today = "2026-09-26";
 const athlete: BodyGoalsInput = {
@@ -29,17 +30,21 @@ test("the plan follows Mifflin–St Jeor, training energy and a sustainable rate
   const plan = planGoals(athlete, today);
   // 10×88 + 6.25×182 − 5×34 + 5 = 1852.5 kcal resting.
   assert.equal(plan.restingKcal, 1850);
-  // ×1.375 plus 4 × 75 min × 0.075 kcal/kg/min × 88 kg over 7 days.
-  assert.equal(plan.maintenanceKcal, 2830);
+  // ×1.55 on his feet some of the day (2,871 kcal), plus 4 sessions of
+  // 1.25 h × 4 kcal/kg/h net × 88 kg over 7 days (251 kcal): 3,123 kcal,
+  // 2,830 before maintenance was raised.
+  assert.equal(plan.maintenanceKcal, 3120);
   assert.equal(plan.direction, "lose");
+  // 0.5 % of 88 kg a week is 484 kcal a day, under the 500 kcal cap.
   assert.equal(plan.weeklyChangeKg, 0.44);
-  assert.equal(plan.calories, 2350);
+  assert.equal(plan.calories, 2640);
   assert.equal(plan.protein, 176);
   assert.equal(plan.weeksToGoal, 16);
   assert.equal(plan.sessionsPerWeek, 4);
   assert.deepEqual(plan.notes, []);
+  // Only the carbohydrate gram is rounded after the fat: within 2 kcal.
   const kcal = plan.protein * 4 + plan.carbs * 4 + plan.fat * 9;
-  assert.equal(kcal, plan.calories);
+  assert.ok(Math.abs(kcal - plan.calories) <= 2, `${kcal}`);
 });
 
 test("macros are worked out from the calories shown, so they add up to them", () => {
@@ -137,26 +142,36 @@ test("warnings: underweight goals and too little energy", () => {
   assert.equal(under.direction, "maintain");
   assert.ok(under.confirmToLose);
   assert.ok(under.notes.some((n) => /just below the healthy range/.test(n)));
-  const small = planGoals(
-    {
-      ...athlete,
-      sex: "female",
-      age: 60,
-      heightCm: 150,
-      weightKg: 50,
-      targetWeightKg: 45,
-      activity: "low",
-      trainingDays: 0,
-    },
-    today,
-  );
-  // Resting energy is 980 kcal and maintenance 1,170: no room for a
-  // deficit above the 1,200 kcal floor, so the plan holds at the floor.
+  const smallWoman = {
+    ...athlete,
+    sex: "female" as const,
+    age: 60,
+    heightCm: 150,
+    weightKg: 50,
+    targetWeightKg: 45,
+    activity: "low" as const,
+    trainingDays: 0,
+  };
+  const small = planGoals(smallWoman, today);
+  // Resting energy is 980 kcal and maintenance 1,370 (1.4 × resting): the
+  // 1,200 kcal floor leaves a small deficit, so the plan loses slowly.
   assert.equal(small.restingKcal, 980);
-  assert.equal(small.direction, "maintain");
+  assert.equal(small.maintenanceKcal, 1370);
+  assert.equal(small.direction, "lose");
   assert.equal(small.calories, 1200);
   assert.equal(small.calories, small.floorKcal);
-  assert.ok(small.notes.some((n) => /isn't room for a safe deficit/.test(n)));
+  assert.equal(small.weeklyChangeKg, 0.15);
+  assert.ok(small.notes.some((n) => /loses more slowly/.test(n)));
+  // At 70 and 45 kg, maintenance is 1,230: no room for a deficit above the
+  // floor, so the plan holds at maintenance.
+  const smaller = planGoals(
+    { ...smallWoman, age: 70, weightKg: 45, targetWeightKg: 42 },
+    today,
+  );
+  assert.equal(smaller.restingKcal, 880);
+  assert.equal(smaller.direction, "maintain");
+  assert.equal(smaller.calories, 1230);
+  assert.ok(smaller.notes.some((n) => /isn't room for a safe deficit/.test(n)));
   const eager = planGoals(
     { ...athlete, trainingDays: 7, experience: "new" },
     today,
@@ -189,19 +204,19 @@ test("saving goals sets profile and daily targets and leaves the lifting brief a
   assert.equal(next.profile.age, 34);
   assert.deepEqual(next.nutrition.targets, {
     goal: "lose",
-    calories: 2350,
+    calories: 2640,
     protein: 176,
-    carbs: 254,
-    fat: 70,
+    carbs: 320,
+    fat: 73,
   });
   // The brief is the athlete's own: the plan's 4 sessions don't replace
   // the 5 days they said they have.
   assert.deepEqual(next.profile.lifting, state.profile.lifting);
-  assert.match(prepared.detail, /2,350 kcal a day/);
+  assert.match(prepared.detail, /2,640 kcal a day/);
   // The original state is untouched until the change is saved.
   assert.equal(state.profile.body, undefined);
   // The saved goals, with their timestamp, plan the same way.
-  assert.equal(planGoals(next.profile.body!, today).calories, 2350);
+  assert.equal(planGoals(next.profile.body!, today).calories, 2640);
   const fresh = emptyJournal();
   applyGoals(fresh, athlete, today);
   assert.equal(fresh.profile.lifting, undefined);
@@ -227,4 +242,66 @@ test("sessions follow the days available, with no floor of 2", () => {
     planGoals({ ...athlete, trainingDays: 6 }, today).sessionsPerWeek,
     4,
   );
+});
+
+test("everyday movement counts 1.4, 1.55 or 1.75 times resting energy, never less than 1.4", () => {
+  const resting = 1852.5;
+  // 4 sessions of 75 min at 4 kcal/kg/h net, at 88 kg, over 7 days.
+  const training = (4 * 1.25 * 4 * 88) / 7;
+  const tens = (kcal: number) => Math.round(kcal / 10) * 10;
+  for (const [activity, factor] of [
+    ["low", 1.4],
+    ["moderate", 1.55],
+    ["high", 1.75],
+  ] as const)
+    assert.equal(
+      planGoals({ ...athlete, activity }, today).maintenanceKcal,
+      tens(resting * factor + training),
+      activity,
+    );
+  // Sitting most of the day with no training still counts 1.4.
+  assert.equal(
+    planGoals({ ...athlete, activity: "low", trainingDays: 0 }, today)
+      .maintenanceKcal,
+    tens(resting * 1.4),
+  );
+});
+
+test("training counts the planned sessions and their length, net of rest, at most 1,000 kcal a day", () => {
+  // One cost for an hour of lifting: the burn estimate's 5 METs less the
+  // 1 MET of resting energy maintenance already counts.
+  assert.equal(LIFTING_NET_KCAL_PER_KG_HOUR, LIFTING_MET - 1);
+  assert.equal(LIFTING_NET_KCAL_PER_KG_HOUR, 4);
+  // Six days free, four sessions planned at this level: energy for four.
+  assert.equal(
+    planGoals({ ...athlete, trainingDays: 6 }, today).maintenanceKcal,
+    planGoals(athlete, today).maintenanceKcal,
+  );
+  // Longer sessions count more: 4 × 0.75 h more × 4 × 88 / 7 is 151 kcal.
+  const longer = planGoals({ ...athlete, sessionMinutes: 120 }, today);
+  assert.ok(
+    Math.abs(
+      longer.maintenanceKcal - planGoals(athlete, today).maintenanceKcal - 151,
+    ) <= 10,
+  );
+  // Five 4-hour sessions would count 1,006 kcal a day at 88 kg: held to
+  // 1,000, in maintenance and the floor, with a note.
+  const most = planGoals(
+    {
+      ...athlete,
+      experience: "experienced",
+      trainingDays: 6,
+      sessionMinutes: 240,
+    },
+    today,
+  );
+  assert.equal(most.sessionsPerWeek, 5);
+  assert.equal(most.maintenanceKcal, 3870);
+  assert.equal(most.floorKcal, 2850);
+  assert.ok(
+    most.notes.some((n) =>
+      n.startsWith("The plan counts your training as 1,000 kcal a day at most"),
+    ),
+  );
+  assert.ok(!planGoals(athlete, today).notes.some((n) => /at most/.test(n)));
 });

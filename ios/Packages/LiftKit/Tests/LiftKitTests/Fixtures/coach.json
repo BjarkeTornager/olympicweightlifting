@@ -218,7 +218,7 @@
         {
           "id": "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a25",
           "title": "Set your goals",
-          "detail": "Hold around 60 kg. 2,090 kcal a day: 108 g protein, 284 g carbs, 58 g fat. 3 training sessions a week. Under 18 the plan doesn't set a calorie deficit: a growing body needs plenty of energy for training and growth, so it holds your weight. If you want to change your weight, talk it through with a parent, your coach or a doctor.",
+          "detail": "Hold around 60 kg. 2,330 kcal a day: 108 g protein, 328 g carbs, 65 g fat. 3 training sessions a week. Under 18 the plan doesn't set a calorie deficit: a growing body needs plenty of energy for training and growth, so it holds your weight. If you want to change your weight, talk it through with a parent, your coach or a doctor.",
           "state": "pending",
           "entries": [
             {
@@ -231,7 +231,7 @@
                 {
                   "label": "Energy",
                   "note": "Was No target",
-                  "value": "2090 kcal"
+                  "value": "2330 kcal"
                 },
                 {
                   "label": "Protein",
@@ -241,12 +241,12 @@
                 {
                   "label": "Carbs",
                   "note": "Was No target",
-                  "value": "284 g"
+                  "value": "328 g"
                 },
                 {
                   "label": "Fat",
                   "note": "Was No target",
-                  "value": "58 g"
+                  "value": "65 g"
                 }
               ]
             }

@@ -58,16 +58,16 @@ test("rates follow body fat and experience; recomposition stays gentle", () => {
   const lean = planGoals(athlete, today, { bodyFatPercent: 11 });
   assert.equal(lean.weeklyChangeKg, 0.35);
   assert.ok(lean.notes.some((n) => /already lean/.test(n)));
-  // More to lose: up to 0.75 % a week, 0.66 kg here, but not below resting
-  // energy plus training, which holds it to 0.59 kg.
+  // More to lose: up to 0.75 % a week, 0.66 kg here (723 kcal a day,
+  // within the 1,000 kcal cap at this body fat), well above resting energy
+  // plus training. (The plan for a woman held at that floor is in
+  // goal-safety.test.ts.)
   const more = planGoals({ ...athlete, targetWeightKg: 75 }, today, {
     bodyFatPercent: 28,
   });
-  assert.equal(more.calories, more.floorKcal);
-  assert.equal(more.weeklyChangeKg, 0.59);
-  assert.ok(
-    more.notes.some((n) => /loses more slowly: about 0\.59 kg/.test(n)),
-  );
+  assert.equal(more.weeklyChangeKg, 0.66);
+  assert.ok(more.calories > more.floorKcal);
+  assert.ok(!more.notes.some((n) => /loses more slowly/.test(n)));
   // Muscle comes more slowly with experience.
   const gain = (experience: BodyGoalsInput["experience"]) =>
     planGoals({ ...athlete, targetWeightKg: 92, experience }, today)

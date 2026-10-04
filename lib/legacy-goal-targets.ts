@@ -4,7 +4,11 @@ import { journals } from "./db/schema";
 import { journalSchema, type JournalState } from "./model";
 import { writeJournal } from "./server";
 import { localClock, timeZoneSchema } from "./reminders";
-import { latestBodyFat, type BodyFocus } from "./body-composition";
+import {
+  latestBodyFat,
+  leannessLimits,
+  type BodyFocus,
+} from "./body-composition";
 import { planForState, planTargets, type BodyGoals } from "./body-goals";
 import type { DietTargets } from "./nutrition";
 
@@ -12,8 +16,11 @@ import type { DietTargets } from "./nutrition";
 // (from 2026-10-04) reach only goals saved since. A target saved before that
 // which breaks a hard limit follows the plan again, once: under 18, a BMI
 // under 17.5 now or at the goal, a deficit over the cap, or calories below
-// the floor. Only targets that still equal what the old plan gave for the
-// saved goals change; targets the athlete set by hand are never touched.
+// the floor. The limits are judged by today's plan, whose maintenance counts
+// everyday movement more fully than the old one did, so an old deficit is
+// often larger than it said. Only targets that still equal what the old
+// plan gave for the saved goals change; targets the athlete set by hand are
+// never touched.
 
 const round = (value: number, step = 1) => Math.round(value / step) * step;
 // The old plan's rate limits by body fat, as they were then.
@@ -93,18 +100,7 @@ function oldPlan(
       carbs: round(Math.max(0, (energy - protein * 4 - fat * 9) / 4)),
     };
   });
-  return {
-    goal: direction,
-    calories: kcal,
-    protein,
-    macros,
-    deficit: maintenance - calories,
-    // Resting energy plus training, never under 1,200 kcal (1,500 for men):
-    // today's floor for these goals.
-    floor: Math.max(resting + training, g.sex === "male" ? 1500 : 1200),
-    unrounded: calories,
-    bodyFat,
-  };
+  return { goal: direction, calories: kcal, protein, macros };
 }
 
 const sameTargets = (a: DietTargets, b: DietTargets) =>
@@ -143,21 +139,25 @@ export function regateLegacyTargets(
         p.protein === saved.protein &&
         p.macros.some((m) => m.fat === saved.fat && m.carbs === saved.carbs),
     );
-  if (!old || old.deficit <= 0) return false;
+  const plan = planForState(state, today);
+  if (!old || !plan) return false;
+  // The deficit the old target sets against today's maintenance, and the
+  // cap and floor today's plan keeps.
+  const deficit = plan.maintenanceKcal - old.calories;
+  if (deficit <= 0) return false;
   const metres = body.heightCm / 100;
   const bmi = Math.min(body.weightKg, body.targetWeightKg) / metres ** 2;
   const cap =
-    old.bodyFat != null && old.bodyFat >= oldLimits[body.sex].higher
+    plan.bodyFatPercent != null &&
+    plan.bodyFatPercent >= leannessLimits(body.sex).higher
       ? 1000
       : 500;
   const breaksLimit =
     body.age < 18 ||
     bmi < 17.5 ||
-    old.deficit > cap ||
-    old.unrounded < old.floor;
+    deficit > cap ||
+    old.calories < plan.floorKcal;
   if (!breaksLimit) return false;
-  const plan = planForState(state, today);
-  if (!plan) return false;
   const next = planTargets(plan);
   if (sameTargets(next, saved)) return false;
   state.nutrition.targets = next;

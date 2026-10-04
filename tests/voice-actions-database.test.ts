@@ -211,11 +211,11 @@ test(
             experience: "developing",
           });
           assert.ok(saved.ok && "detail" in saved);
-          assert.match(saved.detail, /2,350 kcal a day/);
+          assert.match(saved.detail, /2,640 kcal a day/);
           const { state } = await readJournal(a);
           assert.equal(state.profile.body?.targetWeightKg, 81);
           assert.equal(state.profile.body?.targetDate, null);
-          assert.equal(state.nutrition.targets.calories, 2350);
+          assert.equal(state.nutrition.targets.calories, 2640);
           // Missing details are refused, not guessed.
           await assert.rejects(
             run(a, "set_goals", {

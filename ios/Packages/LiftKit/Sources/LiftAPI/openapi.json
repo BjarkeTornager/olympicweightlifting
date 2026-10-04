@@ -691,6 +691,12 @@
           },
           "targetBodyFatPercent": {
             "type": "number"
+          },
+          "goalNotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

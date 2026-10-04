@@ -2572,6 +2572,8 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .goals-form .checkin-number-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .goals-plan { display: grid; gap: 6px; padding: 14px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); line-height: 1.45; }
 .goals-plan .fine-print { margin: 0; }
+.goals-form .goals-check { display: flex; flex-direction: row; align-items: center; gap: 10px; font-size: 14px; font-weight: 400; }
+.goals-form .goals-check input { width: 18px; height: 18px; min-height: 0; flex: none; }
 /* Drinks */
 .hydration-row { display: grid; gap: 10px; padding-bottom: 14px; }
 .hydration-row > .list-row { cursor: default; }

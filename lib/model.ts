@@ -4,7 +4,7 @@ import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 import { coachingSchema } from "./coaching";
 import { liftingBriefSchema } from "./lifting-brief";
-import { bodyGoalsSchema } from "./body-goals";
+import { bodyGoalsSchema, goalChecksSchema } from "./body-goals";
 import { bodyTargetsSchema } from "./body-composition";
 import {
   storedCustomProgramSchema,
@@ -145,6 +145,8 @@ export const journalSchema = z
         body: bodyGoalsSchema.optional(),
         // Focus and target body fat beside the weight goal.
         bodyTargets: bodyTargetsSchema.optional(),
+        // Pregnancy, and a confirmed low goal weight, for the plan's limits.
+        goalChecks: goalChecksSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

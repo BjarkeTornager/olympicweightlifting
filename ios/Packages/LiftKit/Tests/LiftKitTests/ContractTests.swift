@@ -54,6 +54,45 @@ struct ContractTests {
     #expect(entry.lines.first?.note == "80 g")
   }
 
+  @Test("A targets review shows the goal and every target, with what it was")
+  func coachTargets() throws {
+    let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
+    let receipt = try #require(
+      history.turns.flatMap(\.receipts).first { $0.title == "Update your daily nutrition targets" })
+    #expect(receipt.state == "pending")
+    let lines = try #require(receipt.entries?.first?.lines)
+    #expect(lines.map(\.label) == ["Goal", "Energy", "Protein", "Carbs", "Fat"])
+    #expect(lines[0].value == "Lose weight" && lines[0].note == nil)
+    // Only calories changed: the old value sits under the label.
+    #expect(lines[1].value == "2400 kcal" && lines[1].note == "Was 2350 kcal")
+    #expect(lines[2].value == "176 g" && lines[2].note == nil)
+  }
+
+  @Test("A goals review carries the plan's own notes, as the server's plan wrote them")
+  func coachGoals() throws {
+    let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
+    let receipt = try #require(history.turns.flatMap(\.receipts).first { $0.title == "Set your goals" })
+    #expect(receipt.state == "pending")
+    // A 16-year-old who wants to lose weight: the plan holds it, and says why.
+    #expect(receipt.detail.hasPrefix("Hold around 60 kg."))
+    #expect(receipt.detail.contains("Under 18 the plan doesn't set a calorie deficit"))
+    #expect(receipt.detail.contains("talk it through with a parent, your coach or a doctor"))
+    #expect(receipt.entries?.first?.lines.first?.value == "Maintain weight")
+  }
+
+  @Test("Today's goals bring the plan's notes, and decode without them")
+  func todayGoalNotes() throws {
+    let url = try #require(Bundle.module.url(forResource: "Fixtures/today", withExtension: "json"))
+    var json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    var body = try #require(json["body"] as? [String: Any])
+    #expect(try fixture("today", as: Components.Schemas.Today.self).body?.goalNotes == nil)
+    body["goalNotes"] = ["Your target date has passed, so the plan holds your weight for now."]
+    json["body"] = body
+    let today = try JSONDecoder().decode(
+      Components.Schemas.Today.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(today.body?.goalNotes?.first?.hasPrefix("Your target date has passed") == true)
+  }
+
   @Test("Every kind of visual Coach draws decodes, with its own fields")
   func coachVisuals() throws {
     let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)

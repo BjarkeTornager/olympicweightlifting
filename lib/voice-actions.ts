@@ -11,7 +11,7 @@ import {
 } from "./server";
 import { cardioActivitySchema } from "./cardio";
 import { foodGroupSchema } from "./nutrition";
-import { bodyGoalsRequestSchema } from "./body-goals";
+import { bodyGoalsRequestSchema, planForState } from "./body-goals";
 import { bodyFatInputSchema } from "./body-composition";
 import { drinkInputSchema } from "./hydration";
 import { supplementInputSchema } from "./supplements";
@@ -361,6 +361,10 @@ export const voiceToolArgs = {
       (v) => v || undefined,
       bodyGoalsRequestSchema.shape.targetBodyFatPercent,
     ),
+    pregnancy: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.pregnancy,
+    ),
   }),
   undo_save: z.object({ save_id: z.string().uuid() }),
   // Not a save: a card on the athlete's screen, kept in the Coach thread.
@@ -502,12 +506,21 @@ export function voiceAction(
     case "set_goals": {
       // The summary is for the journal receipt, not part of the goals.
       const details = Object.entries(voiceToolArgs.set_goals.parse(raw));
-      return {
-        kind: "set_body_goals",
-        bodyGoals: bodyGoalsRequestSchema.parse(
-          Object.fromEntries(details.filter(([key]) => key !== "summary")),
-        ),
-      };
+      const goals = bodyGoalsRequestSchema.parse(
+        Object.fromEntries(details.filter(([key]) => key !== "summary")),
+      );
+      // A call saves with no review, so the model's confirmation of a low
+      // goal weight counts only after the saved plan asked for it, for that
+      // goal weight. Otherwise the plan holds and its note asks.
+      if (
+        goals.confirmLowWeight &&
+        !(
+          planForState(state, today)?.confirmToLose &&
+          state.profile.body?.targetWeightKg === goals.targetWeightKg
+        )
+      )
+        delete goals.confirmLowWeight;
+      return { kind: "set_body_goals", bodyGoals: goals };
     }
     case "clear_unfinished_workout": {
       voiceToolArgs.clear_unfinished_workout.parse(raw);
@@ -861,6 +874,9 @@ async function saveVoiceAction(
     ...(prepared.meal ? { meal: prepared.meal } : {}),
     ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
     ...(prepared.targets ? { targets: prepared.targets } : {}),
+    ...(prepared.targetsBefore
+      ? { targetsBefore: prepared.targetsBefore }
+      : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
     ...(prepared.drink ? { drink: prepared.drink } : {}),
     ...(prepared.workoutReview

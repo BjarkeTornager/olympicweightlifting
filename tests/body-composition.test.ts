@@ -5,6 +5,7 @@ import {
   applyGoals,
   planForState,
   planGoals,
+  TARGETS_DIFFER,
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import {
@@ -57,11 +58,16 @@ test("rates follow body fat and experience; recomposition stays gentle", () => {
   const lean = planGoals(athlete, today, { bodyFatPercent: 11 });
   assert.equal(lean.weeklyChangeKg, 0.35);
   assert.ok(lean.notes.some((n) => /already lean/.test(n)));
-  // More to lose: up to 0.75 % a week.
+  // More to lose: up to 0.75 % a week, 0.66 kg here, but not below resting
+  // energy plus training, which holds it to 0.59 kg.
   const more = planGoals({ ...athlete, targetWeightKg: 75 }, today, {
     bodyFatPercent: 28,
   });
-  assert.equal(more.weeklyChangeKg, 0.66);
+  assert.equal(more.calories, more.floorKcal);
+  assert.equal(more.weeklyChangeKg, 0.59);
+  assert.ok(
+    more.notes.some((n) => /loses more slowly: about 0\.59 kg/.test(n)),
+  );
   // Muscle comes more slowly with experience.
   const gain = (experience: BodyGoalsInput["experience"]) =>
     planGoals({ ...athlete, targetWeightKg: 92, experience }, today)
@@ -97,7 +103,13 @@ test("body fat targets are checked against lean mass and healthy limits", () => 
   const veryLean = planGoals(athlete, today, { targetBodyFatPercent: 7 });
   assert.ok(veryLean.notes.some((n) => /very lean/.test(n)));
   const unsafe = planGoals(athlete, today, { targetBodyFatPercent: 4 });
-  assert.ok(unsafe.notes.some((n) => /essential fat/.test(n)));
+  assert.ok(
+    unsafe.notes.some((n) =>
+      /below the lowest healthy level \(about 5% for men\); it isn't a safe goal/.test(
+        n,
+      ),
+    ),
+  );
 });
 
 test("goals with body fat save a reading, a focus and a target beside profile.body", () => {
@@ -321,6 +333,9 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
     new Date(),
   );
 
+  // The first reading moves the plan from Mifflin–St Jeor to lean mass,
+  // about 200 kcal above the targets saved without one, so the iPhone says
+  // they differ instead of showing the plan's notes.
   const body = buildToday(state, 1, today, new Set()).body;
   assert.deepEqual(body, {
     bodyFatPercent: 14,
@@ -334,6 +349,7 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
     focus: "recomposition",
     targetWeightKg: 85,
     targetBodyFatPercent: 11,
+    goalNotes: [TARGETS_DIFFER],
   });
   const journal = buildJournal(state, 1, "2026-09-27", 14, new Set());
   assert.deepEqual(

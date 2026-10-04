@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { cardioSummary, cardioTitle } from "./cardio";
-import { foodDate, totalNutrients } from "./nutrition";
+import { dailyTargets, foodDate, totalNutrients } from "./nutrition";
 import { drinkSchema } from "./hydration";
 import { supplementSchema } from "./supplements";
 import {
@@ -249,7 +249,7 @@ export function dailyHealth(state: JournalState, date: string) {
     checkin,
     nutrients,
     mealCount: meals.length,
-    targets: state.nutrition.targets,
+    targets: dailyTargets(state.nutrition.targets),
     priorities: priorities.slice(0, 3),
     recoveryFocus: lowEnergy || highSoreness,
     sessionsThisWeek: sessions.length + cardio.sessions,

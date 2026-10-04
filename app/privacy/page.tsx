@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <header>
         <p className="eyebrow">Your journal, your data</p>
         <h1>Privacy</h1>
-        <p className="lead">Last updated 3 October 2026.</p>
+        <p className="lead">Last updated 4 October 2026.</p>
       </header>
       <section className="space-y-3">
         <h2>Your account and training</h2>
@@ -380,6 +380,13 @@ export default function PrivacyPage() {
           health details. They are stored in your account journal, kept in your
           browser’s device copy and included in journal backups. You can edit or
           delete them in Health history.
+        </p>
+        <p>
+          If you choose to tell the goals form, Coach or the voice coach that
+          you are pregnant or breastfeeding, that is saved with your goals, only
+          so the goal plan never sets a calorie deficit. It is sensitive health
+          information: it is optional, Coach sees it with your goals, and
+          choosing Neither in your goals removes it.
         </p>
         <p>
           When you ask Coach for a daily plan or health guidance, relevant

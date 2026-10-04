@@ -292,10 +292,10 @@ private struct GoalsSection: View {
       if let percent = body?.targetBodyFatPercent {
         row("Body fat", "\(Format.decimal(percent)) %", "percent", Category.body.tint)
       }
-      if let kcal = today.nutrition.targetCalories {
+      if let kcal = Format.target(today.nutrition.targetCalories) {
         row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)
       }
-      if let grams = today.nutrition.targetProtein {
+      if let grams = Format.target(today.nutrition.targetProtein) {
         row("Protein", "\(Format.number(grams)) g a day", "fork.knife", Theme.protein)
       }
       let (litres, unit) = Format.litres(today.hydration.targetMl)
@@ -305,7 +305,13 @@ private struct GoalsSection: View {
     } header: {
       Text("Goals")
     } footer: {
-      Text("Set with Coach. Ask Coach to change any of them.")
+      // The plan's own notes come first: why it holds weight or loses more
+      // slowly, and who to talk to. The server sends them only beside the
+      // plan's own targets, and otherwise a line saying the targets differ.
+      VStack(alignment: .leading, spacing: 6) {
+        ForEach(body?.goalNotes ?? [], id: \.self) { Text($0) }
+        Text("Set with Coach. Ask Coach to change any of them.")
+      }
     }
     .themedRows()
   }

@@ -4,6 +4,7 @@ import { formatLitres, hydrationForDay } from "./hydration";
 import { supplementText, supplementsForDay } from "./supplements";
 import { describeRoute, type RouteNote } from "./route-summary";
 import { bodyFatByDate } from "./body-composition";
+import { dailyTargets } from "./nutrition";
 import { formatSleepDuration } from "./health";
 
 // A compact, complete picture of the journal for a date range, shared by
@@ -147,7 +148,7 @@ export function journalForVoice(
       method: b.method ?? undefined,
       source: b.source === "apple-health" ? "Apple Health" : "reported",
     })),
-    dailyTargets: state.nutrition.targets,
+    dailyTargets: dailyTargets(state.nutrition.targets),
     goals: state.profile.body ?? null,
   };
 }

@@ -155,6 +155,18 @@ test("a steady 6.0 h athlete gets the short-sleep opening, hidden for a week at 
   assert.deepEqual(quietOpenings(hidden, offsetDate(date, 6)), ["sleep-short"]);
   assert.deepEqual(quietOpenings(hidden, offsetDate(date, 7)), []);
   assert.deepEqual(quietOpenings(hidden, offsetDate(date, -1)), []);
+  // Whatever else is in the device's storage is ignored.
+  assert.deepEqual(
+    quietOpenings({ "sleep-short": "1" } as Record<string, string>, date),
+    [],
+  );
+  assert.deepEqual(
+    quietOpenings(
+      { "sleep-short": 5 } as unknown as Record<string, string>,
+      date,
+    ),
+    [],
+  );
   assert.equal(
     coachSuggestion(state, date, quietOpenings(hidden, date)).id,
     "get-to-know-you",

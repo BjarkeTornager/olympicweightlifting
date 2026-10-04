@@ -90,7 +90,10 @@ export function quietOpenings(hidden: Record<string, string>, date: string) {
   return Object.entries(hidden)
     .filter(
       ([id, day]) =>
-        weeklyOpenings.includes(id) && day <= date && date < offsetDate(day, 7),
+        weeklyOpenings.includes(id) &&
+        foodDate.safeParse(day).success &&
+        day <= date &&
+        date < offsetDate(day, 7),
     )
     .map(([id]) => id);
 }

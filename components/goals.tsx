@@ -6,6 +6,8 @@ import {
   bodyGoalsRequestSchema,
   describePlan,
   describeSessions,
+  energyQuestionsFor,
+  energySigns,
   goalsForState,
   planForState,
   planGoals,
@@ -101,7 +103,8 @@ type Draft = Record<
   | "targetBodyFatPercent"
   | "pregnancy"
   | "weeksSinceBirth"
-  | "limitProtein",
+  | "limitProtein"
+  | "energySigns",
   string
 >;
 const focusLabels: Record<BodyFocus, string> = {
@@ -125,6 +128,9 @@ function GoalsForm({
   // The baby's age in whole weeks today, from the day it was born. Sent
   // back unchanged, it keeps that day (applyGoals).
   const babyAge = babyWeeks(state, today());
+  // The low-energy answers in force: sent back unchanged, they keep their
+  // day, so saving again never stretches a no past 3 months.
+  const signs = energySigns(state, today());
   // Sex and everyday activity are left for the athlete to choose: a default
   // would quietly change the plan.
   const [draft, setDraft] = useState<Draft>(() => ({
@@ -148,7 +154,12 @@ function GoalsForm({
     pregnancy: state.profile.goalChecks?.pregnancy ?? "",
     weeksSinceBirth: babyAge == null ? "" : String(babyAge),
     limitProtein: health?.limitProtein ? "yes" : "",
+    energySigns: signs == null ? "" : signs ? "yes" : "no",
   }));
+  // The goal weight is a competition weight class, its weigh-in the date.
+  const [weightClass, setWeightClass] = useState(
+    body != null && state.profile.weighIn?.classKg === body.targetWeightKg,
+  );
   // A loss towards a weight just under the healthy range, confirmed for
   // the saved goal weight.
   const [confirmed, setConfirmed] = useState(
@@ -168,6 +179,11 @@ function GoalsForm({
     Boolean(draft.pregnancy) ||
     ((draft.sex === "female" || draft.sex === "unspecified") &&
       !(number(draft.age) > 55));
+  // A weight class is a limit to make: asked when the goal weight is below
+  // the current one, and kept while it is.
+  const classOffered =
+    number(draft.targetWeightKg) < number(draft.weightKg) ||
+    Boolean(state.profile.weighIn);
   const parsed = bodyGoalsRequestSchema.safeParse({
     ...draft,
     focus: draft.focus || undefined,
@@ -199,6 +215,20 @@ function GoalsForm({
         : draft.limitProtein === "no" || health?.limitProtein
           ? false
           : undefined,
+    // "Prefer not to say" removes saved answers.
+    energySigns:
+      draft.energySigns === "yes"
+        ? true
+        : draft.energySigns === "no"
+          ? false
+          : state.profile.energyCheck
+            ? null
+            : undefined,
+    weightClass: classOffered
+      ? weightClass
+      : state.profile.weighIn
+        ? false
+        : undefined,
     age: number(draft.age),
     heightCm: number(draft.heightCm),
     weightKg: number(draft.weightKg),
@@ -224,7 +254,7 @@ function GoalsForm({
       : "Fill in the numbers to see your daily plan.";
   const preview =
     split &&
-    ((lowWeightConfirmed: boolean) =>
+    ((lowWeightConfirmed: boolean, answered = true) =>
       planGoals(split.goals, today(), {
         focus: split.composition.focus,
         targetBodyFatPercent: split.composition.targetBodyFatPercent,
@@ -236,11 +266,21 @@ function GoalsForm({
         weeksSinceBirth: split.checks.weeksSinceBirth ?? null,
         limitProtein: draft.limitProtein === "yes",
         lowWeightConfirmed,
+        energySigns: answered ? (split.checks.energySigns ?? null) : null,
+        weightClass: split.checks.weightClass ?? false,
       }));
   // A loss towards a weight just under the healthy range waits for the
   // athlete to confirm it.
   const asksConfirmation = preview ? preview(false).confirmToLose : false;
   const plan = preview ? preview(asksConfirmation && confirmed) : null;
+  // The low-energy questions come before a plan that would cut or aim very
+  // lean, and stay while there are answers to change or remove.
+  const asksEnergy =
+    Boolean(draft.energySigns) ||
+    Boolean(state.profile.energyCheck) ||
+    (preview
+      ? preview(asksConfirmation && confirmed, false).energyCheckDue
+      : false);
   const field = (key: keyof Draft) => ({
     value: draft[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -384,6 +424,43 @@ function GoalsForm({
           </select>
         </label>
       </div>
+      {classOffered && (
+        <label className="goals-check">
+          <input
+            type="checkbox"
+            checked={weightClass}
+            onChange={(e) => setWeightClass(e.target.checked)}
+          />
+          My goal weight is a competition weight class, and the date is the
+          weigh-in
+        </label>
+      )}
+      {asksEnergy && (
+        <fieldset className="goals-questions">
+          <legend>Before a deficit: a few health questions</legend>
+          <ul>
+            {energyQuestionsFor(
+              draft.sex === "male" ? "male" : "unspecified",
+            ).map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
+          <label>
+            Yes to any of these
+            <select {...field("energySigns")}>
+              <option value="">Prefer not to say</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+          <p className="fine-print">
+            Optional, and not a diagnosis. Only a yes or no and the date are
+            kept, so the plan stays safe: with a yes it holds your weight, and a
+            sports doctor or sports dietitian can help you look into it. A no is
+            asked again after 3 months while you&rsquo;re losing weight.
+          </p>
+        </fieldset>
+      )}
       <p className="fine-print">
         {asksPregnancy
           ? `Optional. Kept with your goals only so the plan stays safe: no targets in pregnancy, no deficit while breastfeeding until your baby is ${POSTPARTUM_WEEKS} weeks old, and no protein target with kidney disease or a doctor's limit on protein. Choose No, Neither or Prefer not to say to remove them.`

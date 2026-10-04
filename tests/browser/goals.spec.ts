@@ -211,3 +211,93 @@ test("with voice on, goals can be set up by talking to Coach", async ({
     page.getByRole("button", { name: "Start talking" }),
   ).toBeVisible();
 });
+
+test("before a deficit the form asks the low-energy questions, and a weight class is cut to its limit", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#today");
+  await page
+    .getByRole("region", { name: "Your goals" })
+    .getByRole("button", { name: "Fill in yourself" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Your goals" });
+  await dialog.getByLabel("Age").fill("34");
+  await dialog.getByLabel("Height (cm)").fill("182");
+  await dialog.getByLabel("Sex").selectOption("male");
+  await dialog.getByLabel("Weight now (kg)").fill("88");
+  await dialog.getByLabel("Goal weight (kg)").fill("88");
+  await dialog.getByLabel("Active outside training").selectOption("moderate");
+  await dialog.getByLabel("Days I can train").fill("4");
+  const plan = dialog.getByRole("status");
+  const questions = dialog.getByRole("group", {
+    name: "Before a deficit: a few health questions",
+  });
+  // Holding weight asks nothing, and offers no weight class.
+  await expect(plan).toContainText("Hold around 88 kg");
+  await expect(questions).toHaveCount(0);
+  const weightClass = dialog.getByLabel(
+    "My goal weight is a competition weight class, and the date is the weigh-in",
+  );
+  await expect(weightClass).toHaveCount(0);
+  // A deficit asks first: men aren't asked about periods.
+  await dialog.getByLabel("Goal weight (kg)").fill("81");
+  await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
+  await expect(questions).toBeVisible();
+  await expect(questions.getByRole("listitem")).toHaveCount(2);
+  await expect(questions).toContainText("stress fracture in the last 2 years");
+  await expect(questions).not.toContainText("period");
+  const answer = questions.getByLabel("Yes to any of these");
+  await expect(answer).toHaveValue("");
+  // Any yes holds the weight, kindly, with who can help.
+  await answer.selectOption("yes");
+  await expect(plan).toContainText("Hold around 88 kg");
+  await expect(plan).toContainText("a sports doctor or sports dietitian");
+  await answer.selectOption("no");
+  await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
+  // Women and anyone who'd rather not say are asked about periods too.
+  await dialog.getByLabel("Sex").selectOption("unspecified");
+  await expect(questions.getByRole("listitem")).toHaveCount(3);
+  await expect(questions).toContainText("hormonal contraception");
+  await dialog.getByLabel("Sex").selectOption("male");
+  // A weight class with its weigh-in in three weeks: too soon to make
+  // safely, so the plan says what else to consider.
+  const weighIn = new Date(Date.now() + 21 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  await dialog.getByLabel("By (optional)").fill(weighIn);
+  await weightClass.check();
+  await expect(plan).toContainText(
+    `to make the 81 kg class by the weigh-in on ${weighIn}`,
+  );
+  await expect(plan).toContainText(
+    `Making the 81 kg class by the weigh-in on ${weighIn} would need about`,
+  );
+  await expect(plan).toContainText(
+    "Consider a later meet or the next class up",
+  );
+  await expect(plan).toContainText(
+    "The plan never includes a last-minute cut of water or food",
+  );
+  const axe = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
+  expect(axe.violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath("goals-questions.png") });
+  await dialog.getByRole("button", { name: "Save goals" }).click();
+  await expect(dialog).toHaveCount(0);
+  // Both are kept, and the form shows them again.
+  await page
+    .getByRole("region", { name: "Your goals" })
+    .getByRole("button")
+    .click();
+  await expect(answer).toHaveValue("no");
+  await expect(weightClass).toBeChecked();
+  await expect(plan).toContainText("to make the 81 kg class");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
+});

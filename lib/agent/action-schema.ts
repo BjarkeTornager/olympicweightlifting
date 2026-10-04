@@ -478,7 +478,7 @@ export const actionToolSchema = z
     drink: drinkInputSchema
       .optional()
       .describe(
-        "For log_drink: one drink as reported, ml as a whole number (a glass ≈ 250, a bottle ≈ 500, a can ≈ 330 unless stated). Log each drink separately; the day's total adds up.",
+        "For log_drink: one drink as reported, ml as a whole number (a glass ≈ 250, a bottle ≈ 500, a can ≈ 330 unless stated; estimated=true when you used one of these sizes because no volume was given). Log each drink separately; the day's total adds up. Beer, wine and spirits are drinks too, with a record_meal for their energy.",
       ),
     drinkId: z.string().uuid().optional(),
     supplement: supplementInputSchema
@@ -499,7 +499,7 @@ export const actionToolSchema = z
       ),
     checkin: checkinPatchSchema
       .describe(
-        "Partial update: include date and ONLY the fields the user explicitly reports or corrects. Omit every unchanged field. For a sleep-only report send {date,sleepHours}; do not fill energy, soreness, waterMl, bodyweight or notes. A null value DELETES a saved measurement and an empty notes string DELETES the note: use either only when explicitly asked to clear it.",
+        "Partial update: include date and ONLY the fields the user explicitly reports or corrects. Omit every unchanged field. For a sleep-only report send {date,sleepHours}; do not fill energy, soreness, bodyweight or notes. A null value DELETES a saved measurement and an empty notes string DELETES the note: use either only when explicitly asked to clear it.",
       )
       .optional(),
   })

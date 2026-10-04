@@ -11,13 +11,12 @@ import {
 
 test("workflow checks detect dropped correction fields and unauthorized preview saves", () => {
   const before = emptyJournal();
-  saveCheckin(
-    before,
-    { date: TEST_DATE, sleepHours: 7.5, waterMl: 750 },
-    TEST_DATE,
-  );
+  saveCheckin(before, { date: TEST_DATE, sleepHours: 7.5 }, TEST_DATE);
+  // The scenario predates drinks and still checks the check-in's old water
+  // total, which nothing writes now.
+  before.health.checkins[0].waterMl = 750;
   const after = structuredClone(before);
-  saveCheckin(after, { date: TEST_DATE, waterMl: 1250 }, TEST_DATE);
+  after.health.checkins[0].waterMl = 1250;
   const correction = scenarios.find((s) => s.id === "checkin_preservation")!
     .turns[1];
   assert.deepEqual(checkJournal(before, after, correction), []);

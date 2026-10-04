@@ -40,7 +40,9 @@ struct RemindersView: View {
           row("Water", "drop.fill", Category.water.tint)
         }
       } footer: {
-        Text("At 11, 14 and 17, only when you're behind your daily target. Log 250 ml straight from the notification.")
+        Text(
+          "At 11, 14 and 17, only when you're behind the lower end of the day's drinks range, and not while the target is hidden. Log 250 ml straight from the notification."
+        )
       }
       .themedRows()
       Section {

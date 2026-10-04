@@ -215,6 +215,19 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // reproduces the previous hash (74336db6…). Health, privacy and
     // evidence text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 11, water): the drinks paragraph only. Beer, wine and spirits join
+    // the drinks with energy that also need a record_meal (alcohol has 7
+    // kcal a gram); they count towards the drinks total, but Coach never
+    // suggests alcohol to rehydrate. A usual size saved because no volume
+    // was given is marked estimated=true. The target is an estimated range
+    // that the athlete can hide, and the sentence about record_checkin
+    // waterMl goes, since check-ins no longer hold water
+    // (hydration.test.ts). The drinks target rule above stays in the
+    // paragraph. Restoring that paragraph reproduces the previous hash
+    // (74336db6…). Health, privacy and evidence text is otherwise
+    // unchanged.
+    // With PR 4 and PR 11 both merged the hash is 8bb2b289…, where PR 5 starts.
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 5, macros), so Coach describes the macros the plan now sets: the
     // goal-setup paragraph adds protein from a height-adjusted weight at a
     // BMI of 30 or more, fat at 25 % of calories and carbohydrate as the
@@ -223,8 +236,8 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // height-adjusted weight at a BMI of 30 or more while losing
     // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
     // gaining. Restoring those three phrases reproduces the previous hash
-    // (fff4bd28…). Health, privacy and evidence text is unchanged.
-    "2f64565167c06969348222c14a177e9d8182b977e6213de49f2a34be473e7319",
+    // (8bb2b289…). Health, privacy and evidence text is unchanged.
+    "b22e1af2f7f9f2485b06c65b6ba969c443f5922c2874d135059efeea35204aee",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

@@ -15,10 +15,13 @@ const values = {
   sleepHours: z.number().finite().min(0).max(24).nullable(),
   energy: z.number().int().min(1).max(5).nullable(),
   soreness: z.number().int().min(1).max(5).nullable(),
-  waterMl: z.number().finite().int().min(0).max(15000).nullable(),
   bodyweight: z.number().finite().min(20).max(500).nullable(),
   notes: z.string().trim().max(2000),
 };
+// The check-in's water total from before drinks were logged one at a time.
+// Older journals and cached apps still send it; it is moved into a drink
+// (moveCheckinWater) and nothing new writes it.
+const legacyWaterMl = z.number().finite().int().min(0).max(15000).nullable();
 export const checkinPatchSchema = z
   .object({ date: foodDate, ...values })
   .partial()
@@ -34,7 +37,7 @@ export const checkinSchema = z
     sleepHours: values.sleepHours.default(null),
     energy: values.energy.default(null),
     soreness: values.soreness.default(null),
-    waterMl: values.waterMl.default(null),
+    waterMl: legacyWaterMl.default(null),
     bodyweight: values.bodyweight.default(null),
     notes: values.notes.default(""),
     updatedAt: z.string().datetime(),

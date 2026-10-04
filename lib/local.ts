@@ -4,6 +4,7 @@ import type { JournalState, Snapshot } from "./model";
 import { nutritionSchema } from "./nutrition";
 import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
+import { moveCheckinWater } from "./hydration";
 export type LocalRecord = Snapshot & {
   accountId: string;
   seq: number;
@@ -32,12 +33,13 @@ interface LocalDB extends DBSchema {
 }
 let connection: Promise<IDBPDatabase<LocalDB>> | undefined;
 function upgradeLocal(record: LocalRecord): LocalRecord {
-  const upgrade = (state: JournalState) => ({
-    ...state,
-    nutrition: nutritionSchema.parse(state.nutrition ?? {}),
-    health: healthSchema.parse(state.health ?? {}),
-    cardio: cardioSchema.parse(state.cardio ?? {}),
-  });
+  const upgrade = (state: JournalState) =>
+    moveCheckinWater({
+      ...state,
+      nutrition: nutritionSchema.parse(state.nutrition ?? {}),
+      health: healthSchema.parse(state.health ?? {}),
+      cardio: cardioSchema.parse(state.cardio ?? {}),
+    });
   return {
     ...record,
     state: upgrade(record.state),

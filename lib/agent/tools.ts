@@ -128,7 +128,7 @@ export const specifications = {
   health_overview: {
     schema: z.object({ date: foodDate }).strict(),
     description:
-      "Read this athlete's health check-in for a date, 14 days of sleep/energy/soreness/water/bodyweight, seven days of strength and cardio with durations/distances, food totals and diet targets. Required before giving a daily plan, discussing recovery or preparing a check-in. Missing records are unmeasured, not zero. Returns evidence-backed starting points, not medical diagnoses.",
+      "Read this athlete's health check-in for a date, 14 days of sleep/energy/soreness/bodyweight, the day's drinks against their target, seven days of strength and cardio with durations/distances, food totals and diet targets. Required before giving a daily plan, discussing recovery or preparing a check-in. Missing records are unmeasured, not zero. Returns evidence-backed starting points, not medical diagnoses.",
   },
   food_journal: {
     schema: foodQuerySchema,

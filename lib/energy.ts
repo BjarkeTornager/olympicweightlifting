@@ -17,21 +17,34 @@ export const LIFTING_NET_KCAL_PER_KG_HOUR = 4;
 // To the nearest 10 kcal: the figures are not more precise than that.
 const tens = (kcal: number) => Math.round(kcal / 10) * 10;
 
+// Within a quarter of each other: a real change between two weighings, or
+// from an older weight in Settings, where a typo (185 for 85) or pounds for
+// kilograms are not.
+const near = (a: number, b?: number | null) =>
+  b != null && b > 0 && Math.abs(a - b) <= b / 4;
+
 // Bodyweight for a date: the latest check-in weight from the 30 days up to
-// it, then the weight in Settings, then the one given when setting goals.
+// it, then the weight in Settings, then the one given when setting goals. A
+// check-in far from both the weight already trusted and the weighing before
+// it is passed over as a likely slip, so one typo can't double every
+// estimate or the drinks target; the next weighing that agrees with it is
+// trusted again.
 export function bodyweightKg(state: JournalState, date: string) {
-  const day = Date.parse(date);
-  const checkin = state.health.checkins
-    .filter(
-      (c) =>
-        c.bodyweight != null &&
-        c.date <= date &&
-        day - Date.parse(c.date) <= 30 * 86400000,
-    )
-    .sort((a, b) => b.date.localeCompare(a.date))[0]?.bodyweight;
-  return (
-    checkin || state.profile.bodyweight || state.profile.body?.weightKg || null
-  );
+  const profile = state.profile.bodyweight || state.profile.body?.weightKg;
+  let trusted: { kg: number; date: string } | null = null;
+  let previous: number | null = null;
+  for (const c of state.health.checkins
+    .filter((c) => c.bodyweight != null && c.date <= date)
+    .sort((a, b) => a.date.localeCompare(b.date))) {
+    const kg = c.bodyweight!;
+    const reference = trusted?.kg ?? profile;
+    if (!reference || near(kg, reference) || near(kg, previous))
+      trusted = { kg, date: c.date };
+    previous = kg;
+  }
+  const recent =
+    trusted && Date.parse(date) - Date.parse(trusted.date) <= 30 * 86400000;
+  return (recent && trusted?.kg) || profile || null;
 }
 
 // A value between Compendium bands, so a speed never jumps a whole band.

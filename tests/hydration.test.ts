@@ -134,3 +134,19 @@ test("Coach logs drinks, bundles a drink with energy as a meal too, and removes 
   assert.equal(day.drinks.length, 2);
   assert.match(describeDay(day), /Drinks: 1 L of about 3\.1 L/);
 });
+
+test("the drinks target takes the latest check-in weight, but not a slip", () => {
+  const at = (weight: number) => {
+    const s = emptyJournal();
+    s.profile.body = { weightKg: weight } as never;
+    return hydrationTargetMl(s, date).targetMl;
+  };
+  // Goals set at 85 kg; a check-in of 80 kg since is the weight used.
+  const s = emptyJournal();
+  s.profile.body = { weightKg: 85 } as never;
+  s.health.checkins.push({ date, bodyweight: 80 } as never);
+  assert.equal(hydrationTargetMl(s, date).targetMl, at(80));
+  // A check-in of 185, a typo or pounds, leaves the target as it was.
+  s.health.checkins = [{ date, bodyweight: 185 } as never];
+  assert.equal(hydrationTargetMl(s, date).targetMl, at(85));
+});

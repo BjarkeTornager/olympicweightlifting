@@ -317,6 +317,32 @@ test("the weight for a date is the latest check-in from the 30 days before it", 
   assert.equal(bodyweightKg(s, "2026-10-31"), 90);
 });
 
+test("a check-in weight far from the one before it is passed over as a slip", () => {
+  // 85 kg with goals set, then a check-in of 185: a typo, or pounds.
+  const s = emptyJournal();
+  s.profile.body = { weightKg: 85 } as never;
+  s.health.checkins.push({ date: "2026-09-20", bodyweight: 185 } as never);
+  assert.equal(bodyweightKg(s, date), 85);
+  // The next weighing is trusted, and the slip stays passed over.
+  s.health.checkins.push({ date: "2026-09-25", bodyweight: 84.5 } as never);
+  assert.equal(bodyweightKg(s, date), 84.5);
+  // A weight that has really changed since Settings is trusted once a
+  // second weighing agrees with it.
+  const changed = emptyJournal();
+  changed.profile.bodyweight = 60;
+  changed.health.checkins.push({ date: "2026-09-20", bodyweight: 85 } as never);
+  assert.equal(bodyweightKg(changed, date), 60);
+  changed.health.checkins.push({
+    date: "2026-09-25",
+    bodyweight: 85.4,
+  } as never);
+  assert.equal(bodyweightKg(changed, date), 85.4);
+  // With nothing to compare it with, a check-in is taken as given.
+  const first = emptyJournal();
+  first.health.checkins.push({ date: "2026-09-20", bodyweight: 92 } as never);
+  assert.equal(bodyweightKg(first, date), 92);
+});
+
 function lift(s: JournalState, opened: string): Workout {
   const w = createWorkout(s, days[0], date);
   w.startedAt = opened;

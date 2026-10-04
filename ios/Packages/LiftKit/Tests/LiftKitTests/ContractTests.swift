@@ -97,6 +97,19 @@ struct ContractTests {
     #expect(item.kind == "yoga-class")
   }
 
+  @Test("The workout in progress says why each load, where rest starts, and the day's recovery")
+  func workoutInProgress() throws {
+    let workout = try fixture("workout", as: Components.Schemas.WorkoutDetail.self)
+    #expect(workout.recovery == "auto" && workout.techniqueCheck == false)
+    #expect(workout.recoveryHint?.hasPrefix("You slept 5 h 30 min before this session.") == true)
+    let snatch = workout.exercises[0]
+    #expect(snatch.progression?.status == "confirm" && snatch.restSeconds == 180)
+    #expect(workout.exercises[1].progression?.resetWeight == 72)
+    #expect(workout.exercises[2].sets[0].rpe == 7)
+    // A load the athlete chooses needs no reason; an accessory rests 90 s.
+    #expect(workout.exercises[3].progression == nil && workout.exercises[3].restSeconds == 90)
+  }
+
   @Test("Train decodes from a server that hasn't deployed its newest fields yet")
   func trainingFromOlderServer() throws {
     let url = try #require(Bundle.module.url(forResource: "Fixtures/training", withExtension: "json"))

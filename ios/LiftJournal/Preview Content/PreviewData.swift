@@ -63,13 +63,17 @@
     static func training(active: Bool = false) -> Training? {
       let workout = """
         "activeWorkout": {"id": "w1", "title": "Snatch + Back Squat", "date": "2026-09-26", "finished": false,
+          "recovery": "auto", "techniqueCheck": false,
+          "recoveryHint": "You slept 5 h 30 min before this session. Under 6 hours can lower performance, so you may want to hold today’s loads.",
           "exercises": [
-            {"entryId": "e1", "exerciseId": "snatch", "name": "Snatch", "target": "5 × 2 at 70 kg",
+            {"entryId": "e1", "exerciseId": "snatch", "name": "Snatch", "target": "5 × 2 at 70 kg", "restSeconds": 180,
+             "progression": {"status": "increase", "reason": "All prescribed sets and reps were made, the top set at RPE 8. The program automatically adds 2 kg total (1 kg per side)."},
              "sets": [{"id": "s1", "weight": 70, "reps": 2, "result": "success", "logged": true},
                       {"id": "s2", "weight": 70, "reps": 2, "result": "miss", "logged": true},
                       {"id": "s3", "weight": 70, "reps": 2, "result": "success", "logged": false},
                       {"id": "s4", "weight": 70, "reps": 2, "result": "success", "logged": false}]},
-            {"entryId": "e2", "exerciseId": "squat", "name": "Back Squat", "target": "4 × 5 at 110 kg",
+            {"entryId": "e2", "exerciseId": "squat", "name": "Back Squat", "target": "4 × 5 at 110 kg", "restSeconds": 180,
+             "progression": {"status": "hold", "reason": "The previous workout included a miss. Repeat this load. Two sessions in a row at 110 kg ended with a miss or an RPE above 8. A common coaching convention, not a rule, is to reset to about 90%: 99 kg. Take the reset, or repeat 110 kg.", "resetWeight": 99},
              "sets": [{"id": "s5", "weight": 110, "reps": 5, "result": "success", "logged": false},
                       {"id": "s6", "weight": 110, "reps": 5, "result": "success", "logged": false}]}]},
         """

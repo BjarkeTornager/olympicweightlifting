@@ -619,6 +619,69 @@ test("strength workouts on a logged lifting day are skipped; future workouts wai
   assert.equal(state.cardio.sessions.length, 0);
 });
 
+test("Apple Health lifting beside an open session waits, then counts once", () => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 88;
+  const lifting = workout({
+    id: crypto.randomUUID(),
+    kind: "strength",
+    name: "Strength Training",
+    start: "2026-09-26T17:05:00+02:00",
+    end: "2026-09-26T18:25:00+02:00",
+    durationSeconds: 4800,
+    distanceKm: undefined,
+    caloriesKcal: 410,
+  });
+  // The session is still open in the journal: nothing is imported yet, and
+  // the workout is kept with its times until the session is finished.
+  state.activeWorkout = createWorkout(state, days[0], date);
+  const deferred = applyWorkout(state, lifting, undefined, new Set(), tz, now);
+  assert.equal(deferred.result, "deferred");
+  assert.equal(deferred.receipt?.status, "deferred");
+  assert.deepEqual(deferred.receipt?.workout, lifting);
+  assert.equal(
+    deferred.receipt?.startedAt?.toISOString(),
+    "2026-09-26T15:05:00.000Z",
+  );
+  assert.equal(state.cardio.sessions.length, 0);
+  // Finished at 18:30 after the first set at 17:10: the same session.
+  const session = {
+    ...state.activeWorkout,
+    firstSetAt: "2026-09-26T15:10:00.000Z",
+    finishedAt: "2026-09-26T16:30:00.000Z",
+    durationMinutes: 80,
+  };
+  state.activeWorkout = null;
+  state.sessions.push(session);
+  const receipt = { userId: "u", ...deferred.receipt! };
+  const matched = applyWorkout(state, lifting, receipt, new Set(), tz, now);
+  assert.equal(matched.result, "skipped");
+  assert.equal(matched.receipt?.workout, null);
+  assert.equal(state.cardio.sessions.length, 0);
+  // A separate watch workout that evening is training of its own.
+  const evening = workout({
+    ...lifting,
+    id: crypto.randomUUID(),
+    start: "2026-09-26T20:00:00+02:00",
+    end: "2026-09-26T20:45:00+02:00",
+    durationSeconds: 2700,
+  });
+  assert.equal(
+    applyWorkout(state, evening, undefined, new Set(), tz, now).result,
+    "imported",
+  );
+  assert.equal(state.cardio.sessions.length, 1);
+  // Lifting logged without times can't be told apart, so it is the same.
+  state.cardio.sessions = [];
+  state.sessions = [
+    { ...session, firstSetAt: undefined, startedAt: undefined },
+  ];
+  assert.equal(
+    applyWorkout(state, evening, undefined, new Set(), tz, now).result,
+    "skipped",
+  );
+});
+
 test("daily heart-rate summaries replace the day's previous summary", () => {
   const state = emptyJournal();
   assert.equal(applyVitals(state, { date, restingHeartRate: 54 }, now), true);

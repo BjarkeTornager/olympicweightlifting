@@ -308,3 +308,122 @@ test(
     }
   },
 );
+
+test(
+  "Apple Health lifting synced while a session is open is counted once, after the session",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db");
+    const { readJournal, writeJournal } = await import("../lib/server");
+    const { syncHealth } = await import("../lib/health-sync");
+    const { createWorkout, days } = await import("../lib/domain");
+    const { dayBurn } = await import("../lib/energy");
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Deferred lifting test',$1||'@example.test',true)",
+      [id],
+    );
+    const date = "2026-09-26";
+    const lifting = {
+      id: crypto.randomUUID(),
+      kind: "strength",
+      name: "Strength Training",
+      start: "2026-09-26T17:05:00+02:00",
+      end: "2026-09-26T18:25:00+02:00",
+      durationSeconds: 4800,
+      caloriesKcal: 410,
+    };
+    const receipt = async (workoutId: string) =>
+      (
+        await pool.query(
+          "SELECT status, started_at, workout FROM health_workout_imports WHERE user_id = $1 AND workout_id = $2",
+          [id, workoutId],
+        )
+      ).rows[0];
+    try {
+      // A session open in the journal while the watch records it.
+      let journal = await readJournal(id);
+      const state = structuredClone(journal.state);
+      state.profile.bodyweight = 88;
+      state.activeWorkout = createWorkout(state, days[0], date);
+      await writeJournal(id, {
+        state,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      const first = await syncHealth(
+        id,
+        { timezone: tz, workouts: [lifting] },
+        now,
+      );
+      // The phone hears "skipped": it has nothing to send again.
+      assert.deepEqual(first.workouts, [{ id: lifting.id, result: "skipped" }]);
+      assert.equal(first.changed, false);
+      const kept = await receipt(lifting.id);
+      assert.equal(kept.status, "deferred");
+      assert.equal(
+        new Date(kept.started_at).toISOString(),
+        "2026-09-26T15:05:00.000Z",
+      );
+      assert.equal(kept.workout.caloriesKcal, 410);
+      // A sync while the session is still open leaves it waiting.
+      const waiting = await syncHealth(id, { timezone: tz }, now);
+      assert.deepEqual(waiting.workouts, []);
+      assert.equal((await receipt(lifting.id)).status, "deferred");
+
+      // The session is finished; the next sync matches the watch's workout
+      // to it instead of counting the lifting twice.
+      journal = await readJournal(id);
+      const finished = structuredClone(journal.state);
+      finished.sessions.push({
+        ...finished.activeWorkout!,
+        firstSetAt: "2026-09-26T15:10:00.000Z",
+        finishedAt: "2026-09-26T16:30:00.000Z",
+        durationMinutes: 80,
+      });
+      finished.activeWorkout = null;
+      await writeJournal(id, {
+        state: finished,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      const reconciled = await syncHealth(id, { timezone: tz }, now);
+      assert.deepEqual(reconciled.workouts, [
+        { id: lifting.id, result: "skipped" },
+      ]);
+      const after = await receipt(lifting.id);
+      assert.equal(after.status, "skipped");
+      assert.equal(after.workout, null);
+      journal = await readJournal(id);
+      assert.equal(journal.state.cardio.sessions.length, 0);
+      // Only the session's estimate: 4 × 88 kg × 80 min, about 470 kcal.
+      assert.deepEqual(dayBurn(journal.state, date), {
+        kcal: 470,
+        estimated: true,
+        count: 1,
+        untimed: 0,
+      });
+      // Deleted in Apple Health while waiting: it never comes in.
+      const other = { ...lifting, id: crypto.randomUUID() };
+      const open = structuredClone(journal.state);
+      open.activeWorkout = createWorkout(open, days[0], date);
+      await writeJournal(id, {
+        state: open,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      await syncHealth(id, { timezone: tz, workouts: [other] }, now);
+      const gone = await syncHealth(
+        id,
+        { timezone: tz, deletedWorkoutIds: [other.id] },
+        now,
+      );
+      assert.deepEqual(gone.workouts, [{ id: other.id, result: "removed" }]);
+      assert.equal((await receipt(other.id)).status, "removed");
+    } finally {
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);

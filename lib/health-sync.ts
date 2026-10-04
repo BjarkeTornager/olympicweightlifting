@@ -84,7 +84,10 @@ export type WorkoutImportResult =
   | "unchanged"
   | "preserved"
   | "removed"
-  | "skipped";
+  | "skipped"
+  // Kept on the server until the session it ran beside is finished; the
+  // phone hears "skipped", as it has nothing to send again.
+  | "deferred";
 
 const workoutDigest = (w: HealthWorkout) =>
   createHash("sha256").update(JSON.stringify(w)).digest("hex");
@@ -162,6 +165,21 @@ function manualMatch(
 
 type Receipt = typeof healthWorkoutImports.$inferSelect;
 
+// A strength workout from Apple Health is the logged session when their
+// times meet, give or take a quarter of an hour. Lifting logged without
+// times can't be told apart from it, so it counts as the same session.
+function loggedLifting(state: JournalState, date: string, w: HealthWorkout) {
+  const margin = 15 * 60000;
+  const start = Date.parse(w.start) - margin;
+  const end = Date.parse(w.end) + margin;
+  return state.sessions.some((s) => {
+    if (s.date !== date) return false;
+    const from = s.firstSetAt ?? s.startedAt;
+    if (!from || !s.finishedAt) return true;
+    return Date.parse(from) < end && Date.parse(s.finishedAt) > start;
+  });
+}
+
 export function applyWorkout(
   state: JournalState,
   w: HealthWorkout,
@@ -173,7 +191,9 @@ export function applyWorkout(
   const digest = workoutDigest(w);
   const date = localClock(new Date(w.start), timezone).date;
   if (date > localClock(now, timezone).date) return { result: "skipped" };
-  if (receipt) {
+  const times = { startedAt: new Date(w.start), endedAt: new Date(w.end) };
+  // A deferred workout is looked at afresh.
+  if (receipt && receipt.status !== "deferred") {
     if (receipt.digest === digest) return { result: "unchanged" };
     const current = state.cardio.sessions.find(
       (s) => s.id === receipt.cardioId,
@@ -191,11 +211,28 @@ export function applyWorkout(
     );
     return {
       result: "updated",
-      receipt: { ...receipt, digest, entryDigest: entryDigest(next) },
+      receipt: { ...receipt, digest, entryDigest: entryDigest(next), ...times },
     };
   }
-  // A strength workout on a day with logged lifting is that session: skip it.
-  if (w.kind === "strength" && state.sessions.some((s) => s.date === date))
+  // Lifting while a session of that day is still open in the journal waits
+  // until it is finished, so the watch's figure and the session's estimate
+  // are never both counted.
+  if (w.kind === "strength" && state.activeWorkout?.date === date)
+    return {
+      result: "deferred",
+      receipt: {
+        workoutId: w.id,
+        cardioId: null,
+        status: "deferred",
+        digest,
+        entryDigest: null,
+        importedAt: now,
+        ...times,
+        workout: w,
+      },
+    };
+  // A strength workout that ran with logged lifting is that session: skip it.
+  if (w.kind === "strength" && loggedLifting(state, date, w))
     return {
       result: "skipped",
       receipt: {
@@ -205,6 +242,8 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
+        ...times,
+        workout: null,
       },
     };
   const entry = cardioFromWorkout(w, timezone, now);
@@ -236,6 +275,8 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
+        ...times,
+        workout: null,
       },
     };
   }
@@ -252,6 +293,8 @@ export function applyWorkout(
       digest,
       entryDigest: entryDigest(entry),
       importedAt: now,
+      ...times,
+      workout: null,
     },
   };
 }
@@ -434,7 +477,10 @@ export async function syncHealth(
           )
       ).flatMap((r) => (r.cardioId ? [r.cardioId] : [])),
     );
-    const workouts: { id: string; result: WorkoutImportResult }[] = [];
+    const workouts: {
+      id: string;
+      result: Exclude<WorkoutImportResult, "deferred">;
+    }[] = [];
     const receiptWrites: Omit<Receipt, "userId">[] = [];
     for (const w of [...input.workouts].sort((a, b) =>
       a.start.localeCompare(b.start),
@@ -451,11 +497,51 @@ export async function syncHealth(
       if (["imported", "updated", "matched"].includes(outcome.result))
         changed = true;
       if (outcome.receipt) receiptWrites.push(outcome.receipt);
-      workouts.push({ id: w.id, result: outcome.result });
+      workouts.push({
+        id: w.id,
+        result: outcome.result === "deferred" ? "skipped" : outcome.result,
+      });
+    }
+    // Lifting deferred while a session was open: once that session is
+    // finished, it is matched against it or saved as separate training.
+    const deferred = await tx
+      .select()
+      .from(healthWorkoutImports)
+      .where(
+        and(
+          eq(healthWorkoutImports.userId, userId),
+          eq(healthWorkoutImports.status, "deferred"),
+        ),
+      );
+    for (const receipt of deferred) {
+      if (ids.includes(receipt.workoutId)) continue;
+      const w = healthWorkoutSchema.safeParse(receipt.workout);
+      if (!w.success) {
+        receiptWrites.push({ ...receipt, status: "removed", workout: null });
+        continue;
+      }
+      const outcome = applyWorkout(
+        state,
+        w.data,
+        receipt,
+        importedIds,
+        input.timezone,
+        now,
+      );
+      // Still beside an open session: it waits for a later sync.
+      if (outcome.result === "deferred") continue;
+      if (["imported", "matched"].includes(outcome.result)) changed = true;
+      if (outcome.receipt) receiptWrites.push(outcome.receipt);
+      workouts.push({ id: w.data.id, result: outcome.result });
     }
     // Deleted in Apple Health: remove the entry only if the athlete never changed it.
     for (const id of input.deletedWorkoutIds) {
       const receipt = receipts.find((r) => r.workoutId === id);
+      if (receipt?.status === "deferred") {
+        receiptWrites.push({ ...receipt, status: "removed", workout: null });
+        workouts.push({ id, result: "removed" });
+        continue;
+      }
       if (!receipt || receipt.status !== "imported") continue;
       const current = state.cardio.sessions.find(
         (s) => s.id === receipt.cardioId,
@@ -495,6 +581,9 @@ export async function syncHealth(
             digest: receipt.digest,
             entryDigest: receipt.entryDigest,
             importedAt: receipt.importedAt,
+            startedAt: receipt.startedAt,
+            endedAt: receipt.endedAt,
+            workout: receipt.workout,
           },
         });
     const routes = await saveRoutes(

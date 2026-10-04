@@ -1,0 +1,97 @@
+{
+  "date": "2026-09-26",
+  "revision": 12,
+  "sleep": {
+    "fromAppleHealth": false,
+    "nights": 0
+  },
+  "checkin": {
+    "bodyweight": 81,
+    "notes": ""
+  },
+  "body": {
+    "bodyweight": 81,
+    "bodyweightDate": "2026-09-26",
+    "bodyweightFromAppleHealth": false,
+    "focus": "maintain",
+    "targetWeightKg": 81,
+    "goalNotes": [
+      "Your goals plan suggests new daily targets, about 3,000 kcal a day. Look at them on Today."
+    ]
+  },
+  "nutrition": {
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fat": 0,
+    "targetCalories": 2550,
+    "targetProtein": 175,
+    "meals": []
+  },
+  "hydration": {
+    "totalMl": 0,
+    "targetMl": 2250,
+    "estimatedTarget": false,
+    "drinks": [],
+    "targetLowMl": 1750,
+    "targetHighMl": 2750,
+    "restDayTargetMl": 2250,
+    "liftingDayTargetMl": 3000,
+    "note": "An estimate from your weight and the day's training, not a minimum. Thirst and pale urine are good everyday signs."
+  },
+  "supplements": {
+    "taken": [],
+    "usual": []
+  },
+  "strengthToday": [],
+  "activities": [],
+  "sessionsThisWeek": 0,
+  "priorities": [
+    {
+      "id": "checkin",
+      "category": "CHECK IN",
+      "title": "Complete your recovery picture",
+      "reason": "Add energy and soreness so Coach can put your training in context.",
+      "action": "Update check-in"
+    },
+    {
+      "id": "training",
+      "category": "TRAINING",
+      "title": "Choose a session that fits today",
+      "reason": "Review your programme and how you feel. A rest day can be part of your plan.",
+      "action": "Explore programmes"
+    },
+    {
+      "id": "nutrition",
+      "category": "NUTRITION",
+      "title": "Log your first meal",
+      "reason": "A photo or a short description is enough to start. Review portions before saving.",
+      "action": "Log food"
+    }
+  ],
+  "journalStartDate": "2026-08-30",
+  "targetsProposal": {
+    "title": "Hold your weight from here",
+    "reasons": [
+      "Your weight is about 81.2 kg now: you've reached your goal of 81 kg, so the plan holds your weight there."
+    ],
+    "current": {
+      "goal": "lose",
+      "calories": 2550,
+      "protein": 175,
+      "carbs": 315,
+      "fat": 75
+    },
+    "suggested": {
+      "goal": "maintain",
+      "calories": 3000,
+      "protein": 145,
+      "carbs": 415,
+      "fat": 85
+    },
+    "maintain": true,
+    "notes": [
+      "You've reached your goal weight, so the plan holds your weight there. Review your goals to set a new one."
+    ]
+  }
+}

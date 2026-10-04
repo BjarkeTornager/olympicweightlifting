@@ -318,13 +318,13 @@ test("the voice coach has typed Coach's health rules and referrals, and the athl
     );
     assert.match(text, /suggest professional support instead of a stricter/);
     assert.match(text, /don't claim a supplement treats or prevents/);
-    // The saved targets are the athlete's, and the Goals line is the
-    // number the website's Goals card shows.
+    // The saved targets are the athlete's, shown everywhere, the Goals card
+    // included; the Goals line is the plan at the current weight, whose
+    // suggestions are never said to be saved.
     assert.match(text, /the athlete's daily targets are dailyTargets/);
-    assert.match(
-      text,
-      /the website's Goals card on Today shows its calories, which can differ/,
-    );
+    assert.match(text, /on the Goals card on Today and in the iPhone app/);
+    assert.doesNotMatch(text, /Goals card on Today shows its calories/);
+    assert.match(text, /never say they're saved/);
     // No amount before the age is known.
     assert.match(text, /If you don't know their age, ask before describing/);
     // No em dashes, said or written.

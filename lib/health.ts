@@ -6,10 +6,13 @@ import { supplementSchema } from "./supplements";
 import {
   bodyFatSchema,
   bodyFatTrend,
+  bodyMassSchema,
   latestBodyFat,
+  weighIns,
   weightTrend,
 } from "./body-composition";
 import type { JournalState } from "./model";
+import { currentWeightKg } from "./target-history";
 
 const values = {
   sleepHours: z.number().finite().min(0).max(24).nullable(),
@@ -91,6 +94,9 @@ export const healthSchema = z
     vitals: z.array(vitalsSchema).max(5000).optional(),
     // Body fat readings, reported or from a smart scale via Apple Health.
     bodyFat: z.array(bodyFatSchema).max(5000).optional(),
+    // A day's first weight from Apple Health; optional for the same reason,
+    // and written only by the Apple Health sync.
+    bodyMass: z.array(bodyMassSchema).max(5000).optional(),
   })
   .superRefine((v, ctx) => {
     if (new Set(v.checkins.map((c) => c.date)).size !== v.checkins.length)
@@ -114,6 +120,14 @@ export const healthSchema = z
       ctx.addIssue({
         code: "custom",
         message: "Only one body fat reading per date and source is allowed",
+      });
+    if (
+      v.bodyMass &&
+      new Set(v.bodyMass.map((m) => m.date)).size !== v.bodyMass.length
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Only one Apple Health weight per date is allowed",
       });
   });
 export type Checkin = z.infer<typeof checkinSchema>;
@@ -267,7 +281,7 @@ export function dailyHealth(state: JournalState, date: string) {
   const recentVitals = (state.health.vitals ?? [])
     .filter((v) => v.date >= offsetDate(date, -13) && v.date <= date)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const weights = recentCheckins.filter((c) => c.bodyweight != null);
+  const weights = weighIns(state, offsetDate(date, -13), date);
   return {
     date,
     checkin,
@@ -310,8 +324,18 @@ export function dailyHealth(state: JournalState, date: string) {
     vitals: recentVitals.find((v) => v.date === date) ?? null,
     recentVitals,
     latestWeight: weights.at(-1)
-      ? { value: weights.at(-1)!.bodyweight, date: weights.at(-1)!.date }
+      ? {
+          value: weights.at(-1)!.kg,
+          date: weights.at(-1)!.date,
+          source:
+            weights.at(-1)!.source === "apple-health"
+              ? "Apple Health"
+              : "check-in",
+        }
       : null,
+    // The average of the last week's weigh-ins, or the weight given with
+    // the goals until there are newer ones: what the goals plan uses.
+    currentWeightKg: currentWeightKg(state, date),
     // Four weeks of weigh-ins and 90 days of body fat, for fat-loss and
     // muscle-gain coaching; readings are trends, not single verdicts.
     weightTrend: weightTrend(state, date),
@@ -320,6 +344,6 @@ export function dailyHealth(state: JournalState, date: string) {
       trend: bodyFatTrend(state, offsetDate(date, -90), date),
     },
     dataLimits:
-      "Journal records include self-reports plus sleep, workouts, daily heart-rate summaries and scale body fat readings the athlete chose to import from Apple Health, marked with their source. Body fat varies by method and by day; compare readings from the same method. Missing entries do not mean zero intake, sleep or activity. Cardio includes duration, distance and optional heart rate or energy. No clinical interpretation.",
+      "Journal records include self-reports plus sleep, workouts, daily heart-rate summaries, weights and scale body fat readings the athlete chose to import from Apple Health, marked with their source; a check-in weight wins over Apple Health's on the same day. Body fat varies by method and by day; compare readings from the same method. Missing entries do not mean zero intake, sleep or activity. Cardio includes duration, distance and optional heart rate or energy. No clinical interpretation.",
   };
 }

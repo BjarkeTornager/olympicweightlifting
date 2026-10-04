@@ -9,6 +9,7 @@ import {
   type BodyFocus,
 } from "./body-composition";
 import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
+import { currentWeightKg, recordTargets } from "./target-history";
 
 const sessionMinutes = z.number().int().min(15).max(240);
 const experience = z.enum(["new", "developing", "experienced"]);
@@ -236,6 +237,10 @@ export type Composition = {
   // The goal weight is a competition weight class, and the target date its
   // weigh-in.
   weightClass?: boolean;
+  // Which way the saved goals head, for the plan at the current weight
+  // (planForState): once the weight reaches the goal, or passes it, the
+  // plan holds it there rather than turning round.
+  heading?: "lose" | "gain";
 };
 
 export function splitGoals(input: BodyGoalsRequest) {
@@ -431,6 +436,9 @@ export type GoalPlan = {
   // The plan would set a deficit, or aims for very lean body fat, without
   // answers to the low-energy questions in force: Coach asks them first.
   energyCheckDue: boolean;
+  // The weight has reached the goal (or the safer weight the plan heads
+  // for), or passed it, since the goals were saved, so the plan holds it.
+  reachedGoal: boolean;
   sessionsPerWeek: number;
   notes: string[];
   // The notes on health and safety, also in notes: limits that hold or
@@ -440,6 +448,10 @@ export type GoalPlan = {
 };
 
 const round = (value: number, step = 1) => Math.round(value / step) * step;
+// A weight within 1 kg of the goal, or 1 % of bodyweight when that is more,
+// is at it: day-to-day swings are about that size.
+export const maintainBandKg = (weightKg: number) =>
+  Math.max(1, 0.01 * weightKg);
 // To the 5 g at or above, so a least amount is kept after rounding.
 const upTo5 = (value: number) => Math.ceil(value / 5 - 1e-9) * 5;
 // Saved goals carry updatedAt; nothing else is accepted.
@@ -530,14 +542,22 @@ export function planGoals(
   // the plan reaches the limit rather than stopping just above it and
   // leaving a last-minute cut. At or under the limit with the weigh-in
   // still ahead, the plan holds the weight rather than gaining up to the
-  // limit, where day-to-day swings would leave one. Otherwise within 0.5 kg
-  // holds. In pregnancy there is no class to make: the plan sets no weight
-  // goal.
+  // limit, where day-to-day swings would leave one. Otherwise within the
+  // maintain band (maintainBandKg) holds, as does a weight that has passed
+  // the goal the saved goals head for. In pregnancy there is no class to
+  // make: the plan sets no weight goal.
   const weightClass = Boolean(composition.weightClass) && !pregnant;
   const withinClass =
     weightClass && days != null && days >= 0 && g.weightKg <= g.targetWeightKg;
+  const passed =
+    composition.heading === "lose"
+      ? g.weightKg <= g.targetWeightKg
+      : composition.heading === "gain" && g.weightKg >= g.targetWeightKg;
+  const band = maintainBandKg(g.weightKg);
   const steady = (change: number) =>
-    withinClass || (!(weightClass && change < 0) && Math.abs(change) < 0.5);
+    passed ||
+    withinClass ||
+    (!(weightClass && change < 0) && Math.abs(change) < band);
   const difference = g.targetWeightKg - g.weightKg;
   const wanted = steady(difference)
     ? "maintain"
@@ -584,10 +604,24 @@ export function planGoals(
       (g.sex === "male" ? 7 : 14);
 
   const remaining = towards - g.weightKg;
+  // At the goal, or at the safer weight the plan heads for instead, or past
+  // it, since the goals were saved.
+  const passedTowards =
+    composition.heading === "lose"
+      ? g.weightKg <= towards
+      : composition.heading === "gain" && g.weightKg >= towards;
+  const reachedGoal =
+    composition.heading != null &&
+    !pregnant &&
+    (steady(difference) || passedTowards || steady(remaining));
+  if (reachedGoal && !withinClass)
+    notes.push(
+      `You've reached ${towards === g.targetWeightKg ? "your goal weight" : `the ${towards} kg the plan heads for`}, so the plan holds your weight there. Review your goals to set a new one.`,
+    );
   // In pregnancy the plan sets no weight goal: gaining is a healthy part of
   // it.
   let direction: GoalPlan["direction"] =
-    pregnant || steady(remaining)
+    pregnant || passedTowards || steady(remaining)
       ? "maintain"
       : remaining < 0
         ? "lose"
@@ -1030,6 +1064,7 @@ export function planGoals(
       screened &&
       composition.energySigns == null &&
       (kcal < atMaintenance || veryLeanTarget),
+    reachedGoal,
     sessionsPerWeek,
     notes,
     safetyNotes,
@@ -1107,13 +1142,52 @@ export function energySigns(state: JournalState, today: string) {
   return days < ENERGY_CHECK_DAYS ? false : null;
 }
 
-// The plan for the saved goals, with the focus, target, latest body fat and
-// the safety checks given with them.
-export function planForState(state: JournalState, today: string) {
+// The saved goals at the athlete's current weight (currentWeightKg): the
+// average of the last week's weigh-ins, or the weight given with the goals
+// until there are newer ones.
+export function liveGoals(
+  state: JournalState,
+  today: string,
+  // The weight to plan with instead, as just given with the goals.
+  weightKg?: number,
+) {
+  const body = goalsForState(state);
+  if (!body) return null;
+  const now = weightKg ?? currentWeightKg(state, today);
+  return now == null
+    ? body
+    : { ...body, weightKg: Math.min(300, Math.max(30, now)) };
+}
+
+// Which way the saved goals head, from the weight given with them: none
+// when that was already at the goal (maintainBandKg), and always down to a
+// weight class above it.
+function heading(state: JournalState, body: BodyGoalsInput) {
+  const change = body.targetWeightKg - body.weightKg;
+  const lose =
+    change < 0 &&
+    (state.profile.weighIn?.classKg === body.targetWeightKg ||
+      -change >= maintainBandKg(body.weightKg));
+  return lose
+    ? "lose"
+    : change >= maintainBandKg(body.weightKg)
+      ? "gain"
+      : undefined;
+}
+
+// The plan for the saved goals at the current weight (liveGoals), with the
+// focus, target, latest body fat and the safety checks given with them. It
+// suggests new targets (target-proposals.ts); the saved ones stay until the
+// athlete takes them.
+export function planForState(
+  state: JournalState,
+  today: string,
+  weightKg?: number,
+) {
   const body = goalsForState(state);
   if (!body) return null;
   const checks = state.profile.goalChecks;
-  return planGoals(body, today, {
+  return planGoals(liveGoals(state, today, weightKg)!, today, {
     focus: state.profile.bodyTargets?.focus,
     targetBodyFatPercent: state.profile.bodyTargets?.targetBodyFatPercent,
     bodyFatPercent: latestBodyFat(state, today)?.percent ?? null,
@@ -1123,6 +1197,7 @@ export function planForState(state: JournalState, today: string) {
     lowWeightConfirmed: checks?.lowWeightConfirmedKg === body.targetWeightKg,
     energySigns: energySigns(state, today),
     weightClass: state.profile.weighIn?.classKg === body.targetWeightKg,
+    heading: heading(state, body),
   });
 }
 
@@ -1164,7 +1239,8 @@ export function savedTraining(state: JournalState) {
 export const ASSUMED_SESSION =
   "The plan assumes 75-minute sessions; say how long yours usually last to fine-tune it.";
 
-// Saves the goals and the daily targets they imply. The lifting brief is the
+// Saves the goals and the daily targets they imply, recorded as the plan's
+// at the weight given (recordTargets). The lifting brief is the
 // athlete's own record of the days they have and changes only through its
 // own review, so the plan's sessions never overwrite it. Session length and
 // experience left out keep what was saved (savedTraining). Body fat stated
@@ -1290,7 +1366,9 @@ export function applyGoals(
   };
   if (activity === "very_high") state.profile.heavyManualWork = true;
   else delete state.profile.heavyManualWork;
-  const plan = planForState(state, today)!;
+  // Planned at the weight just given, as the form's preview and Coach's
+  // review show it.
+  const plan = planForState(state, today, goals.weightKg)!;
   state.profile.age = goals.age;
   state.profile.bodyweight = goals.weightKg;
   const targets = planTargets(plan);
@@ -1298,7 +1376,12 @@ export function applyGoals(
   const keepsOwn =
     own != null && !plan.proteinTarget && earlier?.proteinTarget === false;
   if (keepsOwn) targets.protein = own;
-  state.nutrition.targets = targets;
+  recordTargets(state, targets, today, {
+    source: "plan",
+    weightKg: goals.weightKg,
+    leanMassKg: plan.leanMassKg,
+    at: stamp,
+  });
   if (keepsOwn)
     plan.notes.push(`Your own protein target of ${own} g stays as it is.`);
   if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);

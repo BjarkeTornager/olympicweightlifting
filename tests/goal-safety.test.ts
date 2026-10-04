@@ -822,12 +822,17 @@ test("Coach and the voice coach pass pregnancy to the same plan; a confirmation 
 
 test("the iPhone shows the plan's notes only beside the plan's own targets", () => {
   // Never a note that contradicts the target shown with it: the plan's
-  // notes come only with its goal and calories, within 100 kcal.
+  // notes come only with its goal and calories, within 100 kcal; otherwise
+  // a line that they differ, or that the plan suggests new ones.
   const consistent = (state: ReturnType<typeof emptyJournal>, date: string) => {
     const today = buildToday(state, 1, date, new Set());
     const notes = today.body?.goalNotes ?? [];
     const plan = planForState(state, date)!;
     if (notes.join() === TARGETS_DIFFER) return notes;
+    if (today.targetsProposal) {
+      assert.match(notes.join(), /^Your goals plan suggests new daily targets/);
+      return notes;
+    }
     assert.deepEqual(notes, plan.notes);
     assert.equal(state.nutrition.targets.goal, plan.direction);
     assert.ok(Math.abs(today.nutrition.targetCalories! - plan.calories) <= 100);
@@ -840,16 +845,25 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
   assert.equal(state.nutrition.targets.calories, 2640);
   assert.match(consistent(state, today).join(), /keeps to a sustainable/);
   // Once the date has passed the plan holds at 3,120, but the saved target
-  // is still 2,640, so the iPhone says they differ rather than that the
-  // plan holds his weight.
+  // is still 2,640: the iPhone suggests holding his weight, for him to take
+  // or leave, rather than saying the plan holds it.
   const later = "2026-12-05";
   assert.match(planForState(state, later)!.notes.join(), /date has passed/);
   const native = buildToday(state, 1, later, new Set());
   assert.equal(native.nutrition.targetCalories, 2640);
-  assert.deepEqual(native.body?.goalNotes, [TARGETS_DIFFER]);
+  assert.deepEqual(native.body?.goalNotes, [
+    "Your goals plan suggests new daily targets, about 3,120 kcal a day. Look at them on Today.",
+  ]);
+  assert.equal(native.targetsProposal?.maintain, true);
+  assert.equal(native.targetsProposal?.suggested.calories, 3120);
+  assert.match(
+    native.targetsProposal!.reasons.join(),
+    /^Your target date, 2026-12-01, has passed/,
+  );
   consistent(state, later);
   // A teenager's target saved before the limits (1,730 kcal, lose) gets the
-  // same line, not "Under 18 ... it holds your weight" beside a deficit.
+  // plan's suggestion, not "Under 18 ... it holds your weight" beside a
+  // deficit.
   const teenager = emptyJournal();
   teenager.profile.body = {
     ...teen,
@@ -867,7 +881,10 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
     carbs: 204,
     fat: 48,
   };
-  assert.deepEqual(consistent(teenager, today), [TARGETS_DIFFER]);
+  assert.match(
+    consistent(teenager, today).join(),
+    /^Your goals plan suggests new daily targets/,
+  );
   // A scale's reading the next day moves the plan by a few kcal: still its
   // notes.
   applyGoals(state, { ...athlete, bodyFatPercent: 18 }, today);

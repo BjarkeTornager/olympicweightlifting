@@ -33,9 +33,23 @@ import {
   bodyFatByDate,
   bodyFatMethods,
   latestBodyFat,
+  weighIns,
   weightTrend,
 } from "./body-composition";
-import { notesForTargets, planForState } from "./body-goals";
+import { planForState } from "./body-goals";
+import {
+  activeGoalsCheck,
+  goalsCheckClosedNote,
+  goalsCheckDate,
+  goalsCheckNote,
+  goalsPlanChanges,
+} from "./coaching";
+import { targetsOn } from "./target-history";
+import {
+  targetNotes,
+  targetsProposal,
+  type TargetsProposal,
+} from "./target-proposals";
 import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
@@ -266,6 +280,9 @@ const bodyView = z
     bodyFatFromAppleHealth: z.boolean().optional(),
     bodyweight: z.number().optional(),
     bodyweightDate: day.optional(),
+    // The weight came from Apple Health rather than a check-in. Optional,
+    // as new fields are.
+    bodyweightFromAppleHealth: z.boolean().optional(),
     // Average change a week over the last four weeks of weigh-ins.
     weeklyWeightChangeKg: z.number().optional(),
     leanMassKg: z.number().optional(),
@@ -319,6 +336,36 @@ const firstStepsView = z
   .strict()
   .register(nativeResponses, { id: "FirstSteps" });
 
+// A set of daily targets; a target left out is none.
+const dailyTargetsView = z
+  .object({
+    // maintain, lose or gain.
+    goal: z.enum(["maintain", "lose", "gain"]),
+    calories: z.number().optional(),
+    protein: z.number().optional(),
+    carbs: z.number().optional(),
+    fat: z.number().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "DailyTargets" });
+// New daily targets the goals plan suggests (target-proposals.ts), for the
+// athlete to take or to keep theirs: why, the targets now and suggested,
+// and the plan's notes. The app sends `suggested` back as it was shown.
+const targetsProposalView = z
+  .object({
+    title: z.string(),
+    reasons: z.array(z.string()),
+    current: dailyTargetsView,
+    suggested: dailyTargetsView,
+    // The plan now holds the weight: the goal is reached or its date passed.
+    maintain: z.boolean(),
+    notes: z.array(z.string()),
+    // The check of the weight trend agreed with the new targets, if any.
+    followUp: z.string().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "TargetsProposal" });
+
 export const todayView = z
   .object({
     date: day,
@@ -349,6 +396,8 @@ export const todayView = z
     // it carries on across installs. Optional, as builds must still decode a
     // server from before it.
     journalStartDate: day.optional(),
+    // Only while the goals plan suggests new daily targets.
+    targetsProposal: targetsProposalView.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Today" });
@@ -443,6 +492,8 @@ export const healthSyncResult = z
     ),
     daysUpdated: int,
     bodyFatUpdated: int.optional(),
+    // Days with a new weight from Apple Health; absent before 4 October.
+    bodyMassUpdated: int.optional(),
     workouts: z.array(
       z
         .object({
@@ -709,6 +760,33 @@ const takeLoadReset = z
   })
   .strict()
   .register(nativeRequests, { id: "TakeLoadResetAction" });
+// App-only: take the daily targets the goals plan suggests, or keep the
+// current ones over them, as Today showed them (TargetsProposal.suggested);
+// a suggestion that has changed since is refused.
+const suggestedTargets = z
+  .object({
+    goal: z.enum(["maintain", "lose", "gain"]),
+    calories: z.number().min(0).max(10000).optional(),
+    protein: z.number().min(0).max(1000).optional(),
+    carbs: z.number().min(0).max(2000).optional(),
+    fat: z.number().min(0).max(1000).optional(),
+  })
+  .strict()
+  .register(nativeRequests, { id: "SuggestedTargets" });
+const takeSuggestedTargets = z
+  .object({
+    kind: z.literal("take_suggested_targets"),
+    targets: suggestedTargets,
+  })
+  .strict()
+  .register(nativeRequests, { id: "TakeSuggestedTargetsAction" });
+const keepCurrentTargets = z
+  .object({
+    kind: z.literal("keep_current_targets"),
+    targets: suggestedTargets,
+  })
+  .strict()
+  .register(nativeRequests, { id: "KeepCurrentTargetsAction" });
 // App-only: whether Today shows a drinks target. The website sets this in
 // Settings.
 const setHydrationTarget = z
@@ -743,6 +821,8 @@ export const nativeAction = z
     confirmTechnique,
     takeLoadReset,
     setHydrationTarget,
+    takeSuggestedTargets,
+    keepCurrentTargets,
   ])
   .register(nativeRequests, { id: "NativeAction" });
 export const nativeActionKinds = nativeAction.options.map(
@@ -802,31 +882,31 @@ function activity(
   });
 }
 
-function bodyForToday(state: JournalState, date: string) {
+function bodyForToday(
+  state: JournalState,
+  date: string,
+  proposal: TargetsProposal | null,
+) {
   const fat = latestBodyFat(state, date);
-  const weights = state.health.checkins
-    .filter(
-      (c) =>
-        c.bodyweight != null &&
-        c.date <= date &&
-        c.date >= offsetDate(date, -30),
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const weight = weights.at(-1);
-  const plan = planForState(state, date);
+  // The latest weigh-in of the last 30 days: a check-in, else Apple Health.
+  const weight = weighIns(state, offsetDate(date, -30), date).at(-1);
+  const plan = proposal?.plan ?? planForState(state, date);
   // Shown beside the saved targets, so only notes that describe them.
-  const notes = plan ? notesForTargets(plan, state.nutrition.targets) : [];
+  const notes = plan ? targetNotes(state, date, proposal) : [];
   const body = defined({
     bodyFatPercent: fat?.percent,
     bodyFatDate: fat?.date,
     bodyFatMethod: fat?.method ?? undefined,
     bodyFatFromAppleHealth: fat ? fat.source === "apple-health" : undefined,
-    bodyweight: weight?.bodyweight ?? undefined,
+    bodyweight: weight?.kg,
     bodyweightDate: weight?.date,
+    bodyweightFromAppleHealth: weight
+      ? weight.source === "apple-health"
+      : undefined,
     weeklyWeightChangeKg: weightTrend(state, date)?.kg_per_week ?? undefined,
     leanMassKg:
-      fat && weight?.bodyweight
-        ? Math.round(weight.bodyweight * (1 - fat.percent / 100) * 10) / 10
+      fat && weight
+        ? Math.round(weight.kg * (1 - fat.percent / 100) * 10) / 10
         : undefined,
     focus: plan?.focus,
     targetWeightKg: state.profile.body?.targetWeightKg,
@@ -834,6 +914,42 @@ function bodyForToday(state: JournalState, date: string) {
     goalNotes: notes.length ? notes : undefined,
   });
   return Object.keys(body).length ? body : undefined;
+}
+
+// The goals plan's suggestion as Today shows it, with the goals check that
+// taking it agrees or closes, as the goals form says (followUpGoals).
+function proposalForToday(
+  state: JournalState,
+  date: string,
+  proposal: TargetsProposal,
+) {
+  const view = (t: TargetsProposal["targets"]) =>
+    defined({
+      goal: t.goal,
+      calories: dailyTarget(t.calories),
+      protein: dailyTarget(t.protein),
+      carbs: dailyTarget(t.carbs),
+      fat: dailyTarget(t.fat),
+    });
+  const checkFrom = goalsCheckDate(state, proposal.plan, date);
+  const closes = goalsPlanChanges(proposal.plan)
+    ? undefined
+    : activeGoalsCheck(state);
+  return defined({
+    title: proposal.maintain
+      ? "Hold your weight from here"
+      : "New daily targets suggested",
+    reasons: proposal.reasons,
+    current: view(proposal.current),
+    suggested: view(proposal.targets),
+    maintain: proposal.maintain,
+    notes: proposal.plan.notes,
+    followUp: checkFrom
+      ? goalsCheckNote(checkFrom)
+      : closes
+        ? goalsCheckClosedNote(closes.followUpDate)
+        : undefined,
+  });
 }
 
 // Short sleep, unless the athlete asked for advice only when they ask.
@@ -853,6 +969,7 @@ export function firstSteps(state: JournalState, date: string) {
     appleHealth:
       state.health.checkins.some((c) => c.sleepImport) ||
       Boolean(state.health.vitals?.length) ||
+      Boolean(state.health.bodyMass?.length) ||
       Boolean(state.health.bodyFat?.some((b) => b.source === "apple-health")),
     meal: state.nutrition.meals.length > 0,
     // Goals saved in pregnancy set no calorie target, and still count.
@@ -919,6 +1036,7 @@ export function buildToday(
   const burned = burnedToday(state, date);
   const supplements = supplementsForDay(state, date);
   const next = state.activeWorkout ? null : nextTraining(state, date);
+  const proposal = targetsProposal(state, date);
   return todayView.parse(
     defined({
       date,
@@ -958,7 +1076,7 @@ export function buildToday(
               notes: checkin.notes,
             })
           : undefined,
-      body: bodyForToday(state, date),
+      body: bodyForToday(state, date, proposal),
       nutrition: defined({
         ...totalNutrients(meals.flatMap((m) => m.items)),
         // A target of 0 is no target.
@@ -1043,6 +1161,9 @@ export function buildToday(
       })),
       firstSteps: firstSteps(state, date),
       journalStartDate: journalStartDate(state, fromAppleHealth, timezone),
+      targetsProposal: proposal
+        ? proposalForToday(state, date, proposal)
+        : undefined,
     }),
   );
 }
@@ -1864,6 +1985,10 @@ const trendDay = z
     bodyFatPercent: z.number().optional(),
     cardioMinutes: int,
     strengthSessions: int,
+    // The daily targets in force that day (targetsOn), absent when none.
+    // Optional, as new fields are; Trends' own targets are today's.
+    targetCalories: z.number().optional(),
+    targetProtein: z.number().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "TrendDay" });
@@ -1898,6 +2023,7 @@ export function buildTrends(
     const food = totalNutrients(meals.flatMap((m) => m.items));
     const water = hydrationForDay(state, d);
     const fat = bodyFatByDate(state, d, d)[0];
+    const targets = targetsOn(state, d, date);
     return defined({
       date: d,
       sleepHours: checkin?.sleepHours,
@@ -1909,7 +2035,7 @@ export function buildTrends(
       waterMl: water.recorded ? water.totalMl : undefined,
       calories: meals.length ? food.calories : undefined,
       protein: meals.length ? food.protein : undefined,
-      bodyweight: checkin?.bodyweight ?? undefined,
+      bodyweight: weighIns(state, d, d)[0]?.kg,
       bodyFatPercent: fat?.percent,
       cardioMinutes: Math.round(
         state.cardio.sessions
@@ -1917,6 +2043,8 @@ export function buildTrends(
           .reduce((n, s) => n + s.durationSeconds, 0) / 60,
       ),
       strengthSessions: state.sessions.filter((s) => s.date === d).length,
+      targetCalories: dailyTarget(targets?.calories) ?? undefined,
+      targetProtein: dailyTarget(targets?.protein) ?? undefined,
     });
   });
   return trendsView.parse(

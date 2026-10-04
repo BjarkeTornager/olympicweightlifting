@@ -677,6 +677,9 @@
           "bodyweightDate": {
             "type": "string"
           },
+          "bodyweightFromAppleHealth": {
+            "type": "boolean"
+          },
           "weeklyWeightChangeKg": {
             "type": "number"
           },
@@ -1168,6 +1171,30 @@
           "trainingProgram"
         ]
       },
+      "DailyTargets": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": "string",
+            "description": "One of: maintain, lose, gain. Treat others as unknown."
+          },
+          "calories": {
+            "type": "number"
+          },
+          "protein": {
+            "type": "number"
+          },
+          "carbs": {
+            "type": "number"
+          },
+          "fat": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "goal"
+        ]
+      },
       "DeleteBodyFatAction": {
         "type": "object",
         "properties": {
@@ -1439,6 +1466,11 @@
             "type": "number",
             "minimum": 3,
             "maximum": 70
+          },
+          "bodyMassKg": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 500
           }
         },
         "required": [
@@ -1559,6 +1591,9 @@
             "type": "integer"
           },
           "bodyFatUpdated": {
+            "type": "integer"
+          },
+          "bodyMassUpdated": {
             "type": "integer"
           },
           "workouts": {
@@ -1818,6 +1853,24 @@
           "fromAppleHealth"
         ]
       },
+      "KeepCurrentTargetsAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "keep_current_targets"
+            ]
+          },
+          "targets": {
+            "$ref": "#/components/schemas/SuggestedTargets"
+          }
+        },
+        "required": [
+          "kind",
+          "targets"
+        ]
+      },
       "LogDrinkAction": {
         "type": "object",
         "properties": {
@@ -2074,6 +2127,12 @@
           },
           {
             "$ref": "#/components/schemas/SetHydrationTargetAction"
+          },
+          {
+            "$ref": "#/components/schemas/TakeSuggestedTargetsAction"
+          },
+          {
+            "$ref": "#/components/schemas/KeepCurrentTargetsAction"
           }
         ],
         "discriminator": {
@@ -2100,7 +2159,9 @@
             "set_workout_recovery": "#/components/schemas/SetWorkoutRecoveryAction",
             "confirm_technique": "#/components/schemas/ConfirmTechniqueAction",
             "take_load_reset": "#/components/schemas/TakeLoadResetAction",
-            "set_hydration_target": "#/components/schemas/SetHydrationTargetAction"
+            "set_hydration_target": "#/components/schemas/SetHydrationTargetAction",
+            "take_suggested_targets": "#/components/schemas/TakeSuggestedTargetsAction",
+            "keep_current_targets": "#/components/schemas/KeepCurrentTargetsAction"
           }
         }
       },
@@ -2957,6 +3018,42 @@
           "date"
         ]
       },
+      "SuggestedTargets": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": "string",
+            "enum": [
+              "maintain",
+              "lose",
+              "gain"
+            ]
+          },
+          "calories": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "protein": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "carbs": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2000
+          },
+          "fat": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "goal"
+        ]
+      },
       "Supplement": {
         "type": "object",
         "properties": {
@@ -3019,6 +3116,64 @@
         "required": [
           "kind",
           "entryId"
+        ]
+      },
+      "TakeSuggestedTargetsAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "take_suggested_targets"
+            ]
+          },
+          "targets": {
+            "$ref": "#/components/schemas/SuggestedTargets"
+          }
+        },
+        "required": [
+          "kind",
+          "targets"
+        ]
+      },
+      "TargetsProposal": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "current": {
+            "$ref": "#/components/schemas/DailyTargets"
+          },
+          "suggested": {
+            "$ref": "#/components/schemas/DailyTargets"
+          },
+          "maintain": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "followUp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "reasons",
+          "current",
+          "suggested",
+          "maintain",
+          "notes"
         ]
       },
       "Today": {
@@ -3092,6 +3247,9 @@
           },
           "journalStartDate": {
             "type": "string"
+          },
+          "targetsProposal": {
+            "$ref": "#/components/schemas/TargetsProposal"
           }
         },
         "required": [
@@ -3257,6 +3415,12 @@
           },
           "strengthSessions": {
             "type": "integer"
+          },
+          "targetCalories": {
+            "type": "number"
+          },
+          "targetProtein": {
+            "type": "number"
           }
         },
         "required": [

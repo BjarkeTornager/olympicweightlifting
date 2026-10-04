@@ -5,7 +5,6 @@ import {
   applyGoals,
   planForState,
   planGoals,
-  TARGETS_DIFFER,
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import {
@@ -334,23 +333,36 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
   );
 
   // The first reading moves the plan from Mifflin–St Jeor to lean mass,
-  // about 200 kcal above the targets saved without one, so the iPhone says
-  // they differ instead of showing the plan's notes.
-  const body = buildToday(state, 1, today, new Set()).body;
-  assert.deepEqual(body, {
+  // about 200 kcal above the targets saved without one. The saved targets
+  // stay, and the iPhone says the plan suggests new ones instead of showing
+  // its notes.
+  const saved = structuredClone(state.nutrition.targets);
+  const today_ = buildToday(state, 1, today, new Set());
+  assert.deepEqual(today_.body, {
     bodyFatPercent: 14,
     bodyFatDate: today,
     bodyFatMethod: "scale",
     bodyFatFromAppleHealth: true,
     bodyweight: 87.6,
     bodyweightDate: today,
+    bodyweightFromAppleHealth: false,
     weeklyWeightChangeKg: -0.4,
     leanMassKg: 75.3,
     focus: "recomposition",
     targetWeightKg: 85,
     targetBodyFatPercent: 11,
-    goalNotes: [TARGETS_DIFFER],
+    goalNotes: [
+      "Your goals plan suggests new daily targets, about 3,110 kcal a day. Look at them on Today.",
+    ],
   });
+  assert.deepEqual(state.nutrition.targets, saved);
+  assert.equal(today_.nutrition.targetCalories, saved.calories);
+  assert.equal(today_.targetsProposal?.suggested.calories, 3110);
+  assert.equal(today_.targetsProposal?.current.calories, saved.calories);
+  assert.match(
+    today_.targetsProposal!.reasons[0],
+    /^Your body fat reading of 14% on 2026-09-26 puts your lean mass at about 75\.3 kg/,
+  );
   const journal = buildJournal(state, 1, "2026-09-27", 14, new Set());
   assert.deepEqual(
     journal.items

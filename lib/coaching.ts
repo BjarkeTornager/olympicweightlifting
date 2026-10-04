@@ -11,8 +11,10 @@ import { z } from "zod";
 import type { JournalState } from "./model";
 import { formatSleepDuration, offsetDate } from "./health";
 import { shortSleep, sleepChange, sleepShortOpening } from "./sleep";
-import { dailyTarget, foodDate } from "./nutrition";
+import { dailyTarget, foodDate, type DietTargets } from "./nutrition";
 import { cardioTitle } from "./cardio";
+import { currentWeightKg, targetsInForce } from "./target-history";
+import { acceptProposal, targetsProposal } from "./target-proposals";
 
 export const memoryInputSchema = z
   .object({
@@ -201,6 +203,18 @@ export function moveGoalsCheck(
     p.id === moved.id ? moved : p,
   );
   return moved;
+}
+
+// Takes the plan's suggested targets (acceptProposal) and, as every surface
+// that saves a plan's targets does, agrees the goals check with them, or
+// closes it when they hold the weight (followUpGoals).
+export function takeTargetsProposal(
+  state: JournalState,
+  today: string,
+  shown: DietTargets,
+) {
+  const proposal = acceptProposal(state, today, shown);
+  return { proposal, ...followUpGoals(state, proposal.plan, today) };
 }
 
 // A goals check still stands while the saved goals change the athlete's
@@ -423,6 +437,8 @@ export function coachingContext(state: JournalState, date: string) {
   // The safety notes are in the plan's notes too.
   const planned = planForState(state, date);
   const plan = planned && { ...planned, safetyNotes: undefined };
+  const proposal = targetsProposal(state, date);
+  const set = targetsInForce(state);
   return {
     preferences: {
       initiative: preferences.initiative,
@@ -431,14 +447,35 @@ export function coachingContext(state: JournalState, date: string) {
     // Null when unknown; the voice coach gets the same.
     age: athleteAge(state),
     // Saved body goals, focus and target body fat, and the plan the app
-    // derives from them with the latest body fat reading. The target is the
-    // plan's, which sets none under 18 or in pregnancy.
+    // derives from them at the current weight with the latest body fat
+    // reading. The target is the plan's, which sets none under 18 or in
+    // pregnancy.
     ...(state.profile.body && plan
       ? {
           goals: {
             ...goalsForState(state),
             focus: state.profile.bodyTargets?.focus,
             targetBodyFatPercent: plan.targetBodyFatPercent ?? undefined,
+            // The average of the last week's weigh-ins, or the weight given
+            // with the goals until there are newer ones: goals.plan's weight.
+            currentWeightKg: currentWeightKg(state, date) ?? undefined,
+            // How the saved daily targets (dailyTargets) were set: the
+            // plan's or the athlete's own, from which day, at which weight.
+            ...(set.recorded && {
+              targetsSet: {
+                source: set.source,
+                from: set.from,
+                weightKg: set.weightKgAtSet,
+              },
+            }),
+            // New targets the app suggests from goals.plan, which the
+            // athlete can take or keep theirs over on Today, and why.
+            ...(proposal && {
+              proposal: {
+                targets: proposal.targets,
+                reasons: proposal.reasons,
+              },
+            }),
             // In pregnancy the plan sets no calorie or macro targets, and
             // with kidney disease or while breastfeeding no protein target,
             // so Coach gets no figures to quote as one.

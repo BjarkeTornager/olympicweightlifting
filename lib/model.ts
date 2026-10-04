@@ -13,6 +13,11 @@ import {
 } from "./body-goals";
 import { bodyTargetsSchema } from "./body-composition";
 import {
+  declinedTargetsSchema,
+  TARGET_HISTORY_MAX,
+  targetRecordSchema,
+} from "./target-history";
+import {
   storedCustomProgramSchema,
   isTrainingProgram,
 } from "./training-program-schema";
@@ -164,6 +169,14 @@ export const journalSchema = z
         // with its weigh-in day.
         energyCheck: energyCheckSchema.optional(),
         weighIn: weighInSchema.optional(),
+        // Each change to the daily targets, with where it came from, and a
+        // suggestion from the plan the athlete chose not to take
+        // (target-history.ts).
+        targetHistory: z
+          .array(targetRecordSchema)
+          .max(TARGET_HISTORY_MAX)
+          .optional(),
+        declinedTargets: declinedTargetsSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

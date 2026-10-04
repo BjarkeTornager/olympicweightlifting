@@ -7,13 +7,16 @@ import { localClock, timeZoneSchema } from "./reminders";
 import { latestBodyFat, type BodyFocus } from "./body-composition";
 import { planForState, planTargets, type BodyGoals } from "./body-goals";
 import type { DietTargets } from "./nutrition";
+import { currentWeightKg, recordTargets } from "./target-history";
 
 // The daily targets are saved when the goals are, so the plan's safety limits
 // (from 2026-10-04) reach only goals saved since. A target saved before that
 // which breaks a hard limit follows the plan again, once: under 18, a BMI
 // under 17.5 now or at the goal, a deficit over the cap, or calories below
 // the floor. Only targets that still equal what the old plan gave for the
-// saved goals change; targets the athlete set by hand are never touched.
+// saved goals change, recorded as the plan's; targets the athlete set by
+// hand are never touched. Other old targets stay, and the plan suggests
+// new ones beside them (target-proposals.ts).
 
 const round = (value: number, step = 1) => Math.round(value / step) * step;
 // The old plan's rate limits by body fat, as they were then.
@@ -160,7 +163,11 @@ export function regateLegacyTargets(
   if (!plan) return false;
   const next = planTargets(plan);
   if (sameTargets(next, saved)) return false;
-  state.nutrition.targets = next;
+  recordTargets(state, next, today, {
+    source: "plan",
+    weightKg: currentWeightKg(state, today),
+    leanMassKg: plan.leanMassKg,
+  });
   return true;
 }
 

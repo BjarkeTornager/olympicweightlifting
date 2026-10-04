@@ -300,7 +300,23 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Restoring those two sentences reproduces the previous hash
     // (13c7f73c…). Health, privacy and evidence text is otherwise
     // unchanged.
-    "9344b50ca1362553faaef017e621a02da4668f15b2956892ef61265c065e2247",
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 7, one weight, one target), in the private-context paragraph
+    // only: goals.plan is the recalculation at the current weight
+    // (goals.currentWeightKg, the average of the last week's weigh-ins);
+    // the Goals card on Today now shows the saved targets, so the sentence
+    // saying it shows goals.plan's calories, and the one explaining that
+    // number, go. Coach quotes dailyTargets, never goals.plan's figures; a
+    // goals.proposal is the app's suggestion, which the athlete takes or
+    // keeps theirs over on Today, and Coach may prepare set_diet_targets
+    // with exactly its targets for review, never presenting it as the
+    // current target. Targets the athlete set themselves
+    // (goals.targetsSet.source manual) stay theirs, with a suggestion only
+    // at the goal or its date (target-proposals.ts). Restoring the
+    // paragraph's previous sentences reproduces the previous hash
+    // (9344b50c…). Health, privacy and evidence text is otherwise
+    // unchanged.
+    "174830b24bdc3d6d2da435afdfe22dab1c6f0f381c7f29c72410528e7667ad11",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -402,15 +418,17 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   // Apple's active energy is an estimate, not a measurement.
   assert.match(core, /active energy is Apple's estimate, not a measurement/);
   assert.doesNotMatch(core, /active energy and workouts .{0,80}recorded/);
-  // The saved targets are the athlete's; the plan is only a proposal, and
-  // the website's Goals card shows the plan's calories until it shows the
-  // saved target.
+  // The saved targets are the athlete's, shown everywhere, the Goals card
+  // included; the plan at the current weight only suggests new ones.
   assert.match(core, /The athlete's daily targets are dailyTargets/);
+  assert.match(core, /on the Goals card on Today and in the iPhone app/);
+  assert.doesNotMatch(core, /Goals card on Today shows goals\.plan/);
+  assert.match(core, /goals\.currentWeightKg, the average of the last week's/);
   assert.match(
     core,
-    /the website's Goals card on Today shows goals\.plan's calories, which can differ/,
+    /prepare set_diet_targets with exactly its targets for review/,
   );
-  assert.match(core, /never present it as their current target/);
+  assert.match(core, /Never present a suggestion as their current target/);
   // Moved out of the goals skill, not copied, and no supplement allowance.
   const goals = skillInstructions(["goals"]);
   assert.doesNotMatch(goals, /bingeing|purging/);

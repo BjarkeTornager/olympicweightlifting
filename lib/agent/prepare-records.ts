@@ -21,6 +21,8 @@ import {
   moveGoalsCheck,
 } from "../coaching";
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
+import { setDailyTargets, targetsProposal } from "../target-proposals";
+import { sameTargets } from "../target-history";
 import { offsetDate } from "../health";
 import {
   mergeDietTargets,
@@ -161,7 +163,9 @@ export function prepareDietTargets(
   if (!Object.keys(action.targets).length)
     throw Error("Name the targets to change.");
   const before = next.nutrition.targets;
-  next.nutrition.targets = mergeDietTargets(before, action.targets);
+  // Recorded as the plan's when they are what it gives now, otherwise as
+  // the athlete's own (setDailyTargets).
+  setDailyTargets(next, mergeDietTargets(before, action.targets), currentDate);
   // New calories at a goals check that is due move it on (moveGoalsCheck).
   const calories = next.nutrition.targets.calories;
   const followUp =
@@ -212,6 +216,7 @@ export function prepareBodyFat(
   action: ActionOf<"record_body_fat" | "delete_body_fat">,
   currentDate: string,
 ): PreparedChange {
+  const suggested = targetsProposal(next, currentDate);
   const entry =
     action.kind === "record_body_fat"
       ? saveBodyFat(next, action.bodyFat, currentDate)
@@ -221,12 +226,20 @@ export function prepareBodyFat(
     action.kind === "record_body_fat" && trend && trend.readings > 1
       ? ` ${trend.change_points > 0 ? "+" : ""}${trend.change_points} points since ${trend.first.date}.`
       : "";
+  // A reading never changes the daily targets; when it moves the plan
+  // enough, the plan suggests new ones for the athlete to take or leave.
+  const proposal = targetsProposal(next, currentDate);
+  const targets =
+    proposal &&
+    (!suggested || !sameTargets(suggested.targets, proposal.targets))
+      ? " Your daily targets stay as they are; your goals plan now suggests new ones, which you can take or leave on Today."
+      : "";
   return {
     title:
       action.kind === "record_body_fat"
         ? "Record body fat"
         : "Remove a body fat reading",
-    detail: `${action.kind === "record_body_fat" ? "" : "Removes "}${entry.percent}% body fat on ${entry.date}${entry.method ? ` (${entry.method})` : ""}.${change}`,
+    detail: `${action.kind === "record_body_fat" ? "" : "Removes "}${entry.percent}% body fat on ${entry.date}${entry.method ? ` (${entry.method})` : ""}.${change}${targets}`,
   };
 }
 

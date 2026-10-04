@@ -139,6 +139,21 @@ test("targets stay within bounds for weights from 1 to 1,000 kg, on every weight
   }
 });
 
+// A strength workout from the Apple Watch, as HealthSync imports it.
+const watchStrength = (minutes: number, start = `${date}T08:00:00+02:00`) =>
+  cardioFromWorkout(
+    {
+      id: crypto.randomUUID(),
+      kind: "strength",
+      name: "Strength Training",
+      start,
+      end: new Date(Date.parse(start) + minutes * 60000).toISOString(),
+      durationSeconds: minutes * 60,
+    },
+    "Europe/Copenhagen",
+    new Date(`${date}T18:00:00Z`),
+  );
+
 test("the training add-on uses real durations: lifting, activities and imported strength", () => {
   const s = withBody(emptyJournal(), "male", 88, { sessionMinutes: 90 });
   const rest = hydrationTargetMl(s, date).targetMl;
@@ -149,37 +164,66 @@ test("the training add-on uses real durations: lifting, activities and imported 
   s.sessions.push(lifting);
   assert.equal(trainingMinutes(s, date), 120);
   assert.equal(hydrationTargetMl(s, date).targetMl, rest + 1250);
-  // A run counts too, and so does a strength workout from Apple Health,
-  // which arrives as an activity.
+  // A run counts too.
   saveCardio(s, { activity: "running", date, durationSeconds: 30 * 60 }, date);
-  s.cardio.sessions.push(
-    cardioFromWorkout(
-      {
-        id: crypto.randomUUID(),
-        kind: "strength",
-        name: "Strength Training",
-        start: `${date}T16:00:00+02:00`,
-        end: `${date}T16:45:00+02:00`,
-        durationSeconds: 45 * 60,
-      },
-      "Europe/Copenhagen",
-      new Date(`${date}T18:00:00Z`),
-    ),
-  );
-  assert.equal(trainingMinutes(s, date), 195);
-  // 3 h 15 min would be 1.95 L; four hours or more stops at 2 L.
-  assert.equal(hydrationTargetMl(s, date).trainingMinutes, 195);
+  assert.equal(trainingMinutes(s, date), 150);
+  assert.equal(hydrationTargetMl(s, date).trainingMinutes, 150);
+  // 3 h 30 min would be 2.1 L; four hours or more stops at 2 L.
   saveCardio(s, { activity: "walking", date, durationSeconds: 3600 }, date);
+  assert.equal(trainingMinutes(s, date), 210);
   assert.equal(
     hydrationTargetMl(s, date).targetMl,
     Math.round((2276 + 2000) / 250) * 250,
   );
+  // A strength workout from Apple Health arrives as an activity, and on a
+  // day without logged lifting it is the day's lifting.
+  const w = withBody(emptyJournal(), "male", 88, { sessionMinutes: 90 });
+  w.cardio.sessions.push(watchStrength(45));
+  assert.equal(trainingMinutes(w, date), 45);
   // A session without a finish counts as the usual session length.
   const t = withBody(emptyJournal(), "male", 88, { sessionMinutes: 90 });
   t.sessions.push(createWorkout(t, days[0], date));
   assert.equal(trainingMinutes(t, date), 90);
   // Training on another day does not count.
   assert.equal(trainingMinutes(s, "2026-09-25"), 0);
+});
+
+test("a watch strength workout imported before the same session is logged counts once", () => {
+  // The worked case: an 88 kg man lifts for 75 minutes, wearing his Watch.
+  const s = withBody(emptyJournal(), "male", 88, { sessionMinutes: 75 });
+  assert.equal(hydrationTargetMl(s, date).targetMl, 2250);
+  // He stops the Watch before tapping Finish, or tells Coach about the
+  // session in the evening, so the Watch workout is imported first.
+  s.cardio.sessions.push(watchStrength(75));
+  assert.equal(trainingMinutes(s, date), 75);
+  assert.equal(hydrationTargetMl(s, date).targetMl, 3000);
+  // Then the same session lands in the journal: still one session.
+  const lifting = createWorkout(s, days[0], date);
+  lifting.startedAt = `${date}T06:00:00.000Z`;
+  lifting.finishedAt = `${date}T07:15:00.000Z`;
+  s.sessions.push(lifting);
+  assert.equal(trainingMinutes(s, date), 75);
+  assert.deepEqual(
+    [hydrationTargetMl(s, date).targetMl, hydrationTargetMl(s, date).lowMl],
+    [3000, 2500],
+  );
+  // The longer of the two counts: an untimed session is the usual length.
+  const untimed = withBody(emptyJournal(), "male", 88, { sessionMinutes: 60 });
+  untimed.cardio.sessions.push(watchStrength(80));
+  untimed.sessions.push(createWorkout(untimed, days[0], date));
+  assert.equal(trainingMinutes(untimed, date), 80);
+  // The Watch's core and functional strength workouts count towards that
+  // one session too, and other activities add on.
+  const core = watchStrength(30);
+  core.title = "Core Training";
+  untimed.cardio.sessions.push(core);
+  assert.equal(trainingMinutes(untimed, date), 110);
+  saveCardio(
+    untimed,
+    { activity: "other", title: "Yoga", date, durationSeconds: 1800 },
+    date,
+  );
+  assert.equal(trainingMinutes(untimed, date), 140);
 });
 
 test("an older check-in water total moves once into a drink", () => {

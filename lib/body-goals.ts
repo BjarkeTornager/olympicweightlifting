@@ -287,6 +287,12 @@ export function planForState(state: JournalState, today: string) {
   });
 }
 
+// The athlete's age from the goals, else Settings, where 0 means unknown.
+// Both coaches get it: supplement, caffeine and sleep advice depend on it.
+export function athleteAge(state: JournalState) {
+  return state.profile.body?.age || state.profile.age || null;
+}
+
 // Saves the goals and the daily targets they imply; the lifting brief's
 // training days follow when a brief exists. Body fat stated with the goals
 // is recorded as today's reading.

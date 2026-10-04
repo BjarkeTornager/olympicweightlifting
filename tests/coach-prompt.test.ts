@@ -193,8 +193,11 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   measurement; dailyTargets is the number the athlete sees, and
     //   goals.plan a recalculation to offer for review, never as the
     //   current target.
+    // - The supplement rule asks the athlete's age before describing any
+    //   amount when it isn't known, as the caffeine rule already did
+    //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
-    "b371f6c1a1564f882b4f9c17fa3e8c9b927859f7f76731e276cb7c08cc93f141",
+    "82c996d50e59b148be779636dce5f3eb9585a53ec61d6ea9dbfa8302bc269dc8",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -269,6 +272,14 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   assert.match(core, /Laxatives, diuretics, appetite suppressants/);
   // Supplements and caffeine are discussed, never prescribed.
   assert.match(core, /Don't prescribe supplements, doses or dose changes/);
+  // No amount, supplement or caffeine, before Coach knows the athlete's age
+  // (coachingContext's age, from the goals or Settings).
+  assert.ok(
+    supplementRule.includes(
+      "If you don't know their age, ask before describing any amount.",
+    ),
+  );
+  assert.match(caffeineRule, /If you don't know their age, ask before giving/);
   assert.match(core, /Caffeine is optional: you may discuss it, never/);
   assert.match(core, /200 mg at once and 400 mg a day from all sources/);
   assert.match(core, /Under 18: no performance dosing/);

@@ -209,6 +209,8 @@ test("the voice coach has typed Coach's health rules and referrals, and the athl
       text,
       /the daily targets the athlete sees in the app are dailyTargets/,
     );
+    // No amount before the age is known.
+    assert.match(text, /If you don't know their age, ask before describing/);
     // No em dashes, said or written.
     assert.doesNotMatch(text, /\u2014/);
   }

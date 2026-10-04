@@ -2,7 +2,7 @@ import type { JournalState, Workout } from "./model";
 import { EXERCISES } from "./domain";
 import { cardioActivities } from "./cardio";
 import { foodGroups } from "./nutrition";
-import { describePlan, planForState } from "./body-goals";
+import { athleteAge, describePlan, planForState } from "./body-goals";
 import { bodyFocuses, bodyFatMethods } from "./body-composition";
 import { dayForCoach, describeDay } from "./journal-summary";
 import type { RouteNote } from "./route-summary";
@@ -110,9 +110,7 @@ export function voiceContext(
     goals: state.profile.body
       ? describePlan(state.profile.body, planForState(state, date)!)
       : null,
-    // From the goals, else Settings, where 0 means unknown. Caffeine,
-    // supplement and sleep advice depend on it.
-    age: state.profile.body?.age || state.profile.age || null,
+    age: athleteAge(state),
   };
 }
 

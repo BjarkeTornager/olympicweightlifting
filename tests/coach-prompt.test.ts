@@ -190,14 +190,16 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   allows "creatine, caffeine". The setup paragraph's rates come from
     //   the same constants, with identical text.
     // - Apple Health active energy is Apple's estimate, not a recorded
-    //   measurement; dailyTargets is the number the athlete sees, and
-    //   goals.plan a recalculation to offer for review, never as the
-    //   current target.
+    //   measurement; dailyTargets are the athlete's targets, shown on Food
+    //   and in the iPhone app, while the website's Goals card on Today
+    //   shows goals.plan's calories, which can differ. goals.plan is a
+    //   recalculation to offer for review, never the current target, and
+    //   Coach explains the Goals card's number when asked.
     // - The supplement rule asks the athlete's age before describing any
     //   amount when it isn't known, as the caffeine rule already did
     //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
-    "82c996d50e59b148be779636dce5f3eb9585a53ec61d6ea9dbfa8302bc269dc8",
+    "74336db6086b85a0a50bf3c0ef71f999488710348f9dc483100082c125eecdfb",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -296,10 +298,13 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   // Apple's active energy is an estimate, not a measurement.
   assert.match(core, /active energy is Apple's estimate, not a measurement/);
   assert.doesNotMatch(core, /active energy and workouts .{0,80}recorded/);
-  // The saved targets are the athlete's; the plan is only a proposal.
+  // The saved targets are the athlete's; the plan is only a proposal, and
+  // the website's Goals card shows the plan's calories until it shows the
+  // saved target.
+  assert.match(core, /The athlete's daily targets are dailyTargets/);
   assert.match(
     core,
-    /the daily targets the athlete sees in the app are dailyTargets/,
+    /the website's Goals card on Today shows goals\.plan's calories, which can differ/,
   );
   assert.match(core, /never present it as their current target/);
   // Moved out of the goals skill, not copied, and no supplement allowance.

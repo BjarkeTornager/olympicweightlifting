@@ -189,10 +189,24 @@ const trainingMlPerHour = 600;
 const trainingMaxMl = 2000;
 const quarterLitres = (ml: number) => Math.round(ml / 250) * 250;
 
+// Pregnancy and breastfeeding, when the athlete has said so with their
+// goals: EFSA and NNR add about 300 and 700 ml of total water, which is
+// about 250 and 550 ml from drinks.
+const pregnancyMl = { pregnant: 250, breastfeeding: 550 };
+const pregnancyWords = {
+  pregnant: "pregnancy",
+  breastfeeding: "breastfeeding",
+};
+
 function drinksBaseMl(state: JournalState, date: string) {
   const weight = bodyweightKg(state, date);
   const sex = state.profile.body?.sex ?? "unspecified";
-  const ml = baseMl + sexMl[sex] + mlPerKg * (weight || referenceKg);
+  const pregnancy = state.profile.goalChecks?.pregnancy;
+  const ml =
+    baseMl +
+    sexMl[sex] +
+    mlPerKg * (weight || referenceKg) +
+    (pregnancy ? pregnancyMl[pregnancy] : 0);
   return {
     ml: Math.min(drinksBoundsMl.max, Math.max(drinksBoundsMl.min, ml)),
     estimated: !weight,
@@ -272,10 +286,12 @@ export function usualHydrationTargets(state: JournalState, date: string) {
 export function hydrationNote(state: JournalState, date: string) {
   const { estimated } = hydrationTargetMl(state, date);
   const age = state.profile.body?.age || state.profile.age;
+  const pregnancy = state.profile.goalChecks?.pregnancy;
+  const also = pregnancy ? `, ${pregnancyWords[pregnancy]}` : "";
   return [
     estimated
       ? "A general estimate until your weight is known, not a minimum."
-      : "An estimate from your weight and the day's training, not a minimum.",
+      : `An estimate from your weight${also} and the day's training, not a minimum.`,
     age >= 50
       ? "Pale urine is a good everyday sign; after about 50 thirst is a weaker guide, so drink with meals too."
       : "Thirst and pale urine are good everyday signs.",

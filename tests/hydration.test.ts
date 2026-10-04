@@ -101,6 +101,40 @@ test("the target is a drinks target from weight and sex, in quarter litres", () 
   );
 });
 
+test("pregnancy and breastfeeding add about 250 and 550 ml from drinks", () => {
+  // EFSA and NNR add about 300 and 700 ml of total water. A 60 kg woman,
+  // rest day then a 75-minute lifting day.
+  for (const [pregnancy, rest, lifting] of [
+    [null, 1750, 2500],
+    ["pregnant", 2000, 2750],
+    ["breastfeeding", 2250, 3000],
+  ] as const) {
+    const s = withBody(emptyJournal(), "female", 60, { sessionMinutes: 75 });
+    s.profile.goalChecks = {
+      pregnancy,
+      lowWeightConfirmedKg: null,
+      updatedAt: new Date().toISOString(),
+    };
+    assert.deepEqual(
+      usualHydrationTargets(s, date),
+      { restDayMl: rest, liftingDayMl: lifting },
+      String(pregnancy),
+    );
+    assert.equal(hydrationTargetMl(s, date).targetMl, rest);
+    assert.match(
+      hydrationNote(s, date),
+      pregnancy
+        ? new RegExp(
+            `from your weight, ${pregnancy === "pregnant" ? "pregnancy" : "breastfeeding"} and the day's training`,
+          )
+        : /from your weight and the day's training/,
+    );
+  }
+  // No status saved is the same as neither.
+  const none = withBody(emptyJournal(), "female", 60);
+  assert.equal(hydrationTargetMl(none, date).targetMl, 1750);
+});
+
 test("targets stay within bounds for weights from 1 to 1,000 kg, on every weight path", () => {
   for (let kg = 1; kg <= 1000; kg += kg < 40 ? 1 : 7) {
     const paths = [

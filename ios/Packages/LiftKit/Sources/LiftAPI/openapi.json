@@ -3129,6 +3129,14 @@
           },
           "targets": {
             "$ref": "#/components/schemas/SuggestedTargets"
+          },
+          "energyAnswer": {
+            "type": "string",
+            "enum": [
+              "no",
+              "yes",
+              "prefer_not_to_say"
+            ]
           }
         },
         "required": [
@@ -3165,6 +3173,32 @@
           },
           "followUp": {
             "type": "string"
+          },
+          "energyCheck": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "note": {
+                "type": "string"
+              },
+              "ifYes": {
+                "$ref": "#/components/schemas/DailyTargets"
+              }
+            },
+            "required": [
+              "title",
+              "questions",
+              "note",
+              "ifYes"
+            ]
           }
         },
         "required": [

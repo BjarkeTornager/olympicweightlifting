@@ -62,8 +62,22 @@ struct ContractTests {
     #expect(proposal.suggested.goal == "maintain" && proposal.suggested.calories == 3000)
     #expect(proposal.reasons.first?.contains("you've reached your goal of 81 kg") == true)
     #expect(today.body?.bodyweightFromAppleHealth == false)
+    // Holding the weight asks no health questions.
+    #expect(proposal.energyCheck == nil)
     // None without a suggestion.
     #expect(try fixture("today", as: Components.Schemas.Today.self).targetsProposal == nil)
+  }
+
+  @Test("A suggestion that sets a deficit carries the low-energy questions, and what a yes holds")
+  func todayTargetsCheck() throws {
+    let today = try fixture("today-targets-check", as: Components.Schemas.Today.self)
+    let proposal = try #require(today.targetsProposal)
+    #expect(proposal.reasons == ["Your weight is about 63.1 kg now, above the 62 kg you aim to hold."])
+    #expect(proposal.suggested.goal == "lose" && proposal.suggested.calories == 1960)
+    let check = try #require(proposal.energyCheck)
+    #expect(check.questions.count == 3)
+    #expect(check.note.hasPrefix("Optional, and not a diagnosis."))
+    #expect(check.ifYes.goal == "maintain" && check.ifYes.calories == 2300)
   }
 
   @Test("Trends rows carry the targets in force each day")

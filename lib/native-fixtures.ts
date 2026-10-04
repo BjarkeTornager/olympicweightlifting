@@ -192,11 +192,54 @@ export function nativeFixtures() {
       notes: "",
       updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
     });
+  // Goals saved on 1 September at 62 kg, to hold it, and a week of
+  // weigh-ins around 63.1 kg since: the plan suggests a gentle loss back to
+  // it, a deficit with no answers to the low-energy questions, which Today
+  // asks first.
+  const drifted = emptyJournal();
+  drifted.createdAt = "2026-08-30T07:00:00.000Z";
+  applyGoals(
+    drifted,
+    {
+      age: 30,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 62,
+      targetWeightKg: 62,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 4,
+      sessionMinutes: 75,
+      experience: "developing",
+    },
+    "2026-09-01",
+  );
+  drifted.profile.body!.updatedAt = "2026-09-01T07:00:00.000Z";
+  drifted.profile.targetHistory = drifted.profile.targetHistory!.map((r) => ({
+    ...r,
+    setAt: "2026-09-01T07:00:00.000Z",
+  }));
+  for (const [day, kg] of [
+    [-5, 63],
+    [-2, 63.2],
+    [0, 63.1],
+  ] as const)
+    drifted.health.checkins.push({
+      date: offsetDate(date, day),
+      sleepHours: null,
+      energy: null,
+      soreness: null,
+      waterMl: null,
+      bodyweight: kg,
+      notes: "",
+      updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
+    });
   return {
     "workout.json": workoutInProgress(state),
     "today.json": buildToday(state, 12, date, imported),
     "today-short-sleep.json": buildToday(shortSleep, 12, date, imported),
     "today-targets.json": buildToday(reached, 12, date, new Set()),
+    "today-targets-check.json": buildToday(drifted, 12, date, new Set()),
     "trends-targets.json": buildTrends(reached, date, 7),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
     "trends.json": buildTrends(state, date, 7),

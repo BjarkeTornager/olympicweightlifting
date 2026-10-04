@@ -5,13 +5,19 @@ import SwiftUI
 /// New daily targets the goals plan suggests, from the server: why, the
 /// targets now and suggested, and the plan's notes. Nothing changes until
 /// the athlete takes them; keeping the current ones means the plan suggests
-/// again only once it moves on.
+/// again only once it moves on. One that sets a deficit without answers to
+/// the low-energy questions asks them first, as the goals form does: taking
+/// it needs an answer, and with a yes the plan holds the weight instead.
 struct TargetsProposalCard: View {
   @Environment(AppModel.self) private var model
   let proposal: Components.Schemas.TargetsProposal
   @State private var saving = false
+  @State private var answer: EnergyAnswer?
+
+  typealias EnergyAnswer = Components.Schemas.TakeSuggestedTargetsAction.EnergyAnswerPayload
 
   var body: some View {
+    let shown = Self.shown(proposal, answer: answer)
     VStack(alignment: .leading, spacing: 0) {
       Rectangle().fill(Theme.ink).frame(height: 1)
       Text("From your goals plan").foregroundStyle(Theme.ink).kicker()
@@ -27,7 +33,7 @@ struct TargetsProposalCard: View {
       .fixedSize(horizontal: false, vertical: true)
       .accessibilityElement(children: .combine)
       VStack(spacing: 0) {
-        ForEach(Self.rows(proposal), id: \.label) { row in
+        ForEach(Self.rows(shown), id: \.label) { row in
           LabeledContent {
             Text(row.value).monospacedDigit().foregroundStyle(Theme.ink)
           } label: {
@@ -39,16 +45,20 @@ struct TargetsProposalCard: View {
         }
       }
       .padding(.top, 10)
-      ForEach(proposal.notes.filter { !proposal.reasons.contains($0) } + [proposal.followUp].compactMap { $0 }, id: \.self) {
+      ForEach(Self.notes(proposal, answer: answer), id: \.self) {
         Paragraph($0, language: .english)
           .font(.footnote)
           .foregroundStyle(Theme.inkSecondary)
           .fixedSize(horizontal: false, vertical: true)
           .padding(.top, 6)
       }
+      if let check = proposal.energyCheck {
+        energyCheck(check).padding(.top, 14)
+      }
       HStack(spacing: 10) {
         Button("Use these targets") { choose(take: true) }
           .buttonStyle(PrimaryButtonStyle(height: 44, fullWidth: false))
+          .disabled(proposal.energyCheck != nil && answer == nil)
         Button("Keep mine") { choose(take: false) }
           .buttonStyle(SecondaryButtonStyle())
       }
@@ -57,12 +67,55 @@ struct TargetsProposalCard: View {
     }
   }
 
+  /// The questions, an answer to choose, and what is kept and what a yes
+  /// does.
+  private func energyCheck(_ check: Components.Schemas.TargetsProposal.EnergyCheckPayload) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(check.title)
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(Theme.ink)
+      ForEach(check.questions, id: \.self) {
+        Paragraph($0, language: .english).folio(.note).foregroundStyle(Theme.ink)
+      }
+      Picker("Yes to any of these", selection: $answer) {
+        Text("No").tag(EnergyAnswer?.some(.no))
+        Text("Yes").tag(EnergyAnswer?.some(.yes))
+        Text("Rather not say").tag(EnergyAnswer?.some(.preferNotToSay))
+      }
+      .pickerStyle(.segmented)
+      .sensoryFeedback(.selection, trigger: answer)
+      .accessibilityLabel("Yes to any of these")
+      Paragraph(check.note, language: .english)
+        .font(.footnote)
+        .foregroundStyle(Theme.inkSecondary)
+    }
+    .fixedSize(horizontal: false, vertical: true)
+  }
+
   private func choose(take: Bool) {
     saving = true
     Task {
-      await model.chooseTargets(proposal, take: take)
+      await model.chooseTargets(proposal, take: take, answer: answer)
       saving = false
     }
+  }
+
+  /// The suggestion as it would be saved: with a yes to the low-energy
+  /// questions, the targets that hold the weight.
+  static func shown(
+    _ p: Components.Schemas.TargetsProposal, answer: EnergyAnswer?
+  ) -> Components.Schemas.TargetsProposal {
+    guard answer == .yes, let ifYes = p.energyCheck?.ifYes else { return p }
+    var held = p
+    held.suggested = ifYes
+    return held
+  }
+
+  /// The plan's notes not already given as reasons, and the goals check the
+  /// suggestion agrees, which a yes doesn't: the plan then holds the weight.
+  static func notes(_ p: Components.Schemas.TargetsProposal, answer: EnergyAnswer?) -> [String] {
+    let followUp = answer == .yes && p.energyCheck != nil ? nil : p.followUp
+    return p.notes.filter { !p.reasons.contains($0) } + [followUp].compactMap { $0 }
   }
 
   /// "Energy  2,640 → 3,000 kcal", a line for each target that changes,

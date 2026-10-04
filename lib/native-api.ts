@@ -46,6 +46,7 @@ import {
 } from "./coaching";
 import { targetsOn } from "./target-history";
 import {
+  energyCheckNote,
   targetNotes,
   targetsProposal,
   type TargetsProposal,
@@ -362,6 +363,19 @@ const targetsProposalView = z
     notes: z.array(z.string()),
     // The check of the weight trend agreed with the new targets, if any.
     followUp: z.string().optional(),
+    // Only when the suggestion sets a deficit without answers to the
+    // low-energy questions in force: they come before it is taken, and
+    // take_suggested_targets carries the answer (energyAnswer). With a
+    // yes the plan holds the weight, at ifYes instead.
+    energyCheck: z
+      .object({
+        title: z.string(),
+        questions: z.array(z.string()),
+        note: z.string(),
+        ifYes: dailyTargetsView,
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .register(nativeResponses, { id: "TargetsProposal" });
@@ -777,6 +791,10 @@ const takeSuggestedTargets = z
   .object({
     kind: z.literal("take_suggested_targets"),
     targets: suggestedTargets,
+    // The answer to the low-energy questions Today asked with the
+    // suggestion (TargetsProposal.energyCheck): any yes, no to all, or
+    // rather not say. Refused without one when they were asked.
+    energyAnswer: z.enum(["no", "yes", "prefer_not_to_say"]).optional(),
   })
   .strict()
   .register(nativeRequests, { id: "TakeSuggestedTargetsAction" });
@@ -949,6 +967,12 @@ function proposalForToday(
       : closes
         ? goalsCheckClosedNote(closes.followUpDate)
         : undefined,
+    energyCheck: proposal.energyCheck && {
+      title: "Before a deficit: a few health questions",
+      questions: proposal.energyCheck.questions,
+      note: energyCheckNote(proposal.energyCheck),
+      ifYes: view(proposal.energyCheck.ifYes),
+    },
   });
 }
 

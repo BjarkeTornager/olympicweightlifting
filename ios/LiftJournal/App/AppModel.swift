@@ -405,14 +405,21 @@ final class AppModel {
     await save(.deleteDrink(.init(kind: .deleteDrink, drinkId: id)), confirmation: "Drink removed")
   }
 
-  /// Take the daily targets the goals plan suggests, or keep the current
-  /// ones over them, sending the suggestion back as Today showed it: one
-  /// that has changed since is refused.
-  func chooseTargets(_ proposal: Components.Schemas.TargetsProposal, take: Bool) async {
+  /// Take the daily targets the goals plan suggests, with the answer to the
+  /// low-energy questions when it asked them, or keep the current ones over
+  /// them, sending the suggestion back as Today showed it: one that has
+  /// changed since is refused.
+  func chooseTargets(
+    _ proposal: Components.Schemas.TargetsProposal, take: Bool,
+    answer: Components.Schemas.TakeSuggestedTargetsAction.EnergyAnswerPayload? = nil
+  ) async {
     let shown = Self.shownTargets(proposal.suggested)
     await save(
       take
-        ? .takeSuggestedTargets(.init(kind: .takeSuggestedTargets, targets: shown))
+        ? .takeSuggestedTargets(
+          .init(
+            kind: .takeSuggestedTargets, targets: shown,
+            energyAnswer: proposal.energyCheck == nil ? nil : answer))
         : .keepCurrentTargets(.init(kind: .keepCurrentTargets, targets: shown)),
       confirmation: take ? "New targets saved" : "Targets kept")
   }

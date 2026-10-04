@@ -171,3 +171,75 @@ test("old targets get the higher maintenance as a suggestion, which can be kept 
     page.getByRole("dialog", { name: "Your goals" }).getByRole("status"),
   ).toContainText("Saving replaces your own daily targets (2,500 kcal)");
 });
+
+test("a suggestion that sets a deficit asks the low-energy questions first; with a yes the plan holds the weight", async ({
+  page,
+  context,
+}, info) => {
+  const date = today();
+  // Goals to hold 62 kg, saved a few weeks ago; a week of weigh-ins around
+  // 63.1 kg since.
+  let state: JournalState = emptyJournal();
+  applyGoals(
+    state,
+    {
+      ...athlete,
+      age: 30,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 62,
+      targetWeightKg: 62,
+    },
+    offsetDate(date, -25),
+  );
+  for (const [day, bodyweight] of [
+    [-5, 63],
+    [-2, 63.2],
+    [0, 63.1],
+  ] as const)
+    saveCheckin(state, { date: offsetDate(date, day), bodyweight }, date);
+  let revision = 1;
+  await context.route("**/api/journal", (r) => {
+    if (r.request().method() === "PUT") {
+      state = r.request().postDataJSON().state;
+      revision++;
+    }
+    return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#today");
+  const goals = page.getByRole("region", { name: "Your goals" });
+  const suggestion = goals.getByRole("button", { name: /New daily targets/ });
+  await expect(suggestion).toContainText("1,960");
+  await suggestion.click();
+  const dialog = page.getByRole("dialog", { name: "New daily targets" });
+  await expect(dialog).toContainText(
+    "Your weight is about 63.1 kg now, above the 62 kg you aim to hold.",
+  );
+  const questions = dialog.getByRole("group", {
+    name: "Before a deficit: a few health questions",
+  });
+  await expect(questions).toContainText(
+    "Have you had a stress fracture in the last 2 years?",
+  );
+  // Not taken in one tap: the questions come first.
+  const take = dialog.getByRole("button", { name: "Use these targets" });
+  await expect(take).toBeDisabled();
+  const axe = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
+  expect(axe.violations).toEqual([]);
+  await page.screenshot({ path: info.outputPath("deficit-questions.png") });
+  // A yes: the plan holds her weight instead.
+  await questions.getByLabel("Yes to any of these").selectOption("yes");
+  await expect(dialog).toContainText("Calories: 2,300 kcal (was 2,280 kcal)");
+  await take.click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => state.profile.energyCheck?.signs).toBe(true);
+  expect(state.nutrition.targets).toMatchObject({
+    goal: "maintain",
+    calories: 2300,
+  });
+  await expect(suggestion).toHaveCount(0);
+});

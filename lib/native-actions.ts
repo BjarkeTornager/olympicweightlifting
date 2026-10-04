@@ -161,19 +161,26 @@ function preparer(
             "Your goals plan suggests new ones again only once it moves on from these.",
         };
       }
+      const answer = raw.energyAnswer;
       const { proposal, agreed, closed } = takeTargetsProposal(
         next,
         today,
         shown,
+        answer === undefined
+          ? undefined
+          : answer === "prefer_not_to_say"
+            ? null
+            : answer === "yes",
       );
       next.updatedAt = new Date().toISOString();
       const kcal = proposal.targets.calories;
+      const held = Boolean(proposal.energyCheck) && answer === "yes";
       return {
         state: next,
-        title: "Take the suggested daily targets",
+        title: held ? "Hold your weight" : "Take the suggested daily targets",
         detail: [
           kcal != null
-            ? `Your daily target is now ${kcal.toLocaleString("en-GB")} kcal, a starting estimate.`
+            ? `Your daily target is now ${kcal.toLocaleString("en-GB")} kcal, ${held ? "holding your weight, as you answered yes to one of the health questions. A sports doctor or sports dietitian can help you look into it." : "a starting estimate."}`
             : "Your daily targets are now your goals plan's.",
           ...(agreed ? [goalsCheckNote(agreed.followUpDate)] : []),
           ...(closed ? [goalsCheckClosedNote(closed.followUpDate)] : []),

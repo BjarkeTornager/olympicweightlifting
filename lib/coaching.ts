@@ -205,15 +205,17 @@ export function moveGoalsCheck(
   return moved;
 }
 
-// Takes the plan's suggested targets (acceptProposal) and, as every surface
-// that saves a plan's targets does, agrees the goals check with them, or
-// closes it when they hold the weight (followUpGoals).
+// Takes the plan's suggested targets (acceptProposal), with the answer to
+// the low-energy questions when it asks them, and, as every surface that
+// saves a plan's targets does, agrees the goals check with them, or closes
+// it when they hold the weight (followUpGoals).
 export function takeTargetsProposal(
   state: JournalState,
   today: string,
   shown: DietTargets,
+  signs?: boolean | null,
 ) {
-  const proposal = acceptProposal(state, today, shown);
+  const proposal = acceptProposal(state, today, shown, signs);
   return { proposal, ...followUpGoals(state, proposal.plan, today) };
 }
 

@@ -853,7 +853,7 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
   const native = buildToday(state, 1, later, new Set());
   assert.equal(native.nutrition.targetCalories, 2640);
   assert.deepEqual(native.body?.goalNotes, [
-    "Your goals plan suggests new daily targets, about 3,120 kcal a day. Look at them on Today.",
+    "Your goals plan suggests new daily targets, about 3,120 kcal a day. You can take them on Today on the website, or in the latest app.",
   ]);
   assert.equal(native.targetsProposal?.maintain, true);
   assert.equal(native.targetsProposal?.suggested.calories, 3120);

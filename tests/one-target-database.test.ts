@@ -137,11 +137,30 @@ test(
         ),
         /Your goals plan has changed since these targets were suggested/,
       );
-      // Taken, once, however often the app retries.
+      // Still a deficit, with no answers to the low-energy questions: Today
+      // asks them, and the targets aren't taken without an answer.
+      assert.equal(suggestion.energyCheck?.questions.length, 2);
+      await assert.rejects(
+        applyNativeAction(
+          id,
+          {
+            id: crypto.randomUUID(),
+            timezone: tz,
+            action: { kind: "take_suggested_targets", targets: shown },
+          },
+          now,
+        ),
+        /a few health questions come first/,
+      );
+      // Taken with a no to all, once, however often the app retries.
       const take = {
         id: crypto.randomUUID(),
         timezone: tz,
-        action: { kind: "take_suggested_targets", targets: shown },
+        action: {
+          kind: "take_suggested_targets",
+          targets: shown,
+          energyAnswer: "no",
+        },
       };
       const saved = await applyNativeAction(id, take, now);
       assert.equal(saved.status, "saved");
@@ -157,6 +176,10 @@ test(
       );
       journal = await readJournal(id);
       assert.equal(journal.state.nutrition.targets.calories, shown.calories);
+      assert.deepEqual(journal.state.profile.energyCheck, {
+        date: "2026-09-26",
+        signs: false,
+      });
       assert.deepEqual(
         (({ source, from, weightKgAtSet }) => ({
           source,

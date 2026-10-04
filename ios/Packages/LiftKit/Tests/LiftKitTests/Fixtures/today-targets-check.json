@@ -1,0 +1,112 @@
+{
+  "date": "2026-09-26",
+  "revision": 12,
+  "sleep": {
+    "fromAppleHealth": false,
+    "nights": 0
+  },
+  "checkin": {
+    "bodyweight": 63.1,
+    "notes": ""
+  },
+  "body": {
+    "bodyweight": 63.1,
+    "bodyweightDate": "2026-09-26",
+    "bodyweightFromAppleHealth": false,
+    "focus": "lose_fat",
+    "targetWeightKg": 62,
+    "goalNotes": [
+      "Your goals plan suggests new daily targets, about 1,960 kcal a day. You can take them on Today on the website, or in the latest app."
+    ]
+  },
+  "nutrition": {
+    "calories": 0,
+    "protein": 0,
+    "carbs": 0,
+    "fat": 0,
+    "targetCalories": 2280,
+    "targetProtein": 110,
+    "meals": []
+  },
+  "hydration": {
+    "totalMl": 0,
+    "targetMl": 1750,
+    "estimatedTarget": false,
+    "drinks": [],
+    "targetLowMl": 1500,
+    "targetHighMl": 2250,
+    "restDayTargetMl": 1750,
+    "liftingDayTargetMl": 2500,
+    "note": "An estimate from your weight and the day's training, not a minimum. Thirst and pale urine are good everyday signs."
+  },
+  "supplements": {
+    "taken": [],
+    "usual": []
+  },
+  "strengthToday": [],
+  "activities": [],
+  "sessionsThisWeek": 0,
+  "priorities": [
+    {
+      "id": "checkin",
+      "category": "CHECK IN",
+      "title": "Complete your recovery picture",
+      "reason": "Add energy and soreness so Coach can put your training in context.",
+      "action": "Update check-in"
+    },
+    {
+      "id": "training",
+      "category": "TRAINING",
+      "title": "Choose a session that fits today",
+      "reason": "Review your programme and how you feel. A rest day can be part of your plan.",
+      "action": "Explore programmes"
+    },
+    {
+      "id": "nutrition",
+      "category": "NUTRITION",
+      "title": "Log your first meal",
+      "reason": "A photo or a short description is enough to start. Review portions before saving.",
+      "action": "Log food"
+    }
+  ],
+  "journalStartDate": "2026-08-30",
+  "targetsProposal": {
+    "title": "New daily targets suggested",
+    "reasons": [
+      "Your weight is about 63.1 kg now, above the 62 kg you aim to hold."
+    ],
+    "current": {
+      "goal": "maintain",
+      "calories": 2280,
+      "protein": 110,
+      "carbs": 315,
+      "fat": 65
+    },
+    "suggested": {
+      "goal": "lose",
+      "calories": 1960,
+      "protein": 125,
+      "carbs": 240,
+      "fat": 55
+    },
+    "maintain": false,
+    "notes": [],
+    "followUp": "These numbers are a starting estimate: from 2026-10-17, about 3 weeks on, Coach can check them against your weight trend with you.",
+    "energyCheck": {
+      "title": "Before a deficit: a few health questions",
+      "questions": [
+        "Have you had a stress fracture in the last 2 years?",
+        "Have you had an eating disorder, or does eating often feel out of your control?",
+        "Have you missed a period, or had cycles longer than 35 days, in the last 3 months? (Skip this if you use hormonal contraception or gave birth in the last few months.)"
+      ],
+      "note": "Optional, and not a diagnosis. Only a yes or no and the date are kept, so the plan stays safe: with a yes it holds your weight instead, at about 2,300 kcal a day, and a sports doctor or sports dietitian can help you look into it.",
+      "ifYes": {
+        "goal": "maintain",
+        "calories": 2300,
+        "protein": 115,
+        "carbs": 315,
+        "fat": 65
+      }
+    }
+  }
+}

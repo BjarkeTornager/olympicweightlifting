@@ -14,7 +14,7 @@ import { saveBodyFat, weighIns } from "../lib/body-composition";
 import { saveCardio } from "../lib/cardio";
 import { bodyweightKg, cardioBurn } from "../lib/energy";
 import { hydrationTargetMl } from "../lib/hydration";
-import { saveCheckin } from "../lib/health";
+import { offsetDate, saveCheckin } from "../lib/health";
 import { applyBodyMassImport } from "../lib/health-sync";
 import { prepareAction } from "../lib/agent/actions";
 import { coachingContext, takeTargetsProposal } from "../lib/coaching";
@@ -197,7 +197,7 @@ test("a new body fat reading doesn't change the targets shown; the plan suggests
     "Your body fat reading of 26% on 2026-09-26 puts your lean mass at about 65.1 kg, and the plan works out your energy and protein from it.",
   ]);
   assert.deepEqual(native.body?.goalNotes, [
-    "Your goals plan suggests new daily targets, about 2,280 kcal a day. Look at them on Today.",
+    "Your goals plan suggests new daily targets, about 2,280 kcal a day. You can take them on Today on the website, or in the latest app.",
   ]);
   // Coach and the voice coach see the targets, the plan and the suggestion,
   // and quote the targets.
@@ -363,8 +363,11 @@ test("targets saved by the old plan, whose maintenance was lower, get a suggesti
     buildToday(state, 1, today, new Set()).nutrition.targetCalories,
     2350,
   );
-  // Taking it records the old targets as they were, then the plan's.
-  takeTargetsProposal(state, today, proposal.targets);
+  // Still a deficit, with no answers to the low-energy questions: they
+  // come first. Taking it with a no records the old targets as they were,
+  // then the plan's.
+  assert.ok(proposal.energyCheck);
+  takeTargetsProposal(state, today, proposal.targets, false);
   assert.deepEqual(
     state.profile.targetHistory?.map((r) => [r.source, r.from, r.calories]),
     [
@@ -379,7 +382,8 @@ test("targets saved by the old plan, whose maintenance was lower, get a suggesti
 
 test("targets the athlete sets themselves stay theirs: no suggestion until the goal or its date, and the plan's estimate beside them", () => {
   const state = emptyJournal();
-  applyGoals(state, athlete, today);
+  // Saved earlier, so today's weigh-ins count however fast the test runs.
+  applyGoals(state, athlete, "2026-09-01");
   // Set on Food (or with Coach) to the plan's own: still the plan's.
   setDailyTargets(state, { ...state.nutrition.targets }, today);
   assert.equal(targetsInForce(state).source, "plan");
@@ -470,6 +474,283 @@ test("the history keeps where each target came from, and its length", () => {
     2000 + TARGET_HISTORY_MAX + 4,
   );
   journalSchema.parse(state);
+});
+
+// A woman of 30 who saved goals to hold 62 kg on 1 September.
+const holder: BodyGoalsInput = {
+  age: 30,
+  sex: "female",
+  heightCm: 168,
+  weightKg: 62,
+  targetWeightKg: 62,
+  targetDate: null,
+  activity: "moderate",
+  trainingDays: 4,
+  sessionMinutes: 75,
+  experience: "developing",
+};
+
+test("a suggestion that sets a deficit says why, and asks the low-energy questions before it can be taken", () => {
+  const state = emptyJournal();
+  applyGoals(state, holder, "2026-09-01");
+  assert.equal(state.nutrition.targets.calories, 2280);
+  // Her weight has moved off it by more than day-to-day swings.
+  weigh(state, [
+    ["2026-09-21", 63],
+    ["2026-09-24", 63.2],
+    ["2026-09-26", 63.1],
+  ]);
+  const proposal = targetsProposal(state, today)!;
+  assert.equal(proposal.targets.goal, "lose");
+  assert.equal(proposal.targets.calories, 1960);
+  assert.deepEqual(proposal.reasons, [
+    "Your weight is about 63.1 kg now, above the 62 kg you aim to hold.",
+  ]);
+  // A deficit with no answers in force: the questions come first, on the
+  // website and the iPhone, with what a yes saves instead.
+  assert.equal(proposal.plan.energyCheckDue, true);
+  assert.equal(proposal.energyCheck?.questions.length, 3);
+  assert.deepEqual(proposal.energyCheck?.ifYes, {
+    goal: "maintain",
+    calories: 2300,
+    protein: 115,
+    carbs: 315,
+    fat: 65,
+  });
+  const native = buildToday(state, 1, today, new Set()).targetsProposal!;
+  assert.equal(
+    native.energyCheck?.title,
+    "Before a deficit: a few health questions",
+  );
+  assert.match(native.energyCheck!.note, /about 2,300 kcal a day/);
+  // Without an answer, nothing is taken.
+  assert.throws(
+    () => takeTargetsProposal(structuredClone(state), today, proposal.targets),
+    /a few health questions come first/,
+  );
+  // Rather not say: the suggestion is taken, with its goals check, and
+  // nothing is kept about the questions.
+  const unsaid = structuredClone(state);
+  const taken = takeTargetsProposal(unsaid, today, proposal.targets, null);
+  assert.equal(unsaid.nutrition.targets.calories, 1960);
+  assert.equal(unsaid.profile.energyCheck, undefined);
+  assert.equal(taken.agreed?.followUpDate, "2026-10-17");
+  // No to all: kept with the date.
+  const no = structuredClone(state);
+  takeTargetsProposal(no, today, proposal.targets, false);
+  assert.equal(no.nutrition.targets.calories, 1960);
+  assert.deepEqual(no.profile.energyCheck, { date: today, signs: false });
+  // Any yes: kept, and the plan holds her weight instead, with no check of
+  // a loss.
+  const yes = structuredClone(state);
+  const held = takeTargetsProposal(yes, today, proposal.targets, true);
+  assert.deepEqual(yes.profile.energyCheck, { date: today, signs: true });
+  assert.deepEqual(yes.nutrition.targets, proposal.energyCheck!.ifYes);
+  assert.equal(held.agreed, undefined);
+  assert.equal(targetsInForce(yes).source, "plan");
+  journalSchema.parse(yes);
+  // A maintenance suggestion asks nothing.
+  const reached = emptyJournal();
+  applyGoals(reached, athlete, "2026-08-01");
+  weigh(reached, [
+    ["2026-09-24", 81.2],
+    ["2026-09-26", 81.4],
+  ]);
+  assert.equal(targetsProposal(reached, today)?.energyCheck, undefined);
+});
+
+test("while breastfeeding, the baby reaching 6 weeks is named as why the plan can now lose", () => {
+  const state = emptyJournal();
+  applyGoals(
+    state,
+    {
+      ...holder,
+      age: 31,
+      weightKg: 75,
+      targetWeightKg: 68,
+      trainingDays: 3,
+      sessionMinutes: 60,
+      pregnancy: "breastfeeding",
+      weeksSinceBirth: 3,
+    },
+    "2026-09-01",
+  );
+  assert.equal(state.nutrition.targets.goal, "maintain");
+  const proposal = targetsProposal(state, today)!;
+  assert.equal(proposal.targets.goal, "lose");
+  assert.deepEqual(proposal.reasons, [
+    "Your baby is now 6 weeks old, so your goals plan can include a gentle loss.",
+  ]);
+  // Periods aren't asked about while breastfeeding.
+  assert.equal(proposal.energyCheck?.questions.length, 2);
+});
+
+test("slow loss towards a target date never suggests cutting further; the goals check looks at it", () => {
+  // 88 to 82 kg by September 2027: about 0.1 kg a week at 3,000 kcal.
+  const far = emptyJournal();
+  applyGoals(
+    far,
+    { ...athlete, targetWeightKg: 82, targetDate: "2027-09-01" },
+    "2026-09-01",
+  );
+  assert.equal(far.nutrition.targets.calories, 3000);
+  const june = "2027-06-15";
+  for (const [date, bodyweight] of [
+    ["2027-06-10", 87.6],
+    ["2027-06-13", 87.4],
+    ["2027-06-15", 87.5],
+  ] as const)
+    saveCheckin(far, { date, bodyweight }, june);
+  // The plan now loses 0.44 kg a week, 370 kcal lower: not suggested.
+  assert.ok(planForState(far, june)!.calories <= 2640);
+  assert.equal(targetsProposal(far, june), null);
+  // Nor with the date 13 weeks out, nor at any weight within 2.5 % on any
+  // day before the date: a suggestion never cuts below the saved target.
+  for (const [target, due] of [
+    [84, "2026-12-01"],
+    [80, "2027-03-01"],
+    [82, "2027-09-01"],
+  ] as const) {
+    const state = emptyJournal();
+    applyGoals(
+      state,
+      { ...athlete, targetWeightKg: target, targetDate: due },
+      "2026-09-01",
+    );
+    const saved = state.nutrition.targets.calories!;
+    for (let day = "2026-09-08"; day < due; day = offsetDate(day, 14))
+      for (const kg of [86.3, 87, 87.5, 88, 89, 90]) {
+        const s = structuredClone(state);
+        for (const back of [0, 2, 4])
+          saveCheckin(s, { date: offsetDate(day, -back), bodyweight: kg }, day);
+        const proposal = targetsProposal(s, day);
+        if (proposal?.targets.goal === "lose")
+          assert.ok(
+            proposal.targets.calories! >= saved,
+            `${target} by ${due}, ${kg} kg on ${day}`,
+          );
+      }
+  }
+  // Losing faster than the date needs: the plan eases off, and says why.
+  const ahead = emptyJournal();
+  applyGoals(
+    ahead,
+    { ...athlete, targetWeightKg: 84, targetDate: "2026-11-15" },
+    "2026-09-01",
+  );
+  const sept = "2026-09-08";
+  for (const back of [0, 2, 4])
+    saveCheckin(ahead, { date: offsetDate(sept, -back), bodyweight: 86 }, sept);
+  const easier = targetsProposal(ahead, sept)!;
+  assert.ok(easier.targets.calories! > ahead.nutrition.targets.calories!);
+  assert.deepEqual(easier.reasons, [
+    "You're about 2 kg from your goal, with about 10 weeks to go to 2026-11-15, so the plan loses about 0.21 kg a week.",
+  ]);
+});
+
+test("saving the targets unchanged keeps them the plan's, and its later suggestions", () => {
+  const state = emptyJournal();
+  applyGoals(state, athlete, "2026-09-01");
+  weigh(state, [
+    ["2026-09-24", 87.1],
+    ["2026-09-26", 87.1],
+  ]);
+  const history = state.profile.targetHistory!.length;
+  // Food's form saved without a change, and Coach restating a target.
+  setDailyTargets(state, { ...state.nutrition.targets }, today);
+  const coach = prepareAction(
+    state,
+    { kind: "set_diet_targets", targets: { calories: 2640 } },
+    today,
+  ).state;
+  for (const s of [state, coach]) {
+    assert.equal(targetsInForce(s).source, "plan");
+    assert.equal(s.profile.targetHistory!.length, history);
+    // A DEXA reading still suggests new targets.
+    saveBodyFat(s, { date: today, percent: 27, method: "dexa" }, today);
+    assert.ok(targetsProposal(s, today));
+  }
+});
+
+test("targets saved before records count as the plan's only when they are what it gave", () => {
+  const legacy = (targets: State["nutrition"]["targets"]) => {
+    const state = emptyJournal();
+    state.profile.body = {
+      ...athlete,
+      activity: "moderate",
+      updatedAt: "2026-09-01T10:00:00.000Z",
+    };
+    state.nutrition.targets = targets;
+    return state;
+  };
+  // Set by hand with Coach: the athlete's own, with no maintenance reason
+  // and no suggestion as the weight moves, only at the goal.
+  const own = legacy({
+    goal: "lose",
+    calories: 2500,
+    protein: 180,
+    carbs: 250,
+    fat: 70,
+  });
+  assert.equal(targetsInForce(own).source, "manual");
+  assert.deepEqual(coachingContext(own, today).goals?.targetsSet, {
+    source: "manual",
+    from: null,
+    weightKg: null,
+  });
+  assert.equal(targetsProposal(own, today), null);
+  assert.deepEqual(targetNotes(own, today), [
+    "These are your own daily targets; your goals plan's estimate is about 2,640 kcal a day.",
+  ]);
+  weigh(own, [
+    ["2026-09-24", 85.5],
+    ["2026-09-26", 85.5],
+  ]);
+  assert.equal(targetsProposal(own, today), null);
+  const there = legacy(own.nutrition.targets);
+  weigh(there, [
+    ["2026-09-24", 81.4],
+    ["2026-09-26", 81.2],
+  ]);
+  assert.equal(targetsProposal(there, today)?.maintain, true);
+  // The old plan's own targets (2,350 kcal) are its, as are those the plan
+  // gave from 4 October with its safety limits, here holding his weight:
+  // fat a quarter of the calories, carbohydrate the rest.
+  for (const targets of [
+    { goal: "lose", calories: 2350, protein: 176, carbs: 253, fat: 70 },
+    { goal: "maintain", calories: 2830, protein: 158, carbs: 372, fat: 79 },
+  ] as const)
+    assert.equal(targetsInForce(legacy({ ...targets })).source, "plan");
+  // In pregnancy that plan saved none.
+  assert.equal(
+    targetsInForce(
+      legacy({
+        goal: "maintain",
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
+      }),
+    ).source,
+    "plan",
+  );
+});
+
+test("keeping the targets, then the weight coming back, suggests nothing close to them", () => {
+  const state = emptyJournal();
+  applyGoals(state, holder, "2026-09-01");
+  weigh(state, [
+    ["2026-09-21", 63],
+    ["2026-09-24", 63.2],
+    ["2026-09-26", 63.1],
+  ]);
+  keepCurrentTargets(state, today, targetsProposal(state, today)!.targets);
+  // Back to 62.3 kg: the plan holds at 2,290 kcal beside her 2,280.
+  const later = "2026-10-10";
+  for (const date of ["2026-10-05", "2026-10-08", later])
+    saveCheckin(state, { date, bodyweight: 62.3 }, later);
+  assert.equal(planForState(state, later)!.calories, 2290);
+  assert.equal(targetsProposal(state, later), null);
 });
 
 test("a goal below a lean athlete's safer weight isn't reached as it is set", () => {

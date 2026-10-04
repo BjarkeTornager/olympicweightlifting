@@ -31,6 +31,7 @@ import { today } from "@/lib/domain";
 import { dailyTarget } from "@/lib/nutrition";
 import { currentWeightKg, targetsInForce } from "@/lib/target-history";
 import {
+  energyCheckNote,
   keepCurrentTargets,
   targetsProposal,
   type TargetsProposal,
@@ -170,8 +171,11 @@ const proposalTitle = (proposal: TargetsProposal) =>
 
 // The plan's suggestion: why, the targets now and suggested, the plan's
 // notes, and the goals check that taking it agrees or closes, as the goals
-// form says. Taking it saves the plan's targets; keeping the current ones
-// means it isn't suggested again until the plan moves on.
+// form says. One that sets a deficit without answers to the low-energy
+// questions in force asks them first, as the goals form does; taking it
+// then needs an answer, and with a yes the plan holds the weight instead.
+// Taking it saves the plan's targets; keeping the current ones means it
+// isn't suggested again until the plan moves on.
 function ProposalReview({
   journal,
   proposal,
@@ -184,16 +188,28 @@ function ProposalReview({
   const state = journal.state!;
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const checkFrom = goalsCheckDate(state, proposal.plan, today());
-  const closes = goalsPlanChanges(proposal.plan)
-    ? undefined
-    : activeGoalsCheck(state);
+  const [answer, setAnswer] = useState<"" | "no" | "yes" | "skip">("");
+  const check = proposal.energyCheck;
+  const yes = check != null && answer === "yes";
+  // With a yes, the plan holding the weight is what is saved.
+  const plan = yes
+    ? planForState(state, today(), undefined, true)!
+    : proposal.plan;
+  const targets = yes ? check.ifYes : proposal.targets;
+  const checkFrom = goalsCheckDate(state, plan, today());
+  const closes = goalsPlanChanges(plan) ? undefined : activeGoalsCheck(state);
   const choose = async (take: boolean) => {
     setSaving(true);
     setError("");
     try {
       await journal.update((s) => {
-        if (take) takeTargetsProposal(s, today(), proposal.targets);
+        if (take)
+          takeTargetsProposal(
+            s,
+            today(),
+            proposal.targets,
+            !check ? undefined : answer === "skip" ? null : answer === "yes",
+          );
         else keepCurrentTargets(s, today(), proposal.targets);
       });
       onDone();
@@ -209,7 +225,7 @@ function ProposalReview({
         {proposal.reasons.map((reason) => (
           <strong key={reason}>{reason}</strong>
         ))}
-        {proposal.plan.notes
+        {plan.notes
           .filter((note) => !proposal.reasons.includes(note))
           .map((note) => (
             <p key={note} className="fine-print">
@@ -223,14 +239,42 @@ function ProposalReview({
           </p>
         )}
       </div>
-      <TargetsReview after={proposal.targets} before={proposal.current} />
+      {check && (
+        <fieldset className="goals-questions">
+          <legend>Before a deficit: a few health questions</legend>
+          <ul>
+            {check.questions.map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
+          <label>
+            Yes to any of these
+            <select
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value as typeof answer)}
+            >
+              <option value="" disabled>
+                Choose
+              </option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+              <option value="skip">Prefer not to say</option>
+            </select>
+          </label>
+          <p className="fine-print">{energyCheckNote(check)}</p>
+        </fieldset>
+      )}
+      <TargetsReview after={targets} before={proposal.current} />
       {error && (
         <p className="notice warning" role="alert">
           {error}
         </p>
       )}
       <div className="button-row">
-        <Button disabled={saving} onClick={() => void choose(true)}>
+        <Button
+          disabled={saving || (check != null && !answer)}
+          onClick={() => void choose(true)}
+        >
           Use these targets
         </Button>
         <Button

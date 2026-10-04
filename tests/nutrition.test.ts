@@ -126,6 +126,78 @@ test("agent meal proposals preserve training and update owned meals only", () =>
   assert.equal(updated.state.nutrition.meals.length, 1);
   assert.equal(updated.meal?.id, prepared.meal?.id);
 });
+test("a Coach target update changes only the targets it names", () => {
+  const state = emptyJournal();
+  state.nutrition.targets = {
+    goal: "lose",
+    calories: 2350,
+    protein: 176,
+    carbs: 253,
+    fat: 70,
+  };
+  // Calories only: protein, carbs, fat and the goal label are kept.
+  const calories = prepareAction(
+    state,
+    { kind: "set_diet_targets", targets: { calories: 2400 } },
+    "2026-09-06",
+  );
+  assert.deepEqual(calories.state.nutrition.targets, {
+    goal: "lose",
+    calories: 2400,
+    protein: 176,
+    carbs: 253,
+    fat: 70,
+  });
+  assert.deepEqual(calories.targets, calories.state.nutrition.targets);
+  assert.deepEqual(calories.targetsBefore, state.nutrition.targets);
+  // An explicit null clears that target alone.
+  const cleared = prepareAction(
+    state,
+    { kind: "set_diet_targets", targets: { carbs: null } },
+    "2026-09-06",
+  );
+  assert.deepEqual(cleared.state.nutrition.targets, {
+    ...state.nutrition.targets,
+    carbs: null,
+  });
+  // The goal label changes only when given.
+  const goal = prepareAction(
+    state,
+    { kind: "set_diet_targets", targets: { goal: "maintain" } },
+    "2026-09-06",
+  );
+  assert.deepEqual(goal.state.nutrition.targets, {
+    ...state.nutrition.targets,
+    goal: "maintain",
+  });
+  // A complete set still replaces them all, and an empty one is refused.
+  const full = {
+    goal: "gain",
+    calories: 3000,
+    protein: 180,
+    carbs: 380,
+    fat: 90,
+  };
+  assert.deepEqual(
+    prepareAction(
+      state,
+      { kind: "set_diet_targets", targets: full },
+      "2026-09-06",
+    ).state.nutrition.targets,
+    full,
+  );
+  assert.throws(
+    () =>
+      prepareAction(
+        state,
+        { kind: "set_diet_targets", targets: {} },
+        "2026-09-06",
+      ),
+    /Name the targets/,
+  );
+  // The journal itself is untouched until the change is saved.
+  assert.equal(state.nutrition.targets.calories, 2350);
+});
 test("photo processing rejects spoofed files, bounds size and removes metadata", async () => {
   await assert.rejects(
     normalizeFoodPhoto(

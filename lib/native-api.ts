@@ -17,7 +17,7 @@ import {
 } from "./hydration";
 import type { JournalState } from "./model";
 import { nextTraining } from "./next-training";
-import { mealTypes, totalNutrients } from "./nutrition";
+import { mealTypes, totalNutrients, type Nutrients } from "./nutrition";
 import type { SavedVisual } from "./coach-visuals";
 import { describeRoute, type RouteNote } from "./route-summary";
 import {
@@ -1194,6 +1194,17 @@ type StoredProposal = ReceiptSource &
 const capitalised = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 const grams = (value: number) => `${Math.round(value)} g`;
+const targetAmount = (value: number | null, key: keyof Nutrients) =>
+  value == null
+    ? "No target"
+    : key === "calories"
+      ? `${Math.round(value)} kcal`
+      : grams(value);
+const dietGoalNames = {
+  maintain: "Maintain weight",
+  lose: "Lose weight",
+  gain: "Gain weight",
+};
 
 // One saved or proposed entry as the app shows it: the same facts the
 // website's review shows (meal items, sets, check-in values), as text.
@@ -1310,18 +1321,35 @@ export function receiptEntryView(
     };
   }
   if (entry.targets) {
-    const t = entry.targets;
+    // The goal and all four targets, with the old value under any that
+    // changes, so a target cleared shows as plainly as a new one.
+    const t = entry.targets,
+      before = entry.targetsBefore;
+    const line = (label: string, key: keyof Nutrients) =>
+      defined({
+        label,
+        note:
+          before && before[key] !== t[key]
+            ? `Was ${targetAmount(before[key], key)}`
+            : undefined,
+        value: targetAmount(t[key], key),
+      });
     return {
       title: entry.title,
       lines: [
-        t.calories != null && {
-          label: "Energy",
-          value: `${Math.round(t.calories)} kcal`,
-        },
-        t.protein != null && { label: "Protein", value: grams(t.protein) },
-        t.carbs != null && { label: "Carbs", value: grams(t.carbs) },
-        t.fat != null && { label: "Fat", value: grams(t.fat) },
-      ].filter((line) => line !== false),
+        defined({
+          label: "Goal",
+          note:
+            before && before.goal !== t.goal
+              ? `Was ${dietGoalNames[before.goal].toLowerCase()}`
+              : undefined,
+          value: dietGoalNames[t.goal],
+        }),
+        line("Energy", "calories"),
+        line("Protein", "protein"),
+        line("Carbs", "carbs"),
+        line("Fat", "fat"),
+      ],
     };
   }
   if (entry.memory)

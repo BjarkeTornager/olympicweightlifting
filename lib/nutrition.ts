@@ -102,15 +102,34 @@ export const mealSchema = mealInputSchema.extend({
   id: z.string().uuid(),
   createdAt: z.string().datetime(),
 });
+const dietGoal = z.enum(["maintain", "lose", "gain"]);
+const dietTargetFields = {
+  calories: z.number().finite().min(0).max(10000).nullable(),
+  protein: z.number().finite().min(0).max(1000).nullable(),
+  carbs: z.number().finite().min(0).max(2000).nullable(),
+  fat: z.number().finite().min(0).max(1000).nullable(),
+};
 export const dietTargetsSchema = z
   .object({
-    goal: z.enum(["maintain", "lose", "gain"]).default("maintain"),
-    calories: z.number().finite().min(0).max(10000).nullable().default(null),
-    protein: z.number().finite().min(0).max(1000).nullable().default(null),
-    carbs: z.number().finite().min(0).max(2000).nullable().default(null),
-    fat: z.number().finite().min(0).max(1000).nullable().default(null),
+    goal: dietGoal.default("maintain"),
+    calories: dietTargetFields.calories.default(null),
+    protein: dietTargetFields.protein.default(null),
+    carbs: dietTargetFields.carbs.default(null),
+    fat: dietTargetFields.fat.default(null),
   })
   .strict();
+// A change to the saved targets: only the fields given change, and null
+// clears one. No defaults, so a field left out is never reset.
+export const dietTargetsUpdateSchema = z
+  .object({ goal: dietGoal, ...dietTargetFields })
+  .partial()
+  .strict();
+export function mergeDietTargets(
+  current: DietTargets,
+  update: z.infer<typeof dietTargetsUpdateSchema>,
+): DietTargets {
+  return dietTargetsSchema.parse({ ...current, ...update });
+}
 export const favouriteMealSchema = mealInputSchema
   .omit({ date: true, photoIds: true, source: true })
   .extend({

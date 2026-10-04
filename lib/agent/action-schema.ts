@@ -10,7 +10,7 @@ import {
   trainingExerciseId,
 } from "../training-program-schema";
 import { checkinPatchSchema } from "../health";
-import { mealInputSchema, dietTargetsSchema } from "../nutrition";
+import { mealInputSchema, dietTargetsUpdateSchema } from "../nutrition";
 import { bodyGoalsRequestSchema } from "../body-goals";
 import { bodyFatInputSchema } from "../body-composition";
 import { drinkInputSchema } from "../hydration";
@@ -253,7 +253,10 @@ const singleActionSchema = z.discriminatedUnion("kind", [
   recordBodyFatSchema,
   z.object({ kind: z.literal("delete_body_fat"), date }).strict(),
   z
-    .object({ kind: z.literal("set_diet_targets"), targets: dietTargetsSchema })
+    .object({
+      kind: z.literal("set_diet_targets"),
+      targets: dietTargetsUpdateSchema,
+    })
     .strict(),
   z
     .object({
@@ -467,7 +470,11 @@ export const actionToolSchema = z
       )
       .optional(),
     mealId: z.string().uuid().optional(),
-    targets: dietTargetsSchema.optional(),
+    targets: dietTargetsUpdateSchema
+      .optional()
+      .describe(
+        "For set_diet_targets: only the targets the athlete changes (goal maintain, lose or gain; calories in kcal; protein, carbs and fat in grams). Targets left out keep their saved value; null clears one, only when asked.",
+      ),
     drink: drinkInputSchema
       .optional()
       .describe(

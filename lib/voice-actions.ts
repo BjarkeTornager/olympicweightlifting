@@ -859,6 +859,9 @@ async function saveVoiceAction(
     ...(prepared.meal ? { meal: prepared.meal } : {}),
     ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
     ...(prepared.targets ? { targets: prepared.targets } : {}),
+    ...(prepared.targetsBefore
+      ? { targetsBefore: prepared.targetsBefore }
+      : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
     ...(prepared.drink ? { drink: prepared.drink } : {}),
     ...(prepared.workoutReview

@@ -482,6 +482,69 @@ test("a receipt opens to show what was saved, item by item", () => {
   assert.match(batch.entries![0].footnote!, /of about 2.5 L that day/);
   assert.equal(batch.entries![2].summary, "330 ml cola.");
 
+  // Targets show the goal label and every target, with what changed.
+  const targets = receiptView(
+    {
+      id: "t",
+      title: "Update your daily nutrition targets",
+      detail: "These are your chosen daily targets.",
+      workout: null,
+      expiresAt: now.toISOString(),
+      targets: {
+        goal: "lose",
+        calories: 2400,
+        protein: 176,
+        carbs: null,
+        fat: 70,
+      },
+      targetsBefore: {
+        goal: "maintain",
+        calories: 2350,
+        protein: 176,
+        carbs: 253,
+        fat: 70,
+      },
+    },
+    now,
+  );
+  assert.equal(targets.state, "pending");
+  assert.deepEqual(targets.entries![0].lines, [
+    { label: "Goal", note: "Was maintain weight", value: "Lose weight" },
+    { label: "Energy", note: "Was 2350 kcal", value: "2400 kcal" },
+    { label: "Protein", value: "176 g" },
+    { label: "Carbs", note: "Was 253 g", value: "No target" },
+    { label: "Fat", value: "70 g" },
+  ]);
+  // One stored before the old values were kept still lists every target.
+  const older = receiptView(
+    {
+      id: "o",
+      title: "Update your daily nutrition targets",
+      detail: "",
+      workout: null,
+      status: "saved",
+      expiresAt: now.toISOString(),
+      targets: {
+        goal: "maintain",
+        calories: 2200,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
+    now,
+  );
+  assert.deepEqual(
+    older.entries![0].lines.map((line) => `${line.label}: ${line.value}`),
+    [
+      "Goal: Maintain weight",
+      "Energy: 2200 kcal",
+      "Protein: No target",
+      "Carbs: No target",
+      "Fat: No target",
+    ],
+  );
+
   // A plain note has nothing more to show.
   const plain = receiptView(
     {

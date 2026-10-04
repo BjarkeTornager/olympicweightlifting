@@ -54,6 +54,20 @@ struct ContractTests {
     #expect(entry.lines.first?.note == "80 g")
   }
 
+  @Test("A targets review shows the goal and every target, with what it was")
+  func coachTargets() throws {
+    let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)
+    let receipt = try #require(
+      history.turns.flatMap(\.receipts).first { $0.title == "Update your daily nutrition targets" })
+    #expect(receipt.state == "pending")
+    let lines = try #require(receipt.entries?.first?.lines)
+    #expect(lines.map(\.label) == ["Goal", "Energy", "Protein", "Carbs", "Fat"])
+    #expect(lines[0].value == "Lose weight" && lines[0].note == nil)
+    // Only calories changed: the old value sits under the label.
+    #expect(lines[1].value == "2400 kcal" && lines[1].note == "Was 2350 kcal")
+    #expect(lines[2].value == "176 g" && lines[2].note == nil)
+  }
+
   @Test("Every kind of visual Coach draws decodes, with its own fields")
   func coachVisuals() throws {
     let history = try fixture("coach", as: Components.Schemas.CoachHistory.self)

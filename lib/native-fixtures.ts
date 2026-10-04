@@ -253,6 +253,40 @@ export function nativeFixtures() {
           proposals: [],
         },
         {
+          id: "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a22",
+          question: "Set my calorie target to 2400",
+          photoIds: [],
+          createdAt: now.toISOString(),
+          status: "done",
+          reply: "Here is the new calorie target to review.",
+          visuals: [],
+          // Calories only: the other targets and the goal are kept.
+          proposals: [
+            {
+              id: "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a23",
+              title: "Update your daily nutrition targets",
+              detail:
+                "These are your chosen daily targets. They are not a calculated calorie prescription.",
+              expiresAt: "2026-09-27T18:00:00.000Z",
+              workout: null,
+              targets: {
+                goal: "lose",
+                calories: 2400,
+                protein: 176,
+                carbs: 253,
+                fat: 70,
+              },
+              targetsBefore: {
+                goal: "lose",
+                calories: 2350,
+                protein: 176,
+                carbs: 253,
+                fat: 70,
+              },
+            },
+          ],
+        },
+        {
           id: "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a21",
           question:
             "Can you give me a high-protein dinner with salmon for two, and show me what it looks like?",

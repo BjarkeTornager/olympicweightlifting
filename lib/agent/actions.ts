@@ -61,6 +61,8 @@ export type ActionPreview = {
   workout: Workout | null;
   meal?: Meal;
   targets?: DietTargets;
+  // The targets before this change, so the review can show what changes.
+  targetsBefore?: DietTargets;
   checkin?: Checkin;
   cardio?: CardioEntry;
   memory?: CoachMemory;
@@ -96,6 +98,7 @@ export type PreviewEntry = Pick<
   | "workout"
   | "meal"
   | "targets"
+  | "targetsBefore"
   | "checkin"
   | "cardio"
   | "memory"
@@ -265,6 +268,7 @@ export function prepareAction(
     workout,
     meal: change.meal,
     targets: change.targets,
+    targetsBefore: change.targetsBefore,
     checkin: change.checkin,
     cardio: change.cardio,
     memory: change.memory,

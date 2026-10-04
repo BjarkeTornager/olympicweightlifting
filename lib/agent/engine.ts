@@ -195,6 +195,9 @@ function prepareChange(
     workout: prepared.workout,
     ...(prepared.meal ? { meal: prepared.meal } : {}),
     ...(prepared.targets ? { targets: prepared.targets } : {}),
+    ...(prepared.targetsBefore
+      ? { targetsBefore: prepared.targetsBefore }
+      : {}),
     ...(prepared.checkin ? { checkin: prepared.checkin } : {}),
     ...(prepared.cardio ? { cardio: prepared.cardio } : {}),
     ...(prepared.drink ? { drink: prepared.drink } : {}),

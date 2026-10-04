@@ -16,7 +16,12 @@ import {
   supplementRule,
   teenSleepRule,
 } from "../lib/agent/health-rules";
-import { proteinPerKg, weeklyRates } from "../lib/body-goals";
+import {
+  CARBS_FLOOR_G,
+  macroShares,
+  proteinPerKg,
+  weeklyRates,
+} from "../lib/body-goals";
 
 test("conversational prompt changes preserve the fixed health, privacy, evidence and action policy", () => {
   // The whole reviewed policy, core and skills; turns get the core plus the
@@ -209,7 +214,17 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // ("(low/moderate/high)" gains it). Restoring those three phrases
     // reproduces the previous hash (74336db6…). Health, privacy and
     // evidence text is unchanged.
-    "fff4bd2881d26793b989a3661b211f0126f6d1fd64f4af5c0be1ffa3a1e3c19d",
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 5, macros), so Coach describes the macros the plan now sets: the
+    // goal-setup paragraph adds protein from a height-adjusted weight at a
+    // BMI of 30 or more, fat at 25 % of calories and carbohydrate as the
+    // rest, at least 130 g (macroShares and CARBS_FLOOR_G in
+    // body-goals.ts); the coaching paragraph adds 2 g/kg of a
+    // height-adjusted weight at a BMI of 30 or more while losing
+    // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
+    // gaining. Restoring those three phrases reproduces the previous hash
+    // (fff4bd28…). Health, privacy and evidence text is unchanged.
+    "2f64565167c06969348222c14a177e9d8182b977e6213de49f2a34be473e7319",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -340,15 +355,21 @@ test("Coach quotes the plan's own rates and protein", () => {
   assert.ok(coaching.includes(`losing about ${losing}`));
   assert.ok(coaching.includes(`about ${gaining} a week`));
   assert.ok(coaching.includes(`${recomposing} a week either way`));
-  const { bodyweight, leanMass } = proteinPerKg;
+  const { bodyweight, leanMass, adjusted } = proteinPerKg;
   assert.ok(
     coaching.includes(
-      `the app sets ${bodyweight.losing} g/kg of bodyweight, or ${leanMass.losing} g/kg of lean mass when body fat is known`,
+      `the app sets ${bodyweight.losing} g/kg of bodyweight, ${adjusted.losing} g/kg of a height-adjusted weight at a BMI of 30 or more, or ${leanMass.losing} g/kg of lean mass when body fat is known`,
     ),
   );
   assert.ok(
     coaching.includes(
-      `the app sets ${bodyweight.other} g/kg of bodyweight, or ${leanMass.other} g/kg of lean mass`,
+      `the app sets ${bodyweight.other} g/kg of bodyweight, less at a BMI of 30 or more, or ${leanMass.other} g/kg of lean mass`,
+    ),
+  );
+  // Goal setup names the plan's fat share and carbohydrate floor.
+  assert.ok(
+    setup.includes(
+      `or from a height-adjusted weight at a BMI of 30 or more; fat ${macroShares.fat} % of calories; carbohydrate the rest, at least ${CARBS_FLOOR_G} g)`,
     ),
   );
   // Every rate and protein figure in it is one of the plan's.
@@ -361,7 +382,11 @@ test("Coach quotes the plan's own rates and protein", () => {
     for (const value of [low, high])
       assert.ok(planPercents.has(Number(value)), `${value} %`);
   const planProtein = new Set(
-    [...Object.values(bodyweight), ...Object.values(leanMass)].map(String),
+    [
+      ...Object.values(bodyweight),
+      ...Object.values(leanMass),
+      ...Object.values(adjusted),
+    ].map(String),
   );
   for (const [, value] of coaching.matchAll(/([\d.]+) g\/kg/g))
     assert.ok(planProtein.has(value), `${value} g/kg`);

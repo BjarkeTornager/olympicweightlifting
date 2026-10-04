@@ -4,7 +4,6 @@ import { AgreedPlans } from "./coach-memory";
 import { useState } from "react";
 import {
   Check,
-  Droplets,
   Dumbbell,
   HeartPulse,
   Moon,
@@ -41,7 +40,6 @@ export function CheckinDetails({ checkin }: { checkin: Checkin }) {
       : `${formatSleepDuration(checkin.sleepHours)} sleep`,
     checkin.energy == null ? null : `Energy ${checkin.energy}/5`,
     checkin.soreness == null ? null : `Soreness ${checkin.soreness}/5`,
-    checkin.waterMl == null ? null : `${checkin.waterMl}\u00a0ml water`,
     checkin.bodyweight == null ? null : `${checkin.bodyweight} kg`,
   ].filter(Boolean);
   return (
@@ -79,7 +77,6 @@ function CheckinForm({
       sleepHours: c?.sleepHours ?? null,
       energy: c?.energy ?? null,
       soreness: c?.soreness ?? null,
-      waterMl: c?.waterMl ?? null,
       bodyweight: c?.bodyweight ?? null,
       notes: c?.notes ?? "",
     };
@@ -111,7 +108,6 @@ function CheckinForm({
               draft.sleepHours,
               draft.energy,
               draft.soreness,
-              draft.waterMl,
               draft.bodyweight,
             ];
             // A body fat reading alone doesn't need a check-in.
@@ -162,7 +158,6 @@ function CheckinForm({
         {(
           [
             ["sleepHours", "Sleep last night", "hours", Moon, 0, 24, "any"],
-            ["waterMl", "Water today", "ml total", Droplets, 0, 15000, 1],
             ["bodyweight", "Bodyweight", "kg", Scale, 20, 500, 0.1],
           ] as const
         ).map(([key, label, unit, Icon, min, max, step]) => (

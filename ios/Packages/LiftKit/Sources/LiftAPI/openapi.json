@@ -1297,13 +1297,16 @@
           },
           "kind": {
             "type": "string",
-            "description": "One of: water, sparkling water, coffee, tea, energy drink, sports drink, milk, juice, soft drink, protein shake, other. Treat others as unknown."
+            "description": "One of: water, sparkling water, coffee, tea, energy drink, sports drink, milk, juice, soft drink, protein shake, beer, wine, spirits, other. Treat others as unknown."
           },
           "name": {
             "type": "string"
           },
           "at": {
             "type": "string"
+          },
+          "estimated": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -1644,6 +1647,24 @@
             "items": {
               "$ref": "#/components/schemas/Drink"
             }
+          },
+          "targetLowMl": {
+            "type": "integer"
+          },
+          "targetHighMl": {
+            "type": "integer"
+          },
+          "targetHidden": {
+            "type": "boolean"
+          },
+          "restDayTargetMl": {
+            "type": "integer"
+          },
+          "liftingDayTargetMl": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
           }
         },
         "required": [
@@ -1806,6 +1827,9 @@
                   "juice",
                   "soft drink",
                   "protein shake",
+                  "beer",
+                  "wine",
+                  "spirits",
                   "other"
                 ]
               },
@@ -2014,6 +2038,9 @@
           },
           {
             "$ref": "#/components/schemas/UseProgrammeAction"
+          },
+          {
+            "$ref": "#/components/schemas/SetHydrationTargetAction"
           }
         ],
         "discriminator": {
@@ -2036,7 +2063,8 @@
             "create_training_program": "#/components/schemas/CreateProgrammeAction",
             "update_training_program": "#/components/schemas/UpdateProgrammeAction",
             "delete_training_program": "#/components/schemas/DeleteProgrammeAction",
-            "use_programme": "#/components/schemas/UseProgrammeAction"
+            "use_programme": "#/components/schemas/UseProgrammeAction",
+            "set_hydration_target": "#/components/schemas/SetHydrationTargetAction"
           }
         }
       },
@@ -2675,6 +2703,24 @@
           }
         }
       },
+      "SetHydrationTargetAction": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "set_hydration_target"
+            ]
+          },
+          "hidden": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "hidden"
+        ]
+      },
       "Sleep": {
         "type": "object",
         "properties": {
@@ -3120,6 +3166,9 @@
           },
           "waterTargetMl": {
             "type": "integer"
+          },
+          "waterTargetHidden": {
+            "type": "boolean"
           }
         },
         "required": [

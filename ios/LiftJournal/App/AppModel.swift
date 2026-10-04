@@ -366,7 +366,7 @@ final class AppModel {
   /// The area a change belongs to, for its margin note's key.
   static func category(_ action: NativeAction) -> Category? {
     switch action {
-    case .logDrink, .deleteDrink: .water
+    case .logDrink, .deleteDrink, .setHydrationTarget: .water
     case .logSupplement, .deleteSupplement: .food
     case .recordCheckin: .checkin
     case .recordBodyFat, .deleteBodyFat: .body
@@ -402,6 +402,13 @@ final class AppModel {
 
   func removeDrink(id: String) async {
     await save(.deleteDrink(.init(kind: .deleteDrink, drinkId: id)), confirmation: "Drink removed")
+  }
+
+  /// Hide or show the day's drinks target on Today. Drinks still add up.
+  func setHydrationTarget(hidden: Bool) async {
+    await save(
+      .setHydrationTarget(.init(kind: .setHydrationTarget, hidden: hidden)),
+      confirmation: hidden ? "Drinks target hidden" : "Drinks target shown")
   }
 
   func logSupplement(name: String, amount: String) async {

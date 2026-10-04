@@ -276,9 +276,35 @@ private struct AthleteCard: View {
   }
 }
 
-/// The targets Coach and the athlete have agreed on.
+/// The drinks targets as Account lists them.
+enum DrinksTargets {
+  /// A rest day's drinks and a lifting day's, or the day's alone from a
+  /// server older than both; marked as estimated while no weight is known.
+  static func line(_ water: Components.Schemas.Hydration) -> String {
+    if water.targetHidden == true { return "Hidden on Today" }
+    let estimated = water.estimatedTarget ? ", estimated" : ""
+    if let rest = water.restDayTargetMl, let lifting = water.liftingDayTargetMl {
+      return "\(FoodSection.litres(rest)) L rest · \(FoodSection.litres(lifting)) L lifting\(estimated)"
+    }
+    let (litres, unit) = Format.litres(water.targetMl)
+    return "\(litres) \(unit) a day\(estimated)"
+  }
+
+  /// What the target rests on: a general base until a weight is known.
+  static func basis(_ water: Components.Schemas.Hydration) -> String {
+    water.estimatedTarget
+      ? "a general estimate until your weight is known"
+      : "an estimate from your weight and the day's training"
+  }
+}
+
+/// The targets Coach and the athlete have agreed on, and the drinks target,
+/// which follows weight and training and can be hidden.
 private struct GoalsSection: View {
+  @Environment(AppModel.self) private var model
   let today: Today
+  /// The switch as just set, until Today reloads with it.
+  @State private var showing: Bool?
 
   var body: some View {
     let body = today.body
@@ -298,10 +324,17 @@ private struct GoalsSection: View {
       if let grams = Format.target(today.nutrition.targetProtein) {
         row("Protein", "\(Format.number(grams)) g a day", "fork.knife", Theme.protein)
       }
-      let (litres, unit) = Format.litres(today.hydration.targetMl)
-      row(
-        "Water", "\(litres) \(unit) a day\(today.hydration.estimatedTarget ? ", estimated" : "")",
-        "drop.fill", Category.water.tint)
+      // On shows the drinks target on Today; off hides it.
+      Toggle(isOn: shown) {
+        Label {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Drinks")
+            Text(drinks).font(.footnote.monospacedDigit()).foregroundStyle(Theme.inkSecondary)
+          }
+        } icon: {
+          IconBadge(symbol: "drop.fill", tint: Category.water.tint, size: 28)
+        }
+      }
     } header: {
       Text("Goals")
     } footer: {
@@ -310,10 +343,26 @@ private struct GoalsSection: View {
       // plan's own targets, and otherwise a line saying the targets differ.
       VStack(alignment: .leading, spacing: 6) {
         ForEach(body?.goalNotes ?? [], id: \.self) { Text($0) }
-        Text("Set with Coach. Ask Coach to change any of them.")
+        Text(
+          "Ask Coach to change the weight, body fat, energy and protein targets. The drinks target is \(DrinksTargets.basis(today.hydration)), not a minimum."
+        )
       }
     }
     .themedRows()
+  }
+
+  private var drinks: String { DrinksTargets.line(today.hydration) }
+
+  private var shown: Binding<Bool> {
+    Binding(
+      get: { showing ?? (today.hydration.targetHidden != true) },
+      set: { show in
+        showing = show
+        Task {
+          await model.setHydrationTarget(hidden: !show)
+          showing = nil
+        }
+      })
   }
 
   private func row(_ title: String, _ value: String, _ symbol: String, _ tint: Color) -> some View {

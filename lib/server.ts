@@ -14,6 +14,7 @@ import {
 } from "./db/schema";
 import { emptyJournal } from "./domain";
 import { journalSchema, type JournalState, type Snapshot } from "./model";
+import { moveCheckinWater, retainDrinkDetails } from "./hydration";
 import { isValidLoggedSet } from "../js/progression.js";
 export class RevisionConflict extends Error {
   constructor(public snapshot: Snapshot) {
@@ -24,6 +25,10 @@ export class RevisionConflict extends Error {
 }
 export class MutationConflict extends Error {}
 export class MissingMealPhoto extends Error {}
+// A stored journal as the app reads it, with any older check-in water total
+// moved into a drink.
+const storedJournal = (raw: unknown) =>
+  moveCheckinWater(journalSchema.parse(raw));
 export async function readJournal(userId: string): Promise<Snapshot> {
   const db = getDb();
   await db
@@ -34,7 +39,7 @@ export async function readJournal(userId: string): Promise<Snapshot> {
     .select()
     .from(journals)
     .where(eq(journals.userId, userId));
-  return { state: journalSchema.parse(row.state), revision: row.revision };
+  return { state: storedJournal(row.state), revision: row.revision };
 }
 export type JournalTransaction = Parameters<
   Parameters<ReturnType<typeof getDb>["transaction"]>[0]
@@ -48,6 +53,8 @@ export async function writeJournal(
     preserveMissingFoodTags?: boolean;
     preserveMissingCoachData?: boolean;
     preserveMissingActivityPhotos?: boolean;
+    // An older cached app knows neither alcohol kinds nor estimated volumes.
+    preserveDrinkDetails?: boolean;
   },
   transaction?: JournalTransaction,
 ): Promise<Snapshot> {
@@ -88,11 +95,11 @@ export async function writeJournal(
         throw new MutationConflict(
           "A save identifier was reused with different content.",
         );
-      return { state: journalSchema.parse(row.state), revision: row.revision };
+      return { state: storedJournal(row.state), revision: row.revision };
     }
     if (row.revision !== input.revision)
       throw new RevisionConflict({
-        state: journalSchema.parse(row.state),
+        state: storedJournal(row.state),
         revision: row.revision,
       });
     // Older cached clients cannot intentionally edit a field they do not know.
@@ -100,7 +107,7 @@ export async function writeJournal(
     if (input.state.cardio === undefined)
       state.cardio = journalSchema.parse(row.state).cardio;
     if (input.preserveMissingCoachData) {
-      const previous = journalSchema.parse(row.state);
+      const previous = storedJournal(row.state);
       // Omission by an older client preserves the brief. Explicit null clears it.
       // Agent transactions omit this compatibility flag, so Undo restores absence.
       if (state.profile.lifting === undefined)
@@ -225,6 +232,14 @@ export async function writeJournal(
           "Only images categorised as Food can be linked to meals. Correct the category in Images or remove the image link in Food before syncing.",
         );
     }
+    if (input.preserveDrinkDetails && state.health.drinks)
+      state.health.drinks = retainDrinkDetails(
+        state.health.drinks,
+        storedJournal(row.state).health.drinks ?? [],
+      );
+    // After the omitted drinks are restored, so a check-in total moves only
+    // on a day with no other drinks.
+    state.health = moveCheckinWater(state).health;
     state.updatedAt = new Date().toISOString();
     // Account-level optimistic concurrency also covers deleted sessions: stale devices
     // must resolve before uploading, so old snapshots cannot resurrect deletions.

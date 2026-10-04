@@ -1,4 +1,5 @@
 import type { JournalState, Snapshot } from "./model";
+import { alcoholKinds, drinksForOlderApps } from "./hydration";
 /** Older cached food schemas reject unknown properties. Adapt only the response,
  * never the stored record; their writes preserve omitted tags in the transaction. */
 export function foodSnapshotForClient<T extends Snapshot>(
@@ -36,6 +37,17 @@ export function foodSnapshotForClient<T extends Snapshot>(
     }
     delete snapshot.state.nutrition.favourites;
     delete snapshot.state.nutrition.completeDays;
+  }
+  if (
+    request.headers.get("x-drinks-version") !== "1" &&
+    snapshot.state.health.drinks?.some(
+      (d) => d.estimated !== undefined || alcoholKinds.includes(d.kind),
+    )
+  ) {
+    snapshot = structuredClone(snapshot);
+    snapshot.state.health.drinks = drinksForOlderApps(
+      snapshot.state.health.drinks!,
+    );
   }
   if (request.headers.get("x-food-tags-version") === "1") return snapshot;
   return {

@@ -78,9 +78,10 @@ export const goalChecksInputSchema = z
       .int()
       .min(0)
       .max(260)
+      .nullable()
       .optional()
       .describe(
-        "While breastfeeding: how many weeks old the baby is, only if the athlete says.",
+        "While breastfeeding: how many weeks old the baby is, only if the athlete says; null if they'd rather not say after all.",
       ),
     limitProtein: z
       .boolean()
@@ -929,9 +930,9 @@ export function applyGoals(
   const health = state.profile.goalHealth;
   const limitProtein = checks.limitProtein ?? Boolean(health?.limitProtein);
   const babyBornOn =
-    pregnancy !== "breastfeeding"
+    pregnancy !== "breastfeeding" || checks.weeksSinceBirth === null
       ? undefined
-      : checks.weeksSinceBirth != null
+      : checks.weeksSinceBirth !== undefined
         ? new Date(Date.parse(today) - checks.weeksSinceBirth * WEEK_MS)
             .toISOString()
             .slice(0, 10)

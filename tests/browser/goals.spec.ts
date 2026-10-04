@@ -66,8 +66,22 @@ test("goals are set from Today, preview the plan and become the daily food targe
     .analyze();
   expect(axe.violations).toEqual([]);
   await page.screenshot({ path: info.outputPath("goals-form.png") });
-  // Men aren't asked about pregnancy.
+  // Men aren't asked about pregnancy. Everyone may say they have kidney
+  // disease or were told to limit protein: the plan then sets no protein
+  // target.
   await expect(dialog.getByLabel("Pregnant or breastfeeding")).toHaveCount(0);
+  await expect(dialog).toContainText(
+    "no protein target with kidney disease or a doctor's limit on protein; choose No or Prefer not to say to remove it",
+  );
+  const kidney = dialog.getByLabel("Kidney disease, or told to limit protein");
+  await expect(kidney).toHaveValue("");
+  await kidney.selectOption("yes");
+  await expect(plan).toContainText("g fat, with no protein target");
+  await expect(plan).toContainText("follow your doctor's", {
+    ignoreCase: true,
+  });
+  await kidney.selectOption("");
+  await expect(plan).toContainText("g protein");
   // An unhealthy goal is flagged, not silently accepted: just under the
   // healthy range, the plan holds until the athlete confirms.
   await dialog.getByLabel("Goal weight (kg)").fill("58");
@@ -137,9 +151,19 @@ test("under 18 the form asks no body fat, and breastfeeding holds weight", async
   await status.selectOption("breastfeeding");
   await expect(plan).toContainText("Hold around 60 kg");
   await expect(plan).toContainText("milk supply");
+  await expect(plan).toContainText("with no protein target");
   await expect(dialog).toContainText(
-    "choose Neither or Prefer not to say to remove it",
+    "Choose No, Neither or Prefer not to say to remove them.",
   );
+  // No deficit until the baby is 6 weeks old, then a gentle one.
+  const baby = dialog.getByLabel("Baby’s age (weeks, optional)");
+  await expect(plan).toContainText("Say how old your baby is");
+  await baby.fill("3");
+  await expect(plan).toContainText("no deficit until your baby is 6 weeks");
+  await expect(plan).toContainText("Hold around 60 kg");
+  await baby.fill("8");
+  await expect(plan).toContainText("Lose about 0.23 kg a week");
+  await expect(plan).toContainText("keeps any deficit gentle");
   await page.screenshot({ path: info.outputPath("goals-breastfeeding.png") });
   await dialog.getByRole("button", { name: "Save goals" }).click();
   await expect(dialog).toHaveCount(0);
@@ -152,6 +176,8 @@ test("under 18 the form asks no body fat, and breastfeeding holds weight", async
       .click();
   await reopen();
   await expect(status).toHaveValue("breastfeeding");
+  await expect(baby).toHaveValue("8");
+  await expect(plan).toContainText("Lose about 0.23 kg a week");
   await status.selectOption("neither");
   await expect(plan).toContainText("Lose about");
   await status.selectOption("");

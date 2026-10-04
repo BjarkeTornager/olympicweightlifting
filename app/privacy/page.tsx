@@ -383,10 +383,14 @@ export default function PrivacyPage() {
         </p>
         <p>
           If you choose to tell the goals form, Coach or the voice coach that
-          you are pregnant or breastfeeding, that is saved with your goals, only
-          so the goal plan never sets a calorie deficit. It is sensitive health
-          information: it is optional, Coach sees it with your goals, and
-          choosing Neither in your goals removes it.
+          you are pregnant or breastfeeding, and your baby&rsquo;s age, or that
+          you have kidney disease or a doctor has told you to limit protein,
+          that is saved with your goals, only so the goal plan stays safe: no
+          calorie deficit in pregnancy or in the first weeks after a birth, and
+          no protein target. Your baby&rsquo;s age is kept as the day it was
+          born, so the plan knows when six weeks have passed. It is sensitive
+          health information: it is optional, Coach sees it with your goals, and
+          choosing Neither, No or Prefer not to say in your goals removes it.
         </p>
         <p>
           When you ask Coach for a daily plan or health guidance, relevant

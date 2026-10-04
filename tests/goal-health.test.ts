@@ -366,6 +366,11 @@ test("the answers are kept with the goals until the athlete says otherwise, apar
   applyGoals(feeding, { ...mother, trainingDays: 4 }, later);
   assert.equal(feeding.profile.goalHealth?.babyBornOn, "2026-08-29");
   assert.equal(feeding.nutrition.targets.goal, "lose");
+  // An empty age on the form removes it, as its preview shows.
+  applyGoals(feeding, { ...mother, weeksSinceBirth: null }, later);
+  assert.equal(feeding.profile.goalHealth, undefined);
+  assert.equal(feeding.profile.goalChecks?.pregnancy, "breastfeeding");
+  assert.equal(feeding.nutrition.targets.goal, "maintain");
   // No longer breastfeeding: both go.
   applyGoals(feeding, { ...mother, pregnancy: "neither" }, later);
   assert.equal(feeding.profile.goalChecks, undefined);

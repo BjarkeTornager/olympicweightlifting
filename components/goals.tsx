@@ -8,6 +8,7 @@ import {
   goalsForState,
   planForState,
   planGoals,
+  POSTPARTUM_WEEKS,
   savedTraining,
   splitGoals,
   type BodyGoalsInput,
@@ -97,7 +98,9 @@ type Draft = Record<
   | "focus"
   | "bodyFatPercent"
   | "targetBodyFatPercent"
-  | "pregnancy",
+  | "pregnancy"
+  | "weeksSinceBirth"
+  | "limitProtein",
   string
 >;
 const focusLabels: Record<BodyFocus, string> = {
@@ -117,6 +120,15 @@ function GoalsForm({
   const state = journal.state!;
   const body = goalsForState(state);
   const training = savedTraining(state);
+  const health = state.profile.goalHealth;
+  // The baby's age in whole weeks today, from the day it was born.
+  const babyWeeks =
+    state.profile.goalChecks?.pregnancy === "breastfeeding" &&
+    health?.babyBornOn
+      ? Math.floor(
+          (Date.parse(today()) - Date.parse(health.babyBornOn)) / 604800000,
+        )
+      : null;
   // Sex and everyday activity are left for the athlete to choose: a default
   // would quietly change the plan.
   const [draft, setDraft] = useState<Draft>(() => ({
@@ -138,6 +150,8 @@ function GoalsForm({
       state.profile.bodyTargets?.targetBodyFatPercent ?? "",
     ),
     pregnancy: state.profile.goalChecks?.pregnancy ?? "",
+    weeksSinceBirth: babyWeeks == null ? "" : String(babyWeeks),
+    limitProtein: health?.limitProtein ? "yes" : "",
   }));
   // A loss towards a weight just under the healthy range, confirmed for
   // the saved goal weight.
@@ -176,6 +190,19 @@ function GoalsForm({
     pregnancy:
       draft.pregnancy ||
       (state.profile.goalChecks?.pregnancy ? "neither" : undefined),
+    // Likewise an empty baby's age removes a saved one.
+    weeksSinceBirth:
+      draft.pregnancy !== "breastfeeding"
+        ? undefined
+        : draft.weeksSinceBirth.trim()
+          ? Number(draft.weeksSinceBirth)
+          : null,
+    limitProtein:
+      draft.limitProtein === "yes"
+        ? true
+        : draft.limitProtein === "no" || health?.limitProtein
+          ? false
+          : undefined,
     age: number(draft.age),
     heightCm: number(draft.heightCm),
     weightKg: number(draft.weightKg),
@@ -210,6 +237,8 @@ function GoalsForm({
           draft.pregnancy === "pregnant" || draft.pregnancy === "breastfeeding"
             ? draft.pregnancy
             : null,
+        weeksSinceBirth: split.checks.weeksSinceBirth ?? null,
+        limitProtein: draft.limitProtein === "yes",
         lowWeightConfirmed,
       }));
   // A loss towards a weight just under the healthy range waits for the
@@ -336,6 +365,20 @@ function GoalsForm({
             </select>
           </label>
         )}
+        {asksPregnancy && draft.pregnancy === "breastfeeding" && (
+          <label>
+            Baby&rsquo;s age (weeks, optional)
+            <input inputMode="numeric" {...field("weeksSinceBirth")} />
+          </label>
+        )}
+        <label>
+          Kidney disease, or told to limit protein
+          <select {...field("limitProtein")}>
+            <option value="">Prefer not to say</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
         <label>
           Experience
           <select {...field("experience")}>
@@ -345,13 +388,11 @@ function GoalsForm({
           </select>
         </label>
       </div>
-      {asksPregnancy && (
-        <p className="fine-print">
-          Optional. Kept with your goals only so the plan sets no targets in
-          pregnancy and no deficit while breastfeeding; choose Neither or Prefer
-          not to say to remove it.
-        </p>
-      )}
+      <p className="fine-print">
+        {asksPregnancy
+          ? `Optional. Kept with your goals only so the plan stays safe: no targets in pregnancy, no deficit while breastfeeding until your baby is ${POSTPARTUM_WEEKS} weeks old, and no protein target with kidney disease or a doctor's limit on protein. Choose No, Neither or Prefer not to say to remove them.`
+          : "Optional. Kept with your goals only so the plan sets no protein target with kidney disease or a doctor's limit on protein; choose No or Prefer not to say to remove it."}
+      </p>
       {plan && split ? (
         <div className="goals-plan" role="status">
           <strong>{describePlan(split.goals, plan)}</strong>

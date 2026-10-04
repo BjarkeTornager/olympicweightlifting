@@ -254,6 +254,18 @@ test("a weight class is cut to its limit by the weigh-in, or the plan says what 
     ),
   );
   assert.deepEqual(plan.safetyNotes, []);
+  assert.equal(plan.makesClass, true);
+  // Its weeks never run past the weigh-in: 17.1 weeks away is about 17.
+  const later = offsetDate(today, 120);
+  assert.match(
+    describePlan(
+      { ...lifter, targetDate: later },
+      planGoals({ ...lifter, targetDate: later }, today, { weightClass: true }),
+    ),
+    new RegExp(
+      `to make the 81 kg class by the weigh-in on ${later} \\(about 17 weeks\\)\\.`,
+    ),
+  );
   // Just above the class is still a cut, to the limit, where an ordinary
   // goal weight that close holds.
   const close = { ...lifter, weightKg: 81.3 };
@@ -275,6 +287,27 @@ test("a weight class is cut to its limit by the weigh-in, or the plan says what 
   const classNote = `Making the 81 kg class by the weigh-in on ${soon} would need about 1.00 kg a week; at a sustainable 0.42 kg a week you'd weigh about 82.7 kg then. Consider a later meet or the next class up, and talk it through with your coach or a sports dietitian. The plan never includes a last-minute cut of water or food; leave any such cut to them.`;
   assert.deepEqual(fast.safetyNotes, [classNote]);
   assert.ok(!fast.notes.some((n) => n.startsWith("Reaching ")));
+  // Its line heads towards the class rather than promising it, at the same
+  // rate as the note.
+  assert.equal(fast.makesClass, false);
+  assert.ok(
+    describePlan({ ...lifter, targetDate: soon }, fast).startsWith(
+      "Lose about 0.42 kg a week towards the 81 kg class (about 8 weeks).",
+    ),
+  );
+  const heavier = { ...lifter, weightKg: 85, targetDate: soon };
+  const behind = planGoals(heavier, today, { weightClass: true });
+  assert.ok(
+    describePlan(heavier, behind).startsWith(
+      `Lose about ${behind.weeklyChangeKg} kg a week towards the 81 kg class`,
+    ),
+  );
+  assert.match(
+    behind.safetyNotes[0],
+    new RegExp(
+      `at a sustainable ${behind.weeklyChangeKg.toFixed(2)} kg a week`,
+    ),
+  );
   // Without a class, the ordinary note.
   assert.ok(
     planGoals({ ...lifter, targetDate: soon }, today).notes.some((n) =>
@@ -292,23 +325,58 @@ test("a weight class is cut to its limit by the weigh-in, or the plan says what 
     "Your weigh-in is less than a week away, too close to plan a safe cut, so the plan holds your weight.",
     "Consider a later meet or the next class up, and talk it through with your coach or a sports dietitian. The plan never includes a last-minute cut of water or food; leave any such cut to them.",
   ]);
-  // Under 18 there is no deficit to make a class either.
-  const teen = planGoals({ ...lifter, age: 16, targetDate: weighIn }, today, {
-    weightClass: true,
-  });
+  // Under 18 there is no deficit to make a class either, and no cut left to
+  // anyone: making weight isn't advised while growing (ACSM).
+  const teen = planGoals(
+    { ...lifter, age: 16, weightKg: 85, targetDate: weighIn },
+    today,
+    { weightClass: true },
+  );
   assert.ok(holdsAtMaintenance(teen));
   assert.ok(
     teen.safetyNotes.includes(
-      `This plan holds your weight up to the weigh-in on ${weighIn}, above the 81 kg class. Consider a later meet or the next class up, and talk it through with your coach or a sports dietitian. The plan never includes a last-minute cut of water or food; leave any such cut to them.`,
+      `This plan holds your weight up to the weigh-in on ${weighIn}, above the 81 kg class. Consider a later meet or the next class up. Cutting weight to make a class isn't advised while you're growing; talk it through with a parent, your coach or a doctor.`,
     ),
   );
-  // Below the class, nothing to make; a weigh-in already past has its own
-  // note.
+  assert.ok(!teen.notes.some((n) => /leave any such cut/.test(n)));
+  // In pregnancy there is no class to make, and no word of a cut.
+  const expecting = planGoals(
+    { ...woman, weightKg: 66, targetWeightKg: 64, targetDate: weighIn },
+    today,
+    { weightClass: true, pregnancy: "pregnant" },
+  );
+  assert.equal(expecting.weightClass, false);
+  assert.equal(expecting.dailyTargets, false);
+  assert.ok(!expecting.notes.some((n) => /class|cut/.test(n)));
+  // Below the class, nothing to make. With no weigh-in date the plan may
+  // fill the class over time; with one ahead it holds the weight, so
+  // day-to-day swings never leave a cut on the day.
   assert.deepEqual(
     planGoals({ ...lifter, targetWeightKg: 89 }, today, { weightClass: true })
       .safetyNotes,
     [],
   );
+  const within = planGoals(
+    { ...lifter, targetWeightKg: 89, targetDate: weighIn },
+    today,
+    { weightClass: true },
+  );
+  assert.ok(holdsAtMaintenance(within));
+  assert.deepEqual(within.safetyNotes, []);
+  assert.ok(
+    within.notes.includes(
+      `You're within the 89 kg class, so the plan holds your weight up to the weigh-in on ${weighIn}.`,
+    ),
+  );
+  // As at a goals check with the class nearly made: no surplus up to it.
+  const made = planGoals(
+    { ...lifter, weightKg: 80.2, targetDate: weighIn },
+    today,
+    { weightClass: true },
+  );
+  assert.ok(holdsAtMaintenance(made));
+  assert.ok(!made.notes.some((n) => n.startsWith("Reaching ")));
+  // A weigh-in already past has its own note.
   const past = planGoals(
     { ...lifter, targetDate: offsetDate(today, -1) },
     today,
@@ -343,6 +411,23 @@ test("the weigh-in is kept while the goal weight is the class", () => {
   applyGoals(state, { ...lifter, weightClass: true }, today);
   applyGoals(state, { ...lifter, weightClass: false }, today);
   assert.equal(state.profile.weighIn, undefined);
+  // Pregnancy reported later keeps the weigh-in for afterwards, but the
+  // plan makes no class of it and says nothing of a cut.
+  const later = emptyJournal();
+  const athlete = { ...woman, weightKg: 66, targetWeightKg: 64 };
+  applyGoals(
+    later,
+    { ...athlete, targetDate: weighIn, weightClass: true },
+    today,
+  );
+  const pregnant = applyGoals(
+    later,
+    { ...athlete, targetDate: weighIn, pregnancy: "pregnant" },
+    today,
+  );
+  assert.equal(later.profile.weighIn?.classKg, 64);
+  assert.equal(pregnant.weightClass, false);
+  assert.ok(!pregnant.notes.some((n) => /class|cut/.test(n)));
 });
 
 test("feet, inches and pounds are converted to cm and kg by the app, not the model", () => {

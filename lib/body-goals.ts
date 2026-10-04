@@ -402,8 +402,12 @@ export type GoalPlan = {
   // doctor, midwife or dietitian advises on it. protein is then only the
   // amount the other macros allow for.
   proteinTarget: boolean;
-  // The goal weight is a competition weight class (Composition).
+  // The goal weight is a competition weight class (Composition); never in
+  // pregnancy, when the plan sets no weight goal.
   weightClass: boolean;
+  // The plan reaches that class by its weigh-in, or with no weigh-in date
+  // at all, so the plan's line may promise it.
+  makesClass: boolean;
   // The plan would set a deficit, or aims for very lean body fat, without
   // answers to the low-energy questions in force: Coach asks them first.
   energyCheckDue: boolean;
@@ -499,12 +503,21 @@ export function planGoals(
     g.sex === "male" ? 1500 : 1200,
   );
 
+  const days = g.targetDate
+    ? (Date.parse(g.targetDate) - Date.parse(today)) / 86400000
+    : null;
   // A weight class is a limit to make: any weight above it is to lose, so
   // the plan reaches the limit rather than stopping just above it and
-  // leaving a last-minute cut. Otherwise within 0.5 kg holds.
-  const weightClass = Boolean(composition.weightClass);
+  // leaving a last-minute cut. At or under the limit with the weigh-in
+  // still ahead, the plan holds the weight rather than gaining up to the
+  // limit, where day-to-day swings would leave one. Otherwise within 0.5 kg
+  // holds. In pregnancy there is no class to make: the plan sets no weight
+  // goal.
+  const weightClass = Boolean(composition.weightClass) && !pregnant;
+  const withinClass =
+    weightClass && days != null && days >= 0 && g.weightKg <= g.targetWeightKg;
   const steady = (change: number) =>
-    !(weightClass && change < 0) && Math.abs(change) < 0.5;
+    withinClass || (!(weightClass && change < 0) && Math.abs(change) < 0.5);
   const difference = g.targetWeightKg - g.weightKg;
   const wanted = steady(difference)
     ? "maintain"
@@ -562,9 +575,6 @@ export function planGoals(
   // A target date less than a week away, or past, is too close to plan a
   // change, a recomposition's small cut included: the plan holds the
   // athlete's weight.
-  const days = g.targetDate
-    ? (Date.parse(g.targetDate) - Date.parse(today)) / 86400000
-    : null;
   let held = false;
   if (
     (direction !== "maintain" || focus === "recomposition") &&
@@ -825,13 +835,20 @@ export function planGoals(
   }
   const carbs = round(carbsLeft(), 5);
 
-  // The rate and weeks the calories shown add up to.
+  // The rate and weeks the calories shown add up to. A plan that keeps to
+  // its target date gets there by then, so its weeks never run past it.
   rate =
     direction === "maintain"
       ? 0
       : (Math.abs(calories - maintenance) * 7) / KCAL_PER_KG;
+  const byDate =
+    needed != null && days != null && needed - rate <= 0.005
+      ? Math.max(1, Math.round(days / 7))
+      : Infinity;
   const weeks =
-    direction === "maintain" ? null : Math.ceil(Math.abs(remaining) / rate);
+    direction === "maintain"
+      ? null
+      : Math.min(Math.ceil(Math.abs(remaining) / rate), byDate);
   const weeklyChangeKg = Math.round(rate * 100) / 100;
   if (limited === "hold")
     warn(
@@ -871,7 +888,9 @@ export function planGoals(
   // A weight class the plan won't make by the weigh-in, or at all: the
   // safe options, and never a last-minute cut of water or food, which is
   // for a coach or sports dietitian (ACSM, and the weigh-in only 2 hours
-  // before lifting). A weigh-in already past has its own note.
+  // before lifting). Under 18 no cut at all: ACSM discourages making weight
+  // while growing. A weigh-in already past has its own note. The rate
+  // quoted is the plan's own (weeklyChangeKg), as its line gives it.
   const classKg = g.targetWeightKg;
   const aboveClass =
     weightClass && g.weightKg > classKg && !(days != null && days < 0);
@@ -885,10 +904,13 @@ export function planGoals(
       : direction === "lose" && towards > classKg
         ? `The plan stops at ${towards} kg, above the ${classKg} kg class. `
         : direction === "lose" && needed != null && days != null
-          ? `Making the ${classKg} kg class by the weigh-in on ${g.targetDate} would need about ${needed.toFixed(2)} kg a week; at a sustainable ${rate.toFixed(2)} kg a week you'd weigh about ${Math.round((g.weightKg - (rate * days) / 7) * 10) / 10} kg then. `
+          ? `Making the ${classKg} kg class by the weigh-in on ${g.targetDate} would need about ${needed.toFixed(2)} kg a week; at a sustainable ${weeklyChangeKg.toFixed(2)} kg a week you'd weigh about ${Math.round((g.weightKg - (rate * days) / 7) * 10) / 10} kg then. `
           : `This plan holds your weight${days != null ? ` up to the weigh-in on ${g.targetDate}` : ""}, above the ${classKg} kg class. `;
+    const options = `Consider ${days != null ? "a later meet or " : ""}the next class up`;
     warn(
-      `${lead}Consider ${days != null ? "a later meet or " : ""}the next class up, and talk it through with your coach or a sports dietitian. The plan never includes a last-minute cut of water or food; leave any such cut to them.`,
+      minor
+        ? `${lead}${options}. Cutting weight to make a class isn't advised while you're growing; talk it through with a parent, your coach or a doctor.`
+        : `${lead}${options}, and talk it through with your coach or a sports dietitian. The plan never includes a last-minute cut of water or food; leave any such cut to them.`,
     );
   } else if (
     direction !== "maintain" &&
@@ -897,7 +919,11 @@ export function planGoals(
     !aboveClass
   )
     warn(
-      `Reaching ${towards} kg by ${g.targetDate} would need ${needed.toFixed(2)} kg a week; this plan keeps to a sustainable ${rate.toFixed(2)} kg.`,
+      `Reaching ${towards} kg by ${g.targetDate} would need ${needed.toFixed(2)} kg a week; this plan keeps to a sustainable ${weeklyChangeKg.toFixed(2)} kg.`,
+    );
+  if (withinClass)
+    notes.push(
+      `You're within the ${classKg} kg class, so the plan holds your weight up to the weigh-in on ${g.targetDate}.`,
     );
   // A reading would give protein from lean mass instead; not asked for
   // under 18, when readings aren't used, nor without a protein target.
@@ -969,6 +995,7 @@ export function planGoals(
     dailyTargets: !pregnant,
     proteinTarget,
     weightClass,
+    makesClass: weightClass && makesClass,
     // Asked only when a deficit remains once every other limit has had its
     // say, or for a very lean goal.
     energyCheckDue:
@@ -1281,11 +1308,15 @@ export function describePlan(goals: GoalsGiven, plan: GoalPlan) {
         ? `Recomposition: hold around ${goals.weightKg} kg while losing fat and building muscle`
         : `Hold around ${goals.weightKg} kg`
       : `${plan.direction === "lose" ? "Lose" : "Gain"} about ${plan.weeklyChangeKg} kg a week ${
-          plan.weightClass &&
-          plan.direction === "lose" &&
-          plan.towardsKg === goals.targetWeightKg
+          // Only a plan that gets there in time promises the class; one
+          // that doesn't heads towards it, and its safety note says why.
+          plan.makesClass
             ? `to make the ${plan.towardsKg} kg class${goals.targetDate ? ` by the weigh-in on ${goals.targetDate}` : ""}`
-            : `towards ${plan.towardsKg} kg`
+            : plan.weightClass &&
+                plan.direction === "lose" &&
+                plan.towardsKg === goals.targetWeightKg
+              ? `towards the ${plan.towardsKg} kg class`
+              : `towards ${plan.towardsKg} kg`
         }${plan.weeksToGoal ? ` (about ${plan.weeksToGoal} week${plan.weeksToGoal === 1 ? "" : "s"})` : ""}`;
   const composition =
     plan.leanMassKg != null

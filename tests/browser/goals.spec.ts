@@ -261,15 +261,15 @@ test("before a deficit the form asks the low-energy questions, and a weight clas
   await expect(questions).toContainText("hormonal contraception");
   await dialog.getByLabel("Sex").selectOption("male");
   // A weight class with its weigh-in in three weeks: too soon to make
-  // safely, so the plan says what else to consider.
+  // safely, so the plan heads towards it, never promising it, and says
+  // what else to consider.
   const weighIn = new Date(Date.now() + 21 * 86400000)
     .toISOString()
     .slice(0, 10);
   await dialog.getByLabel("By (optional)").fill(weighIn);
   await weightClass.check();
-  await expect(plan).toContainText(
-    `to make the 81 kg class by the weigh-in on ${weighIn}`,
-  );
+  await expect(plan).toContainText("towards the 81 kg class");
+  await expect(plan).not.toContainText("to make the 81 kg class");
   await expect(plan).toContainText(
     `Making the 81 kg class by the weigh-in on ${weighIn} would need about`,
   );
@@ -294,7 +294,7 @@ test("before a deficit the form asks the low-energy questions, and a weight clas
     .click();
   await expect(answer).toHaveValue("no");
   await expect(weightClass).toBeChecked();
-  await expect(plan).toContainText("to make the 81 kg class");
+  await expect(plan).toContainText("towards the 81 kg class");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,

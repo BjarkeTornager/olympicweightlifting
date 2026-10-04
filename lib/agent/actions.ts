@@ -73,14 +73,16 @@ export type ActionPreview = {
     status: WorkoutStatus;
     sources?: { id: string; title: string; date: string; sets: number }[];
   };
-  // A drink logged or removed, with the day's total after it.
+  // A drink logged or removed, with the day's total after it, and the
+  // day's target unless the athlete hid it.
   drink?: {
     name: string;
     ml: number;
     date: string;
     removed?: boolean;
+    estimated?: boolean;
     dayTotalMl: number;
-    dayTargetMl: number;
+    dayTargetMl?: number;
   };
   entries?: PreviewEntry[];
   expiresAt: string;
@@ -127,6 +129,7 @@ function applyAction(
   action: Exclude<AgentAction, { kind: "record_bundle" }>,
   before: JournalState,
   currentDate: string,
+  mealDates: ReadonlySet<string>,
 ): PreparedChange {
   switch (action.kind) {
     case "set_lifting_brief":
@@ -183,7 +186,7 @@ function applyAction(
       return prepareDietTargets(next, action);
     case "log_drink":
     case "delete_drink":
-      return prepareDrink(next, action, currentDate);
+      return prepareDrink(next, action, currentDate, mealDates);
     case "log_supplement":
     case "delete_supplement":
       return prepareSupplement(next, action, currentDate);
@@ -203,6 +206,9 @@ export function prepareAction(
   state: JournalState,
   raw: unknown,
   currentDate: string,
+  // Dates a bundle also logs food on, so a drink with energy beside its
+  // meal is not asked for one.
+  mealDates: ReadonlySet<string> = new Set(),
 ): PreparedAction {
   const parsed = actionSchema.parse(raw);
   if (parsed.kind === "record_bundle") {
@@ -222,8 +228,17 @@ export function prepareAction(
       );
     let combined = structuredClone(state);
     const entries: PreviewEntry[] = [];
+    const foodDates = new Set(
+      parsed.entries.flatMap((e) =>
+        e.kind === "record_meal"
+          ? [e.meal.date]
+          : e.kind === "repeat_meal"
+            ? [e.date]
+            : [],
+      ),
+    );
     for (const entry of parsed.entries) {
-      const prepared = prepareAction(combined, entry, currentDate);
+      const prepared = prepareAction(combined, entry, currentDate, foodDates);
       combined = prepared.state;
       entries.push({
         title: prepared.title,
@@ -250,7 +265,7 @@ export function prepareAction(
   }
   const action = parsed,
     next = structuredClone(state);
-  const change = applyAction(next, action, state, currentDate);
+  const change = applyAction(next, action, state, currentDate, mealDates);
   const workout = change.workout ?? null;
   const workoutReview: ActionPreview["workoutReview"] =
     change.workoutReview ??

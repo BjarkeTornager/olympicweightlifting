@@ -1,6 +1,8 @@
 import {
   addDrink,
+  alcoholKinds,
   formatLitres,
+  formatTargetLitres,
   hydrationForDay,
   removeDrink,
 } from "../hydration";
@@ -106,6 +108,7 @@ export function prepareDrink(
   next: JournalState,
   action: ActionOf<"log_drink" | "delete_drink">,
   currentDate: string,
+  mealDates: ReadonlySet<string> = new Set(),
 ): PreparedChange {
   const drink =
     action.kind === "log_drink"
@@ -116,17 +119,25 @@ export function prepareDrink(
         })()
       : removeDrink(next, action.drinkId);
   const day = hydrationForDay(next, drink.date);
-  const what = `${drink.ml} ml ${drink.name || drink.kind}`;
+  const what = `${drink.estimated ? "about " : ""}${drink.ml} ml ${drink.name || drink.kind}`;
+  // Alcohol's energy belongs in Food too, unless its meal comes with it.
+  const food =
+    action.kind === "log_drink" &&
+    alcoholKinds.includes(drink.kind) &&
+    !mealDates.has(drink.date)
+      ? ` ${drink.kind[0].toUpperCase()}${drink.kind.slice(1)} has energy too: log it in Food as well.`
+      : "";
   return {
     title: action.kind === "log_drink" ? "Log a drink" : "Remove a drink",
-    detail: `${action.kind === "log_drink" ? what : `Removes ${what}`}. ${formatLitres(day.totalMl)} of about ${formatLitres(day.targetMl)} on ${drink.date}.`,
+    detail: `${action.kind === "log_drink" ? what : `Removes ${what}`}. ${formatLitres(day.totalMl)}${day.hidden ? "" : ` of about ${formatTargetLitres(day.targetMl)}`} on ${drink.date}.${food}`,
     drink: {
       name: drink.name || drink.kind,
       ml: drink.ml,
       date: drink.date,
       ...(action.kind === "delete_drink" ? { removed: true } : {}),
+      ...(drink.estimated ? { estimated: true } : {}),
       dayTotalMl: day.totalMl,
-      dayTargetMl: day.targetMl,
+      ...(day.hidden ? {} : { dayTargetMl: day.targetMl }),
     },
   };
 }

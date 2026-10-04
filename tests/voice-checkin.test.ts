@@ -33,6 +33,7 @@ import {
   caffeineRule,
   disorderedEatingRule,
   drinksTargetRule,
+  proteinTargetRule,
   supplementRule,
   teenSleepRule,
 } from "../lib/agent/health-rules";
@@ -307,6 +308,7 @@ test("the voice coach has typed Coach's health rules and referrals, and the athl
       disorderedEatingRule,
       drinksTargetRule,
       teenSleepRule,
+      proteinTargetRule,
     ])
       assert.ok(text.includes(rule), rule.slice(0, 40));
     // Referrals for pregnancy, medication and eating disorders, as typed.

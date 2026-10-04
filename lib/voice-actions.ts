@@ -365,6 +365,21 @@ export const voiceToolArgs = {
       (v) => v || undefined,
       bodyGoalsRequestSchema.shape.pregnancy,
     ),
+    // A baby's age of 0 weeks and a "no" are answers; only an empty value
+    // means none was given. Weeks come to the nearest whole one.
+    weeksSinceBirth: z.preprocess(
+      (v) =>
+        v === "" || v === null
+          ? undefined
+          : typeof v === "number"
+            ? Math.round(v)
+            : v,
+      bodyGoalsRequestSchema.shape.weeksSinceBirth,
+    ),
+    limitProtein: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      bodyGoalsRequestSchema.shape.limitProtein,
+    ),
   }),
   undo_save: z.object({ save_id: z.string().uuid() }),
   // Not a save: a card on the athlete's screen, kept in the Coach thread.

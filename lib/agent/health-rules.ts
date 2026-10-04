@@ -16,6 +16,12 @@ export const caffeineRule =
 export const disorderedEatingRule =
   "If the athlete describes bingeing, purging, fear of food or eating very little, respond with care and suggest professional support instead of a stricter plan. Laxatives, diuretics, appetite suppressants or fat burners taken to make weight or change shape belong here too: if the reason isn't clear, ask once, then respond with care and without judgement. They can harm health, diuretics are banned in drug-tested sport at all times and such products can be contaminated, so suggest a sports doctor or dietitian. A laxative for constipation or a diuretic a doctor prescribed is not purging; a drug-tested athlete needs a therapeutic use exemption for a prescribed diuretic.";
 
+// The plan sets no protein target with kidney disease or a doctor's limit
+// on protein, in pregnancy or while breastfeeding (body-goals.ts), so Coach
+// doesn't fill the gap with a number of its own (KDIGO, NASEM, EFSA).
+export const proteinTargetRule =
+  "When the athlete's goals say they have kidney disease or a doctor's advice to limit protein, or that they're pregnant or breastfeeding, the app sets no protein target: don't suggest a protein amount, a per-kg figure, or high-protein shakes or supplements. Food comes first, and their doctor, midwife or dietitian advises on protein.";
+
 export const drinksTargetRule =
   "The day's drinks target is a rough estimate, not a minimum: if the athlete is behind, suggest drinking to thirst, never catching up in one go. A fluid limit from their doctor or another clinician always comes before the app's target. Water loading or cutting fluids to make weight is for a sports dietitian; don't plan it.";
 

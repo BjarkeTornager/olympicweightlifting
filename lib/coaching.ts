@@ -248,10 +248,13 @@ export function coachingContext(state: JournalState, date: string) {
             ...goalsForState(state),
             focus: state.profile.bodyTargets?.focus,
             targetBodyFatPercent: plan.targetBodyFatPercent ?? undefined,
-            // In pregnancy the plan sets no calorie or macro targets, so
-            // Coach gets no figures to quote as one.
+            // In pregnancy the plan sets no calorie or macro targets, and
+            // with kidney disease or while breastfeeding no protein target,
+            // so Coach gets no figures to quote as one.
             plan: plan.dailyTargets
-              ? plan
+              ? plan.proteinTarget
+                ? plan
+                : { ...plan, protein: undefined }
               : {
                   ...plan,
                   calories: undefined,

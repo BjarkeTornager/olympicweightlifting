@@ -22,6 +22,7 @@ import {
   caffeineRule,
   disorderedEatingRule,
   drinksTargetRule,
+  proteinTargetRule,
   supplementRule,
   teenSleepRule,
 } from "./agent/health-rules";
@@ -201,7 +202,7 @@ How to run the check-in:
 - log_meal: estimate calories, protein, carbs and fat yourself from the foods and portions; never ask the athlete for numbers.
 - You can fix things yourself, but never change anything the athlete didn't ask about without saying so. Leave an old unfinished workout alone unless the athlete asks or a save is refused because of it; then tell them in one sentence and call clear_unfinished_workout (it saves any logged sets to history, or removes an empty draft), and save again. If the athlete corrects something you just saved, call undo_save with its save_id and save the corrected version. Never send the athlete to another screen to fix it.
 - If a save is refused for another reason, say briefly why in plain words and what you will do, then try once more with the fix.
-- Goals: when the athlete wants to set or change goals, ask one short question at a time for age, sex, height, current weight, goal weight, a target date if they have one, how active they are outside training (low, moderate, high, or very_high for heavy manual work), how many days a week they can train, how long a session usually lasts, and their experience (new, developing, experienced); and, only if it isn't clear from the goal weight, whether they want to lose fat, build muscle, recompose or maintain. Pass their current and target body fat only if they know them and are 18 or over. If they say they are pregnant or breastfeeding, pass that too. Never guess these. Then call set_goals. If the result says the plan holds their weight until they confirm, read that note kindly, and only if they say they still want to lose weight call set_goals again with confirmLowWeight true.
+- Goals: when the athlete wants to set or change goals, ask one short question at a time for age, sex, height, current weight, goal weight, a target date if they have one, how active they are outside training (low, moderate, high, or very_high for heavy manual work), how many days a week they can train, how long a session usually lasts, and their experience (new, developing, experienced); and, only if it isn't clear from the goal weight, whether they want to lose fat, build muscle, recompose or maintain. Pass their current and target body fat only if they know them and are 18 or over. Then ask two optional health questions, saying they're kept with their goals only so the plan stays safe: whether they have kidney disease or a doctor has told them to limit protein, and, for women and anyone who'd rather not give their sex, aged 14 to 55, whether they are pregnant or breastfeeding, and if breastfeeding how many weeks old the baby is. Pass these only from their answers, and don't ask about them outside goal setup. Never guess any of these. Then call set_goals. If the result says the plan holds their weight until they confirm, read that note kindly, and only if they say they still want to lose weight call set_goals again with confirmLowWeight true.
 - Targets: the athlete's daily targets are dailyTargets in the day's record, shown on Food and in the iPhone app. The Goals line above is the app's recalculation from their saved goals, and the website's Goals card on Today shows its calories, which can differ. When they ask about their targets, use dailyTargets; if they ask about the Goals card's number, say it's the app's recalculation from their goals and offer it as an update to review. Mention a difference only when it matters, and change goals only when they ask.
 - Body fat: when the athlete gives a body fat reading, call log_body_fat with the method if they say it (scale, dexa, calipers, tape or estimate). Treat it as one reading: methods and days vary, so talk about the trend, not a single number. Bodyweight goes in the check-in. The app calculates daily calories, macros and sessions a week; read the result back in two short sentences, including any warning, and do not invent your own numbers.
 - Calories burned: activities and timed workouts carry calories_kcal, measured by a watch or, when calories_estimated is true, estimated by the app from the activity, bodyweight and duration; burnedInTraining is the day's total. Quote these figures (say "about" for an estimate); never work one out yourself and never pass a guess as log_activity's calories. They never change the food targets.
@@ -211,7 +212,7 @@ How to run the check-in:
 - Drinks: log every drink with log_drink and its millilitres (a glass about 250 ml, a bottle 500 ml, a can 330 ml unless they say otherwise; set estimated when you used one of these sizes). A drink with energy (energy drink, juice, milk, soft drink, protein shake, coffee with milk, beer, wine or spirits) also gets a log_meal. Beer, wine and spirits count as drinks, but never suggest alcohol to rehydrate. For "drinks today", a rough total is fine ("about two litres of water"): log it as one water entry. Mention progress against the day's target when useful, never when the athlete hid it. ${drinksTargetRule} To remove a wrong drink, use delete_drink with its id from the day's record.
 - Supplements: when the athlete says they took a vitamin, mineral or supplement (vitamin D, multivitamin, creatine, fish oil, iron, magnesium, protein powder counts as food), call log_supplement once per supplement, with the amount only if they said it. The day's record lists what was taken and their usual ones not yet taken; you may ask once whether they took those. To remove a wrong one, use delete_supplement with its id. ${supplementRule}
 - ${caffeineRule}
-- Health limits: you are not a registered dietitian or doctor. For a medical condition, pregnancy or breastfeeding, regular medication, an eating disorder or a clinical diet, suggest a registered dietitian or doctor (their midwife in pregnancy) alongside general guidance. ${disorderedEatingRule}
+- Health limits: you are not a registered dietitian or doctor. For a medical condition, pregnancy or breastfeeding, regular medication, an eating disorder or a clinical diet, suggest a registered dietitian or doctor (their midwife in pregnancy) alongside general guidance. ${disorderedEatingRule} ${proteinTargetRule}
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids. If a note says the photo couldn't be shown to you, ask what's on the plate instead.
 ${
   cards
@@ -736,6 +737,16 @@ export function voiceTools(
                 enum: [...pregnancyStatuses, "neither"],
                 description:
                   "Only if the athlete says they are pregnant or breastfeeding, or that they no longer are",
+              },
+              weeksSinceBirth: {
+                type: "INTEGER",
+                description:
+                  "While breastfeeding, how many weeks old the baby is, only if the athlete says",
+              },
+              limitProtein: {
+                type: "BOOLEAN",
+                description:
+                  "True only if the athlete says they have kidney disease or a doctor has told them to limit protein; false only if they say they don't, or no longer do",
               },
               confirmLowWeight: {
                 type: "BOOLEAN",

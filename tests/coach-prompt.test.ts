@@ -13,12 +13,16 @@ import {
   caffeineRule,
   disorderedEatingRule,
   drinksTargetRule,
+  proteinTargetRule,
   supplementRule,
   teenSleepRule,
 } from "../lib/agent/health-rules";
 import {
   CARBS_FLOOR_G,
+  LACTATION_KCAL,
   macroShares,
+  POSTPARTUM_WEEKS,
+  pregnancyCarbsFloorG,
   proteinPerKg,
   weeklyRates,
 } from "../lib/body-goals";
@@ -237,7 +241,26 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
     // gaining. Restoring those three phrases reproduces the previous hash
     // (8bb2b289…). Health, privacy and evidence text is unchanged.
-    "b22e1af2f7f9f2485b06c65b6ba969c443f5922c2874d135059efeea35204aee",
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 6, pregnancy, breastfeeding and kidney inputs):
+    // - Goal setup's second message adds two optional health questions,
+    //   said to be kept with the goals only so the plan stays safe: kidney
+    //   disease or a doctor's advice to limit protein (limitProtein), and
+    //   for women and anyone who'd rather not give their sex, aged 14–55,
+    //   pregnancy or breastfeeding with the baby's age in weeks. Coach
+    //   passes them only from the athlete's answers and doesn't ask about
+    //   them outside goal setup. One added sentence says what the plan
+    //   then does (LACTATION_KCAL, POSTPARTUM_WEEKS and pregnancyCarbsFloorG
+    //   in body-goals.ts).
+    // - One added core paragraph, the protein target rule
+    //   (agent/health-rules.ts, also in the voice coach's instructions):
+    //   with no protein target, Coach suggests no protein amount, per-kg
+    //   figure or high-protein shakes, food first, and their doctor,
+    //   midwife or dietitian advises.
+    // Removing that paragraph and those two goal-setup additions
+    // reproduces the previous hash (b22e1af2…). Health, privacy and
+    // evidence text is otherwise unchanged.
+    "d1edcd618961a4fb1a9ff6bfe070260c44a06a114441f1fcf4af9da5609a3656",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -303,6 +326,7 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
       disorderedEatingRule,
       drinksTargetRule,
       teenSleepRule,
+      proteinTargetRule,
     ])
       assert.ok(core.includes(rule), rule.slice(0, 40));
   }
@@ -326,6 +350,8 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   // The drinks target is not a minimum, and a clinician's limit wins.
   assert.match(core, /not a minimum/);
   assert.match(core, /fluid limit from their doctor or another clinician/);
+  // No protein figure of Coach's own when the plan sets no protein target.
+  assert.match(core, /the app sets no protein target: don't suggest a protein/);
   // Teens need more sleep than adults.
   assert.match(core, /Teenagers \(13–17\) need 8–10 hours/);
   // Activity guidance from WHO and the Danish Health Authority.
@@ -377,6 +403,19 @@ test("Coach quotes the plan's own rates and protein", () => {
   assert.ok(
     coaching.includes(
       `the app sets ${bodyweight.other} g/kg of bodyweight, less at a BMI of 30 or more, or ${leanMass.other} g/kg of lean mass`,
+    ),
+  );
+  // Goal setup asks the optional health questions, and says what the plan
+  // does with them, from its own constants.
+  assert.ok(
+    setup.includes(
+      "whether they have kidney disease or a doctor has told them to limit protein (limitProtein), and, for women and anyone who'd rather not give their sex, aged 14–55, whether they're pregnant or breastfeeding",
+    ),
+  );
+  assert.ok(setup.includes("don't ask about them outside goal setup"));
+  assert.ok(
+    setup.includes(
+      `adds about ${LACTATION_KCAL} kcal a day for making milk, sets no deficit until the baby is ${POSTPARTUM_WEEKS} weeks old and only a gentle one after, and keeps carbohydrate at ${pregnancyCarbsFloorG.breastfeeding} g or more`,
     ),
   );
   // Goal setup names the plan's fat share and carbohydrate floor.

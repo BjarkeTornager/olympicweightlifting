@@ -17,8 +17,13 @@ import {
   type GoalPlan,
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
+import { localClock } from "../lib/agent/time-context";
+import { coachingContext } from "../lib/coaching";
 import { journalSchema } from "../lib/model";
 import { buildToday } from "../lib/native-api";
+import { voiceAction, voiceToolArgs } from "../lib/voice-actions";
+import { voiceContext, voiceInstruction } from "../lib/voice-checkin";
+import { elevenLabsTools } from "../lib/voice-elevenlabs";
 
 // Pregnancy, breastfeeding and kidney disease, asked with the goals: the
 // plan sets no deficit in pregnancy, adds the lactation allowance and waits
@@ -383,4 +388,89 @@ test("with no protein target, the iPhone shows none", () => {
   assert.ok(
     native.body?.goalNotes?.some((n) => /sets no protein target/.test(n)),
   );
+});
+
+test("Coach and the voice coach pass the answers to the same plan, and get no protein figure to quote", () => {
+  // Models send an empty value for an unknown answer; 0 weeks and "no"
+  // are answers, and weeks come to the nearest whole one.
+  const blank = voiceToolArgs.set_goals.parse({
+    ...man,
+    summary: "Goals",
+    weeksSinceBirth: "",
+    limitProtein: "",
+  });
+  assert.equal(blank.weeksSinceBirth, undefined);
+  assert.equal(blank.limitProtein, undefined);
+  const given = voiceToolArgs.set_goals.parse({
+    ...mother,
+    summary: "Goals",
+    pregnancy: "breastfeeding",
+    weeksSinceBirth: 0,
+    limitProtein: false,
+  });
+  assert.equal(given.weeksSinceBirth, 0);
+  assert.equal(given.limitProtein, false);
+  assert.equal(
+    voiceToolArgs.set_goals.parse({
+      ...mother,
+      summary: "Goals",
+      weeksSinceBirth: 9.6,
+    }).weeksSinceBirth,
+    10,
+  );
+  // A voice save reaches the same plan as typed Coach and the form.
+  const action = voiceAction(
+    "set_goals",
+    {
+      ...mother,
+      summary: "Goals",
+      pregnancy: "breastfeeding",
+      weeksSinceBirth: 10,
+      limitProtein: true,
+    },
+    emptyJournal(),
+    today,
+  );
+  assert.ok(
+    action.kind === "set_body_goals" &&
+      action.bodyGoals.weeksSinceBirth === 10 &&
+      action.bodyGoals.limitProtein === true,
+  );
+  const state = prepareAction(emptyJournal(), action, today).state;
+  assert.deepEqual(
+    { ...state.profile.goalHealth, updatedAt: undefined },
+    { limitProtein: true, babyBornOn: "2026-07-18", updatedAt: undefined },
+  );
+  assert.equal(state.nutrition.targets.goal, "lose");
+  assert.equal(state.nutrition.targets.protein, null);
+  // Coach gets the plan without a protein figure to quote as a target.
+  const plan = coachingContext(state, today).goals?.plan;
+  assert.equal(plan?.proteinTarget, false);
+  assert.equal(plan?.protein, undefined);
+  assert.equal(plan?.calories, state.nutrition.targets.calories);
+  // The voice coach hears the same, with the notes that say why.
+  const goals = voiceContext(state, today).goals ?? "";
+  assert.match(goals, /g fat, with no protein target\./);
+  assert.match(goals, /keeps any deficit gentle/);
+  assert.match(goals, /kidney disease or a doctor's advice to limit protein/);
+  // Both voice providers offer the two answers, and the voice coach asks
+  // the questions as optional ones, at goal setup only.
+  const setGoals = elevenLabsTools().find(
+    (t) => t.name === "set_goals",
+  ) as unknown as {
+    parameters: { properties: Record<string, { type: string }> };
+  };
+  assert.equal(setGoals.parameters.properties.weeksSinceBirth.type, "integer");
+  assert.equal(setGoals.parameters.properties.limitProtein.type, "boolean");
+  const instruction = voiceInstruction(
+    voiceContext(emptyJournal(), today),
+    localClock(`${today}T09:00:00Z`, "UTC"),
+    "Sam",
+  );
+  assert.ok(
+    instruction.includes(
+      "Then ask two optional health questions, saying they're kept with their goals only so the plan stays safe: whether they have kidney disease or a doctor has told them to limit protein, and, for women and anyone who'd rather not give their sex, aged 14 to 55, whether they are pregnant or breastfeeding, and if breastfeeding how many weeks old the baby is.",
+    ),
+  );
+  assert.ok(instruction.includes("don't ask about them outside goal setup"));
 });

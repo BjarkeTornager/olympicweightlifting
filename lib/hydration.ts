@@ -60,6 +60,29 @@ export function addDrink(
   return saved;
 }
 
+// Words a food entry uses for each kind of alcohol, in English and Danish,
+// to tell whether a drink's energy is already in Food that day.
+const alcoholWords: Partial<Record<DrinkKind, string[]>> = {
+  beer: ["beer", "lager", "ale", "pilsner", "pils", "ipa", "stout", "øl"],
+  wine: ["wine", "prosecco", "champagne", "cava", "vin", "rødvin", "hvidvin"],
+  spirits: ["spirits", "whisky", "whiskey", "vodka", "gin", "rum", "snaps"],
+};
+export function alcoholInFood(state: JournalState, drink: Drink) {
+  const words = new Set(
+    (alcoholWords[drink.kind] ?? []).flatMap((w) => [w, `${w}s`]),
+  );
+  return state.nutrition.meals.some(
+    (m) =>
+      m.date === drink.date &&
+      [m.name, ...m.items.map((i) => i.name)].some((name) =>
+        name
+          .toLowerCase()
+          .split(/[^\p{L}]+/u)
+          .some((w) => words.has(w)),
+      ),
+  );
+}
+
 export function removeDrink(state: JournalState, id: string) {
   const drink = (state.health.drinks ?? []).find((d) => d.id === id);
   if (!drink) throw Error("That drink is not in your journal.");

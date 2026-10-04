@@ -92,11 +92,54 @@ test(
       });
       assert.ok(wine.ok && "detail" in wine);
       assert.match(wine.detail, /^about 150 ml wine\./);
-      assert.match(wine.detail, /Wine has energy too: log it in Food as well/);
+      assert.match(
+        wine.detail,
+        /Wine has energy too: if it isn't in Food yet, log it there as well/,
+      );
       assert.equal(
         (await readJournal(id)).state.health.drinks?.at(-1)?.estimated,
         true,
       );
+      // With the wine already in Food, as when the voice coach logs the
+      // meal first, the receipt doesn't ask for it again.
+      const meal = await runVoiceTool(id, {
+        id: crypto.randomUUID(),
+        name: "log_meal",
+        args: {
+          summary: "A glass of white wine",
+          date,
+          meal_type: "dinner",
+          name: "White wine",
+          items: [
+            {
+              name: "White wine",
+              portion: "150 ml",
+              calories: 120,
+              protein_g: 0,
+              carbs_g: 4,
+              fat_g: 0,
+            },
+          ],
+        },
+        today: date,
+        seenPhotoIds: [],
+      });
+      assert.ok(meal.ok);
+      const second = await runVoiceTool(id, {
+        id: crypto.randomUUID(),
+        name: "log_drink",
+        args: {
+          summary: "A glass of white wine",
+          date,
+          ml: 150,
+          kind: "wine",
+          estimated: true,
+        },
+        today: date,
+        seenPhotoIds: [],
+      });
+      assert.ok(second.ok && "detail" in second);
+      assert.doesNotMatch(second.detail, /energy/);
     } finally {
       await pool.query("DELETE FROM users WHERE id = $1", [id]);
     }

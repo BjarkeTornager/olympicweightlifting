@@ -362,7 +362,10 @@ test("wine is logged with an energy prompt, unless its meal comes with it", () =
     { kind: "log_drink", drink: { date, ml: 150, kind: "wine" } },
     date,
   );
-  assert.match(wine.detail, /Wine has energy too: log it in Food as well\./);
+  assert.match(
+    wine.detail,
+    /Wine has energy too: if it isn't in Food yet, log it there as well\./,
+  );
   // It counts towards the drinks total at its volume.
   assert.equal(hydrationForDay(wine.state, date).totalMl, 150);
   const both = prepareAction(
@@ -390,6 +393,38 @@ test("wine is logged with an energy prompt, unless its meal comes with it", () =
     date,
   );
   assert.match(elsewhere.entries![0].detail, /Beer has energy too/);
+  // A meal already in Food that names it, as when voice logs the meal
+  // first: no prompt. One that doesn't name it still gets the prompt.
+  const dinner = prepareAction(s, { kind: "record_meal", meal }, date).state;
+  const after = (drink: Record<string, unknown>) =>
+    prepareAction(
+      dinner,
+      { kind: "log_drink", drink: { date, ...drink } },
+      date,
+    ).detail;
+  assert.doesNotMatch(after({ ml: 150, kind: "wine" }), /energy/);
+  assert.match(after({ ml: 330, kind: "beer" }), /Beer has energy too/);
+  // Whole words in English or Danish, so ginger is not gin.
+  const named = (name: string) =>
+    prepareAction(
+      s,
+      {
+        kind: "record_meal",
+        meal: { ...meal, name, items: [{ ...meal.items[0], name }] },
+      },
+      date,
+    ).state;
+  const logged = (state: JournalState, kind: "wine" | "spirits") =>
+    prepareAction(
+      state,
+      { kind: "log_drink", drink: { date, ml: 150, kind } },
+      date,
+    ).detail;
+  assert.doesNotMatch(logged(named("Et glas rødvin"), "wine"), /energy/);
+  assert.match(
+    logged(named("Ginger tea"), "spirits"),
+    /Spirits have energy too/,
+  );
   // Water never asks.
   assert.doesNotMatch(
     prepareAction(

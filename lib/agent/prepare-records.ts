@@ -1,5 +1,6 @@
 import {
   addDrink,
+  alcoholInFood,
   alcoholKinds,
   formatLitres,
   formatTargetLitres,
@@ -120,12 +121,15 @@ export function prepareDrink(
       : removeDrink(next, action.drinkId);
   const day = hydrationForDay(next, drink.date);
   const what = `${drink.estimated ? "about " : ""}${drink.ml} ml ${drink.name || drink.kind}`;
-  // Alcohol's energy belongs in Food too, unless its meal comes with it.
+  // Alcohol's energy belongs in Food too, unless its meal comes with it or
+  // Food already names it that day. Voice, and a drink saved on its own,
+  // may log the meal next, so the line doesn't assume it is missing.
   const food =
     action.kind === "log_drink" &&
     alcoholKinds.includes(drink.kind) &&
-    !mealDates.has(drink.date)
-      ? ` ${drink.kind[0].toUpperCase()}${drink.kind.slice(1)} has energy too: log it in Food as well.`
+    !mealDates.has(drink.date) &&
+    !alcoholInFood(next, drink)
+      ? ` ${drink.kind[0].toUpperCase()}${drink.kind.slice(1)} ${drink.kind === "spirits" ? "have" : "has"} energy too: if it isn't in Food yet, log it there as well.`
       : "";
   return {
     title: action.kind === "log_drink" ? "Log a drink" : "Remove a drink",

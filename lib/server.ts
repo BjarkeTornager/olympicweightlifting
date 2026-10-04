@@ -99,6 +99,22 @@ export async function writeJournal(
     // Keep its current value; an explicit empty collection still means deletion.
     if (input.state.cardio === undefined)
       state.cardio = journalSchema.parse(row.state).cardio;
+    // A client from before sleep sources keeps an imported night but not
+    // where it came from. The digest covers the source, so an unchanged
+    // digest means the same night from the same source.
+    for (const checkin of state.health.checkins) {
+      const night = checkin.sleepImport;
+      const before = row.state.health?.checkins?.find(
+        (c) => c.date === checkin.date,
+      )?.sleepImport;
+      if (
+        night &&
+        !night.source &&
+        before?.source &&
+        before.digest === night.digest
+      )
+        night.source = before.source;
+    }
     if (input.preserveMissingCoachData) {
       const previous = journalSchema.parse(row.state);
       // Omission by an older client preserves the brief. Explicit null clears it.

@@ -2728,6 +2728,11 @@
                     "awake",
                     "inBed"
                   ]
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
                 }
               },
               "required": [

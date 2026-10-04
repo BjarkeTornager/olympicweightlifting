@@ -5,8 +5,10 @@ export function foodSnapshotForClient<T extends Snapshot>(
   request: Request,
   snapshot: T,
 ): T {
+  const sleepImport = request.headers.get("x-sleep-import-version");
   if (
-    request.headers.get("x-sleep-import-version") !== "1" &&
+    sleepImport !== "1" &&
+    sleepImport !== "2" &&
     snapshot.state.health.checkins.some(
       (entry) => entry.sleepImport !== undefined,
     )
@@ -14,6 +16,17 @@ export function foodSnapshotForClient<T extends Snapshot>(
     snapshot = structuredClone(snapshot);
     for (const entry of snapshot.state.health.checkins)
       delete entry.sleepImport;
+  }
+  // Version 1 knows the import but not which source the night came from.
+  if (
+    sleepImport === "1" &&
+    snapshot.state.health.checkins.some(
+      (entry) => entry.sleepImport?.source !== undefined,
+    )
+  ) {
+    snapshot = structuredClone(snapshot);
+    for (const entry of snapshot.state.health.checkins)
+      delete entry.sleepImport?.source;
   }
   if (
     request.headers.get("x-activity-photos-version") !== "1" &&

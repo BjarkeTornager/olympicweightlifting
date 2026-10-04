@@ -16,6 +16,19 @@ struct HealthMappingTests {
     #expect(HealthSync.sleepValue(99) == nil)
   }
 
+  @Test("A sleep sample names its source without the device's own name")
+  func sleepSources() {
+    let apple = "com.apple.health.81A3C2E4-0B1D-4C7E-9A55-3F6D2E1B7C90"
+    #expect(HealthSync.sleepSource(bundle: apple, product: "Watch7,1", name: "Sam's Apple Watch") == "Apple Watch")
+    #expect(HealthSync.sleepSource(bundle: apple, product: "iPhone17,2", name: "Sam's iPhone") == "iPhone")
+    #expect(HealthSync.sleepSource(bundle: apple, product: nil, name: "Sam's iPhone") == "iPhone")
+    // An app is named, even when it runs on the watch.
+    #expect(HealthSync.sleepSource(bundle: "com.tantsissa.AutoSleep", product: "Watch7,1", name: "AutoSleep") == "AutoSleep")
+    #expect(HealthSync.sleepSource(bundle: "com.example.sleep", product: "iPhone17,2", name: "  ") == nil)
+    #expect(HealthSync.sleepSource(bundle: "com.example.sleep", product: nil, name: String(repeating: "z", count: 80))?.count == 60)
+    #expect(HealthSync.sleepSource(bundle: "com.example.sleep", product: nil, name: String(repeating: "😴", count: 40))?.utf16.count == 60)
+  }
+
   @Test("A night runs from local noon to local noon, even across a clock change")
   func nightWindow() {
     var calendar = Calendar(identifier: .gregorian)

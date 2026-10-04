@@ -981,7 +981,9 @@ function sleepDetails(
           ]
         : []),
     ],
-    footnote: night ? "From Apple Health" : "Reported by you",
+    footnote: night
+      ? `From Apple Health${night.source ? `, ${night.source}` : ""}`
+      : "Reported by you",
   });
 }
 

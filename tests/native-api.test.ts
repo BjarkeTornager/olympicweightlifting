@@ -290,6 +290,13 @@ test("journal items carry their full details: meals item by item, sleep with its
     { label: "Night", value: "23:40 to 07:10" },
   ]);
   assert.equal(sleep.footnote, "From Apple Health");
+  state.health.checkins[0].sleepImport!.source = "Apple Watch";
+  assert.equal(
+    buildJournal(state, 1, "2026-09-27", 14, new Set()).items.find(
+      (i) => i.kind === "sleep",
+    )!.details!.footnote,
+    "From Apple Health, Apple Watch",
+  );
   const checkin = byKind("checkin").details!;
   assert.deepEqual(
     checkin.lines.map((l) => l.label),

@@ -801,7 +801,9 @@ export const TARGETS_DIFFER =
 // (25 g of protein or carbohydrate, 11 g of fat), so a note about protein
 // or carbohydrate never sits beside a macro from an older plan. Otherwise
 // one line says they differ, so a note never contradicts the target shown
-// beside it.
+// beside it. When the plan sets no protein target, a saved one is the
+// athlete's own (their doctor's or dietitian's figure, as its note
+// advises), so it doesn't count as a difference.
 export function notesForTargets(
   plan: GoalPlan,
   targets: z.infer<typeof dietTargetsSchema>,
@@ -810,6 +812,7 @@ export function notesForTargets(
   const kcalPer = { calories: 1, protein: 4, carbs: 4, fat: 9 };
   const close = (Object.keys(kcalPer) as (keyof typeof kcalPer)[]).every(
     (key) => {
+      if (key === "protein" && !plan.proteinTarget) return true;
       const a = planned[key];
       const b = dailyTarget(targets[key]);
       return a == null || b == null
@@ -898,7 +901,9 @@ export const ASSUMED_SESSION =
 // confirmation only while the goal weight stays the same and the baby's
 // birth day only while breastfeeding. The birth day is worked out from the
 // weeks given only when they differ from the saved age, so saving the
-// goals again never moves it.
+// goals again never moves it. A protein target saved beside a plan that set
+// none is the athlete's own, their doctor's or dietitian's figure perhaps,
+// and is kept while the plan still sets none.
 export function applyGoals(
   state: JournalState,
   input: BodyGoalsInput | BodyGoalsRequest,
@@ -906,6 +911,7 @@ export function applyGoals(
 ) {
   const split = splitGoals(input);
   const { composition, checks } = split;
+  const earlier = planForState(state, today);
   const known = savedTraining(state);
   const assumed =
     split.goals.sessionMinutes == null && known.sessionMinutes == null;
@@ -986,7 +992,14 @@ export function applyGoals(
   const plan = planForState(state, today)!;
   state.profile.age = goals.age;
   state.profile.bodyweight = goals.weightKg;
-  state.nutrition.targets = planTargets(plan);
+  const targets = planTargets(plan);
+  const own = dailyTarget(state.nutrition.targets.protein);
+  const keepsOwn =
+    own != null && !plan.proteinTarget && earlier?.proteinTarget === false;
+  if (keepsOwn) targets.protein = own;
+  state.nutrition.targets = targets;
+  if (keepsOwn)
+    plan.notes.push(`Your own protein target of ${own} g stays as it is.`);
   if (assumed && plan.sessionsPerWeek > 0) plan.notes.push(ASSUMED_SESSION);
   return plan;
 }

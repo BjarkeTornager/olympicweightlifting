@@ -486,6 +486,69 @@ test("Coach and the voice coach pass the answers to the same plan, and get no pr
   assert.ok(instruction.includes("don't ask about them outside goal setup"));
 });
 
+test("a protein target the athlete sets beside a plan that sets none is their own: the notes stay, and saving the goals keeps it", () => {
+  const state = emptyJournal();
+  applyGoals(state, { ...man, limitProtein: true }, today);
+  const plan = planForState(state, today)!;
+  assert.equal(state.nutrition.targets.protein, null);
+  // Their doctor's figure, saved as they said it, as the kidney note
+  // advises.
+  const own = prepareAction(
+    state,
+    { kind: "set_diet_targets", targets: { protein: 70 } },
+    today,
+  ).state;
+  assert.equal(own.nutrition.targets.protein, 70);
+  assert.deepEqual(notesForTargets(plan, own.nutrition.targets), plan.notes);
+  const native = buildToday(own, 1, today, new Set());
+  assert.equal(native.nutrition.targetProtein, 70);
+  assert.deepEqual(native.body?.goalNotes, plan.notes);
+  // Another target set by hand still says the targets differ.
+  const calories = prepareAction(
+    own,
+    { kind: "set_diet_targets", targets: { calories: 2600 } },
+    today,
+  ).state;
+  assert.deepEqual(notesForTargets(plan, calories.nutrition.targets), [
+    TARGETS_DIFFER,
+  ]);
+  // Coach's goals review, like the form, keeps it and says so.
+  const reviewed = prepareAction(
+    own,
+    { kind: "set_body_goals", bodyGoals: { ...man, trainingDays: 4 } },
+    today,
+  );
+  const next = reviewed.state;
+  assert.equal(next.nutrition.targets.protein, 70);
+  assert.match(
+    reviewed.detail,
+    /Your own protein target of 70 g stays as it is\./,
+  );
+  assert.deepEqual(
+    notesForTargets(planForState(next, today)!, next.nutrition.targets),
+    planForState(next, today)!.notes,
+  );
+  // Once the plan sets protein again, its own replaces it.
+  const removed = prepareAction(
+    next,
+    { kind: "set_body_goals", bodyGoals: { ...man, limitProtein: false } },
+    today,
+  );
+  assert.equal(removed.state.nutrition.targets.protein, 180);
+  // A protein target set before the answer isn't one for it, so the answer
+  // removes it.
+  const earlier = emptyJournal();
+  applyGoals(earlier, man, today);
+  const handSet = prepareAction(
+    earlier,
+    { kind: "set_diet_targets", targets: { protein: 150 } },
+    today,
+  ).state;
+  const answered = applyGoals(handSet, { ...man, limitProtein: true }, today);
+  assert.equal(handSet.nutrition.targets.protein, null);
+  assert.ok(!answered.notes.some((n) => n.startsWith("Your own protein")));
+});
+
 test("saving the goals again keeps the baby's birth day, so a gentle deficit can start at 6 weeks", () => {
   const born = "2026-09-01";
   const state = emptyJournal();

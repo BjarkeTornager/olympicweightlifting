@@ -157,4 +157,13 @@ struct LiftJournalTests {
     #expect(
       AppModel.category(.recordCheckin(.init(kind: .recordCheckin, checkin: .init(date: "2026-10-02")))) == .checkin)
   }
+
+  @Test("A receipt's safety notes are shown on their own, so its detail leaves them out")
+  func receiptNotes() {
+    let note =
+      "Under 18 the plan doesn't set a calorie deficit: a growing body needs plenty of energy for training and growth, so it holds your weight."
+    let detail = "Hold around 60 kg. 2,330 kcal a day. \(note) 3 training sessions a week."
+    #expect(ReceiptCard.detail(detail, without: [note]) == "Hold around 60 kg. 2,330 kcal a day. 3 training sessions a week.")
+    #expect(ReceiptCard.detail(detail, without: []) == detail)
+  }
 }

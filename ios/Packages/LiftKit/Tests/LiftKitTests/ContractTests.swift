@@ -92,6 +92,9 @@ struct ContractTests {
     #expect(receipt.detail.contains("Under 18 the plan doesn't set a calorie deficit"))
     #expect(receipt.detail.contains("talk it through with a parent, your coach or a doctor"))
     #expect(receipt.entries?.first?.lines.first?.value == "Maintain weight")
+    // The same note on its own, for the receipt to show in full.
+    #expect(receipt.notes?.count == 1)
+    #expect(receipt.notes?.first?.hasPrefix("Under 18 the plan doesn't set a calorie deficit") == true)
   }
 
   @Test("Today's goals bring the plan's notes, and decode without them")

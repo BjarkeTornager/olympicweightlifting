@@ -573,7 +573,9 @@ final class VoiceCall {
       }
     }
     let ok = result["ok"] as? Bool == true
-    if !reading, let index = lines.firstIndex(where: { $0.id == call.id }) {
+    if Self.unsaved(result) {
+      lines.removeAll { $0.id == call.id && $0.role == .save }
+    } else if !reading, let index = lines.firstIndex(where: { $0.id == call.id }) {
       lines[index].state = ok ? .saved : .failed
       if ok { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     }
@@ -586,6 +588,12 @@ final class VoiceCall {
       if let save = result["saveId"] { saved["save_id"] = save }
       respond(call, ["result": saved])
     }
+  }
+
+  /// Goals read back before they are saved (the server's goalsReadBack):
+  /// nothing is saved until the athlete says yes, so there is no receipt.
+  nonisolated static func unsaved(_ result: [String: Any]) -> Bool {
+    result["ok"] as? Bool == true && (result["data"] as? [String: Any])?["saved"] as? Bool == false
   }
 
   /// A card on the athlete's screen, drawn as soon as the server has kept it

@@ -161,6 +161,101 @@
       ]
     },
     {
+      "id": "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a22",
+      "question": "Set my calorie target to 2400",
+      "fromVoice": false,
+      "photoIds": [],
+      "createdAt": "2026-09-26T18:00:00.000Z",
+      "status": "done",
+      "reply": "Here is the new calorie target to review.",
+      "receipts": [
+        {
+          "id": "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a23",
+          "title": "Update your daily nutrition targets",
+          "detail": "These are your chosen daily targets. They are not a calculated calorie prescription.",
+          "state": "pending",
+          "entries": [
+            {
+              "title": "Update your daily nutrition targets",
+              "lines": [
+                {
+                  "label": "Goal",
+                  "value": "Lose weight"
+                },
+                {
+                  "label": "Energy",
+                  "note": "Was 2350 kcal",
+                  "value": "2400 kcal"
+                },
+                {
+                  "label": "Protein",
+                  "value": "176 g"
+                },
+                {
+                  "label": "Carbs",
+                  "value": "253 g"
+                },
+                {
+                  "label": "Fat",
+                  "value": "70 g"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "visuals": []
+    },
+    {
+      "id": "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a24",
+      "question": "I'm 16 and want to get down to 55 kg",
+      "fromVoice": false,
+      "photoIds": [],
+      "createdAt": "2026-09-26T18:00:00.000Z",
+      "status": "done",
+      "reply": "Here is your plan to review.",
+      "receipts": [
+        {
+          "id": "9c3e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a25",
+          "title": "Set your goals",
+          "detail": "Hold around 60 kg. 2,090 kcal a day: 108 g protein, 284 g carbs, 58 g fat. 3 training sessions a week. Under 18 the plan doesn't set a calorie deficit: a growing body needs plenty of energy for training and growth, so it holds your weight. If you want to change your weight, talk it through with a parent, your coach or a doctor.",
+          "state": "pending",
+          "entries": [
+            {
+              "title": "Set your goals",
+              "lines": [
+                {
+                  "label": "Goal",
+                  "value": "Maintain weight"
+                },
+                {
+                  "label": "Energy",
+                  "note": "Was No target",
+                  "value": "2090 kcal"
+                },
+                {
+                  "label": "Protein",
+                  "note": "Was No target",
+                  "value": "108 g"
+                },
+                {
+                  "label": "Carbs",
+                  "note": "Was No target",
+                  "value": "284 g"
+                },
+                {
+                  "label": "Fat",
+                  "note": "Was No target",
+                  "value": "58 g"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "visuals": []
+    },
+    {
       "id": "8b2d3f8e-2a51-4c1e-9d0b-0c1f7c1e2a21",
       "question": "Can you give me a high-protein dinner with salmon for two, and show me what it looks like?",
       "fromVoice": false,

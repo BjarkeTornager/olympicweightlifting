@@ -177,6 +177,12 @@ enum Format {
     value.formatted(.number.precision(.fractionLength(0...digits)).locale(locale))
   }
 
+  /// A daily target, or nil when none is set. Zero counts as none: nobody
+  /// aims to eat nothing, and "0 kcal a day" would read as a target to meet.
+  static func target(_ value: Double?) -> Double? {
+    value.flatMap { $0 > 0 ? $0 : nil }
+  }
+
   /// A count in running text: spelled out up to ten ("two meals"), in
   /// figures above.
   static func count(_ value: Int) -> String {

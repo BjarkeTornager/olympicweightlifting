@@ -102,15 +102,61 @@ export const mealSchema = mealInputSchema.extend({
   id: z.string().uuid(),
   createdAt: z.string().datetime(),
 });
+const dietGoal = z.enum(["maintain", "lose", "gain"]);
+const dietTargetFields = {
+  calories: z.number().finite().min(0).max(10000).nullable(),
+  protein: z.number().finite().min(0).max(1000).nullable(),
+  carbs: z.number().finite().min(0).max(2000).nullable(),
+  fat: z.number().finite().min(0).max(1000).nullable(),
+};
 export const dietTargetsSchema = z
   .object({
-    goal: z.enum(["maintain", "lose", "gain"]).default("maintain"),
-    calories: z.number().finite().min(0).max(10000).nullable().default(null),
-    protein: z.number().finite().min(0).max(1000).nullable().default(null),
-    carbs: z.number().finite().min(0).max(2000).nullable().default(null),
-    fat: z.number().finite().min(0).max(1000).nullable().default(null),
+    goal: dietGoal.default("maintain"),
+    calories: dietTargetFields.calories.default(null),
+    protein: dietTargetFields.protein.default(null),
+    carbs: dietTargetFields.carbs.default(null),
+    fat: dietTargetFields.fat.default(null),
   })
   .strict();
+// A change to the saved targets: only the fields given change, and null
+// clears one. No defaults, so a field left out is never reset.
+export const dietTargetsUpdateSchema = z
+  .object({ goal: dietGoal, ...dietTargetFields })
+  .partial()
+  .strict();
+export function mergeDietTargets(
+  current: DietTargets,
+  update: z.infer<typeof dietTargetsUpdateSchema>,
+): DietTargets {
+  return dietTargetsSchema.parse({ ...current, ...update });
+}
+// A daily target, or null when none is set. Zero counts as none: nobody
+// aims to eat nothing, and "of 0 kcal" would read as a target to meet.
+export function dailyTarget(value: number | null | undefined) {
+  return value != null && value > 0 ? value : null;
+}
+// The saved targets as Coach reads them, with a target of 0 as none, so it
+// never compares a day against "0 kcal".
+export function dailyTargets(targets: DietTargets): DietTargets {
+  return {
+    goal: targets.goal,
+    calories: dailyTarget(targets.calories),
+    protein: dailyTarget(targets.protein),
+    carbs: dailyTarget(targets.carbs),
+    fat: dailyTarget(targets.fat),
+  };
+}
+// What is left of a daily target, or that there is none.
+export function targetProgress(
+  eaten: number,
+  target: number | null | undefined,
+  unit: "kcal" | "g",
+) {
+  const goal = dailyTarget(target);
+  if (goal == null) return "No daily target";
+  const diff = Math.abs(Math.round(goal - eaten));
+  return `${diff.toLocaleString("en-GB")}\u00a0${unit} ${eaten > goal ? "above target" : "remaining"}`;
+}
 export const favouriteMealSchema = mealInputSchema
   .omit({ date: true, photoIds: true, source: true })
   .extend({
@@ -189,7 +235,7 @@ export function nutritionSummary(
   const meals = nutrition.meals.filter((m) => m.date >= from && m.date <= to);
   const dates = [...new Set(meals.map((m) => m.date))].sort();
   return {
-    targets: nutrition.targets,
+    targets: dailyTargets(nutrition.targets),
     loggedDays: dates.length,
     totals: totalNutrients(meals.flatMap((m) => m.items)),
     days: dates.map((date) => ({
@@ -297,7 +343,7 @@ export function queryFoodJournal(
     from,
     to,
     filters: filter,
-    targets: nutrition.targets,
+    targets: dailyTargets(nutrition.targets),
     totalMeals: meals.length,
     loggedDays: new Set(meals.map((m) => m.date)).size,
     explicitlyCompleteDates: (nutrition.completeDays ?? []).filter(

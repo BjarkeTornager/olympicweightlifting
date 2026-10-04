@@ -482,6 +482,69 @@ test("a receipt opens to show what was saved, item by item", () => {
   assert.match(batch.entries![0].footnote!, /of about 2.5 L that day/);
   assert.equal(batch.entries![2].summary, "330 ml cola.");
 
+  // Targets show the goal label and every target, with what changed.
+  const targets = receiptView(
+    {
+      id: "t",
+      title: "Update your daily nutrition targets",
+      detail: "These are your chosen daily targets.",
+      workout: null,
+      expiresAt: now.toISOString(),
+      targets: {
+        goal: "lose",
+        calories: 2400,
+        protein: 176,
+        carbs: null,
+        fat: 70,
+      },
+      targetsBefore: {
+        goal: "maintain",
+        calories: 2350,
+        protein: 176,
+        carbs: 253,
+        fat: 70,
+      },
+    },
+    now,
+  );
+  assert.equal(targets.state, "pending");
+  assert.deepEqual(targets.entries![0].lines, [
+    { label: "Goal", note: "Was maintain weight", value: "Lose weight" },
+    { label: "Energy", note: "Was 2350 kcal", value: "2400 kcal" },
+    { label: "Protein", value: "176 g" },
+    { label: "Carbs", note: "Was 253 g", value: "No target" },
+    { label: "Fat", value: "70 g" },
+  ]);
+  // One stored before the old values were kept still lists every target.
+  const older = receiptView(
+    {
+      id: "o",
+      title: "Update your daily nutrition targets",
+      detail: "",
+      workout: null,
+      status: "saved",
+      expiresAt: now.toISOString(),
+      targets: {
+        goal: "maintain",
+        calories: 2200,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
+    now,
+  );
+  assert.deepEqual(
+    older.entries![0].lines.map((line) => `${line.label}: ${line.value}`),
+    [
+      "Goal: Maintain weight",
+      "Energy: 2200 kcal",
+      "Protein: No target",
+      "Carbs: No target",
+      "Fat: No target",
+    ],
+  );
+
   // A plain note has nothing more to show.
   const plain = receiptView(
     {
@@ -878,6 +941,51 @@ test("A new journal's first steps show until all are done, for two weeks", () =>
     buildToday(state, 2, "2026-10-15", new Set()).firstSteps,
     undefined,
   );
+  // A target of 0 is no target, so goals are still to set.
+  state.nutrition.targets.calories = 0;
+  assert.equal(buildToday(state, 3, date, new Set()).firstSteps?.goals, false);
   state.nutrition.targets.calories = 2200;
   assert.equal(buildToday(state, 3, date, new Set()).firstSteps, undefined);
+});
+
+test("a target of 0 reaches the app as no target, for Today, Account and Trends", () => {
+  const state = emptyJournal();
+  const date = "2026-09-26";
+  state.nutrition.targets = {
+    goal: "maintain",
+    calories: 0,
+    protein: 0,
+    carbs: null,
+    fat: null,
+  };
+  const today = buildToday(state, 1, date, new Set());
+  assert.equal(today.nutrition.targetCalories, undefined);
+  assert.equal(today.nutrition.targetProtein, undefined);
+  const trends = buildTrends(state, date, 3);
+  assert.equal(trends.targetCalories, undefined);
+  assert.equal(trends.targetProtein, undefined);
+  state.nutrition.targets.calories = 1900;
+  assert.equal(
+    buildToday(state, 2, date, new Set()).nutrition.targetCalories,
+    1900,
+  );
+  assert.equal(buildTrends(state, date, 3).targetCalories, 1900);
+  // A receipt shows a 0 target as no target, and clearing one to 0 changes
+  // nothing it shows.
+  const receipt = receiptView(
+    {
+      id: "z",
+      title: "Update your daily nutrition targets",
+      detail: "",
+      workout: null,
+      expiresAt: "2026-09-27T18:00:00.000Z",
+      targets: { ...state.nutrition.targets, protein: 0 },
+      targetsBefore: { ...state.nutrition.targets, protein: null },
+    },
+    new Date("2026-09-26T18:00:00Z"),
+  );
+  assert.deepEqual(receipt.entries![0].lines[2], {
+    label: "Protein",
+    value: "No target",
+  });
 });

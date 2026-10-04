@@ -184,7 +184,7 @@ struct TrendView: View {
     case .water:
       bars({ $0.waterMl.map(Double.init) }, unit: "ml", target: trends.map { Double($0.waterTargetMl) })
     case .food:
-      bars(\.calories, unit: "kcal", target: trends?.targetCalories)
+      bars(\.calories, unit: "kcal", target: Format.target(trends?.targetCalories))
     case .heart:
       Chart {
         ForEach(days, id: \.date) { day in

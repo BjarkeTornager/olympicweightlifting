@@ -209,6 +209,7 @@ export function coachingContext(state: JournalState, date: string) {
     focus: "",
   };
   const suggestion = coachSuggestion(state, date);
+  const plan = planForState(state, date);
   return {
     preferences: {
       initiative: preferences.initiative,
@@ -217,15 +218,25 @@ export function coachingContext(state: JournalState, date: string) {
     // Null when unknown; the voice coach gets the same.
     age: athleteAge(state),
     // Saved body goals, focus and target body fat, and the plan the app
-    // derives from them with the latest body fat reading.
-    ...(state.profile.body
+    // derives from them with the latest body fat reading. The target is the
+    // plan's, which sets none under 18 or in pregnancy.
+    ...(state.profile.body && plan
       ? {
           goals: {
             ...state.profile.body,
             focus: state.profile.bodyTargets?.focus,
-            targetBodyFatPercent:
-              state.profile.bodyTargets?.targetBodyFatPercent ?? undefined,
-            plan: planForState(state, date),
+            targetBodyFatPercent: plan.targetBodyFatPercent ?? undefined,
+            // In pregnancy the plan sets no calorie or macro targets, so
+            // Coach gets no figures to quote as one.
+            plan: plan.dailyTargets
+              ? plan
+              : {
+                  ...plan,
+                  calories: undefined,
+                  protein: undefined,
+                  carbs: undefined,
+                  fat: undefined,
+                },
           },
         }
       : {}),

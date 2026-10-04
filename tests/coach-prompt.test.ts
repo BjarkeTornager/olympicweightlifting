@@ -528,8 +528,11 @@ test("goal setup asks the weight class and the low-energy questions, and the goa
     followUp,
     /Never answer slow loss by cutting further without first checking the food logs are complete/,
   );
-  // A message about a weigh-in loads the goals skill.
-  assert.ok(skills.goals.signal?.test("My weigh-in is in 6 weeks"));
+  // A message about making a weight class loads the goals skill; an
+  // everyday weigh-in being logged doesn't.
+  assert.ok(skills.goals.signal?.test("I need to make weight by May"));
   assert.ok(skills.goals.signal?.test("I compete in the 81 kg weight class"));
+  assert.ok(skills.goals.signal?.test("The weigh-in date is 14 November"));
   assert.ok(skills.goals.signal?.test("Indvejningen er om en måned"));
+  assert.ok(!skills.goals.signal?.test("Morning weigh-in: 80.2 kg"));
 });

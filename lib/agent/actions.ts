@@ -187,7 +187,7 @@ function applyAction(
     case "update_meal":
       return prepareMeal(next, action, currentDate);
     case "set_diet_targets":
-      return prepareDietTargets(next, action);
+      return prepareDietTargets(next, action, currentDate);
     case "log_drink":
     case "delete_drink":
       return prepareDrink(next, action, currentDate, mealDates);

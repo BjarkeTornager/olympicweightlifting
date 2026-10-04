@@ -1477,7 +1477,8 @@ export function receiptEntryView(
         line("Carbs", "carbs"),
         line("Fat", "fat"),
       ],
-      // The goals check agreed in the same change (followUpGoals).
+      // The goals check agreed or moved on in the same change
+      // (followUpGoals, moveGoalsCheck).
       footnote: entry.plan
         ? `Coach checks your weight trend with you from ${entry.plan.followUpDate}.`
         : undefined,

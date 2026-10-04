@@ -17,6 +17,14 @@ import {
   type BodyGoalsInput,
 } from "@/lib/body-goals";
 import { latestBodyFat, type BodyFocus } from "@/lib/body-composition";
+import {
+  activeGoalsCheck,
+  followUpGoals,
+  goalsCheckClosedNote,
+  goalsCheckDate,
+  goalsCheckNote,
+  goalsPlanChanges,
+} from "@/lib/coaching";
 import { today } from "@/lib/domain";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
@@ -273,6 +281,12 @@ function GoalsForm({
   // athlete to confirm it.
   const asksConfirmation = preview ? preview(false).confirmToLose : false;
   const plan = preview ? preview(asksConfirmation && confirmed) : null;
+  // Saved, a plan that changes weight agrees a check of the weight trend
+  // about 3 weeks on, as with Coach, and one that doesn't closes an active
+  // check (followUpGoals).
+  const checkFrom = plan ? goalsCheckDate(state, plan, today()) : null;
+  const closes =
+    plan && !goalsPlanChanges(plan) ? activeGoalsCheck(state) : undefined;
   // The low-energy questions come before a plan that would cut or aim very
   // lean, and stay while there are answers to change or remove.
   const asksEnergy =
@@ -296,7 +310,7 @@ function GoalsForm({
         setError("");
         try {
           await journal.update((s) => {
-            applyGoals(
+            const saved = applyGoals(
               s,
               {
                 ...parsed.data,
@@ -304,6 +318,7 @@ function GoalsForm({
               },
               today(),
             );
+            followUpGoals(s, saved, today());
           });
           onDone();
         } catch (e) {
@@ -474,6 +489,14 @@ function GoalsForm({
               {note}
             </p>
           ))}
+          {checkFrom && (
+            <p className="fine-print">{goalsCheckNote(checkFrom)}</p>
+          )}
+          {closes && (
+            <p className="fine-print">
+              {goalsCheckClosedNote(closes.followUpDate)}
+            </p>
+          )}
         </div>
       ) : (
         <p className="fine-print">{waiting}</p>

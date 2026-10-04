@@ -169,12 +169,13 @@ export function weightTrend(state: JournalState, date: string, days = 28) {
   };
 }
 
-// Essential fat and very lean limits, by sex. Without a stated sex, the
-// midpoint. Used for notes, never to refuse a record.
+// The lowest healthy body fat (NATA: about 5 % for men, 12 % for women) and
+// the very lean, lean and higher limits, by sex. Without a stated sex, the
+// midpoint. Used for notes and plan limits, never to refuse a record.
 export function leannessLimits(sex: "male" | "female" | "unspecified") {
   return sex === "male"
-    ? { essential: 5, veryLean: 8, lean: 12, higher: 25 }
+    ? { minimum: 5, veryLean: 8, lean: 12, higher: 25 }
     : sex === "female"
-      ? { essential: 13, veryLean: 16, lean: 22, higher: 32 }
-      : { essential: 9, veryLean: 12, lean: 17, higher: 28 };
+      ? { minimum: 12, veryLean: 16, lean: 22, higher: 32 }
+      : { minimum: 8.5, veryLean: 12, lean: 17, higher: 28 };
 }

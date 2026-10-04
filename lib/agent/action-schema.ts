@@ -490,7 +490,7 @@ export const actionToolSchema = z
     bodyGoals: bodyGoalsRequestSchema
       .optional()
       .describe(
-        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights. Optional: focus (lose_fat, build_muscle, recomposition or maintain) as they describe it, bodyFatPercent if they state a current reading, and targetBodyFatPercent if they name one.",
+        "For set_body_goals: every field as the athlete stated it. Ask for anything missing; never guess age, sex, height or weights. Optional: focus (lose_fat, build_muscle, recomposition or maintain) as they describe it, bodyFatPercent if they state a current reading, and targetBodyFatPercent if they name one (neither under 18: the plan uses no body fat then). pregnancy (pregnant, breastfeeding, or neither when they no longer are) only if the athlete tells you. confirmLowWeight true only after the plan's note asked them to confirm losing towards a weight just under the healthy range and they said they still want to.",
       ),
     bodyFat: bodyFatInputSchema
       .optional()

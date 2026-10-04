@@ -86,8 +86,11 @@ test("maintaining, gaining and deadlines stay within safe limits", () => {
 });
 
 test("warnings: underweight goals and too little energy", () => {
+  // BMI 17.5 at the goal: the plan holds until the athlete confirms.
   const under = planGoals({ ...athlete, targetWeightKg: 58 }, today);
-  assert.ok(under.notes.some((n) => /below the healthy range/.test(n)));
+  assert.equal(under.direction, "maintain");
+  assert.ok(under.confirmToLose);
+  assert.ok(under.notes.some((n) => /just below the healthy range/.test(n)));
   const small = planGoals(
     {
       ...athlete,
@@ -101,8 +104,13 @@ test("warnings: underweight goals and too little energy", () => {
     },
     today,
   );
-  assert.equal(small.calories, small.restingKcal);
-  assert.ok(small.notes.some((n) => /resting energy/.test(n)));
+  // Resting energy is 980 kcal and maintenance 1,170: no room for a
+  // deficit above the 1,200 kcal floor, so the plan holds at the floor.
+  assert.equal(small.restingKcal, 980);
+  assert.equal(small.direction, "maintain");
+  assert.equal(small.calories, 1200);
+  assert.equal(small.calories, small.floorKcal);
+  assert.ok(small.notes.some((n) => /isn't room for a safe deficit/.test(n)));
   const eager = planGoals(
     { ...athlete, trainingDays: 7, experience: "new" },
     today,

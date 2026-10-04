@@ -359,6 +359,10 @@ export const voiceToolArgs = {
       (v) => v || undefined,
       bodyGoalsRequestSchema.shape.targetBodyFatPercent,
     ),
+    pregnancy: z.preprocess(
+      (v) => v || undefined,
+      bodyGoalsRequestSchema.shape.pregnancy,
+    ),
   }),
   undo_save: z.object({ save_id: z.string().uuid() }),
   // Not a save: a card on the athlete's screen, kept in the Coach thread.

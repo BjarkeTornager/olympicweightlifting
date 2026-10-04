@@ -772,7 +772,7 @@ export function voiceTools(
                   "Only after asking the ask_first questions: true for any yes, false for no to all; leave it out if they'd rather not answer",
               },
               confirm_id: text(
-                "The confirm_id of the plan you read back, only after the athlete said yes to saving it",
+                "The confirm_id of the plan you read back: only after the athlete said yes to saving it, or with confirmLowWeight once they confirmed",
               ),
             },
             required: ["summary", "age", "sex", "activity", "trainingDays"],

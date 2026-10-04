@@ -242,7 +242,9 @@ export function CoachProposal({
             <Button
               variant="ghost"
               onClick={() =>
-                p.memory || p.plan
+                // A goals change with its agreed check opens Food, where its
+                // targets are.
+                (p.memory || p.plan) && !p.targets
                   ? onOpenMemories(p.plan ? "plans" : "memories")
                   : go(proposalRoute(p))
               }

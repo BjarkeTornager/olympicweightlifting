@@ -212,6 +212,8 @@ test("goals saved in pregnancy set no daily target anywhere", () => {
   assert.equal(native.nutrition.targetCalories, undefined);
   assert.equal(native.nutrition.targetProtein, undefined);
   assert.ok(native.body?.goalNotes?.some((n) => n.startsWith("In pregnancy")));
+  // Setting them still counts as a first step done.
+  assert.equal(native.firstSteps?.goals, true);
   // Coach gets the plan without figures to quote as a target.
   const plan = coachingContext(state, today).goals?.plan;
   assert.equal(plan?.dailyTargets, false);

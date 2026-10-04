@@ -773,7 +773,10 @@ export function firstSteps(state: JournalState, date: string) {
       Boolean(state.health.vitals?.length) ||
       Boolean(state.health.bodyFat?.some((b) => b.source === "apple-health")),
     meal: state.nutrition.meals.length > 0,
-    goals: dailyTarget(state.nutrition.targets.calories) != null,
+    // Goals saved in pregnancy set no calorie target, and still count.
+    goals:
+      dailyTarget(state.nutrition.targets.calories) != null ||
+      state.profile.goalChecks?.pregnancy === "pregnant",
   };
   return Object.values(steps).every(Boolean) ? undefined : steps;
 }

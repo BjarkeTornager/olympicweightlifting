@@ -44,8 +44,8 @@ test("with body fat known, energy and protein come from lean mass", () => {
   assert.equal(plan.leanMassKg, 75.3);
   assert.equal(plan.restingKcal, 2000);
   assert.equal(plan.focus, "lose_fat");
-  // 2.5 g per kg of lean mass while losing fat.
-  assert.equal(plan.protein, 188);
+  // 2.5 g per kg of lean mass while losing fat, to 5 g.
+  assert.equal(plan.protein, 190);
   assert.equal(plan.weeklyChangeKg, 0.44);
   // Without body fat the plan is the same as before.
   const plain = planGoals(athlete, today);
@@ -86,7 +86,7 @@ test("rates follow body fat and experience; recomposition stays gentle", () => {
     recomp.calories,
     Math.round((recomp.maintenanceKcal * 0.95) / 10) * 10,
   );
-  assert.equal(recomp.protein, 188);
+  assert.equal(recomp.protein, 190);
   // Recomposition towards a lower weight caps the loss at 0.25 % a week.
   const slow = planGoals(athlete, today, { focus: "recomposition" });
   assert.equal(slow.weeklyChangeKg, 0.22);

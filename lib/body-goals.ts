@@ -160,11 +160,31 @@ export const weeklyRates = {
   recomposition: 0.0025,
 };
 // On lean mass when body fat is known, else on bodyweight; more while
-// losing fat or recomposing.
+// losing fat or recomposing. At a BMI of 30 or more without body fat, per
+// kg of a height-adjusted weight instead (adjustedWeightKg), as per-kg
+// amounts on total weight run past anything studied there.
 export const proteinPerKg = {
   leanMass: { losing: 2.5, other: 2.2 },
   bodyweight: { losing: 2, other: 1.8 },
+  adjusted: { losing: 2, other: 1.8 },
 };
+const ADJUSTED_FROM_BMI = 30;
+// 1.6 g/kg, about where gains in lean mass level off: the plan's protein
+// on bodyweight at a BMI of 30 or more, within the adjusted weight's
+// limits, and the least it goes down to to make room for carbohydrate.
+const MODEST_PROTEIN_PER_KG = 1.6;
+// The weight at a BMI of 25 plus a quarter of the weight above it.
+export function adjustedWeightKg(weightKg: number, heightCm: number) {
+  const reference = 25 * (heightCm / 100) ** 2;
+  return reference + 0.25 * (weightKg - reference);
+}
+// Fat, as a percentage of energy: a quarter, inside every reference range
+// (20-35 %), going down to a fifth only to make room for carbohydrate and
+// never under a quarter before 18. Carbohydrate fills the rest and is at
+// least 130 g a day, the generally recommended minimum (NASEM), so a low
+// calorie or heavy plan can't squeeze it out.
+export const macroShares = { fat: 25, leastFat: 20, leastFatUnder18: 25 };
+export const CARBS_FLOOR_G = 130;
 
 export type GoalPlan = {
   direction: "lose" | "maintain" | "gain";
@@ -181,6 +201,7 @@ export type GoalPlan = {
   // 1,200 kcal (1,500 for men).
   floorKcal: number;
   calories: number;
+  // Grams to 5 g, adding up to the calories within 10 kcal.
   protein: number;
   fat: number;
   carbs: number;
@@ -203,6 +224,8 @@ export type GoalPlan = {
 };
 
 const round = (value: number, step = 1) => Math.round(value / step) * step;
+// To the 5 g at or above, so a least amount is kept after rounding.
+const upTo5 = (value: number) => Math.ceil(value / 5 - 1e-9) * 5;
 // Saved goals carry updatedAt; nothing else is accepted.
 const plannedGoalsSchema = bodyGoalsInputSchema.extend({
   updatedAt: z.iso.datetime().optional(),
@@ -474,6 +497,72 @@ export function planGoals(
     }
   }
   calories = Math.max(calories, floor);
+
+  // Protein on lean mass when body fat is known, else on bodyweight, to
+  // 5 g (proteinPerKg). At a BMI of 30 or more without body fat it is
+  // 1.6 g/kg of bodyweight, kept to at least the amount per kg of the
+  // adjusted weight and at most 2.0 g/kg of it (so 2.0 g/kg of it while
+  // losing).
+  const losing = direction === "lose" || focus === "recomposition";
+  const adjusted = lean == null && bmiNow >= ADJUSTED_FROM_BMI;
+  const basisKg =
+    lean ?? (adjusted ? adjustedWeightKg(g.weightKg, g.heightCm) : g.weightKg);
+  const perKg =
+    lean != null
+      ? proteinPerKg.leanMass
+      : adjusted
+        ? proteinPerKg.adjusted
+        : proteinPerKg.bodyweight;
+  const proteinFor = basisKg * (losing ? perKg.losing : perKg.other);
+  let protein = round(
+    adjusted
+      ? Math.min(
+          Math.max(MODEST_PROTEIN_PER_KG * g.weightKg, proteinFor),
+          basisKg * proteinPerKg.adjusted.losing,
+        )
+      : proteinFor,
+    5,
+  );
+  // Macros from the calories as shown, to 5 g, so they add up to them
+  // within the carbohydrate's rounding (10 kcal). Fat is a quarter of
+  // energy and carbohydrate the rest. Short of 130 g of carbohydrate, fat
+  // goes down to a fifth of energy (not under 18), then protein to 1.6 g/kg
+  // of the weight it is set from, then calories up towards maintenance;
+  // the note says which.
+  let kcal = round(calories, 10);
+  const leastFat = minor ? macroShares.leastFatUnder18 : macroShares.leastFat;
+  const fatAt = (share: number) => upTo5((kcal * share) / 900);
+  let fat = fatAt(macroShares.fat);
+  const carbsLeft = () => (kcal - protein * 4 - fat * 9) / 4;
+  const usualFat = fat;
+  const usualProtein = protein;
+  if (carbsLeft() < CARBS_FLOOR_G)
+    fat = Math.max(
+      fatAt(leastFat),
+      fat - upTo5(((CARBS_FLOOR_G - carbsLeft()) * 4) / 9),
+    );
+  if (carbsLeft() < CARBS_FLOOR_G)
+    protein = Math.max(
+      Math.min(protein, upTo5(MODEST_PROTEIN_PER_KG * basisKg)),
+      protein - upTo5(CARBS_FLOOR_G - carbsLeft()),
+    );
+  const atMaintenance = round(maintenance, 10);
+  let raised = false;
+  while (carbsLeft() < CARBS_FLOOR_G && kcal < atMaintenance) {
+    kcal += 10;
+    fat = fatAt(leastFat);
+    raised = true;
+  }
+  let heldForCarbs = false;
+  if (raised) {
+    calories = kcal;
+    if (kcal >= atMaintenance && direction === "lose") {
+      direction = "maintain";
+      heldForCarbs = true;
+    }
+  }
+  const carbs = round(carbsLeft(), 5);
+
   // The rate and weeks the calories shown add up to.
   rate =
     direction === "maintain"
@@ -486,26 +575,41 @@ export function planGoals(
     notes.push(
       "There isn't room for a safe deficit alongside your training and recovery, so the plan holds your weight at maintenance.",
     );
-  else if (limited === "floor")
+  // Once carbohydrate sets the calories, its own note says so instead.
+  else if (limited === "floor" && !raised)
     notes.push(
       `Calories are kept at a level that covers your resting energy and training, so the plan loses more slowly: about ${weeklyChangeKg} kg a week.`,
     );
-  else if (limited === "cap")
+  else if (limited === "cap" && !raised)
     notes.push(
       `The deficit is kept to ${cap.toLocaleString("en-GB")} kcal a day to protect training and muscle, so the plan loses about ${weeklyChangeKg} kg a week.`,
+    );
+  const room = [
+    fat < usualFat &&
+      `fat is about ${Math.round((fat * 900) / kcal)}% of calories rather than a quarter`,
+    protein < usualProtein && "protein is a little lower",
+    raised &&
+      (heldForCarbs
+        ? "the plan holds your weight at maintenance"
+        : direction === "lose"
+          ? `the plan loses more slowly: about ${weeklyChangeKg} kg a week`
+          : "calories are a little higher"),
+  ].filter((part): part is string => Boolean(part));
+  if (room.length)
+    notes.push(
+      `To keep ${CARBS_FLOOR_G} g of carbohydrate a day, the generally recommended minimum, ${room.length > 1 ? `${room.slice(0, -1).join(", ")} and ${room.at(-1)}` : room[0]}.`,
     );
   if (direction !== "maintain" && needed != null && needed - rate > 0.005)
     notes.push(
       `Reaching ${towards} kg by ${g.targetDate} would need ${needed.toFixed(2)} kg a week; this plan keeps to a sustainable ${rate.toFixed(2)} kg.`,
     );
-
-  const losing = direction === "lose" || focus === "recomposition";
-  // Protein on lean mass when body fat is known, else on bodyweight
-  // (proteinPerKg); fat at least 25 % of energy; carbs fill the rest.
-  const perKg = lean != null ? proteinPerKg.leanMass : proteinPerKg.bodyweight;
-  const protein = round(
-    (lean ?? g.weightKg) * (losing ? perKg.losing : perKg.other),
-  );
+  // A reading would give protein from lean mass instead; not asked for
+  // under 18, when readings aren't used, nor in pregnancy, with no protein
+  // target.
+  if (adjusted && !minor && !pregnant)
+    notes.push(
+      "Protein is an estimate from your height and weight; add a body fat reading for a better number.",
+    );
   if (bodyFat != null && direction === "lose" && bodyFat <= limits.lean)
     notes.push(
       `At ${bodyFat}% body fat you are already lean, so the plan loses slowly to protect muscle and training.`,
@@ -537,10 +641,6 @@ export function planGoals(
     notes.push(
       `At ${targetBodyFat}% body fat with your current lean mass you would weigh about ${weightAtTarget} kg, not ${g.targetWeightKg} kg; one of the two goals will need to give.`,
     );
-  // Macros from the calories as shown, so they add up to that number.
-  const kcal = round(calories, 10);
-  const fat = round(Math.max(g.weightKg * 0.8, (kcal * 0.25) / 9));
-  const carbs = round(Math.max(0, (kcal - protein * 4 - fat * 9) / 4));
   if (trainingKcal > TRAINING_KCAL_CAP)
     notes.push(
       `The plan counts your training as ${TRAINING_KCAL_CAP.toLocaleString("en-GB")} kcal a day at most, so it may be on the low side; if your weight falls faster than planned, ask Coach to review it.`,

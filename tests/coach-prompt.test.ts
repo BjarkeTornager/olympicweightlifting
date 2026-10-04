@@ -3,11 +3,20 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
   fullPrompt,
+  siteHelp,
   skillInstructions,
   systemPrompt,
 } from "../lib/agent/knowledge";
 import { skillList, skillNames, skills } from "../lib/agent/skills";
 import { coachStyle } from "../lib/agent/coach-style";
+import {
+  caffeineRule,
+  disorderedEatingRule,
+  drinksTargetRule,
+  supplementRule,
+  teenSleepRule,
+} from "../lib/agent/health-rules";
+import { proteinPerKg, weeklyRates } from "../lib/body-goals";
 
 test("conversational prompt changes preserve the fixed health, privacy, evidence and action policy", () => {
   // The whole reviewed policy, core and skills; turns get the core plus the
@@ -156,7 +165,36 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Removing that sentence and restoring the old summary reproduces the
     // previous hash (f44bfc11…). Health, privacy and evidence text is
     // unchanged.
-    "4d2133d0274d4dccb23e1038ccebdc74ea60ef95a193d8756f10c9586a74afe8",
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // of every target the app sets (PR 1, Coach prompts):
+    // - Shared health rules (agent/health-rules.ts, also in the voice
+    //   coach's instructions) in the always-loaded core. The supplement
+    //   rule replaces the supplement paragraph's last sentence: no
+    //   prescribing, creatine 3–5 g only as information for adults, no
+    //   performance supplements under 18, in pregnancy or breastfeeding,
+    //   with a condition or on medication, food first. Two added
+    //   paragraphs: a caffeine rule (EFSA limits, minors, pregnancy, sleep,
+    //   no powder) and the bingeing and purging rule, moved out of the goals
+    //   skill and extended to laxatives, diuretics, appetite suppressants
+    //   and fat burners taken to make weight. The drinks paragraph gains the
+    //   drinks target rule (not a minimum, a clinician's fluid limit comes
+    //   first, no water cuts). The reference paragraph adds teen sleep
+    //   (8–10 h) and replaces the NHS link with WHO 2020 and Danish Health
+    //   Authority activity guidance, given as general adult guidance when
+    //   age is unknown.
+    // - The goals skill's coaching paragraph quotes the plan's own rates
+    //   and protein (weeklyRates and proteinPerKg in body-goals.ts) instead
+    //   of 0.5–1 %, 0.25–0.5 %, 1.6–2.4 and 1.6–2.2 g/kg; says at least 7
+    //   hours of sleep; replaces "daily steps" with keeping everyday
+    //   movement near usual and never walking off food; and no longer
+    //   allows "creatine, caffeine". The setup paragraph's rates come from
+    //   the same constants, with identical text.
+    // - Apple Health active energy is Apple's estimate, not a recorded
+    //   measurement; dailyTargets is the number the athlete sees, and
+    //   goals.plan a recalculation to offer for review, never as the
+    //   current target.
+    // Privacy and action policy text is unchanged.
+    "b371f6c1a1564f882b4f9c17fa3e8c9b927859f7f76731e276cb7c08cc93f141",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -210,4 +248,111 @@ test("the core prompt and the skills together are exactly the reviewed policy", 
         1,
         `${name}: "${start}"`,
       );
+});
+
+test("the health rules hold on every turn, not only when a skill loads", () => {
+  for (const logging of [true, false]) {
+    // The core prompt alone, with no skill loaded.
+    const core = systemPrompt(logging);
+    for (const rule of [
+      supplementRule,
+      caffeineRule,
+      disorderedEatingRule,
+      drinksTargetRule,
+      teenSleepRule,
+    ])
+      assert.ok(core.includes(rule), rule.slice(0, 40));
+  }
+  const core = systemPrompt();
+  // Purging, including laxatives and diuretics, on an ordinary log.
+  assert.match(core, /bingeing, purging, fear of food or eating very little/);
+  assert.match(core, /Laxatives, diuretics, appetite suppressants/);
+  // Supplements and caffeine are discussed, never prescribed.
+  assert.match(core, /Don't prescribe supplements, doses or dose changes/);
+  assert.match(core, /Caffeine is optional: you may discuss it, never/);
+  assert.match(core, /200 mg at once and 400 mg a day from all sources/);
+  assert.match(core, /Under 18: no performance dosing/);
+  // The drinks target is not a minimum, and a clinician's limit wins.
+  assert.match(core, /not a minimum/);
+  assert.match(core, /fluid limit from their doctor or another clinician/);
+  // Teens need more sleep than adults.
+  assert.match(core, /Teenagers \(13–17\) need 8–10 hours/);
+  // Activity guidance from WHO and the Danish Health Authority.
+  assert.doesNotMatch(fullPrompt(), /NHS|nhs\.uk/);
+  assert.match(core, /WHO 2020 guidelines/);
+  assert.match(core, /Danish Health Authority recommends adults move/);
+  assert.match(core, /when age is unknown, give the adult guidance/);
+  // Apple's active energy is an estimate, not a measurement.
+  assert.match(core, /active energy is Apple's estimate, not a measurement/);
+  assert.doesNotMatch(core, /active energy and workouts .{0,80}recorded/);
+  // The saved targets are the athlete's; the plan is only a proposal.
+  assert.match(
+    core,
+    /the daily targets the athlete sees in the app are dailyTargets/,
+  );
+  assert.match(core, /never present it as their current target/);
+  // Moved out of the goals skill, not copied, and no supplement allowance.
+  const goals = skillInstructions(["goals"]);
+  assert.doesNotMatch(goals, /bingeing|purging/);
+  assert.doesNotMatch(goals, /creatine|caffeine, protein powder/);
+  assert.match(goals, /the supplement and caffeine rules apply/);
+});
+
+test("Coach quotes the plan's own rates and protein", () => {
+  const percent = (rate: number) => Math.round(rate * 10000) / 100;
+  const { lose, gain, recomposition } = weeklyRates;
+  const losing = `${percent(lose.lean)}–${percent(lose.higher)} % of bodyweight a week`;
+  const gaining = `${percent(gain.experienced)}–${percent(gain.new)} %`;
+  const recomposing = `at most ${percent(recomposition)} %`;
+  const [setup, coaching, ...rest] = skillInstructions(["goals"]).split("\n");
+  assert.equal(rest.length, 0);
+  // Goal setup describes the calculation.
+  assert.ok(setup.includes(`losing ${losing} depending on body fat`));
+  assert.ok(setup.includes(`gaining ${gaining} by experience`));
+  assert.ok(setup.includes(`recomposition ${recomposing};`));
+  // Coaching uses the same figures and the same protein per kg.
+  assert.ok(coaching.includes(`losing about ${losing}`));
+  assert.ok(coaching.includes(`about ${gaining} a week`));
+  assert.ok(coaching.includes(`${recomposing} a week either way`));
+  const { bodyweight, leanMass } = proteinPerKg;
+  assert.ok(
+    coaching.includes(
+      `the app sets ${bodyweight.losing} g/kg of bodyweight, or ${leanMass.losing} g/kg of lean mass when body fat is known`,
+    ),
+  );
+  assert.ok(
+    coaching.includes(
+      `the app sets ${bodyweight.other} g/kg of bodyweight, or ${leanMass.other} g/kg of lean mass`,
+    ),
+  );
+  // Every rate and protein figure in it is one of the plan's.
+  const planPercents = new Set(
+    [...Object.values(lose), ...Object.values(gain), recomposition].map(
+      percent,
+    ),
+  );
+  for (const [, low, high] of coaching.matchAll(/([\d.]+)–([\d.]+) %/g))
+    for (const value of [low, high])
+      assert.ok(planPercents.has(Number(value)), `${value} %`);
+  const planProtein = new Set(
+    [...Object.values(bodyweight), ...Object.values(leanMass)].map(String),
+  );
+  for (const [, value] of coaching.matchAll(/([\d.]+) g\/kg/g))
+    assert.ok(planProtein.has(value), `${value} g/kg`);
+  // The old figures, which disagreed with the app, are gone.
+  assert.doesNotMatch(coaching, /0\.5–1 %|0\.25–0\.5 %|1\.6–2\.[24]/);
+  // At least 7 hours, and everyday movement instead of a step quota.
+  assert.match(coaching, /at least 7 hours of sleep for adults/);
+  assert.doesNotMatch(coaching, /7–9 hours|daily steps/);
+  assert.match(coaching, /never on top of it to make up for food/);
+});
+
+test("site help says Goals calculates calories and macros", () => {
+  assert.doesNotMatch(siteHelp.nutrition, /No calorie needs calculation/);
+  assert.match(
+    siteHelp.nutrition,
+    /Goals on Today .* calculates daily calories, protein, carbs and fat/,
+  );
+  assert.match(siteHelp.nutrition, /starting estimates, not measured needs/);
+  assert.match(siteHelp.nutrition, /There is no food database integration/);
 });

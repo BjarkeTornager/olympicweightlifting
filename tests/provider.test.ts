@@ -58,7 +58,7 @@ test("video output budget is isolated from chat and truncated replies are flagge
           : undefined)
       );
     };
-    assert.equal(budget(), 1800);
+    assert.equal(budget(), 4000);
     assert.equal(budget("video_review"), 4800);
     const message = { role: "assistant", content: '{"evidence":' };
     assert.equal(
@@ -127,7 +127,7 @@ test("Luna uses Azure's supported completion limit without excluding private too
     assert.equal("max_tokens" in body, false);
     assert.equal(
       "max_completion_tokens" in body && body.max_completion_tokens,
-      visual ? 3200 : 1800,
+      4000,
     );
     assert.deepEqual("provider" in body && body.provider, {
       require_parameters: true,
@@ -153,10 +153,7 @@ test("Luna uses Azure's supported completion limit without excluding private too
       model: "google/gemini-3.8-flash",
     }).body;
     assert.equal("max_completion_tokens" in previous, false);
-    assert.equal(
-      "max_tokens" in previous && previous.max_tokens,
-      visual ? 3200 : 1800,
-    );
+    assert.equal("max_tokens" in previous && previous.max_tokens, 4000);
   }
   const routedTools = [
     {
@@ -176,7 +173,7 @@ test("Luna uses Azure's supported completion limit without excluding private too
     ),
   );
   assert.equal(terra.model, "openai/gpt-5.6-terra");
-  assert.equal(terra.max_completion_tokens, 1800);
+  assert.equal(terra.max_completion_tokens, 4000);
   assert.deepEqual(terra.provider, {
     require_parameters: true,
     data_collection: "deny",
@@ -373,4 +370,80 @@ test("OpenAI models are told where the shared prefix ends, so it is cached acros
     request("google/gemini-3.8-flash")[0].content,
     "Fixed instructions",
   );
+});
+
+test("a save cut off at the output limit is asked for once more with room for a long reply", async (t) => {
+  const { mock } = await import("node:test");
+  const { callModel, ReplyCutShort, parseModelResponse } =
+    await import("../lib/agent/provider");
+  process.env.AGENT_PROVIDER = "openrouter";
+  process.env.AGENT_MODEL = "openai/gpt-5.6-luna";
+  process.env.OPENROUTER_API_KEY = "test-key";
+  const call = (args: string, finish: string) => ({
+    choices: [
+      {
+        finish_reason: finish,
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "log_entry", arguments: args },
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const whole = JSON.stringify({ kind: "record_bundle", entries: [] });
+  const cut = whole.slice(0, 20);
+  // Unfinished JSON is a reply cut short, also when the provider reports
+  // an ordinary finish.
+  for (const finish of ["length", "tool_calls", "stop"])
+    assert.throws(
+      () => parseModelResponse(call(cut, finish), "openrouter"),
+      ReplyCutShort,
+    );
+  const limits: number[] = [];
+  const fetch = mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      limits.push(body.max_completion_tokens);
+      return Response.json(
+        body.max_completion_tokens < 8000
+          ? call(cut, "tool_calls")
+          : call(whole, "tool_calls"),
+      );
+    },
+  );
+  t.after(() => fetch.mock.restore());
+  const reply = await callModel(
+    [{ role: "user", content: "Log my whole day" }],
+    [],
+    AbortSignal.timeout(5000),
+  );
+  assert.deepEqual(reply.tool_calls?.[0].function.arguments, {
+    kind: "record_bundle",
+    entries: [],
+  });
+  assert.deepEqual(limits, [4000, 8000]);
+  // Cut short again with the room: no third request, a plain message.
+  limits.length = 0;
+  fetch.mock.mockImplementation(async (_url: string, init: RequestInit) => {
+    limits.push(JSON.parse(String(init.body)).max_completion_tokens);
+    return Response.json(call(cut, "length"));
+  });
+  await assert.rejects(
+    callModel(
+      [{ role: "user", content: "Log my whole day" }],
+      [],
+      AbortSignal.timeout(5000),
+    ),
+    /too long to finish/,
+  );
+  assert.deepEqual(limits, [4000, 8000]);
 });

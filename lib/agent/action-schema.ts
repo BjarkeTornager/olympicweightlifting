@@ -127,6 +127,9 @@ const progressSchema = z
     separateSession: z.boolean().optional(),
   })
   .strict();
+// How many entries one save can hold: a full day reported at once, such as
+// four meals, drinks, every supplement, a check-in and a workout.
+export const BUNDLE_MAX = 30;
 const bundleEntrySchema = z.discriminatedUnion("kind", [
   recordCardioSchema,
   recordCheckinSchema,
@@ -355,7 +358,7 @@ export const actionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("record_bundle"),
-      entries: z.array(bundleEntrySchema).min(2).max(6),
+      entries: z.array(bundleEntrySchema).min(2).max(BUNDLE_MAX),
     })
     .strict(),
 ]);
@@ -428,9 +431,9 @@ export const actionToolSchema = z
     entries: z
       .array(bundleEntrySchema)
       .min(2)
-      .max(6)
+      .max(BUNDLE_MAX)
       .describe(
-        "For record_bundle only: 2–6 reported entries validated and saved atomically. Combine same-date check-in fields into ONE record_checkin, including only explicitly reported fields; omitted values are preserved. No nested bundles.",
+        "For record_bundle only: 2–30 reported entries validated and saved atomically, one per meal, drink, supplement, check-in, cardio or workout. Combine same-date check-in fields into ONE record_checkin, including only explicitly reported fields; omitted values are preserved. No nested bundles.",
       )
       .optional(),
     memory: memoryInputSchema

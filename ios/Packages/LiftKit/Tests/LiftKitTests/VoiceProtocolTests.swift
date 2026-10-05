@@ -101,10 +101,14 @@ struct VoiceProtocolTests {
     #expect(gate.pass(quiet, coachSpeaking: false, coachLevel: 0) == [quiet])
     // Noise while the coach speaks becomes silence.
     #expect(gate.pass(quiet, coachSpeaking: true, coachLevel: 0.3).first?.allSatisfy { $0 == 0 } == true)
-    // Speech must last three chunks; then all three are sent, not clipped.
-    _ = gate.pass(loud, coachSpeaking: true, coachLevel: 0.1)
-    _ = gate.pass(loud, coachSpeaking: true, coachLevel: 0.1)
-    #expect(gate.pass(loud, coachSpeaking: true, coachLevel: 0.1) == [loud, loud, loud])
+    // A burst under half a second stays out.
+    for _ in 0..<4 {
+      #expect(gate.pass(loud, coachSpeaking: true, coachLevel: 0.1).first?.allSatisfy { $0 == 0 } == true)
+    }
+    _ = gate.pass(quiet, coachSpeaking: true, coachLevel: 0.1)
+    // Speech must last five chunks; then all five are sent, not clipped.
+    for _ in 0..<4 { _ = gate.pass(loud, coachSpeaking: true, coachLevel: 0.1) }
+    #expect(gate.pass(loud, coachSpeaking: true, coachLevel: 0.1) == Array(repeating: loud, count: 5))
     #expect(gate.pass(quiet, coachSpeaking: true, coachLevel: 0.1) == [quiet])
   }
 

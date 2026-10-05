@@ -1,4 +1,11 @@
-import { test, expect, browserUser, coachTask } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  coachTask,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today, createWorkout, days } from "../../lib/domain";
 import { saveCardio } from "../../lib/cardio";
@@ -15,9 +22,9 @@ test("Walking is discoverable in an ongoing workout and logs duration without ch
   state.activeWorkout = createWorkout(state, days[0], today());
   const originalWorkout = structuredClone(state.activeWorkout);
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
+    if (isJournalSave(r.request())) {
       expect(r.request().headers()["x-journal-account"]).toBe(browserUser.id);
-      state = r.request().postDataJSON().state;
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -111,8 +118,8 @@ test("Cardio on a phone: add, correct, filter, reload and delete while preservin
   state.activeWorkout = createWorkout(state, undefined, today());
   state.activeWorkout.title = "Saved lifting draft";
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

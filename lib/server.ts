@@ -1,5 +1,10 @@
 import { canonicalJson, jsonEqual } from "./json";
 import { cachedJournal, rememberJournal } from "./journal-cache";
+import {
+  applyJournalPatch,
+  diffJournal,
+  type JournalPatch,
+} from "./journal-patch";
 import { retainFoodClassifications } from "./nutrition";
 import { createHash } from "node:crypto";
 import { and, eq, sql, inArray } from "drizzle-orm";
@@ -95,8 +100,15 @@ export type JournalTransaction = Parameters<
 >[0];
 export async function writeJournal(
   userId: string,
-  input: {
-    state: Omit<JournalState, "cardio"> & { cardio?: JournalState["cardio"] };
+  input: (
+    | {
+        state: Omit<JournalState, "cardio"> & {
+          cardio?: JournalState["cardio"];
+        };
+      }
+    // Or only the changes to the journal as stored at this revision.
+    | { patch: JournalPatch }
+  ) & {
     revision: number;
     mutationId: string;
     preserveMissingFoodTags?: boolean;
@@ -106,9 +118,15 @@ export async function writeJournal(
     preserveDrinkDetails?: boolean;
   },
   transaction?: JournalTransaction,
-): Promise<VersionedSnapshot> {
-  const state = journalSchema.parse(input.state);
-  const hash = digest(JSON.stringify({ state, revision: input.revision }));
+): Promise<VersionedSnapshot & { fix?: JournalPatch }> {
+  const whole = "state" in input ? journalSchema.parse(input.state) : undefined;
+  const hash = digest(
+    JSON.stringify(
+      whole
+        ? { state: whole, revision: input.revision }
+        : { patch: "patch" in input && input.patch, revision: input.revision },
+    ),
+  );
   const work = async (tx: JournalTransaction) => {
     await tx
       .insert(journals)
@@ -137,7 +155,11 @@ export async function writeJournal(
         and(eq(mutations.userId, userId), eq(mutations.id, input.mutationId)),
       );
     if (prior) {
-      if (!sameSave(prior.hash, hash, state, input.revision))
+      if (
+        whole
+          ? !sameSave(prior.hash, hash, whole, input.revision)
+          : prior.hash !== hash
+      )
         throw new MutationConflict(
           "A save identifier was reused with different content.",
         );
@@ -145,9 +167,16 @@ export async function writeJournal(
     }
     if (row.revision !== input.revision)
       throw new RevisionConflict({ state: previous, ...row });
+    // The changes made to the journal as stored, when only they came.
+    const applied =
+      "patch" in input
+        ? applyJournalPatch(structuredClone(previous), input.patch)
+        : undefined;
+    const incoming = "state" in input ? input.state : applied!;
+    const state = whole ?? journalSchema.parse(applied);
     // Older cached clients cannot intentionally edit a field they do not know.
     // Keep its current value; an explicit empty collection still means deletion.
-    if (input.state.cardio === undefined) state.cardio = previous.cardio;
+    if (incoming.cardio === undefined) state.cardio = previous.cardio;
     // A client from before sleep sources keeps an imported night but not
     // where it came from. The digest covers the source, so an unchanged
     // digest means the same night from the same source.
@@ -361,7 +390,14 @@ export async function writeJournal(
     // Kept under the row's new version: if this transaction rolls back, no
     // row ever has that version, so the entry is never read.
     rememberJournal(userId, saved.version, structuredClone(state));
-    return { state, revision, version: saved.version };
+    return {
+      state,
+      revision,
+      version: saved.version,
+      // What the server changed in the journal the changes made, such as the
+      // time it was saved, so the sender's copy can match it.
+      ...(applied ? { fix: diffJournal(applied, state) } : {}),
+    };
   };
   return transaction ? work(transaction) : getDb().transaction(work);
 }

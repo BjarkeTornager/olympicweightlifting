@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, isJournalSave } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 
 test("gym library filters, aliases and attributed technique guides work on a narrow phone", async ({
@@ -86,7 +86,7 @@ test("a gym routine retains new exercises and logs after reload; changing search
   const routineSynced = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/journal") &&
-      r.request().method() === "PUT" &&
+      isJournalSave(r.request()) &&
       r.status() === 200,
   );
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
@@ -116,14 +116,10 @@ test("a gym routine retains new exercises and logs after reload; changing search
   const workoutSynced = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/journal") &&
-      r.request().method() === "PUT" &&
+      isJournalSave(r.request()) &&
       r.status() === 200 &&
-      r
-        .request()
-        .postDataJSON()
-        .state.activeWorkout?.exercises.some(
-          (e: { exerciseId: string }) => e.exerciseId === "seated_leg_curl",
-        ),
+      // The whole journal or only the changes: either names the exercise.
+      r.request().postData()!.includes('"exerciseId":"seated_leg_curl"'),
   );
   await addButton.click();
   await workoutSynced;
@@ -175,16 +171,12 @@ test("an exercise the library lacks is added as the athlete's own, then listed a
   const saved = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/journal") &&
-      r.request().method() === "PUT" &&
+      isJournalSave(r.request()) &&
       r.status() === 200 &&
       r
         .request()
-        .postDataJSON()
-        .state.templates?.some((t: { exercises: { exerciseId: string }[] }) =>
-          t.exercises.some(
-            (e) => e.exerciseId === "custom:Standing cable reverse fly",
-          ),
-        ),
+        .postData()!
+        .includes('"exerciseId":"custom:Standing cable reverse fly"'),
   );
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
   await saved;

@@ -1,4 +1,11 @@
-import { test, expect, browserUser, openTodayOverview } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  openTodayOverview,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import type { BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
@@ -12,8 +19,8 @@ async function seed(context: BrowserContext, initial: JournalState) {
     revision = 1;
   await context.route("**/api/journal", (r) => {
     expect(r.request().headers()["x-coach-journal-version"]).toBe("1");
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

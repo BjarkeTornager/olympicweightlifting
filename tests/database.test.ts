@@ -161,10 +161,60 @@ test(
       );
       assert.equal(projection.rowCount, 1);
       assert.equal(Number(projection.rows[0].weight), 47.5);
+      // A check from a copy at the current version is answered unchanged,
+      // without the journal; any other version gets the whole journal.
+      const latest = await (await GET(request(a))).json();
+      assert.match(latest.version, /^2\.\d+$/);
+      const check = (version: string) => {
+        const r = request(a);
+        r.headers.set("X-Journal-Version", version);
+        return GET(r).then((response) => response.json());
+      };
+      assert.deepEqual(await check(latest.version), {
+        accountId: ids[0],
+        unchanged: true,
+        version: latest.version,
+      });
+      assert.equal((await check("1.1")).revision, 2);
+      // A change made outside the app, even at the same revision, is a new
+      // version: neither the check nor a cached copy hides it.
+      await getPool().query(
+        "UPDATE journals SET state=jsonb_set(state, '{profile,bodyweight}', '83') WHERE user_id=$1",
+        [ids[0]],
+      );
+      const edited = await check(latest.version);
+      assert.equal(edited.unchanged, undefined);
+      assert.equal(edited.state.profile.bodyweight, 83);
+      assert.notEqual(edited.version, latest.version);
+      // A save recorded with the digest used before October 2026 is still
+      // recognised when it is retried.
+      const { journalSchema } = await import("../lib/model");
+      const { canonicalJson } = await import("../lib/json");
+      const { createHash } = await import("node:crypto");
+      const earlier = {
+        state: edited.state,
+        revision: 2,
+        mutationId: crypto.randomUUID(),
+      };
+      const before = journalSchema.parse(earlier.state);
+      await getPool().query(
+        "INSERT INTO sync_mutations (user_id, id, hash, revision) VALUES ($1,$2,$3,2)",
+        [
+          ids[0],
+          earlier.mutationId,
+          createHash("sha256")
+            .update(canonicalJson({ state: before, revision: 2 }))
+            .digest("hex"),
+        ],
+      );
+      const retried = await PUT(request(a, earlier));
+      assert.equal(retried.status, 200, await retried.clone().text());
+      assert.equal((await retried.json()).revision, 2);
       const concurrent = await Promise.all([
         PUT(
           request(a, {
             ...final,
+            state: edited.state,
             revision: 2,
             mutationId: crypto.randomUUID(),
           }),
@@ -172,6 +222,7 @@ test(
         PUT(
           request(a, {
             ...final,
+            state: edited.state,
             revision: 2,
             mutationId: crypto.randomUUID(),
           }),

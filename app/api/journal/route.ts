@@ -5,6 +5,7 @@ import { logFailure } from "@/lib/error-log";
 import { getAuth } from "@/lib/auth";
 import { journalSchema } from "@/lib/model";
 import {
+  currentJournalVersion,
   readJournal,
   writeJournal,
   RevisionConflict,
@@ -39,6 +40,15 @@ export async function GET(request: Request) {
         { error: "The signed-in account changed. Reload before syncing." },
         { status: 401 },
       );
+    // The website checks every 15 seconds. When it already has this version
+    // of the journal, say so instead of sending the whole journal again.
+    const known = request.headers.get("x-journal-version");
+    if (known && known === (await currentJournalVersion(user.id)))
+      return Response.json({
+        accountId: user.id,
+        unchanged: true,
+        version: known,
+      });
     const snapshot = await readJournal(user.id);
     return Response.json({
       accountId: user.id,

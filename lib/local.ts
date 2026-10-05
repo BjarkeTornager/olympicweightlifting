@@ -10,6 +10,9 @@ export type LocalRecord = Snapshot & {
   seq: number;
   dirty: boolean;
   lastSyncedAt?: string;
+  // The server's version of the journal this copy last matched, so a check
+  // can ask whether it changed without downloading it.
+  version?: string;
   foodTagsVersion?: 1;
   coachJournalVersion?: 1;
   liftingCoachVersion?: 1;
@@ -26,7 +29,7 @@ export type LocalRecord = Snapshot & {
     state: JournalState;
     seq: number;
   };
-  conflict?: Snapshot;
+  conflict?: Snapshot & { version?: string };
 };
 interface LocalDB extends DBSchema {
   journals: { key: string; value: LocalRecord };

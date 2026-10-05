@@ -96,7 +96,12 @@ export function useJournal(
           // Reads need no cross-tab write lock. An old/suspended tab can hold
           // that lock indefinitely, which used to strand a clean journal here.
           const response = await privateFetch("/api/journal", {
-            headers: { "X-Journal-Account": accountId },
+            headers: {
+              "X-Journal-Account": accountId,
+              // This copy is the server's at this version: if it still is,
+              // the server answers unchanged instead of sending it again.
+              ...(local.version ? { "X-Journal-Version": local.version } : {}),
+            },
             cache: "no-store",
             signal: requestSignal(),
           });
@@ -105,45 +110,67 @@ export function useJournal(
             return;
           }
           if (!response.ok) throw Error("Sync is temporarily unavailable.");
-          const server = (await response.json()) as Snapshot;
+          const server = (await response.json()) as Snapshot & {
+            version?: string;
+            unchanged?: true;
+          };
           checkActive();
-          local = await changeLocal(accountId, (current) => {
+          if (server.unchanged) {
+            // Nothing to store: only the time of the check is new, which
+            // shows without rewriting the device copy.
+            local = await getLocal(accountId);
             checkActive();
-            if (current.dirty || current.pending) return current;
-            // Another tab may have confirmed a newer revision during this read.
-            if (
-              server.revision < current.revision &&
-              current.revision !== requestedRevision
-            )
-              return current;
-            // A restored database can be older than an already-confirmed device
-            // copy. Preserve that copy for recovery instead of silently replacing it.
-            if (server.revision < current.revision)
-              return { ...current, conflict: server };
-            return {
-              ...current,
-              state: server.state,
-              foodTagsVersion: 1,
-              coachJournalVersion: 1,
-              liftingCoachVersion: 1,
-              revision: server.revision,
+            const checked = {
+              ...local,
               lastSyncedAt: new Date().toISOString(),
-              undo:
-                server.revision === current.revision &&
-                (current.coachJournalVersion === 1 ||
-                  !hasCoachData(server.state)) &&
-                (current.liftingCoachVersion === 1 ||
-                  !server.state.profile.lifting)
-                  ? current.undo
-                  : undefined,
             };
-          });
-          publish(local);
-          setStatus(
-            local.conflict ? "conflict" : local.dirty ? "saved" : "synced",
-          );
-          setError("");
-          if (local.conflict || (!local.dirty && !local.pending)) return;
+            if (alive.current && account.current === accountId)
+              setRecord(checked);
+            setStatus(
+              local.conflict ? "conflict" : local.dirty ? "saved" : "synced",
+            );
+            setError("");
+            if (local.conflict || (!local.dirty && !local.pending)) return;
+          } else {
+            local = await changeLocal(accountId, (current) => {
+              checkActive();
+              if (current.dirty || current.pending) return current;
+              // Another tab may have confirmed a newer revision during this read.
+              if (
+                server.revision < current.revision &&
+                current.revision !== requestedRevision
+              )
+                return current;
+              // A restored database can be older than an already-confirmed device
+              // copy. Preserve that copy for recovery instead of silently replacing it.
+              if (server.revision < current.revision)
+                return { ...current, conflict: server };
+              return {
+                ...current,
+                state: server.state,
+                version: server.version,
+                foodTagsVersion: 1,
+                coachJournalVersion: 1,
+                liftingCoachVersion: 1,
+                revision: server.revision,
+                lastSyncedAt: new Date().toISOString(),
+                undo:
+                  server.revision === current.revision &&
+                  (current.coachJournalVersion === 1 ||
+                    !hasCoachData(server.state)) &&
+                  (current.liftingCoachVersion === 1 ||
+                    !server.state.profile.lifting)
+                    ? current.undo
+                    : undefined,
+              };
+            });
+            publish(local);
+            setStatus(
+              local.conflict ? "conflict" : local.dirty ? "saved" : "synced",
+            );
+            setError("");
+            if (local.conflict || (!local.dirty && !local.pending)) return;
+          }
         }
         const write = async () => {
           checkActive();
@@ -225,12 +252,13 @@ export function useJournal(
               ...(current.seq === pending.seq
                 ? {
                     state: server.state,
+                    version: server.version,
                     dirty: false,
                     foodTagsVersion: 1,
                     coachJournalVersion: 1,
                     liftingCoachVersion: 1,
                   }
-                : { dirty: true }),
+                : { dirty: true, version: undefined }),
             };
           });
           publish(next);
@@ -373,6 +401,7 @@ export function useJournal(
         return {
           ...current,
           state: choice === "server" ? remote.state : current.state,
+          version: choice === "server" ? remote.version : undefined,
           revision: remote.revision,
           conflict: undefined,
           pending: undefined,

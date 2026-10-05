@@ -1,4 +1,10 @@
-import { test, expect, openTodayOverview } from "./fixtures";
+import {
+  test,
+  expect,
+  openTodayOverview,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
 import { saveCheckin } from "../../lib/health";
@@ -120,9 +126,9 @@ test("saved focus and initiative sync with the private journal and survive reope
     }),
   );
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
+    if (isJournalSave(r.request())) {
       expect(r.request().headers()["x-journal-account"]).toBe(account);
-      state = r.request().postDataJSON().state;
+      state = savedJournal(r.request(), state);
       revision++;
       updates.push(state.profile.coaching!.focus);
     }

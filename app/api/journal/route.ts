@@ -15,10 +15,17 @@ import {
 } from "@/lib/server";
 import { planProgramDay } from "@/js/progression.js";
 import { countUse } from "@/lib/feature-use";
+import { journalPatchSchema, PatchMismatch } from "@/lib/journal-patch";
 import { athleteAge, days, program, today } from "@/lib/domain";
 export const dynamic = "force-dynamic";
 const schema = z.object({
   state: journalSchema,
+  revision: z.number().int().min(0),
+  mutationId: z.string().uuid(),
+});
+// The website's save: only the changes to the journal at this revision.
+const changesSchema = z.object({
+  patch: journalPatchSchema,
   revision: z.number().int().min(0),
   mutationId: z.string().uuid(),
 });
@@ -73,7 +80,15 @@ export async function GET(request: Request) {
     );
   }
 }
+// The whole journal, as older cached websites and backups send it.
 export async function PUT(request: Request) {
+  return save(request, false);
+}
+// Only what changed since the copy at this revision.
+export async function PATCH(request: Request) {
+  return save(request, true);
+}
+async function save(request: Request, changes: boolean) {
   // Explicit origin verification supplements cookie SameSite for this custom API.
   const expected = new URL(process.env.BETTER_AUTH_URL ?? request.url).origin;
   if (request.headers.get("origin") !== expected)
@@ -119,14 +134,35 @@ export async function PUT(request: Request) {
       chunks.push(value);
     }
     const raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    const input = schema.parse(raw);
-    const saved = await writeJournal(user.id, {
-      ...input,
+    const preserve = {
       preserveMissingFoodTags: true,
       preserveMissingCoachData: true,
       preserveMissingActivityPhotos:
         request.headers.get("x-activity-photos-version") !== "1",
       preserveDrinkDetails: request.headers.get("x-drinks-version") !== "1",
+    };
+    if (changes) {
+      const saved = await writeJournal(user.id, {
+        ...changesSchema.parse(raw),
+        ...preserve,
+      });
+      void countUse(user.id, "web.journal_save");
+      // A retry of a save already made gets the whole journal back.
+      return Response.json(
+        saved.fix
+          ? {
+              accountId: user.id,
+              revision: saved.revision,
+              version: saved.version,
+              fix: saved.fix,
+            }
+          : { accountId: user.id, ...foodSnapshotForClient(request, saved) },
+      );
+    }
+    const input = schema.parse(raw);
+    const saved = await writeJournal(user.id, {
+      ...input,
+      ...preserve,
       state: {
         ...input.state,
         // Preserve omission until the transaction can retain this additive
@@ -150,6 +186,12 @@ export async function PUT(request: Request) {
       );
     if (error instanceof MutationConflict || error instanceof MissingMealPhoto)
       return Response.json({ error: error.message }, { status: 422 });
+    // The changes were made to another copy of the journal: send it whole.
+    if (error instanceof PatchMismatch)
+      return Response.json(
+        { error: "Sync needs the whole journal once.", resend: true },
+        { status: 422 },
+      );
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       return Response.json(
         {

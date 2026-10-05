@@ -14,6 +14,11 @@ import {
   liftingStateForUndo,
 } from "./food-compatibility";
 import { privateFetch } from "./private-fetch";
+import {
+  applyJournalPatch,
+  diffJournal,
+  type JournalPatch,
+} from "./journal-patch";
 export type SyncStatus =
   | "loading"
   | "local"
@@ -149,6 +154,7 @@ export function useJournal(
                 ...current,
                 state: server.state,
                 version: server.version,
+                base: undefined,
                 foodTagsVersion: 1,
                 coachJournalVersion: 1,
                 liftingCoachVersion: 1,
@@ -190,29 +196,52 @@ export function useJournal(
               revision: current.revision,
               state: structuredClone(current.state),
               seq: current.seq,
+              // Only what changed since the server's copy, when this device
+              // has it; otherwise the whole journal.
+              ...(current.base
+                ? { patch: diffJournal(current.base, current.state) }
+                : {}),
             },
           }));
           const pending = local.pending!;
           const response = await privateFetch("/api/journal", {
-            method: "PUT",
+            method: pending.patch ? "PATCH" : "PUT",
             headers: {
               "Content-Type": "application/json",
               "X-Journal-Account": accountId,
             },
-            body: JSON.stringify(pending),
+            body: JSON.stringify(
+              pending.patch
+                ? {
+                    patch: pending.patch,
+                    revision: pending.revision,
+                    mutationId: pending.mutationId,
+                  }
+                : pending,
+            ),
             signal: requestSignal(),
           });
           if (response.status === 401) {
             onSessionInvalid();
             return;
           }
-          const server = await response.json();
+          const server = (await response.json()) as Partial<Snapshot> & {
+            revision: number;
+            version?: string;
+            fix?: JournalPatch;
+            error?: string;
+            resend?: true;
+          };
           checkActive();
           if (response.status === 409) {
             publish(
               await changeLocal(accountId, (current) => ({
                 ...current,
-                conflict: { state: server.state, revision: server.revision },
+                conflict: {
+                  state: server.state!,
+                  revision: server.revision,
+                  version: server.version,
+                },
               })),
             );
             setStatus("conflict");
@@ -221,14 +250,21 @@ export function useJournal(
           if (!response.ok) {
             // A validation rejection did not commit. Allow a corrected local edit to
             // create a fresh pending mutation instead of retrying bad input forever.
+            // Changes that did not fit the server's copy go again whole.
             if ([400, 413, 422].includes(response.status)) {
               await changeLocal(accountId, (current) => ({
                 ...current,
                 pending: undefined,
+                ...(pending.patch ? { base: undefined } : {}),
               }));
+              if (server.resend) return write();
             }
             throw Error(server.error ?? "Sync is temporarily unavailable.");
           }
+          // The server's journal now: sent whole, or this save's changes
+          // with the server's own adjustments, such as the time saved.
+          const confirmed =
+            server.state ?? applyJournalPatch(pending.state, server.fix ?? []);
           const next = await changeLocal(accountId, (current) => {
             checkActive();
             if (
@@ -237,8 +273,13 @@ export function useJournal(
             )
               return {
                 ...current,
-                conflict: { state: server.state, revision: server.revision },
+                conflict: {
+                  state: confirmed,
+                  revision: server.revision,
+                  version: server.version,
+                },
                 pending: undefined,
+                base: undefined,
               };
             return {
               ...current,
@@ -251,14 +292,17 @@ export function useJournal(
                   : undefined,
               ...(current.seq === pending.seq
                 ? {
-                    state: server.state,
+                    state: confirmed,
                     version: server.version,
+                    base: undefined,
                     dirty: false,
                     foodTagsVersion: 1,
                     coachJournalVersion: 1,
                     liftingCoachVersion: 1,
                   }
-                : { dirty: true, version: undefined }),
+                : // Edited during the save: the next save sends the changes
+                  // from the server's journal now.
+                  { dirty: true, version: undefined, base: confirmed }),
             };
           });
           publish(next);
@@ -356,6 +400,15 @@ export function useJournal(
       try {
         const next = await changeLocal(account.current, (current) => {
           const before = structuredClone(current.state);
+          // The first edit since a sync keeps the server's copy it changes.
+          if (
+            !current.dirty &&
+            !current.pending &&
+            !current.conflict &&
+            !current.base &&
+            current.lastSyncedAt
+          )
+            current.base = before;
           const result = fn(current.state);
           current.state = result ?? current.state;
           current.state.updatedAt = new Date().toISOString();
@@ -402,6 +455,8 @@ export function useJournal(
           ...current,
           state: choice === "server" ? remote.state : current.state,
           version: choice === "server" ? remote.version : undefined,
+          // Keeping this device's journal saves its changes from the server's.
+          base: choice === "server" ? undefined : remote.state,
           revision: remote.revision,
           conflict: undefined,
           pending: undefined,
@@ -457,6 +512,12 @@ export function useJournal(
           : liftingRestored;
       return {
         ...current,
+        ...(!current.dirty &&
+        !current.pending &&
+        !current.base &&
+        current.lastSyncedAt
+          ? { base: current.state }
+          : {}),
         state: {
           ...(current.undo.foodTagsVersion === 1
             ? foodStateForUndo(restored)

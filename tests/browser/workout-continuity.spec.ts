@@ -1,4 +1,11 @@
-import { test, expect, browserUser, openJournalArea } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  openJournalArea,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import type { BrowserContext } from "@playwright/test";
 import { emptyJournal, today } from "../../lib/domain";
@@ -28,8 +35,8 @@ async function fixture(
   let state = initial,
     revision = 1;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

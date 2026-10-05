@@ -1,4 +1,4 @@
-import { test, expect, coachTask } from "./fixtures";
+import { test, expect, coachTask, savedJournal } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -54,7 +54,7 @@ test.describe("sleep with Coach", () => {
       );
       await context.route("**/api/journal", (r) => {
         if (r.request().method() !== "GET") {
-          state = r.request().postDataJSON().state;
+          state = savedJournal(r.request(), state);
           revision++;
         }
         return r.fulfill({ json: { accountId: user.id, state, revision } });

@@ -227,7 +227,16 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // (custom-exercises.test.ts). Removing the three sentences and restoring
     // the old one reproduces the previous hash (2457ba00…). Health, privacy
     // and evidence text is unchanged.
-    "14390d3e323fb8f941dfdbe6d153e256ea668575a6f01b559b0918dfb5ef1720",
+    // Revised 2026-10-05, deliberate and reviewed at the owner's request
+    // (Coach asked whether to save the food and drinks or the five
+    // supplements first, because a save held six entries): one report goes
+    // into ONE record_bundle of up to 30 entries, never split into several
+    // saves or a question about which to save first; only beyond 30 does
+    // Coach save the first 30 and say what is left. The server allows 30
+    // (BUNDLE_MAX). Restoring the "2–6 entries" sentence reproduces the
+    // previous hash (14390d3e…). Health, privacy and evidence text is
+    // unchanged.
+    "14eaff264e6bd84425d055692d1a7d723eac66228b516d03808cc1d8d34bd576",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

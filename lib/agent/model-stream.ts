@@ -135,7 +135,8 @@ export async function readModelStream(
     pending = "",
     finished = false,
     terminal = false,
-    blocked = false;
+    blocked = false,
+    cut = false;
   const calls = new Map<
     number,
     { id: string; function: { name: string; arguments: string } }
@@ -169,7 +170,10 @@ export async function readModelStream(
         blocked = true;
         return;
       }
-      if (
+      // A tool call cut off at the output limit is read as it is, so the
+      // caller can ask again with more room.
+      if (choice.finish_reason === "length" && calls.size) cut = true;
+      else if (
         choice.finish_reason &&
         !["stop", "tool_calls"].includes(choice.finish_reason)
       )
@@ -260,6 +264,7 @@ export async function readModelStream(
           usage: seen.usage,
           choices: [
             {
+              ...(cut ? { finish_reason: "length" } : {}),
               message: {
                 role: "assistant",
                 content,

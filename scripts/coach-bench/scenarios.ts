@@ -640,6 +640,97 @@ export const scenarios: Scenario[] = [
     ],
   },
   {
+    // A real failure: Coach asked whether to save the food and drinks or the
+    // five supplements first, because a save then held six entries.
+    id: "food-drinks-supplements",
+    title: "Food, drinks and five supplements in one message, one save",
+    category: "several",
+    split: "heldout",
+    turns: [
+      {
+        en: "Can you add two glasses of water. 1 glass of kefir. 1 handful of raisins. 5 rye bread slices. 5 panfried eggs. 1 banana. And 4 omega 3, 2 multivitamin, 1 magnesium, 1 Q10, and 6800 mg of creatine.",
+        da: "Kan du tilføje to glas vand. 1 glas kefir. 1 håndfuld rosiner. 5 skiver rugbrød. 5 spejlæg. 1 banan. Og 4 omega 3, 2 multivitaminer, 1 magnesium, 1 Q10 og 6800 mg kreatin.",
+        at: "13:00",
+        expects: "save",
+        check: (c) => {
+          const meals = c.after.nutrition.meals.filter((m) => m.date === today);
+          const foods = meals
+            .flatMap((m) => m.items.map((i) => i.name.toLowerCase()))
+            .join(" | ");
+          const supplements = (c.after.health.supplements ?? [])
+            .filter((x) => x.date === today)
+            .map((x) => x.name.toLowerCase())
+            .join(" | ");
+          return [
+            ...expect(
+              ["raisin|rosin", "rye|rug", "egg|æg", "banana|banan"].every((w) =>
+                new RegExp(w).test(foods),
+              ),
+              `Food: ${foods}`,
+            ),
+            ...expect(
+              water(c.after, today) >= 400,
+              `Water ${water(c.after, today)} ml`,
+            ),
+            ...expect(
+              /kefir/i.test(
+                JSON.stringify([
+                  c.after.health.drinks ?? [],
+                  c.after.nutrition.meals,
+                ]),
+              ),
+              "No kefir",
+            ),
+            ...expect(
+              ["omega", "multi", "magnes", "q10", "creatin|kreatin"].every(
+                (w) => new RegExp(w).test(supplements),
+              ),
+              `Supplements: ${supplements}`,
+            ),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // A whole day at once: more entries than one ordinary reply has room
+    // for, so the save may first be cut off and asked for again.
+    id: "whole-day",
+    title: "Four meals, drinks, six supplements and a check-in in one message",
+    category: "several",
+    split: "heldout",
+    turns: [
+      {
+        en: "Log my whole day please. Breakfast: oatmeal with milk and blueberries, 2 boiled eggs. Lunch: chicken salad with feta and a wholegrain roll. Snack: an apple and a protein bar. Dinner: salmon, rice and broccoli. Drinks: 3 glasses of water, 2 coffees with milk and a beer. Supplements: vitamin D, fish oil, magnesium, zinc, creatine 5 g and a multivitamin. I slept 7 hours and my energy is 4 out of 5.",
+        da: "Gem hele min dag. Morgenmad: havregryn med mælk og blåbær, 2 kogte æg. Frokost: kyllingesalat med feta og en fuldkornsbolle. Mellemmåltid: et æble og en proteinbar. Aftensmad: laks, ris og broccoli. Drikke: 3 glas vand, 2 kaffe med mælk og en øl. Kosttilskud: D-vitamin, fiskeolie, magnesium, zink, kreatin 5 g og en multivitamin. Jeg sov 7 timer og min energi er 4 ud af 5.",
+        at: "13:00",
+        expects: "save",
+        check: (c) => {
+          const meals = c.after.nutrition.meals.filter((m) => m.date === today);
+          const supplements = (c.after.health.supplements ?? []).filter(
+            (x) => x.date === today,
+          );
+          const drinks = (c.after.health.drinks ?? []).filter(
+            (d) => d.date === today,
+          );
+          const checkin = checkinOn(c.after, today);
+          return [
+            ...expect(meals.length >= 4, `${meals.length} meals`),
+            ...expect(
+              supplements.length >= 6,
+              `${supplements.length} supplements`,
+            ),
+            ...expect(drinks.length >= 3, `${drinks.length} drinks`),
+            ...expect(
+              near(checkin?.sleepHours, 7) && checkin?.energy === 4,
+              `Check-in ${checkin?.sleepHours} h, energy ${checkin?.energy}`,
+            ),
+          ];
+        },
+      },
+    ],
+  },
+  {
     id: "log-and-answer",
     title: "Save a shake and answer the day's protein total",
     category: "several",

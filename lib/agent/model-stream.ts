@@ -126,6 +126,8 @@ export async function readModelStream(
   onText: (delta: string) => void,
   signal: AbortSignal,
   seen: StreamUsage = {},
+  // Told each tool the model starts calling, as its arguments begin.
+  onTool?: (name: string) => void,
 ) {
   const reader = response.body?.getReader();
   if (!reader) throw Error("The assistant returned an empty response.");
@@ -141,6 +143,7 @@ export async function readModelStream(
     number,
     { id: string; function: { name: string; arguments: string } }
   >();
+  const announced = new Set<number>();
   const ollamaCalls: NonNullable<
     NonNullable<z.infer<typeof ollamaChunk>["message"]>["tool_calls"]
   > = [];
@@ -195,6 +198,16 @@ export async function readModelStream(
         )
           throw Error("The assistant tool response was too large.");
         calls.set(t.index, call);
+        // The name is whole once the arguments start.
+        if (
+          onTool &&
+          call.function.name &&
+          t.function?.arguments &&
+          !announced.has(t.index)
+        ) {
+          announced.add(t.index);
+          onTool(call.function.name);
+        }
       }
     } else {
       const chunk = ollamaChunk.parse(raw);

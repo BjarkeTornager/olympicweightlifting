@@ -123,6 +123,9 @@ export type ModelOptions = {
   // Room for a long reply, such as a save of many entries, after one was
   // cut off at the ordinary limit.
   longReply?: boolean;
+  // Told each tool a streamed reply starts calling, so Coach can say what
+  // it is doing while the call is written.
+  onTool?: (name: string) => void;
   model?: string;
   // Each call to the provider becomes a chat span under this one.
   span?: TraceSpan;
@@ -215,6 +218,12 @@ export function modelRequest(
         ...(openAiChatModel(model)
           ? { max_completion_tokens: outputLimit }
           : { max_tokens: outputLimit }),
+        // Low effort: a round is about a quarter faster (Luna 5.0 to 3.7 s,
+        // Terra 7.5 to 5.8 s, 7 October 2026) and the Coach benchmark holds.
+        // A video review keeps the model's own effort for its evidence.
+        ...(openAiChatModel(model) && options.purpose !== "video_review"
+          ? { reasoning: { effort: "low" } }
+          : {}),
         provider: {
           require_parameters: true,
           data_collection: "deny",
@@ -601,7 +610,14 @@ async function requestModel(
   let raw: unknown;
   try {
     raw = onText
-      ? await readModelStream(response, config.kind, onText, signal, seen)
+      ? await readModelStream(
+          response,
+          config.kind,
+          onText,
+          signal,
+          seen,
+          options.onTool,
+        )
       : await readReply(response);
   } catch (error) {
     await recordModelCall(servedBy(seen.model, seen.usage), request.body.model);

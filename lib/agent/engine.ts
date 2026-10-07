@@ -58,6 +58,7 @@ import {
   linesLanguage,
   undoneReply,
 } from "../coach-lines";
+import { writtenLanguage } from "../text-language";
 import { displayMessage } from "../coach-tasks";
 import { specifications, toolDefinitions, toolsFor, toolStep } from "./tools";
 import { isReadTool, newTurnReads, runReadTool } from "./read-tools";
@@ -550,6 +551,7 @@ async function turn(
           input.timezone,
           requestClock.time,
           input.language,
+          writtenLanguage(words),
         ) + mealWords(request),
     },
     ...(loaded.size
@@ -790,6 +792,17 @@ async function turn(
         stepName: "Preparing your response",
       });
       const roundStarted = Date.now();
+      // Each tool the model starts writing shows as a step while the call
+      // is written, not only once it runs: once a round, finished with it.
+      const steps: string[] = [];
+      const onTool = emit
+        ? (name: string) => {
+            const step = toolStep(name);
+            if (steps.includes(step)) return;
+            steps.push(step);
+            emit({ type: EventType.STEP_STARTED, stepName: step });
+          }
+        : undefined;
       const offered = answering !== undefined ? [] : availableTools();
       roundSpan.set({ "lift.tools_offered": offered.length });
       const result = await model(
@@ -814,14 +827,21 @@ async function turn(
               });
             }
           : undefined,
-        // Only with tracing on, so evals' models see the options unchanged.
-        roundSpan.recording
-          ? { ...modelOptions, span: roundSpan }
+        // Only with tracing or a stream to report to, so evals' models see
+        // the options unchanged.
+        roundSpan.recording || onTool
+          ? {
+              ...modelOptions,
+              ...(roundSpan.recording ? { span: roundSpan } : {}),
+              ...(onTool ? { onTool } : {}),
+            }
           : modelOptions,
       );
       roundSpan.set({ "lift.tool_calls": result.tool_calls?.length ?? 0 });
       signal.throwIfAborted();
       if (started) emit?.({ type: EventType.TEXT_MESSAGE_END, messageId });
+      for (const step of steps.reverse())
+        emit?.({ type: EventType.STEP_FINISHED, stepName: step });
       emit?.({
         type: EventType.STEP_FINISHED,
         stepName: "Preparing your response",

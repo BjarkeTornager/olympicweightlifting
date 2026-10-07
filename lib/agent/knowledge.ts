@@ -68,10 +68,12 @@ export function requestTime(
   currentDate: string,
   timezone: string,
   currentTime?: string,
+  // Chosen in the app, and the one the message is written in.
   language?: CoachLanguage,
+  written?: CoachLanguage,
 ) {
-  const part = currentTime && partOfDay(currentTime, language);
-  return `Today in the athlete's timezone (${timezone}) is ${currentDate}.${part ? ` The local request time is ${currentTime} (24-hour clock), the ${part.name}; if you greet by time of day, say "${part.greeting}".` : ""}${replyLanguage(language)}`;
+  const part = currentTime && partOfDay(currentTime, written ?? language);
+  return `Today in the athlete's timezone (${timezone}) is ${currentDate}.${part ? ` The local request time is ${currentTime} (24-hour clock), the ${part.name}; if you greet by time of day, say "${part.greeting}".` : ""}${replyLanguage(language, written)}`;
 }
 
 // Danish meal words the models misread (frokost is lunch in Danish but

@@ -49,6 +49,16 @@ test("video output budget is isolated from chat and truncated replies are flagge
       model: "openai/gpt-5.6-luna",
       key: "test",
     };
+    if (kind === "openrouter") {
+      // Coach asks for low reasoning effort; a video review keeps the
+      // model's own.
+      const body = (purpose?: "video_review") =>
+        modelRequest([], [], config, { purpose }).body as {
+          reasoning?: unknown;
+        };
+      assert.deepEqual(body().reasoning, { effort: "low" });
+      assert.equal(body("video_review").reasoning, undefined);
+    }
     const budget = (purpose?: "video_review") => {
       const body = modelRequest([], [], config, { purpose }).body;
       return (

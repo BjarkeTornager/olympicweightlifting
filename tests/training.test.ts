@@ -173,12 +173,9 @@ test("volume, rep records and local calendar dates remain accurate", () => {
   );
   assert.equal("lifts" in stats.recent[0], false);
   // Filtered to one exercise, each recent session lists its logged sets.
-  const deadlifts = trainingSummary(
-    state,
-    "2026-09-01",
-    "2026-09-06",
+  const deadlifts = trainingSummary(state, "2026-09-01", "2026-09-06", [
     "romanian_deadlift",
-  ).recent[0];
+  ]).recent[0];
   assert.equal(deadlifts?.sets, 4);
   assert.equal(deadlifts.lifts?.length, 4);
   assert.deepEqual(deadlifts.lifts?.at(-1), {

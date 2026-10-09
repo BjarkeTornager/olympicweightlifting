@@ -10,7 +10,13 @@ import {
 } from "./body-composition";
 import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
 
-const sessionMinutes = z.number().int().min(15).max(240);
+// A session's length in whole minutes, as the goals take it.
+export const SESSION_MINUTES = { min: 15, max: 240 } as const;
+const sessionMinutes = z
+  .number()
+  .int()
+  .min(SESSION_MINUTES.min)
+  .max(SESSION_MINUTES.max);
 const experience = z.enum(["new", "developing", "experienced"]);
 // Movement outside training: desk job, on feet, physical work, heavy manual
 // work.
@@ -700,13 +706,24 @@ export function planTargets(plan: GoalPlan): z.infer<typeof dietTargetsSchema> {
 export const TARGETS_DIFFER =
   "Your daily targets aren't the ones your goals give now. Ask Coach to review them with you.";
 
+// The plan's notes about the athlete rather than its numbers: under 18,
+// pregnancy and breastfeeding. Their advice holds whatever the calories.
+const athleteNotes = [
+  "Under 18 the plan ",
+  "In pregnancy the plan ",
+  "While you're breastfeeding the plan ",
+];
+
 // The plan's notes describe the saved daily targets only when they are the
 // plan's: the same goal, and calories within 100 kcal, as each new body fat
 // reading moves the plan by a few, with each macro within as much energy
 // (25 g of protein or carbohydrate, 11 g of fat), so a note about protein
 // or carbohydrate never sits beside a macro from an older plan. Otherwise
 // one line says they differ, so a note never contradicts the target shown
-// beside it.
+// beside it. With the same goal, the notes about the athlete follow that
+// line, so a teenager or a new mother keeps that advice: targets saved
+// before maintenance rose (October 2026) stay as they were, and so differ
+// from the plan for most athletes.
 export function notesForTargets(
   plan: GoalPlan,
   targets: z.infer<typeof dietTargetsSchema>,
@@ -722,9 +739,14 @@ export function notesForTargets(
         : Math.abs(a - b) * kcalPer[key] <= 100;
     },
   );
-  return plan.direction === targets.goal && close
-    ? plan.notes
-    : [TARGETS_DIFFER];
+  if (plan.direction !== targets.goal) return [TARGETS_DIFFER];
+  if (close) return plan.notes;
+  return [
+    TARGETS_DIFFER,
+    ...plan.notes.filter((note) =>
+      athleteNotes.some((start) => note.startsWith(start)),
+    ),
+  ];
 }
 
 // The plan for the saved goals, with the focus, target, latest body fat and
@@ -760,8 +782,8 @@ export function goalsForState(
 }
 
 // Session length and experience as saved with the goals, else from the
-// lifting brief, its session length kept within the goals' 15 to 240
-// minutes; undefined when neither says.
+// lifting brief, its session length kept within the goals' range
+// (SESSION_MINUTES); undefined when neither says.
 export function savedTraining(state: JournalState) {
   const body = state.profile.body;
   const brief = state.profile.lifting;
@@ -769,7 +791,12 @@ export function savedTraining(state: JournalState) {
   return {
     sessionMinutes:
       body?.sessionMinutes ??
-      (minutes == null ? undefined : Math.min(240, Math.max(15, minutes))),
+      (minutes == null
+        ? undefined
+        : Math.min(
+            SESSION_MINUTES.max,
+            Math.max(SESSION_MINUTES.min, minutes),
+          )),
     experience:
       body?.experience ??
       (brief && brief.experience !== "unknown" ? brief.experience : undefined),

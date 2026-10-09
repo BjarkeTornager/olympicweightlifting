@@ -56,7 +56,8 @@ function measured(workouts: Workout[]) {
 export function liftingReview(
   state: JournalState,
   endDate: string,
-  exerciseId?: string,
+  // One exercise, under every id it was logged as.
+  exerciseIds?: readonly string[],
 ) {
   foodDate.parse(endDate);
   const from = offsetDate(endDate, -27);
@@ -65,7 +66,7 @@ export function liftingReview(
     .map((s) => ({
       ...s,
       exercises: s.exercises.filter(
-        (e) => !exerciseId || e.exerciseId === exerciseId,
+        (e) => !exerciseIds || exerciseIds.includes(e.exerciseId),
       ),
     }))
     .filter((s) => s.exercises.some((e) => e.sets.some(isValidLoggedSet)))

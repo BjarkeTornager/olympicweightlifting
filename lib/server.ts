@@ -1,4 +1,10 @@
-import { canonicalJson } from "./json";
+import { canonicalJson, jsonEqual } from "./json";
+import { cachedJournal, rememberJournal } from "./journal-cache";
+import {
+  applyJournalPatch,
+  diffJournal,
+  type JournalPatch,
+} from "./journal-patch";
 import { retainFoodClassifications } from "./nutrition";
 import { createHash } from "node:crypto";
 import { and, eq, sql, inArray } from "drizzle-orm";
@@ -29,25 +35,80 @@ export class MissingMealPhoto extends Error {}
 // moved into a drink.
 const storedJournal = (raw: unknown) =>
   moveCheckinWater(journalSchema.parse(raw));
-export async function readJournal(userId: string): Promise<Snapshot> {
+// Which journal a row holds: its revision and the row's own version, which
+// any write changes, also one made outside the app.
+const journalVersion = sql<string>`${journals.revision}::text || '.' || ${journals}.xmin::text`;
+export type VersionedSnapshot = Snapshot & { version: string };
+// The version of an account's journal, without loading it.
+export async function currentJournalVersion(userId: string) {
+  const [row] = await getDb()
+    .select({ version: journalVersion })
+    .from(journals)
+    .where(eq(journals.userId, userId));
+  return row?.version;
+}
+export async function readJournal(userId: string): Promise<VersionedSnapshot> {
   const db = getDb();
   await db
     .insert(journals)
     .values({ userId, state: emptyJournal() })
     .onConflictDoNothing();
-  const [row] = await db
-    .select()
+  const [head] = await db
+    .select({ revision: journals.revision, version: journalVersion })
     .from(journals)
     .where(eq(journals.userId, userId));
-  return { state: storedJournal(row.state), revision: row.revision };
+  const cached = cachedJournal(userId, head.version);
+  if (cached) return { state: cached, ...head };
+  const [row] = await db
+    .select({
+      state: journals.state,
+      revision: journals.revision,
+      version: journalVersion,
+    })
+    .from(journals)
+    .where(eq(journals.userId, userId));
+  const state = storedJournal(row.state);
+  rememberJournal(userId, row.version, state);
+  return {
+    state: structuredClone(state),
+    revision: row.revision,
+    version: row.version,
+  };
+}
+// A save is told apart from a retry of itself by this digest of what it
+// asks for. Saves recorded before 5 October 2026 used canonicalJson, which
+// a retry from then still matches.
+const digest = (text: string) =>
+  createHash("sha256").update(text).digest("hex");
+function sameSave(
+  recorded: string,
+  hash: string,
+  state: JournalState,
+  revision: number,
+) {
+  if (recorded === hash) return true;
+  if (recorded === digest(canonicalJson({ state, revision }))) return true;
+  // A retry may have been acknowledged by the release before cardio existed.
+  // Only an empty additive field may be omitted for that legacy hash match.
+  if (state.cardio.sessions.length) return false;
+  const legacyState = { ...state } as Record<string, unknown>;
+  delete legacyState.cardio;
+  return recorded === digest(canonicalJson({ state: legacyState, revision }));
 }
 export type JournalTransaction = Parameters<
   Parameters<ReturnType<typeof getDb>["transaction"]>[0]
 >[0];
 export async function writeJournal(
   userId: string,
-  input: {
-    state: Omit<JournalState, "cardio"> & { cardio?: JournalState["cardio"] };
+  input: (
+    | {
+        state: Omit<JournalState, "cardio"> & {
+          cardio?: JournalState["cardio"];
+        };
+      }
+    // Or only the changes to the journal as stored at this revision.
+    | { patch: JournalPatch }
+  ) & {
     revision: number;
     mutationId: string;
     preserveMissingFoodTags?: boolean;
@@ -57,33 +118,36 @@ export async function writeJournal(
     preserveDrinkDetails?: boolean;
   },
   transaction?: JournalTransaction,
-): Promise<Snapshot> {
-  const state = journalSchema.parse(input.state);
-  const hash = createHash("sha256")
-    .update(canonicalJson({ state, revision: input.revision }))
-    .digest("hex");
-  // A retry may have been acknowledged by the release before cardio existed.
-  // Only an empty additive field may be omitted for that legacy hash match.
-  const legacyState = { ...state } as Record<string, unknown>;
-  delete legacyState.cardio;
-  const legacyHash =
-    state.cardio.sessions.length === 0
-      ? createHash("sha256")
-          .update(
-            canonicalJson({ state: legacyState, revision: input.revision }),
-          )
-          .digest("hex")
-      : null;
+): Promise<VersionedSnapshot & { fix?: JournalPatch }> {
+  const whole = "state" in input ? journalSchema.parse(input.state) : undefined;
+  const hash = digest(
+    JSON.stringify(
+      whole
+        ? { state: whole, revision: input.revision }
+        : { patch: "patch" in input && input.patch, revision: input.revision },
+    ),
+  );
   const work = async (tx: JournalTransaction) => {
     await tx
       .insert(journals)
       .values({ userId, state: emptyJournal() })
       .onConflictDoNothing();
     const [row] = await tx
-      .select()
+      .select({ revision: journals.revision, version: journalVersion })
       .from(journals)
       .where(eq(journals.userId, userId))
       .for("update");
+    // The journal as stored, parsed once for every comparison below.
+    const previous =
+      cachedJournal(userId, row.version) ??
+      storedJournal(
+        (
+          await tx
+            .select({ state: journals.state })
+            .from(journals)
+            .where(eq(journals.userId, userId))
+        )[0].state,
+      );
     const [prior] = await tx
       .select()
       .from(mutations)
@@ -91,27 +155,34 @@ export async function writeJournal(
         and(eq(mutations.userId, userId), eq(mutations.id, input.mutationId)),
       );
     if (prior) {
-      if (prior.hash !== hash && prior.hash !== legacyHash)
+      if (
+        whole
+          ? !sameSave(prior.hash, hash, whole, input.revision)
+          : prior.hash !== hash
+      )
         throw new MutationConflict(
           "A save identifier was reused with different content.",
         );
-      return { state: storedJournal(row.state), revision: row.revision };
+      return { state: previous, ...row };
     }
     if (row.revision !== input.revision)
-      throw new RevisionConflict({
-        state: storedJournal(row.state),
-        revision: row.revision,
-      });
+      throw new RevisionConflict({ state: previous, ...row });
+    // The changes made to the journal as stored, when only they came.
+    const applied =
+      "patch" in input
+        ? applyJournalPatch(structuredClone(previous), input.patch)
+        : undefined;
+    const incoming = "state" in input ? input.state : applied!;
+    const state = whole ?? journalSchema.parse(applied);
     // Older cached clients cannot intentionally edit a field they do not know.
     // Keep its current value; an explicit empty collection still means deletion.
-    if (input.state.cardio === undefined)
-      state.cardio = journalSchema.parse(row.state).cardio;
+    if (incoming.cardio === undefined) state.cardio = previous.cardio;
     // A client from before sleep sources keeps an imported night but not
     // where it came from. The digest covers the source, so an unchanged
     // digest means the same night from the same source.
     for (const checkin of state.health.checkins) {
       const night = checkin.sleepImport;
-      const before = row.state.health?.checkins?.find(
+      const before = previous.health.checkins.find(
         (c) => c.date === checkin.date,
       )?.sleepImport;
       if (
@@ -123,7 +194,6 @@ export async function writeJournal(
         night.source = before.source;
     }
     if (input.preserveMissingCoachData) {
-      const previous = storedJournal(row.state);
       // Omission by an older client preserves the brief. Explicit null clears it.
       // Agent transactions omit this compatibility flag, so Undo restores absence.
       if (state.profile.lifting === undefined)
@@ -140,34 +210,27 @@ export async function writeJournal(
       // Apple Health summaries come only from the iPhone sync.
       state.health.vitals ??= previous.health.vitals;
       state.health.bodyFat ??= previous.health.bodyFat;
+      // A day stays complete while its meals are the same, food tags aside.
+      const day = (meals: JournalState["nutrition"]["meals"], date: string) =>
+        meals
+          .filter((m) => m.date === date)
+          .map(({ items, ...meal }) => ({
+            ...meal,
+            items: items.map(({ classification, ...item }) => {
+              void classification;
+              return item;
+            }),
+          }));
       state.nutrition.completeDays ??= previous.nutrition.completeDays?.filter(
         (date) =>
-          canonicalJson(
-            previous.nutrition.meals
-              .filter((m) => m.date === date)
-              .map(({ items, ...meal }) => ({
-                ...meal,
-                items: items.map(({ classification, ...item }) => {
-                  void classification;
-                  return item;
-                }),
-              })),
-          ) ===
-          canonicalJson(
-            state.nutrition.meals
-              .filter((m) => m.date === date)
-              .map(({ items, ...meal }) => ({
-                ...meal,
-                items: items.map(({ classification, ...item }) => {
-                  void classification;
-                  return item;
-                }),
-              })),
+          jsonEqual(
+            day(previous.nutrition.meals, date),
+            day(state.nutrition.meals, date),
           ),
       );
     }
     const previousMeals = new Map(
-      journalSchema.parse(row.state).nutrition.meals.map((m) => [m.id, m]),
+      previous.nutrition.meals.map((m) => [m.id, m]),
     );
     try {
       if (input.preserveMissingFoodTags)
@@ -189,13 +252,11 @@ export async function writeJournal(
     const revision = row.revision + 1;
     // Old clients omit photoIds; explicit [] is the supported unlink operation.
     state.cardio.sessions = state.cardio.sessions.map((entry) => {
-      const previous = row.state.cardio?.sessions.find(
-        (s) => s.id === entry.id,
-      );
+      const before = previous.cardio.sessions.find((s) => s.id === entry.id);
       return input.preserveMissingActivityPhotos &&
         entry.photoIds === undefined &&
-        previous?.photoIds
-        ? { ...entry, photoIds: previous.photoIds }
+        before?.photoIds
+        ? { ...entry, photoIds: before.photoIds }
         : entry;
     });
     const activityPhotoIds = [
@@ -251,7 +312,7 @@ export async function writeJournal(
     if (input.preserveDrinkDetails && state.health.drinks)
       state.health.drinks = retainDrinkDetails(
         state.health.drinks,
-        storedJournal(row.state).health.drinks ?? [],
+        previous.health.drinks ?? [],
       );
     // After the omitted drinks are restored, so a check-in total moves only
     // on a day with no other drinks.
@@ -260,12 +321,11 @@ export async function writeJournal(
     // Account-level optimistic concurrency also covers deleted sessions: stale devices
     // must resolve before uploading, so old snapshots cannot resurrect deletions.
     // Keep relational projections in the same transaction as the lossless legacy snapshot.
-    const oldById = new Map(row.state.sessions.map((w) => [w.id, w]));
-    const removed = row.state.sessions.filter(
-      (w) => !state.sessions.some((s) => s.id === w.id),
-    );
+    const oldById = new Map(previous.sessions.map((w) => [w.id, w]));
+    const kept = new Set(state.sessions.map((s) => s.id));
+    const removed = previous.sessions.filter((w) => !kept.has(w.id));
     const changed = state.sessions.filter(
-      (w) => canonicalJson(oldById.get(w.id)) !== canonicalJson(w),
+      (w) => !jsonEqual(oldById.get(w.id), w),
     );
     for (const w of [...removed, ...changed]) {
       await tx
@@ -319,14 +379,25 @@ export async function writeJournal(
           );
       }
     }
-    await tx
+    const [saved] = await tx
       .update(journals)
       .set({ state, revision, updatedAt: new Date() })
-      .where(eq(journals.userId, userId));
+      .where(eq(journals.userId, userId))
+      .returning({ version: journalVersion });
     await tx
       .insert(mutations)
       .values({ userId, id: input.mutationId, hash, revision });
-    return { state, revision };
+    // Kept under the row's new version: if this transaction rolls back, no
+    // row ever has that version, so the entry is never read.
+    rememberJournal(userId, saved.version, structuredClone(state));
+    return {
+      state,
+      revision,
+      version: saved.version,
+      // What the server changed in the journal the changes made, such as the
+      // time it was saved, so the sender's copy can match it.
+      ...(applied ? { fix: diffJournal(applied, state) } : {}),
+    };
   };
   return transaction ? work(transaction) : getDb().transaction(work);
 }

@@ -4,6 +4,8 @@ import {
   browserUser,
   openJournalArea,
   coachTask,
+  isJournalSave,
+  savedJournal,
 } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
@@ -63,8 +65,8 @@ test("Coach finishes while navigating and editing Health, preserves review safet
     });
   });
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

@@ -104,13 +104,6 @@ export function cardioBurn(
   };
 }
 
-// A lifting session at about 5 METs (Compendium 2024, 02052), 1 of them
-// resting energy: about 4 kcal per kg per hour above rest. The goal plan
-// adds that net figure to maintenance, which already counts resting energy,
-// so the plan and the burn estimate share one cost for an hour of lifting.
-export const LIFTING_MET = 5;
-export const LIFTING_NET_KCAL_PER_KG_HOUR = LIFTING_MET - 1;
-
 // A session's length from its start to its finish, or null without both
 // times. An unfinished session left open for hours is not training time.
 export function workoutMinutes(workout: Workout) {
@@ -120,8 +113,16 @@ export function workoutMinutes(workout: Workout) {
   return minutes >= 10 && minutes <= 240 ? minutes : null;
 }
 
-// Olympic weightlifting sessions are mostly rest between short efforts; the
-// Compendium lists vigorous resistance training at about 5 METs overall.
+// A lifting session at about 5 METs (Compendium 2024, 02052), 1 of them
+// resting energy. The burn estimate and the goal plan share that figure:
+// the burn counts the whole 5 kcal per kg per hour, resting energy
+// included, while the plan adds only the 4 above rest, as its maintenance
+// already counts resting energy.
+export const LIFTING_MET = 5;
+export const LIFTING_NET_KCAL_PER_KG_HOUR = LIFTING_MET - 1;
+
+// Olympic weightlifting sessions are mostly rest between short efforts, so
+// a whole session counts at LIFTING_MET.
 export function strengthBurn(
   state: JournalState,
   workout: Workout,

@@ -1,4 +1,5 @@
-import { test, expect } from "./fixtures";
+import { test, expect, isJournalSave, savedJournal } from "./fixtures";
+import { applyJournalPatch } from "../../lib/journal-patch";
 import AxeBuilder from "@axe-core/playwright";
 import { createServer, request } from "node:http";
 import { emptyJournal, createWorkout, days, backup } from "../../lib/domain";
@@ -159,10 +160,13 @@ test.describe("authenticated offline shell", () => {
         return;
       }
       if (incoming.url === "/api/journal") {
-        if (incoming.method === "PUT") {
+        if (incoming.method === "PUT" || incoming.method === "PATCH") {
           const chunks = [];
           for await (const chunk of incoming) chunks.push(chunk);
-          serverState = JSON.parse(Buffer.concat(chunks).toString()).state;
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          serverState = body.patch
+            ? applyJournalPatch(structuredClone(serverState), body.patch)
+            : body.state;
           revision++;
         }
         outgoing.writeHead(200, {
@@ -289,7 +293,7 @@ test("sync client retries an interrupted acknowledgement and protects conflictin
         if (
           index === 1 &&
           secondDisconnected &&
-          route.request().method() === "PUT"
+          isJournalSave(route.request())
         ) {
           await route.fulfill({
             status: 503,
@@ -297,7 +301,7 @@ test("sync client retries an interrupted acknowledgement and protects conflictin
           });
           return;
         }
-        if (route.request().method() === "PUT") {
+        if (isJournalSave(route.request())) {
           const input = route.request().postDataJSON();
           attempts.push(input.mutationId);
           if (!seen.has(input.mutationId)) {
@@ -306,7 +310,10 @@ test("sync client retries an interrupted acknowledgement and protects conflictin
               return;
             }
             seen.add(input.mutationId);
-            server = { state: input.state, revision: server.revision + 1 };
+            server = {
+              state: savedJournal(route.request(), server.state),
+              revision: server.revision + 1,
+            };
           }
           if (index === 0 && loseAcknowledgement) {
             await route.fulfill({

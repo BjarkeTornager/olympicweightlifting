@@ -205,16 +205,6 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
-    // (PR 4, maintenance and training), in the goal-setup paragraph only:
-    // goal setup also asks the usual session length, which the plan now
-    // uses to count training energy for the sessions it sets ("training
-    // days available and experience" and "training days and experience"
-    // gain session length), and everyday activity gains very_high for heavy
-    // manual work, which the plan counts at 2.0 times resting energy
-    // ("(low/moderate/high)" gains it). Restoring those three phrases
-    // reproduces the previous hash (74336db6…). Health, privacy and
-    // evidence text is unchanged.
-    // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 11, water): the drinks paragraph only. Beer, wine and spirits join
     // the drinks with energy that also need a record_meal (alcohol has 7
     // kcal a gram); they count towards the drinks total, but Coach never
@@ -226,7 +216,41 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // paragraph. Restoring that paragraph reproduces the previous hash
     // (74336db6…). Health, privacy and evidence text is otherwise
     // unchanged.
-    // With PR 4 and PR 11 both merged the hash is 8bb2b289…, where PR 5 starts.
+    // Revised 2026-10-04, deliberate and reviewed at the owner's request
+    // ("Coach should be able to add any exercise that the user requests"):
+    // the core workout continuity paragraph gains three sentences. Any
+    // exercise the athlete names can be logged, planned or added: the
+    // catalogue id when it is the same movement, otherwise custom:<their
+    // name for it>, never a refusal, a request for permission or a
+    // different exercise, and the custom id already shown is reused. Sets
+    // still to do go into the ongoing workout with the new
+    // add_workout_exercise and are never logged as done (without that
+    // sentence Coach logged "jeg tager dem efter squats" as done in the
+    // Coach benchmark). The programmes paragraph's custom sentence no longer
+    // limits custom ids to "explicitly named" movements; it still forbids
+    // invented catalogue IDs. The server makes the ids canonical
+    // (custom-exercises.test.ts). Removing the three sentences and restoring
+    // the old one reproduces the previous hash (2457ba00…). Health, privacy
+    // and evidence text is unchanged.
+    // Revised 2026-10-05, deliberate and reviewed at the owner's request
+    // (Coach asked whether to save the food and drinks or the five
+    // supplements first, because a save held six entries): one report goes
+    // into ONE record_bundle of up to 30 entries, never split into several
+    // saves or a question about which to save first; only beyond 30 does
+    // Coach save the first 30 and say what is left. The server allows 30
+    // (BUNDLE_MAX). Restoring the "2–6 entries" sentence reproduces the
+    // previous hash (14390d3e…). Health, privacy and evidence text is
+    // unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // (PR 4, maintenance and training), brought in after the notes above,
+    // in the goal-setup paragraph only: goal setup also asks the usual
+    // session length, which the plan now uses to count training energy for
+    // the sessions it sets ("training days available and experience" and
+    // "training days and experience" gain session length), and everyday
+    // activity gains very_high for heavy manual work, which the plan counts
+    // at 2.0 times resting energy ("(low/moderate/high)" gains it).
+    // Restoring those three phrases reproduces the previous hash
+    // (14eaff26…). Health, privacy and evidence text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 5, macros), so Coach describes the macros the plan now sets: the
     // goal-setup paragraph adds protein from a height-adjusted weight at a
@@ -236,8 +260,8 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // height-adjusted weight at a BMI of 30 or more while losing
     // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
     // gaining. Restoring those three phrases reproduces the previous hash
-    // (8bb2b289…). Health, privacy and evidence text is unchanged.
-    "b22e1af2f7f9f2485b06c65b6ba969c443f5922c2874d135059efeea35204aee",
+    // (5d6a23d3…). Health, privacy and evidence text is unchanged.
+    "0071e2d0df3d7dc008774aaf3595d48f663195089eada1828b2a04f328ec5650",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

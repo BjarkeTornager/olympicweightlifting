@@ -227,12 +227,12 @@ test(
       const native = buildCoach(saved).turns[0];
       assert.equal(native.status, "done");
       assert.equal(native.reply, LIMIT_REPLIES["spend-day-usd"]);
-      // In Danish when that is the reply's language: chosen in the app, or
-      // the one the athlete writes in.
+      // In Danish when that is the reply's language: the one the athlete
+      // writes in, or the one chosen in the app when the words don't tell.
       const dansk = await db.user();
       await db.spend(dansk, new Date(), 1.2);
       for (const asked of [
-        { ...input("Plan my week"), language: "da" as const },
+        { ...input("Plan?"), language: "da" as const },
         input("Hvad skal jeg træne i morgen, og hvor meget skal jeg sove"),
       ])
         assert.equal(

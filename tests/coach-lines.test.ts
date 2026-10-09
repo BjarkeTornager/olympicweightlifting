@@ -23,9 +23,13 @@ test("Coach's own lines read naturally in English and Danish", () => {
     assert.notEqual(da[key], en[key], key);
 });
 
-test("the lines take the chosen language, or else the one the athlete and Coach write in", () => {
-  assert.equal(linesLanguage("da", "I slept 8 hours"), "da");
-  assert.equal(linesLanguage("en", "Jeg har sovet 8 timer i nat"), "en");
+test("the lines take the language the athlete writes in, or else the chosen one", () => {
+  // A message's own words decide, whatever language is chosen in the app.
+  assert.equal(linesLanguage("da", "I slept 8 hours"), "en");
+  assert.equal(linesLanguage("en", "Jeg har sovet 8 timer i nat"), "da");
+  // Words that don't tell: the chosen language, before earlier turns.
+  assert.equal(linesLanguage("da", "8 h", "I slept well"), "da");
+  assert.equal(linesLanguage("en", "", "Det er en time mere"), "en");
   // The website chooses none: Coach answers in the athlete's language.
   assert.equal(linesLanguage(undefined, "Jeg har sovet 8 timer i nat"), "da");
   assert.equal(linesLanguage(undefined, "I slept 8 hours last night"), "en");

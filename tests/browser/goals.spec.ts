@@ -50,6 +50,17 @@ test("goals are set from Today, preview the plan and become the daily food targe
   await expect(plan).toContainText("Lose about 0.44 kg a week towards 81 kg");
   await expect(plan).toContainText("2,640 kcal a day");
   await expect(plan).toContainText("4 training sessions a week");
+  // A session length outside the plan's range is named, rather than Save
+  // just staying disabled.
+  await dialog.getByLabel("Session length (min)").fill("10");
+  await expect(
+    dialog.getByText(
+      "Give the session length in whole minutes, from 15 to 240.",
+    ),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Save goals" }),
+  ).toBeDisabled();
   // Longer sessions and heavy manual work count more energy.
   await dialog.getByLabel("Session length (min)").fill("120");
   await expect(plan).toContainText("2,790 kcal a day");

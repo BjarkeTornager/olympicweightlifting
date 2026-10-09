@@ -47,10 +47,11 @@ test(
         }
         return { role: "assistant", content: "You haven't trained yet." };
       };
+      const turnId = crypto.randomUUID();
       await runTurn(
         user,
         {
-          id: crypto.randomUUID(),
+          id: turnId,
           message: "When did I last train?",
           revision: (await readJournal(user)).revision,
           timezone: "Europe/Copenhagen",
@@ -73,6 +74,15 @@ test(
         "+Preparing your response",
         "-Preparing your response",
       ]);
+      // The turn's metrics name the tools each round asked for.
+      const { rows } = await pool.query(
+        "SELECT metrics FROM agent_turns WHERE id=$1",
+        [turnId],
+      );
+      assert.deepEqual(
+        rows[0].metrics.rounds.map((r: { tools?: string[] }) => r.tools),
+        [["find_sessions"], undefined],
+      );
     } finally {
       await pool.query("DELETE FROM users WHERE id=$1", [user]);
       await pool.end();

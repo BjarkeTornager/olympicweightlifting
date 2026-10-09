@@ -9,6 +9,9 @@ export type TurnRound = ModelUsage & {
   // A reply the host's content filter blocked. Its retry on another model is
   // the next entry, so the blocked call's tokens and cost are counted too.
   filtered?: boolean;
+  // The tools the round asked for, by name only, to see what a slow turn
+  // spent its rounds on.
+  tools?: string[];
 };
 export type TurnMetrics = {
   // Which tier Jev (or the rules) chose, how, and why: a reason code from

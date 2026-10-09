@@ -308,3 +308,308 @@ test(
     }
   },
 );
+
+test(
+  "Apple Health lifting synced while a session is open is counted once, after the session",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db");
+    const { readJournal, writeJournal } = await import("../lib/server");
+    const { syncHealth } = await import("../lib/health-sync");
+    const { createWorkout, days } = await import("../lib/domain");
+    const { dayBurn } = await import("../lib/energy");
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Deferred lifting test',$1||'@example.test',true)",
+      [id],
+    );
+    const date = "2026-09-26";
+    const lifting = {
+      id: crypto.randomUUID(),
+      kind: "strength",
+      name: "Strength Training",
+      start: "2026-09-26T17:05:00+02:00",
+      end: "2026-09-26T18:25:00+02:00",
+      durationSeconds: 4800,
+      caloriesKcal: 410,
+    };
+    const receipt = async (workoutId: string) =>
+      (
+        await pool.query(
+          "SELECT status, workout FROM health_workout_imports WHERE user_id = $1 AND workout_id = $2",
+          [id, workoutId],
+        )
+      ).rows[0];
+    try {
+      // A session open in the journal while the watch records it.
+      let journal = await readJournal(id);
+      const state = structuredClone(journal.state);
+      state.profile.bodyweight = 88;
+      state.activeWorkout = createWorkout(state, days[0], date);
+      await writeJournal(id, {
+        state,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      const first = await syncHealth(
+        id,
+        { timezone: tz, workouts: [lifting] },
+        now,
+      );
+      // The phone hears "skipped": it has nothing to send again.
+      assert.deepEqual(first.workouts, [{ id: lifting.id, result: "skipped" }]);
+      assert.equal(first.changed, false);
+      const kept = await receipt(lifting.id);
+      assert.equal(kept.status, "deferred");
+      assert.equal(kept.workout.start, lifting.start);
+      assert.equal(kept.workout.caloriesKcal, 410);
+      // A sync while the session is still open leaves it waiting.
+      const waiting = await syncHealth(id, { timezone: tz }, now);
+      assert.deepEqual(waiting.workouts, []);
+      assert.equal((await receipt(lifting.id)).status, "deferred");
+
+      // The session is finished; the next sync matches the watch's workout
+      // to it instead of counting the lifting twice.
+      journal = await readJournal(id);
+      const finished = structuredClone(journal.state);
+      finished.sessions.push({
+        ...finished.activeWorkout!,
+        firstSetAt: "2026-09-26T15:10:00.000Z",
+        finishedAt: "2026-09-26T16:30:00.000Z",
+        durationMinutes: 80,
+      });
+      finished.activeWorkout = null;
+      await writeJournal(id, {
+        state: finished,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      const reconciled = await syncHealth(id, { timezone: tz }, now);
+      assert.deepEqual(reconciled.workouts, [
+        { id: lifting.id, result: "skipped" },
+      ]);
+      const after = await receipt(lifting.id);
+      assert.equal(after.status, "skipped");
+      assert.equal(after.workout, null);
+      journal = await readJournal(id);
+      assert.equal(journal.state.cardio.sessions.length, 0);
+      // Only the session's estimate: 4 × 88 kg × 80 min, about 470 kcal.
+      assert.deepEqual(dayBurn(journal.state, date), {
+        kcal: 470,
+        estimated: true,
+        count: 1,
+        untimed: 0,
+        unestimated: 0,
+      });
+      // Deleted in Apple Health while waiting: it never comes in.
+      const other = { ...lifting, id: crypto.randomUUID() };
+      const open = structuredClone(journal.state);
+      open.activeWorkout = createWorkout(open, days[0], date);
+      await writeJournal(id, {
+        state: open,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      await syncHealth(id, { timezone: tz, workouts: [other] }, now);
+      const gone = await syncHealth(
+        id,
+        { timezone: tz, deletedWorkoutIds: [other.id] },
+        now,
+      );
+      assert.deepEqual(gone.workouts, [{ id: other.id, result: "removed" }]);
+      assert.equal((await receipt(other.id)).status, "removed");
+    } finally {
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);
+
+test(
+  "an activity's calories keep where they came from through older browsers and syncs",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db");
+    const { readJournal, writeJournal } = await import("../lib/server");
+    const { syncHealth } = await import("../lib/health-sync");
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Calories source test',$1||'@example.test',true)",
+      [id],
+    );
+    const run = {
+      id: crypto.randomUUID(),
+      kind: "running",
+      name: "Running",
+      start: "2026-09-26T07:00:00+02:00",
+      end: "2026-09-26T07:50:00+02:00",
+      durationSeconds: 3000,
+      distanceKm: 10,
+      caloriesKcal: 612,
+    };
+    try {
+      await syncHealth(id, { timezone: tz, workouts: [run] }, now);
+      let journal = await readJournal(id);
+      assert.equal(
+        journal.state.cardio.sessions[0].caloriesSource,
+        "apple-health",
+      );
+      const title = journal.state.cardio.sessions[0].title;
+      // An older browser leaves the source out: an unchanged figure keeps it.
+      const older = structuredClone(journal.state);
+      delete older.cardio.sessions[0].caloriesSource;
+      older.cardio.sessions[0].title = "Morning run";
+      journal = await writeJournal(id, {
+        state: older,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      assert.equal(
+        journal.state.cardio.sessions[0].caloriesSource,
+        "apple-health",
+      );
+      // Imported before sources were kept, and untouched since: the next
+      // sync labels it once.
+      const untouched = structuredClone(journal.state);
+      untouched.cardio.sessions[0].title = title;
+      journal = await writeJournal(id, {
+        state: untouched,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      await pool.query(
+        "UPDATE journals SET state = state #- '{cardio,sessions,0,caloriesSource}' WHERE user_id = $1",
+        [id],
+      );
+      assert.equal(
+        (await readJournal(id)).state.cardio.sessions[0].caloriesSource,
+        undefined,
+      );
+      const labelled = await syncHealth(id, { timezone: tz }, now);
+      assert.equal(labelled.changed, true);
+      journal = await readJournal(id);
+      assert.equal(
+        journal.state.cardio.sessions[0].caloriesSource,
+        "apple-health",
+      );
+      const again = await syncHealth(id, { timezone: tz }, now);
+      assert.equal(again.changed, false);
+      // An older browser that changes the figure makes it the athlete's.
+      const corrected = structuredClone(journal.state);
+      delete corrected.cardio.sessions[0].caloriesSource;
+      corrected.cardio.sessions[0].caloriesKcal = 500;
+      journal = await writeJournal(id, {
+        state: corrected,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      assert.equal(journal.state.cardio.sessions[0].caloriesSource, undefined);
+    } finally {
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);
+
+test(
+  "a session the iPhone queued without signal keeps its length when the queue is sent at once",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db");
+    const { readJournal, writeJournal } = await import("../lib/server");
+    const { applyNativeAction } = await import("../lib/native-actions");
+    const { syncHealth } = await import("../lib/health-sync");
+    const { days } = await import("../lib/domain");
+    const { burnedToday, strengthBurn } = await import("../lib/energy");
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'Offline queue test',$1||'@example.test',true)",
+      [id],
+    );
+    // The server stamps each change as it arrives, so the clock is moved
+    // on as the phone would send them.
+    const at = (iso: string) => {
+      t.mock.timers.setTime(Date.parse(iso));
+      return new Date(iso);
+    };
+    t.mock.timers.enable({
+      apis: ["Date"],
+      now: Date.parse(now.toISOString()),
+    });
+    const save = (action: Record<string, unknown>) =>
+      applyNativeAction(
+        id,
+        { id: crypto.randomUUID(), timezone: tz, action },
+        new Date(),
+      );
+    const date = "2026-09-26";
+    // The watch's strength workout, 16:32 to 17:58.
+    const watch = {
+      id: crypto.randomUUID(),
+      kind: "strength",
+      name: "Strength Training",
+      start: "2026-09-26T16:32:00+02:00",
+      end: "2026-09-26T17:58:00+02:00",
+      durationSeconds: 5160,
+      caloriesKcal: 380,
+    };
+    try {
+      // The session is started online at 16:30, in the gym.
+      at("2026-09-26T14:30:00Z");
+      await save({ kind: "start_programme", dayId: days[0].id, date });
+      let journal = await readJournal(id);
+      const state = structuredClone(journal.state);
+      state.profile.bodyweight = 88;
+      await writeJournal(id, {
+        state,
+        revision: journal.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      // No signal while training. Back online at 18:00, the health sync
+      // arrives first: the watch's workout waits beside the open session.
+      const first = await syncHealth(
+        id,
+        { timezone: tz, workouts: [watch] },
+        at("2026-09-26T16:00:00Z"),
+      );
+      assert.deepEqual(first.workouts, [{ id: watch.id, result: "skipped" }]);
+      // Then the queue: the sets and Finish, seconds apart.
+      const exerciseId = days[0].exercises[0].exerciseId;
+      const set = { weight: 60, reps: 8, result: "success" };
+      at("2026-09-26T16:00:05Z");
+      await save({ kind: "log_sets", exerciseId, sets: [set] });
+      at("2026-09-26T16:00:06Z");
+      await save({ kind: "log_sets", exerciseId, sets: [set] });
+      at("2026-09-26T16:00:07Z");
+      await save({ kind: "finish_workout" });
+      journal = await readJournal(id);
+      const session = journal.state.sessions[0];
+      // From when it was started, as the sets carry no time of their own.
+      assert.equal(session.firstSetAt, "2026-09-26T16:00:05.000Z");
+      assert.equal(session.durationMinutes, 90);
+      assert.equal(strengthBurn(journal.state, session)?.kcal, 530);
+      // The next sync takes the watch's workout as that session: counted
+      // once, and the day keeps a training figure.
+      const next = await syncHealth(
+        id,
+        { timezone: tz },
+        at("2026-09-26T16:05:00Z"),
+      );
+      assert.deepEqual(next.workouts, [{ id: watch.id, result: "skipped" }]);
+      journal = await readJournal(id);
+      assert.deepEqual(burnedToday(journal.state, date)?.training, {
+        kcal: 530,
+        count: 1,
+        untimed: 0,
+        unestimated: 0,
+      });
+    } finally {
+      t.mock.timers.reset();
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);

@@ -451,7 +451,9 @@ public actor HealthSync {
     case .highIntensityIntervalTraining: return (.other, "HIIT")
     case .crossTraining: return (.other, "Cross Training")
     case .mixedCardio: return (.other, "Mixed Cardio")
-    case .stairClimbing, .stairs: return (.other, "Stair Climbing")
+    // A stair machine and real stairs cost differently, so they keep apart.
+    case .stairClimbing: return (.other, "Stair Climbing")
+    case .stairs: return (.other, "Stairs")
     case .yoga: return (.other, "Yoga")
     case .pilates: return (.other, "Pilates")
     case .flexibility: return (.other, "Flexibility")

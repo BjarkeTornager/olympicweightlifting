@@ -1,4 +1,13 @@
-import { burnFields, cardioBurn, dayBurn, strengthBurn } from "./energy";
+import {
+  activeEnergyKcal,
+  burnFields,
+  burnedToday,
+  cardioBurn,
+  notCounted,
+  sameLifting,
+  strengthBurn,
+} from "./energy";
+import { sessionMinutes } from "./session-length";
 import type { JournalState } from "./model";
 import {
   formatLitres,
@@ -19,6 +28,9 @@ export const dayRange = (from: string, to: string) => {
     throw Error("Read at most 14 days at a time.");
   return (day: string) => day >= from && day <= to;
 };
+
+const minutesText = (minutes: number | null) =>
+  minutes == null ? "not recorded" : `${minutes} min`;
 
 // What the voice coach sees of the journal: compact, with the ids it needs
 // to correct an entry, and photo ids it can look at with view_photo. Routes
@@ -70,6 +82,8 @@ export function journalForVoice(
         date: w.date,
         title: w.title,
         exercises: sets(w),
+        // Lifting logged after the fact has no length, so no calories.
+        duration: minutesText(sessionMinutes(w)),
         ...burnFields(strengthBurn(state, w)),
       })),
     unfinishedWorkout: state.activeWorkout
@@ -128,13 +142,18 @@ export function journalForVoice(
         average_heart_rate: c.averageHeartRate ?? undefined,
         max_heart_rate: c.maxHeartRate ?? undefined,
         ...burnFields(cardioBurn(state, c)),
+        // The watch's record of lifting logged as that session: the day's
+        // training figure counts the two once.
+        same_lifting_as_session_id: state.sessions.find((s) =>
+          sameLifting(s, c),
+        )?.id,
         elevation_gain_m: c.elevationGainM ?? undefined,
         // Recorded by GPS; the map can be shown with show_activity_route.
         route: routes.get(c.id),
       })),
-    // Measured by the athlete's watch or phone and imported from Apple
+    // Recorded by the athlete's watch or phone and imported from Apple
     // Health: resting heart rate, heart rate variability, the day's average
-    // heart rate, steps and active energy.
+    // heart rate and steps, and active energy, which is Apple's estimate.
     heart_and_movement: (state.health.vitals ?? [])
       .filter((v) => inRange(v.date))
       .map((v) => ({
@@ -143,7 +162,10 @@ export function journalForVoice(
         hrv_ms: v.heartRateVariabilityMs ?? undefined,
         average_heart_rate: v.averageHeartRate ?? undefined,
         steps: v.steps ?? undefined,
-        active_energy_kcal: v.activeEnergyKcal ?? undefined,
+        active_energy_kcal:
+          v.activeEnergyKcal != null
+            ? activeEnergyKcal(v.activeEnergyKcal)
+            : undefined,
         source: "Apple Health",
       })),
     // Body fat readings: reported, or measured by a smart scale through
@@ -180,7 +202,7 @@ export function dayForCoach(
     { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
   );
   const round = (n: number) => Math.round(n);
-  const burned = dayBurn(state, date);
+  const burned = burnedToday(state, date);
   return {
     date,
     ...day,
@@ -196,10 +218,33 @@ export function dayForCoach(
       fat_g: round(eaten.fat_g),
       complete: state.nutrition.completeDays?.includes(date) ?? false,
     },
-    // Burned in recorded training, measured where a watch recorded it and
-    // estimated by the app otherwise. Context only: food targets stay as set.
-    burnedInTraining: burned.count
-      ? { kcal: burned.kcal, includes_estimates: burned.estimated }
+    // The two figures Today shows as burned, never added together: Apple
+    // Health's active energy so far, which counts all movement but only the
+    // lifting a watch saw, and recorded training. Both are estimates of
+    // energy above rest. Context only: food targets stay as set.
+    activeEnergy: burned?.active
+      ? {
+          kcal: burned.active.kcal,
+          source: "Apple Health",
+          estimated: true,
+          so_far: true,
+          synced_at: burned.active.syncedAt,
+          ...(burned.active.unusual ? { unusually_high: true } : {}),
+        }
+      : null,
+    burnedInTraining: burned?.training
+      ? {
+          ...(burned.training.count ? { kcal: burned.training.kcal } : {}),
+          includes_estimates: true,
+          net_of_rest: true,
+          ...(burned.training.untimed
+            ? { lifting_sessions_without_length: burned.training.untimed }
+            : {}),
+          // Too short or long for the app to estimate.
+          ...(burned.training.unestimated
+            ? { entries_without_estimate: burned.training.unestimated }
+            : {}),
+        }
       : null,
   };
 }
@@ -218,7 +263,7 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
         )
         .join(
           "; ",
-        )})${w.calories_kcal != null ? `, ${w.calories_estimated ? "about " : ""}${w.calories_kcal} kcal` : ""}`,
+        )})${w.calories_kcal != null ? `, ${w.calories_estimated ? "about " : ""}${w.calories_kcal} kcal` : w.duration === "not recorded" ? ", length not recorded" : ""}`,
     );
   for (const m of day.meals)
     parts.push(
@@ -257,6 +302,19 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
     ].filter(Boolean);
     if (heart.length) parts.push(`From Apple Health: ${heart.join(", ")}`);
   }
+  const training = day.burnedInTraining;
+  const left = notCounted(
+    training?.lifting_sessions_without_length ?? 0,
+    training?.entries_without_estimate ?? 0,
+  );
+  const burned = [
+    day.activeEnergy &&
+      `active energy about ${day.activeEnergy.kcal} kcal so far from Apple Health`,
+    training?.kcal != null
+      ? `training about ${training.kcal} kcal estimated${left ? `, not counting ${left}` : ""}`
+      : left && `no training estimate for ${left}`,
+  ].filter(Boolean);
+  if (burned.length) parts.push(`Burned: ${burned.join("; ")}`);
   const target = day.dailyTargets.calories;
   if (day.meals.length)
     parts.push(

@@ -77,13 +77,18 @@ export const healthWorkoutImports = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     workoutId: text("workout_id").notNull(),
     cardioId: text("cardio_id"),
-    // "imported", "matched" (enriched a manual entry) or "removed".
+    // "imported", "matched" (enriched a manual entry), "skipped" (lifting
+    // already logged), "deferred" (lifting while a session was open) or
+    // "removed".
     status: text("status").notNull(),
     digest: text("digest").notNull(),
     entryDigest: text("entry_digest"),
     importedAt: timestamp("imported_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // A deferred workout as Apple Health sent it, kept until the session it
+    // ran beside is finished; the phone does not send it again.
+    workout: jsonb("workout"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.workoutId] })],
 );

@@ -19,7 +19,7 @@ import {
   cardioEntrySchema,
   type CardioEntry,
 } from "./cardio";
-import { emptyJournal } from "./domain";
+import { emptyJournal, hasLoggedSet } from "./domain";
 import { vitalsSchema, type Vitals } from "./health";
 import { journalSchema, type JournalState } from "./model";
 import { nativeRequests } from "./native-api";
@@ -84,7 +84,10 @@ export type WorkoutImportResult =
   | "unchanged"
   | "preserved"
   | "removed"
-  | "skipped";
+  | "skipped"
+  // Kept on the server until the session it ran beside is finished; the
+  // phone hears "skipped", as it has nothing to send again.
+  | "deferred";
 
 const workoutDigest = (w: HealthWorkout) =>
   createHash("sha256").update(JSON.stringify(w)).digest("hex");
@@ -137,6 +140,7 @@ export function cardioFromWorkout(
     effort: existing?.effort ?? null,
     elevationGainM: round(w.elevationGainM, 0),
     caloriesKcal: round(w.caloriesKcal, 0),
+    ...(w.caloriesKcal != null ? { caloriesSource: "apple-health" } : {}),
     notes: "",
     createdAt: existing?.createdAt ?? stamp,
     updatedAt: stamp,
@@ -162,6 +166,29 @@ function manualMatch(
 
 type Receipt = typeof healthWorkoutImports.$inferSelect;
 
+// A strength workout from Apple Health is the lifting logged that day, unless
+// that session was finished before the workout began, give or take a quarter
+// of an hour: lifting is logged while it happens or afterwards, never before.
+// A session told to Coach later, typed in on the website after training or
+// sent from the iPhone's offline queue carries the time it was saved, so it
+// is the same lifting; so is lifting logged in a session still open. A
+// workout imported before its session is logged is matched the other way
+// round, where the day's figures are worked out (sameLifting in energy.ts).
+function loggedLifting(state: JournalState, date: string, w: HealthWorkout) {
+  const began = Date.parse(w.start) - 15 * 60000;
+  const draft = state.activeWorkout;
+  return (
+    (draft?.date === date && hasLoggedSet(draft)) ||
+    state.sessions.some(
+      (s) =>
+        s.date === date && !(s.finishedAt && Date.parse(s.finishedAt) < began),
+    )
+  );
+}
+// How long an open session with nothing logged holds back a strength workout
+// after it ended, in case the athlete fills the session in afterwards.
+const EMPTY_DRAFT_WAIT = 3 * 3600000;
+
 export function applyWorkout(
   state: JournalState,
   w: HealthWorkout,
@@ -172,8 +199,10 @@ export function applyWorkout(
 ): { result: WorkoutImportResult; receipt?: Omit<Receipt, "userId"> } {
   const digest = workoutDigest(w);
   const date = localClock(new Date(w.start), timezone).date;
-  if (date > localClock(now, timezone).date) return { result: "skipped" };
-  if (receipt) {
+  const today = localClock(now, timezone).date;
+  if (date > today) return { result: "skipped" };
+  // A deferred workout is looked at afresh.
+  if (receipt && receipt.status !== "deferred") {
     if (receipt.digest === digest) return { result: "unchanged" };
     const current = state.cardio.sessions.find(
       (s) => s.id === receipt.cardioId,
@@ -194,8 +223,33 @@ export function applyWorkout(
       receipt: { ...receipt, digest, entryDigest: entryDigest(next) },
     };
   }
-  // A strength workout on a day with logged lifting is that session: skip it.
-  if (w.kind === "strength" && state.sessions.some((s) => s.date === date))
+  // Lifting while a session of that day is still open in the journal waits
+  // until it is finished, so the watch's figure and the session's estimate
+  // are never both counted. It waits only while the session can still be
+  // that lifting: on its own day, and with nothing logged in it, for a few
+  // hours after the workout ended.
+  const draft = state.activeWorkout;
+  if (
+    w.kind === "strength" &&
+    draft?.date === date &&
+    date === today &&
+    (hasLoggedSet(draft) ||
+      now.getTime() < Date.parse(w.end) + EMPTY_DRAFT_WAIT)
+  )
+    return {
+      result: "deferred",
+      receipt: {
+        workoutId: w.id,
+        cardioId: null,
+        status: "deferred",
+        digest,
+        entryDigest: null,
+        importedAt: now,
+        workout: w,
+      },
+    };
+  // A strength workout that ran with logged lifting is that session: skip it.
+  if (w.kind === "strength" && loggedLifting(state, date, w))
     return {
       result: "skipped",
       receipt: {
@@ -205,6 +259,7 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
+        workout: null,
       },
     };
   const entry = cardioFromWorkout(w, timezone, now);
@@ -221,7 +276,13 @@ export function applyWorkout(
           ? entry.maxHeartRate
           : null),
       elevationGainM: match.elevationGainM ?? entry.elevationGainM,
-      caloriesKcal: match.caloriesKcal ?? entry.caloriesKcal,
+      // The athlete's figure stays theirs; one the import fills is its own.
+      ...(match.caloriesKcal == null && entry.caloriesKcal != null
+        ? {
+            caloriesKcal: entry.caloriesKcal,
+            caloriesSource: entry.caloriesSource,
+          }
+        : {}),
       updatedAt: now.toISOString(),
     });
     state.cardio.sessions = state.cardio.sessions.map((s) =>
@@ -236,6 +297,7 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
+        workout: null,
       },
     };
   }
@@ -252,8 +314,32 @@ export function applyWorkout(
       digest,
       entryDigest: entryDigest(entry),
       importedAt: now,
+      workout: null,
     },
   };
+}
+
+// Calories imported before entries kept their source are Apple Health's,
+// unless the athlete has changed the entry since. Returns whether any was
+// labelled, so the journal is saved once and later syncs write nothing.
+export function labelImportedCalories(
+  state: JournalState,
+  imports: { cardioId: string | null; entryDigest: string | null }[],
+) {
+  const digests = new Map(imports.map((r) => [r.cardioId, r.entryDigest]));
+  let labelled = false;
+  state.cardio.sessions = state.cardio.sessions.map((entry) => {
+    if (
+      entry.caloriesKcal == null ||
+      entry.caloriesSource ||
+      !digests.has(entry.id) ||
+      entryDigest(entry) !== digests.get(entry.id)
+    )
+      return entry;
+    labelled = true;
+    return { ...entry, caloriesSource: "apple-health" };
+  });
+  return labelled;
 }
 
 // A scale's body fat reading for a day, kept beside anything the athlete
@@ -421,20 +507,26 @@ export async function syncHealth(
             ),
           )
       : [];
+    const imports = await tx
+      .select({
+        cardioId: healthWorkoutImports.cardioId,
+        entryDigest: healthWorkoutImports.entryDigest,
+      })
+      .from(healthWorkoutImports)
+      .where(
+        and(
+          eq(healthWorkoutImports.userId, userId),
+          eq(healthWorkoutImports.status, "imported"),
+        ),
+      );
     const importedIds = new Set(
-      (
-        await tx
-          .select({ cardioId: healthWorkoutImports.cardioId })
-          .from(healthWorkoutImports)
-          .where(
-            and(
-              eq(healthWorkoutImports.userId, userId),
-              eq(healthWorkoutImports.status, "imported"),
-            ),
-          )
-      ).flatMap((r) => (r.cardioId ? [r.cardioId] : [])),
+      imports.flatMap((r) => (r.cardioId ? [r.cardioId] : [])),
     );
-    const workouts: { id: string; result: WorkoutImportResult }[] = [];
+    if (labelImportedCalories(state, imports)) changed = true;
+    const workouts: {
+      id: string;
+      result: Exclude<WorkoutImportResult, "deferred">;
+    }[] = [];
     const receiptWrites: Omit<Receipt, "userId">[] = [];
     for (const w of [...input.workouts].sort((a, b) =>
       a.start.localeCompare(b.start),
@@ -451,11 +543,52 @@ export async function syncHealth(
       if (["imported", "updated", "matched"].includes(outcome.result))
         changed = true;
       if (outcome.receipt) receiptWrites.push(outcome.receipt);
-      workouts.push({ id: w.id, result: outcome.result });
+      workouts.push({
+        id: w.id,
+        result: outcome.result === "deferred" ? "skipped" : outcome.result,
+      });
+    }
+    // Lifting deferred while a session was open: once that session is
+    // finished, or no longer holds it back, it is matched against the
+    // journal's lifting or saved as separate training.
+    const deferred = await tx
+      .select()
+      .from(healthWorkoutImports)
+      .where(
+        and(
+          eq(healthWorkoutImports.userId, userId),
+          eq(healthWorkoutImports.status, "deferred"),
+        ),
+      );
+    for (const receipt of deferred) {
+      if (ids.includes(receipt.workoutId)) continue;
+      const w = healthWorkoutSchema.safeParse(receipt.workout);
+      if (!w.success) {
+        receiptWrites.push({ ...receipt, status: "removed", workout: null });
+        continue;
+      }
+      const outcome = applyWorkout(
+        state,
+        w.data,
+        receipt,
+        importedIds,
+        input.timezone,
+        now,
+      );
+      // Still beside an open session: it waits for a later sync.
+      if (outcome.result === "deferred") continue;
+      if (["imported", "matched"].includes(outcome.result)) changed = true;
+      if (outcome.receipt) receiptWrites.push(outcome.receipt);
+      workouts.push({ id: w.data.id, result: outcome.result });
     }
     // Deleted in Apple Health: remove the entry only if the athlete never changed it.
     for (const id of input.deletedWorkoutIds) {
       const receipt = receipts.find((r) => r.workoutId === id);
+      if (receipt?.status === "deferred") {
+        receiptWrites.push({ ...receipt, status: "removed", workout: null });
+        workouts.push({ id, result: "removed" });
+        continue;
+      }
       if (!receipt || receipt.status !== "imported") continue;
       const current = state.cardio.sessions.find(
         (s) => s.id === receipt.cardioId,
@@ -495,6 +628,7 @@ export async function syncHealth(
             digest: receipt.digest,
             entryDigest: receipt.entryDigest,
             importedAt: receipt.importedAt,
+            workout: receipt.workout,
           },
         });
     const routes = await saveRoutes(

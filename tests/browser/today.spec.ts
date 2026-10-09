@@ -9,6 +9,7 @@ import { emptyJournal, createWorkout, days, today } from "../../lib/domain";
 import { offsetDate, saveCheckin } from "../../lib/health";
 import { saveTrainingProgram } from "../../lib/training-programs";
 import { addSupplement } from "../../lib/supplements";
+import { saveCardio } from "../../lib/cardio";
 
 const sequence = days.filter((d) => d.weekday !== null);
 
@@ -220,4 +221,44 @@ test("supplements are ticked off and added from Today", async ({
   await expect(
     card.getByRole("list", { name: "Taken today" }),
   ).not.toContainText("Vitamin D");
+});
+
+test("Today shows Apple Health's active energy and training on their own lines, as estimates", async ({
+  page,
+  context,
+}) => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 80;
+  const d = today();
+  saveCardio(
+    state,
+    { date: d, activity: "other", title: "StairMaster", durationSeconds: 1200 },
+    d,
+  );
+  state.health.vitals = [
+    {
+      date: d,
+      restingHeartRate: null,
+      heartRateVariabilityMs: null,
+      averageHeartRate: null,
+      steps: 9120,
+      activeEnergyKcal: 612,
+      source: "apple-health",
+      updatedAt: new Date().toISOString(),
+    },
+  ];
+  await context.route("**/api/journal", (r) =>
+    r.fulfill({ json: { accountId: browserUser.id, state, revision: 1 } }),
+  );
+  await page.goto("/");
+  const records = page.getByRole("region", {
+    name: "Today's food, sleep and calories burned",
+  });
+  const burned = records.getByRole("button", { name: /Burned/ });
+  await expect(burned).toContainText("Active energy from Apple Health, so far");
+  await expect(burned).toContainText("~610 kcal");
+  await expect(burned).toContainText("Training ~220 kcal: estimated");
+  await expect(burned).toContainText(
+    "Doesn't include the energy your body uses at rest.",
+  );
 });

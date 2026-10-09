@@ -135,6 +135,43 @@ struct TodayTests {
     #expect(summary.meals == today.nutrition.meals.count)
   }
 
+  @Test("Burned shows each figure on its own line with its source, and an older server's one figure as an estimate")
+  func burned() throws {
+    let json = #"""
+      {"kcal": 610, "source": "apple-health", "estimated": true, "note": "Active energy from Apple Health, so far",
+       "lines": [
+         {"label": "Active energy", "kcal": 610, "text": "~610", "note": "Apple Health, so far"},
+         {"label": "Training", "kcal": 530, "text": "~530", "note": "Estimated"}],
+       "context": "Doesn't include the energy your body uses at rest."}
+      """#
+    let burned = try JSONDecoder().decode(Components.Schemas.Burned.self, from: Data(json.utf8))
+    #expect(
+      TodayView.burned(burned) == [
+        .init(label: "Active energy", text: "~610", note: "Apple Health, so far"),
+        .init(label: "Training", text: "~530", note: "Estimated"),
+      ])
+    let older = try JSONDecoder().decode(
+      Components.Schemas.Burned.self,
+      from: Data(#"{"kcal": 540, "source": "apple-health", "estimated": false, "note": "Active energy from Apple Health"}"#.utf8))
+    #expect(TodayView.burned(older) == [.init(label: "Burned", text: "~540", note: "Active energy from Apple Health")])
+    #expect(TodayView.burned(nil).isEmpty)
+  }
+
+  @Test("The steps cell says Yesterday when it shows yesterday's, and marks active energy as an estimate, flagged when unusually high")
+  func stepsNote() throws {
+    var today = try #require(PreviewData.today)
+    today.vitals = .init(date: today.date, steps: 9120, activeEnergyKcal: 612)
+    #expect(TodayView.stepsNote(today) == "~610 kcal active")
+    today.vitals = .init(date: "2026-09-25", steps: 11200, activeEnergyKcal: 704)
+    #expect(TodayView.stepsNote(today) == "Yesterday · ~700 kcal active")
+    today.vitals = .init(date: today.date, steps: 9120, activeEnergyKcal: 10000, activeEnergyUnusual: true)
+    #expect(TodayView.stepsNote(today) == "~10,000 kcal active, unusually high")
+    today.vitals = .init(date: "2026-09-25", steps: 11200)
+    #expect(TodayView.stepsNote(today) == "Yesterday")
+    today.vitals = nil
+    #expect(TodayView.stepsNote(today) == nil)
+  }
+
   @Test("Today's colophon and Profile name the athlete from one source: the display name, else the account's")
   func athleteName() throws {
     let model = AppModel()

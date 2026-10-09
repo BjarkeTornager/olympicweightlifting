@@ -798,6 +798,52 @@ test("strength workouts on a logged lifting day are skipped; future workouts wai
   assert.equal(state.cardio.sessions.length, 0);
 });
 
+test("an opened activity gives the calories its Journal row gives", () => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 80;
+  const strength = (caloriesKcal: number) =>
+    cardioFromWorkout(
+      workout({
+        id: crypto.randomUUID(),
+        kind: "strength",
+        name: "Strength Training",
+        durationSeconds: 1800,
+        distanceKm: undefined,
+        caloriesKcal,
+      }),
+      tz,
+      now,
+    );
+  state.cardio.sessions = [strength(612), strength(0)];
+  const feed = buildJournal(state, 1, "2026-09-27", 14, new Set());
+  const energy = (i: number) =>
+    feed.items
+      .filter((item) => item.kind === "cardio")
+      [i].details!.lines.find((l) => l.label === "Energy")?.value;
+  // The watch's figure to the nearest 10, labelled, as in the row.
+  assert.match(feed.items[0].detail, /~610 kcal · watch/);
+  assert.equal(energy(0), "~610 kcal · watch");
+  // A recorded 0 for half an hour is a gap: the app's estimate, as in the
+  // row, never "~0 kcal".
+  assert.match(feed.items[1].detail, /~160 kcal est\./);
+  assert.equal(energy(1), "~160 kcal est.");
+  // A Coach review has no journal at hand: the recorded figure alone.
+  const review = (cardio: (typeof state.cardio.sessions)[number]) =>
+    receiptView(
+      {
+        id: "r",
+        title: "Log your cardio",
+        detail: "",
+        workout: null,
+        expiresAt: "2026-09-27T18:00:00.000Z",
+        cardio,
+      },
+      now,
+    ).entries![0].lines.find((l) => l.label === "Energy")?.value;
+  assert.equal(review(state.cardio.sessions[0]), "~610 kcal · watch");
+  assert.equal(review(state.cardio.sessions[1]), undefined);
+});
+
 test("Apple Health lifting beside an open session waits, then counts once", () => {
   const state = emptyJournal();
   state.profile.bodyweight = 88;
@@ -812,16 +858,12 @@ test("Apple Health lifting beside an open session waits, then counts once", () =
     caloriesKcal: 410,
   });
   // The session is still open in the journal: nothing is imported yet, and
-  // the workout is kept with its times until the session is finished.
+  // the workout is kept as sent until the session is finished.
   state.activeWorkout = createWorkout(state, days[0], date);
   const deferred = applyWorkout(state, lifting, undefined, new Set(), tz, now);
   assert.equal(deferred.result, "deferred");
   assert.equal(deferred.receipt?.status, "deferred");
   assert.deepEqual(deferred.receipt?.workout, lifting);
-  assert.equal(
-    deferred.receipt?.startedAt?.toISOString(),
-    "2026-09-26T15:05:00.000Z",
-  );
   assert.equal(state.cardio.sessions.length, 0);
   // Finished at 18:30 after the first set at 17:10: the same session.
   const session = {

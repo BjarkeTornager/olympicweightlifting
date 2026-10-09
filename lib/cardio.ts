@@ -253,6 +253,6 @@ export function cardioSummary(
     })),
     entries: sessions,
     dataLimits:
-      "Logged activities only. Missing entries or metrics are unmeasured. Pace/speed uses the supplied duration and distance. Activity calories are reported values, not calculated expenditure, and are separate from food intake.",
+      "Logged activities only. Missing entries or metrics are unmeasured. Pace/speed uses the supplied duration and distance. Activity calories are estimates, a watch's included, and are separate from food intake.",
   };
 }

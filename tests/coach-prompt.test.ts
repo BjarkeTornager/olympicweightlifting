@@ -247,7 +247,15 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // says its figure leaves those out. Removing them reproduces the
     // previous hash (14eaff26…). Health, privacy and action policy text is
     // otherwise unchanged.
-    "7786ae88498954ab51d32bc36db9fa4d485a549623f6abc9ac2b73d9cd8886bb",
+    // Revised 2026-10-09, deliberate and reviewed, from the review of PR 10:
+    // the cardio paragraph stops calling a watch's calories measured, since
+    // they are an estimate too. "the app estimates calories burned itself
+    // when none was measured" now ends "when none was recorded", and
+    // "Activity calories, measured or estimated," now reads "Activity
+    // calories, recorded or estimated,". Restoring those two words
+    // reproduces the previous hash (7786ae88…). Health, privacy and action
+    // policy text is otherwise unchanged.
+    "935bdded5614012bf23f79b1d0ed661451c516aa002bf9153f73e36887205b39",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -267,6 +275,9 @@ test("Coach quotes active energy and training apart, as estimates, never added t
     prompt,
     /entries_without_estimate, say its figure leaves those out/,
   );
+  // A watch's calories are an estimate too, never called measured.
+  assert.doesNotMatch(prompt, /when none was measured|measured or estimated/);
+  assert.match(prompt, /Activity calories, recorded or estimated, are/);
   // The site help agrees with what Today shows.
   assert.doesNotMatch(siteHelp.health, /measured when a watch recorded it/);
   assert.match(

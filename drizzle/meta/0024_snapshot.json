@@ -1,5 +1,5 @@
 {
-  "id": "23bd8cc9-25bc-4841-93bb-72ef111616b6",
+  "id": "155bf574-8df6-4565-bf94-d83eafbccbd5",
   "prevId": "9eb2564d-da81-4b71-bd81-def9f118418d",
   "version": "7",
   "dialect": "postgresql",
@@ -1432,18 +1432,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "workout": {
           "name": "workout",

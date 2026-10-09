@@ -171,7 +171,9 @@ type Receipt = typeof healthWorkoutImports.$inferSelect;
 // of an hour: lifting is logged while it happens or afterwards, never before.
 // A session told to Coach later, typed in on the website after training or
 // sent from the iPhone's offline queue carries the time it was saved, so it
-// is the same lifting; so is lifting logged in a session still open.
+// is the same lifting; so is lifting logged in a session still open. A
+// workout imported before its session is logged is matched the other way
+// round, where the day's figures are worked out (sameLifting in energy.ts).
 function loggedLifting(state: JournalState, date: string, w: HealthWorkout) {
   const began = Date.parse(w.start) - 15 * 60000;
   const draft = state.activeWorkout;
@@ -199,7 +201,6 @@ export function applyWorkout(
   const date = localClock(new Date(w.start), timezone).date;
   const today = localClock(now, timezone).date;
   if (date > today) return { result: "skipped" };
-  const times = { startedAt: new Date(w.start), endedAt: new Date(w.end) };
   // A deferred workout is looked at afresh.
   if (receipt && receipt.status !== "deferred") {
     if (receipt.digest === digest) return { result: "unchanged" };
@@ -219,7 +220,7 @@ export function applyWorkout(
     );
     return {
       result: "updated",
-      receipt: { ...receipt, digest, entryDigest: entryDigest(next), ...times },
+      receipt: { ...receipt, digest, entryDigest: entryDigest(next) },
     };
   }
   // Lifting while a session of that day is still open in the journal waits
@@ -244,7 +245,6 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
-        ...times,
         workout: w,
       },
     };
@@ -259,7 +259,6 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
-        ...times,
         workout: null,
       },
     };
@@ -298,7 +297,6 @@ export function applyWorkout(
         digest,
         entryDigest: null,
         importedAt: now,
-        ...times,
         workout: null,
       },
     };
@@ -316,7 +314,6 @@ export function applyWorkout(
       digest,
       entryDigest: entryDigest(entry),
       importedAt: now,
-      ...times,
       workout: null,
     },
   };
@@ -631,8 +628,6 @@ export async function syncHealth(
             digest: receipt.digest,
             entryDigest: receipt.entryDigest,
             importedAt: receipt.importedAt,
-            startedAt: receipt.startedAt,
-            endedAt: receipt.endedAt,
             workout: receipt.workout,
           },
         });

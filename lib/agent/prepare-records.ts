@@ -224,12 +224,18 @@ export function prepareCardio(
       detail: `Removes ${cardioTitle(cardio)} on ${cardio.date}. Review the activity being removed below. Other entries are kept.`,
     };
   }
-  // Calories Coach gives for an activity with a photo were read from it.
+  // Calories Coach gives with a photo, logged or newly linked in the same
+  // change, were read from it. A figure changed on an activity whose photo
+  // was linked before is a correction, as entered.
+  const linked = new Set(
+    action.kind === "update_cardio"
+      ? next.cardio.sessions.find((s) => s.id === action.cardioId)?.photoIds
+      : [],
+  );
   const photoIds =
     action.kind === "record_cardio"
       ? action.cardio.photoIds
-      : (action.changes.photoIds ??
-        next.cardio.sessions.find((s) => s.id === action.cardioId)?.photoIds);
+      : action.changes.photoIds?.filter((id) => !linked.has(id));
   const from = photoIds?.length ? "photo" : "entered";
   const cardio =
     action.kind === "record_cardio"

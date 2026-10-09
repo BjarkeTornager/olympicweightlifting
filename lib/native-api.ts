@@ -6,8 +6,10 @@ import {
   burnedLines,
   burnedToday,
   cardioBurn,
+  recordedBurn,
   strengthBurn,
   unusualActiveEnergy,
+  type Burn,
 } from "./energy";
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
@@ -1168,7 +1170,8 @@ export function buildJournal(
         .join(" · "),
       fromAppleHealth: false,
     });
-  for (const e of state.cardio.sessions.filter((e) => inRange(e.date)))
+  for (const e of state.cardio.sessions.filter((e) => inRange(e.date))) {
+    const burn = cardioBurn(state, e);
     items.push({
       id: e.id,
       date: e.date,
@@ -1178,15 +1181,16 @@ export function buildJournal(
         formatDuration(e.durationSeconds),
         e.distanceKm != null ? kmText(e.distanceKm) : "",
         e.averageHeartRate != null ? `${e.averageHeartRate} bpm avg` : "",
-        burnText(cardioBurn(state, e)),
+        burnText(burn),
       ]
         .filter(Boolean)
         .join(" · "),
       fromAppleHealth: fromAppleHealth.has(e.id),
       hasRoute: routes.has(e.id),
       activity: e.activity,
-      details: receiptEntryView({ title: "", detail: "", cardio: e }),
+      details: receiptEntryView({ title: "", detail: "", cardio: e }, burn),
     });
+  }
   for (const m of state.nutrition.meals.filter((m) => inRange(m.date))) {
     const total = totalNutrients(m.items);
     items.push({
@@ -1392,6 +1396,9 @@ const dietGoalNames = {
 // website's review shows (meal items, sets, check-in values), as text.
 export function receiptEntryView(
   entry: ReceiptSource,
+  // An activity's calories as its Journal row gives them, when the journal
+  // is at hand; a Coach review shows the recorded figure alone.
+  burn?: Burn | null,
 ): z.infer<typeof receiptEntry> {
   if (entry.meal) {
     const meal = entry.meal,
@@ -1466,6 +1473,7 @@ export function receiptEntryView(
   }
   if (entry.cardio) {
     const c = entry.cardio;
+    const energy = burn !== undefined ? burn : recordedBurn(c);
     return defined({
       title: cardioTitle(c),
       date: c.date,
@@ -1487,10 +1495,7 @@ export function receiptEntryView(
           label: "Elevation gain",
           value: `${Math.round(c.elevationGainM)} m`,
         },
-        c.caloriesKcal != null && {
-          label: "Energy",
-          value: `~${Math.round(c.caloriesKcal)} kcal`,
-        },
+        energy != null && { label: "Energy", value: burnText(energy) },
         c.effort != null && { label: "Effort", value: `${c.effort}/10` },
       ].filter((line) => line !== false),
       footnote: c.notes || undefined,
@@ -1600,7 +1605,7 @@ export function receiptView(
       batch && state !== "pending" ? batch.map(entryName).join(", ") : p.detail,
     state,
     entries: batch
-      ? batch.map(receiptEntryView)
+      ? batch.map((entry) => receiptEntryView(entry))
       : structured(p)
         ? [receiptEntryView(p)]
         : undefined,

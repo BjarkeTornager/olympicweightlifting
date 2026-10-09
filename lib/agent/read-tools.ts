@@ -25,14 +25,32 @@ import { trainingSummary, workoutTotals } from "../training";
 import type { JournalState, Workout } from "../model";
 import { queryFoodJournal } from "../nutrition";
 import { cardioSummary } from "../cardio";
-import { burnFields, cardioBurn } from "../energy";
+import {
+  activeEnergyKcal,
+  burnFields,
+  cardioBurn,
+  unusualActiveEnergy,
+} from "../energy";
 import { routeNotesFor } from "../workout-routes";
-import { dailyHealth } from "../health";
+import { dailyHealth, type Vitals } from "../health";
 import { listFoodPhotos } from "../food-photos";
 import { listUserImages } from "../user-images";
 import { siteHelp } from "./knowledge";
 import { imageTiming } from "./time-context";
 import { range, specifications, type ToolArgs } from "./tools";
+
+// Apple Health's active energy as Today shows it: held within range, to the
+// nearest 10 kcal, and flagged when unusually high.
+const vitalsForCoach = (v: Vitals) =>
+  v.activeEnergyKcal == null
+    ? v
+    : {
+        ...v,
+        activeEnergyKcal: activeEnergyKcal(v.activeEnergyKcal),
+        ...(unusualActiveEnergy(v.activeEnergyKcal)
+          ? { activeEnergyUnusuallyHigh: true }
+          : {}),
+      };
 
 type DateRange = { from: string; to: string };
 // What the model has read during one turn. A change may only rely on records
@@ -267,7 +285,7 @@ export async function runReadTool(
       return {
         ...summary,
         // A GPS route Apple Health recorded: place names, never coordinates.
-        // Calories burned: measured, or the app's marked estimate.
+        // Calories burned: always an estimate, with where it came from.
         entries: entries.map((e) => ({
           ...e,
           ...burnFields(cardioBurn(state, e)),
@@ -382,8 +400,20 @@ export async function runReadTool(
     }
     case "health_overview": {
       const a = specifications.health_overview.schema.parse(args);
+      const health = dailyHealth(state, a.date);
+      // Active energy and each activity's calories as Today and the day's
+      // journal give them, so Coach has one figure for each.
       const output = {
-        ...dailyHealth(state, a.date),
+        ...health,
+        vitals: health.vitals && vitalsForCoach(health.vitals),
+        recentVitals: health.recentVitals.map(vitalsForCoach),
+        cardio: {
+          ...health.cardio,
+          entries: health.cardio.entries.map((e) => ({
+            ...e,
+            ...burnFields(cardioBurn(state, e)),
+          })),
+        },
         hydration: {
           ...hydrationForCoach(state, a.date),
           drinks: hydrationForDay(state, a.date).drinks,

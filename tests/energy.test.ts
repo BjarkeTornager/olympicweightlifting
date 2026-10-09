@@ -100,6 +100,54 @@ test("an entry's calories keep their source until the athlete changes them", () 
   assert.equal(cleared.caloriesSource, undefined);
 });
 
+test("Coach's calories are from the photo only when the photo comes with them", async () => {
+  const { prepareAction } = await import("../lib/agent/actions");
+  const photoId = crypto.randomUUID();
+  const s = journal();
+  const run = { activity: "running", date, durationSeconds: 1800 } as const;
+  // Logged from a photo: read from it.
+  const logged = prepareAction(
+    s,
+    {
+      kind: "record_cardio",
+      cardio: { ...run, caloriesKcal: 300, photoIds: [photoId] },
+    },
+    date,
+  );
+  assert.equal(logged.cardio!.caloriesSource, "photo");
+  // A run logged from a photo without calories, corrected later with a
+  // figure the athlete gives: as entered, not from the photo.
+  const first = prepareAction(
+    s,
+    { kind: "record_cardio", cardio: { ...run, photoIds: [photoId] } },
+    date,
+  );
+  const typed = prepareAction(
+    first.state,
+    {
+      kind: "update_cardio",
+      cardioId: first.cardio!.id,
+      changes: { caloriesKcal: 410 },
+    },
+    date,
+  );
+  assert.equal(
+    burnText(cardioBurn(typed.state, typed.cardio!)),
+    "~410 kcal · as entered",
+  );
+  // A photo linked in the same change is where the figure was read.
+  const read = prepareAction(
+    first.state,
+    {
+      kind: "update_cardio",
+      cardioId: first.cardio!.id,
+      changes: { caloriesKcal: 410, photoIds: [photoId, crypto.randomUUID()] },
+    },
+    date,
+  );
+  assert.equal(read.cardio!.caloriesSource, "photo");
+});
+
 test("a recorded 0 for a workout of five minutes or more is a gap, not a reading", () => {
   const s = journal(80);
   const long = activity(s, {
@@ -343,6 +391,25 @@ test("a check-in weight far from the one before it is passed over as a slip", ()
   assert.equal(bodyweightKg(first, date), 92);
 });
 
+test("with no weight in Settings or goals, a slip in the first weighing lasts only until the next", () => {
+  const s = emptyJournal();
+  s.health.checkins.push({ date: "2026-09-20", bodyweight: 185 } as never);
+  assert.equal(bodyweightKg(s, date), 185);
+  // Nothing backs 185 up, so the next weighing is used, as the latest.
+  s.health.checkins.push({ date: "2026-09-22", bodyweight: 85 } as never);
+  assert.equal(bodyweightKg(s, date), 85);
+  // Two weighings in a row that agree back the weight up; a slip after
+  // them is passed over.
+  s.health.checkins.push(
+    { date: "2026-09-24", bodyweight: 85.5 } as never,
+    { date: "2026-09-26", bodyweight: 18.5 } as never,
+  );
+  assert.equal(bodyweightKg(s, date), 85.5);
+  // A real change is trusted once a second weighing agrees.
+  s.health.checkins.push({ date: "2026-09-27", bodyweight: 18.4 } as never);
+  assert.equal(bodyweightKg(s, date), 18.4);
+});
+
 function lift(s: JournalState, opened: string): Workout {
   const w = createWorkout(s, days[0], date);
   w.startedAt = opened;
@@ -395,6 +462,32 @@ test("a session's clock starts at its first set, not when the draft was opened",
   assert.equal(session.durationMinutes, 90);
   // 4 × 88 kg × 1.5 h is 528, to the nearest 10.
   assert.equal(strengthBurn(done, session)?.kcal, 530);
+});
+
+test("sets all logged just before Finish time the session from when it was opened", (t) => {
+  // Opened at 16:00, the sets reach the journal at 17:30, all at once (the
+  // iPhone's offline queue, or a session filled in at the end).
+  t.mock.timers.enable({ apis: ["Date"], now: at("2026-09-28T17:30:00Z") });
+  const s = journal(88);
+  s.activeWorkout = lift(s, "2026-09-28T16:00:00.000Z");
+  const started = hasLoggedSet(s.activeWorkout);
+  logFirstSet(s.activeWorkout);
+  startClock(s.activeWorkout, started);
+  t.mock.timers.setTime(at("2026-09-28T17:31:00Z").getTime());
+  const done = finishWorkout(structuredClone(s));
+  assert.equal(done.sessions[0].durationMinutes, 91);
+  assert.equal(strengthBurn(done, done.sessions[0])?.kcal, 530);
+  // Opened the evening before, or only to fill it in: no length.
+  s.activeWorkout.startedAt = "2026-09-27T20:00:00.000Z";
+  assert.equal(
+    finishWorkout(structuredClone(s)).sessions[0].durationMinutes,
+    null,
+  );
+  s.activeWorkout.startedAt = "2026-09-28T17:29:00.000Z";
+  assert.equal(
+    finishWorkout(structuredClone(s)).sessions[0].durationMinutes,
+    null,
+  );
 });
 
 test("an edit two hours later does not change a session's length", (t) => {
@@ -623,7 +716,7 @@ test("Today shows Apple Health's active energy and training apart, as estimates"
   assert.equal(burnedToday(s, date)?.active, null);
 });
 
-test("Today and Coach report the same burned figures", () => {
+test("Today and Coach report the same burned figures", async () => {
   const s = journal(88);
   activity(s, {
     activity: "running",
@@ -650,6 +743,42 @@ test("Today and Coach report the same burned figures", () => {
     describeDay(day),
     /Burned: active energy about 1230 kcal so far from Apple Health; training about 860 kcal estimated/,
   );
+  // health_overview, which Coach reads first for health and energy, gives
+  // the same active energy and each activity's figure with its label.
+  const { newTurnReads, runReadTool } = await import("../lib/agent/read-tools");
+  const overview = async () =>
+    (await runReadTool("health_overview", { date }, {
+      userId: "athlete",
+      state: s,
+      reads: newTurnReads(),
+      viewedImageIds: new Set<string>(),
+      message: "How much did I burn today?",
+      recent: [],
+      saving: true,
+      currentDate: date,
+      timezone: "UTC",
+    } as never)) as {
+      vitals: Record<string, unknown>;
+      recentVitals: Record<string, unknown>[];
+      cardio: { entries: Record<string, unknown>[]; dataLimits: string };
+    };
+  let health = await overview();
+  assert.equal(health.vitals.activeEnergyKcal, active.kcal);
+  assert.equal(health.recentVitals.at(-1)!.activeEnergyKcal, active.kcal);
+  assert.equal(health.vitals.activeEnergyUnusuallyHigh, undefined);
+  assert.deepEqual(
+    [
+      health.cardio.entries[0].calories_kcal,
+      health.cardio.entries[0].calories_estimated_from,
+    ],
+    [333, "typed in"],
+  );
+  assert.match(health.cardio.dataLimits, /Activity calories are estimates/);
+  s.health.vitals = [{ date, activeEnergyKcal: 14537 }] as never;
+  health = await overview();
+  assert.equal(health.vitals.activeEnergyKcal, 10000);
+  assert.equal(health.vitals.activeEnergyUnusuallyHigh, true);
+  assert.equal(dayForCoach(s, date).activeEnergy?.kcal, 10000);
 });
 
 test("an entry's figure is the same wherever it is read", () => {
@@ -707,4 +836,110 @@ test("a session left open overnight is untimed, and nothing is left out unsaid",
   // Without a weight nothing is estimated, so nothing is said to be missing.
   done.profile.bodyweight = undefined as never;
   assert.equal(dayBurn(done, date).unestimated, 0);
+});
+
+test("Apple Health lifting imported before its session is logged counts once", async (t) => {
+  const { applyWorkout } = await import("../lib/health-sync");
+  const { prepareSession } = await import("../lib/agent/prepare-workouts");
+  const { trainingMinutes } = await import("../lib/hydration");
+  const tz = "Europe/Copenhagen";
+  // Trained 17:00-18:30 with the watch's strength workout running; the
+  // phone syncs at 18:35, before anything is logged.
+  const watch = {
+    id: crypto.randomUUID(),
+    kind: "strength" as const,
+    name: "Strength Training",
+    start: "2026-09-28T17:00:00+02:00",
+    end: "2026-09-28T18:30:00+02:00",
+    durationSeconds: 5400,
+    caloriesKcal: 420,
+  };
+  const synced = (s: JournalState) =>
+    applyWorkout(s, watch, undefined, new Set(), tz, at("2026-09-28T16:35:00Z"))
+      .result;
+  const told = journal(88);
+  assert.equal(synced(told), "imported");
+  assert.equal(dayBurn(told, date).kcal, 420);
+  // Told to Coach at 21:00 with its length: the same session, counted once
+  // at the larger figure (4 × 88 kg × 1.5 h is 530), not 420 + 530.
+  t.mock.timers.enable({ apis: ["Date"], now: at("2026-09-28T19:00:00Z") });
+  prepareSession(
+    told,
+    {
+      kind: "record_session",
+      workout: {
+        title: "Squats",
+        date,
+        category: "open",
+        durationMinutes: 90,
+        exercises: [
+          {
+            exerciseId: "back_squat",
+            sets: [{ weight: 100, reps: 3, result: "success" }],
+          },
+        ],
+      },
+      separateSession: true,
+    },
+    date,
+  );
+  assert.equal(strengthBurn(told, told.sessions[0])?.kcal, 530);
+  assert.deepEqual(dayBurn(told, date), {
+    kcal: 530,
+    estimated: true,
+    count: 1,
+    untimed: 0,
+    unestimated: 0,
+  });
+  const day = dayForCoach(told, date);
+  assert.equal(day.burnedInTraining?.kcal, 530);
+  // Coach sees which watch workout is that session.
+  assert.equal(
+    day.activities[0].same_lifting_as_session_id,
+    told.sessions[0].id,
+  );
+  assert.match(describeDay(day), /training about 530 kcal estimated/);
+  // The drinks target counts it once too.
+  assert.equal(trainingMinutes(told, date), 90);
+
+  // Typed in on the website at 21:00 instead, all in one go: it has no
+  // length of its own, so the watch's figure is the session's.
+  const typed = journal(88);
+  synced(typed);
+  typed.activeWorkout = lift(typed, "2026-09-28T19:00:00.000Z");
+  const started = hasLoggedSet(typed.activeWorkout);
+  logFirstSet(typed.activeWorkout);
+  startClock(typed.activeWorkout, started);
+  t.mock.timers.setTime(at("2026-09-28T19:03:00Z").getTime());
+  const done = finishWorkout(typed);
+  assert.equal(done.sessions[0].durationMinutes, null);
+  assert.deepEqual(burnedLines(burnedToday(done, date)!), [
+    { label: "Training", kcal: 420, text: "~420", note: "Estimated" },
+  ]);
+
+  // A session logged live that evening, its first set after the watch's
+  // workout had synced, is later lifting: both count.
+  const later = journal(88);
+  synced(later);
+  t.mock.timers.setTime(at("2026-09-28T18:00:00Z").getTime());
+  later.activeWorkout = lift(later, "2026-09-28T17:55:00.000Z");
+  const opened = hasLoggedSet(later.activeWorkout);
+  logFirstSet(later.activeWorkout);
+  startClock(later.activeWorkout, opened);
+  t.mock.timers.setTime(at("2026-09-28T19:00:00Z").getTime());
+  const evening = finishWorkout(later);
+  assert.equal(evening.sessions[0].durationMinutes, 60);
+  assert.equal(
+    dayForCoach(evening, date).activities[0].same_lifting_as_session_id,
+    undefined,
+  );
+  // 420 from the watch, plus 4 × 88 kg × 1 h.
+  assert.deepEqual(dayBurn(evening, date), {
+    kcal: 770,
+    estimated: true,
+    count: 2,
+    untimed: 0,
+    unestimated: 0,
+  });
+  assert.equal(trainingMinutes(evening, date), 150);
 });

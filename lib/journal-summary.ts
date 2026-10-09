@@ -4,6 +4,7 @@ import {
   burnedToday,
   cardioBurn,
   notCounted,
+  sameLifting,
   strengthBurn,
 } from "./energy";
 import { sessionMinutes } from "./session-length";
@@ -141,6 +142,11 @@ export function journalForVoice(
         average_heart_rate: c.averageHeartRate ?? undefined,
         max_heart_rate: c.maxHeartRate ?? undefined,
         ...burnFields(cardioBurn(state, c)),
+        // The watch's record of lifting logged as that session: the day's
+        // training figure counts the two once.
+        same_lifting_as_session_id: state.sessions.find((s) =>
+          sameLifting(s, c),
+        )?.id,
         elevation_gain_m: c.elevationGainM ?? undefined,
         // Recorded by GPS; the map can be shown with show_activity_route.
         route: routes.get(c.id),

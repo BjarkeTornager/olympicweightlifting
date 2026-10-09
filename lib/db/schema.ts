@@ -86,9 +86,6 @@ export const healthWorkoutImports = pgTable(
     importedAt: timestamp("imported_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    // When the workout ran, to match it against logged lifting.
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    endedAt: timestamp("ended_at", { withTimezone: true }),
     // A deferred workout as Apple Health sent it, kept until the session it
     // ran beside is finished; the phone does not send it again.
     workout: jsonb("workout"),

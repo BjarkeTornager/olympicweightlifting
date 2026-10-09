@@ -7,7 +7,7 @@ import {
   isValidLoggedSet,
   upgradeProgramDraft,
 } from "../js/progression.js";
-import { sessionMinutes, timedMinutes } from "./session-length";
+import { finishedMinutes, sessionMinutes } from "./session-length";
 import {
   journalSchema,
   type JournalState,
@@ -182,7 +182,7 @@ export function finishWorkout(state: JournalState): JournalState {
       ? draft.durationMinutes
       : original
         ? sessionMinutes(original)
-        : timedMinutes(draft.firstSetAt ?? draft.startedAt, now);
+        : finishedMinutes(draft, now);
   const session = {
     ...draft,
     id: draft.editingSessionId ?? draft.id,

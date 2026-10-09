@@ -17,7 +17,7 @@ import {
 } from "../lib/hydration";
 import { prepareAction } from "../lib/agent/actions";
 import { saveCardio } from "../lib/cardio";
-import { cardioFromWorkout } from "../lib/health-sync";
+import { applyWorkout, cardioFromWorkout } from "../lib/health-sync";
 import { foodSnapshotForClient } from "../lib/food-compatibility";
 import { journalSchema, type JournalState } from "../lib/model";
 import { dayForCoach, describeDay } from "../lib/journal-summary";
@@ -226,15 +226,17 @@ test("a watch strength workout imported before the same session is logged counts
   // The worked case: an 88 kg man lifts for 75 minutes, wearing his Watch.
   const s = withBody(emptyJournal(), "male", 88, { sessionMinutes: 75 });
   assert.equal(hydrationTargetMl(s, date).targetMl, 2250);
-  // He stops the Watch before tapping Finish, or tells Coach about the
-  // session in the evening, so the Watch workout is imported first.
+  // He tells Coach about the session in the evening, so the Watch workout
+  // (imported at 20:00) is in the journal first.
   s.cardio.sessions.push(watchStrength(75));
   assert.equal(trainingMinutes(s, date), 75);
   assert.equal(hydrationTargetMl(s, date).targetMl, 3000);
-  // Then the same session lands in the journal: still one session.
+  // Then the same session lands in the journal, with the length he gave:
+  // still one session.
   const lifting = createWorkout(s, days[0], date);
-  lifting.startedAt = `${date}T06:00:00.000Z`;
-  lifting.finishedAt = `${date}T07:15:00.000Z`;
+  delete lifting.startedAt;
+  lifting.finishedAt = `${date}T19:30:00.000Z`;
+  lifting.durationMinutes = 75;
   s.sessions.push(lifting);
   assert.equal(trainingMinutes(s, date), 75);
   assert.deepEqual(
@@ -258,6 +260,36 @@ test("a watch strength workout imported before the same session is logged counts
     date,
   );
   assert.equal(trainingMinutes(untimed, date), 140);
+});
+
+test("an evening watch strength workout after a finished morning session adds on, as the import keeps it apart", () => {
+  const s = withBody(emptyJournal(), "male", 88, { sessionMinutes: 75 });
+  // A 60-minute session finished at 09:00.
+  const morning = createWorkout(s, days[0], date);
+  morning.startedAt = `${date}T06:00:00.000Z`;
+  morning.finishedAt = `${date}T07:00:00.000Z`;
+  morning.durationMinutes = 60;
+  s.sessions.push(morning);
+  // The Watch's strength workout from 18:00 to 18:45 syncs at 19:00.
+  const evening = {
+    id: crypto.randomUUID(),
+    kind: "strength" as const,
+    name: "Strength Training",
+    start: `${date}T18:00:00+02:00`,
+    end: `${date}T18:45:00+02:00`,
+    durationSeconds: 45 * 60,
+  };
+  const synced = applyWorkout(
+    s,
+    evening,
+    undefined,
+    new Set(),
+    "Europe/Copenhagen",
+    new Date(`${date}T17:00:00Z`),
+  );
+  assert.equal(synced.result, "imported");
+  // The drinks target counts both, as the day's calories do.
+  assert.equal(trainingMinutes(s, date), 105);
 });
 
 test("an older check-in water total moves once into a drink", () => {

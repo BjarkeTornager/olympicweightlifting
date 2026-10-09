@@ -15,7 +15,7 @@ import {
   type CardioActivity,
 } from "@/lib/cardio";
 import type { JournalState } from "@/lib/model";
-import { burnText, cardioBurn, type Burn } from "@/lib/energy";
+import { burnText, cardioBurn, recordedBurn, type Burn } from "@/lib/energy";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -29,7 +29,8 @@ export function CardioDetails({
 }: {
   entry: CardioEntry;
   accountId?: string;
-  // Calories burned, always an estimate, when the journal is at hand.
+  // Calories burned, always an estimate, when the journal is at hand;
+  // otherwise a Coach review shows the recorded figure alone.
   burn?: Burn | null;
 }) {
   const rate = cardioRate(entry);
@@ -59,11 +60,7 @@ export function CardioDetails({
     ],
     [
       "Calories burned",
-      burn !== undefined
-        ? burnText(burn) || null
-        : entry.caloriesKcal == null
-          ? null
-          : `~${entry.caloriesKcal}\u00a0kcal`,
+      burnText(burn !== undefined ? burn : recordedBurn(entry)) || null,
     ],
   ].filter(([, value]) => value != null);
   return (

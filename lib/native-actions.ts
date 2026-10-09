@@ -5,7 +5,12 @@ import { actionSchema } from "./agent/action-schema";
 import { prepareAction } from "./agent/actions";
 import { getDb } from "./db";
 import { mutations } from "./db/schema";
-import { program } from "./domain";
+import {
+  program,
+  setTechniqueChecked,
+  setWorkoutRecovery,
+  takeLoadReset,
+} from "./domain";
 import type { JournalState } from "./model";
 import { actionRequest } from "./native-api";
 import { trainingPrograms } from "./training-programs";
@@ -56,12 +61,58 @@ const withLoads = (p: ProgrammeInput) => ({
   })),
 });
 
+// The app's own changes to the workout in progress: its recovery, the
+// under-18 technique check and taking a proposed reset.
+function workoutPlanChange(raw: NativeActionInput) {
+  switch (raw.kind) {
+    case "set_workout_recovery": {
+      const limited = raw.recovery === "limited";
+      return {
+        change: (s: JournalState) => setWorkoutRecovery(s, raw.recovery),
+        title: limited ? "Hold loads today" : "Follow the programme’s loads",
+        detail: limited
+          ? "Exercises you haven’t started repeat their previous loads."
+          : "Exercises you haven’t started follow the programme’s loads.",
+      };
+    }
+    case "confirm_technique":
+      return {
+        change: (s: JournalState) => setTechniqueChecked(s, raw.checked),
+        title: raw.checked
+          ? "Coach checked your technique"
+          : "Technique not checked today",
+        detail: raw.checked
+          ? "Exercises you haven’t started can go up in load."
+          : "Exercises you haven’t started repeat their loads.",
+      };
+    case "take_load_reset":
+      return {
+        change: (s: JournalState) => takeLoadReset(s, raw.entryId),
+        title: "Reset the load",
+        detail: "This exercise starts lighter today and builds back up.",
+      };
+  }
+}
+
 // The journal change for an app action. Most are Coach actions and go
-// through the same schema and rules; "use_programme" is the app's own.
+// through the same schema and rules; "use_programme", "set_hydration_target"
+// and the workout plan changes are the app's own.
 function preparer(
   raw: NativeActionInput,
   today: string,
 ): (state: JournalState) => Prepared {
+  const planChange = workoutPlanChange(raw);
+  if (planChange)
+    return (state) => {
+      const next = structuredClone(state);
+      planChange.change(next);
+      next.updatedAt = new Date().toISOString();
+      return {
+        state: next,
+        title: planChange.title,
+        detail: planChange.detail,
+      };
+    };
   if (raw.kind === "use_programme") {
     const id = raw.programmeId;
     return (state) => {
@@ -76,6 +127,27 @@ function preparer(
         title: "Follow this programme",
         detail: "Train suggests its next session.",
       };
+    };
+  }
+  if (raw.kind === "set_hydration_target") {
+    const hidden = raw.hidden;
+    return (state) => {
+      const next = structuredClone(state);
+      if (hidden) next.preferences.hideHydrationTarget = true;
+      else delete next.preferences.hideHydrationTarget;
+      next.updatedAt = new Date().toISOString();
+      return hidden
+        ? {
+            state: next,
+            title: "Hide the drinks target",
+            detail:
+              "Drinks still add up; Today shows no target and water reminders stop.",
+          }
+        : {
+            state: next,
+            title: "Show the drinks target",
+            detail: "Today shows the day's drinks range again.",
+          };
     };
   }
   const action = actionSchema.parse(

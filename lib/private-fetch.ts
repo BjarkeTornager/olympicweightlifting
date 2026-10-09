@@ -8,7 +8,9 @@ export function privateRequestHeaders(input?: HeadersInit) {
   headers.set("X-Lifting-Coach-Version", "1");
   headers.set("X-Food-Tags-Version", "1");
   headers.set("X-Activity-Photos-Version", "1");
-  headers.set("X-Sleep-Import-Version", "1");
+  headers.set("X-Sleep-Import-Version", "2");
+  // Alcohol kinds and estimated volumes on drinks.
+  headers.set("X-Drinks-Version", "1");
   // Activities keep where their calories came from (caloriesSource).
   headers.set("X-Calories-Source-Version", "1");
   // Coach can show recipe cards with pictures (drawsRecipeCards).

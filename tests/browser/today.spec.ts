@@ -1,4 +1,10 @@
-import { test, expect, browserUser } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import { emptyJournal, createWorkout, days, today } from "../../lib/domain";
 import { offsetDate, saveCheckin } from "../../lib/health";
 import { saveTrainingProgram } from "../../lib/training-programs";
@@ -23,8 +29,8 @@ test("choosing a custom programme changes Today without starting a workout until
     ],
   });
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -61,8 +67,8 @@ test("Today suggests the next recorded programme session and resumes the same dr
   state.sessions.push(last);
   saveCheckin(state, { date: today(), sleepHours: 7.5 }, today());
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -188,8 +194,8 @@ test("supplements are ticked off and added from Today", async ({
   for (const d of [offsetDate(today(), -2), offsetDate(today(), -1)])
     addSupplement(state, { date: d, name: "Creatine", amount: "5 g" });
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

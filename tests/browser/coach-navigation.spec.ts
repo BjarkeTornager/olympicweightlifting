@@ -4,6 +4,8 @@ import {
   browserUser,
   openJournalArea,
   coachTask,
+  isJournalSave,
+  savedJournal,
 } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
@@ -63,8 +65,8 @@ test("Coach finishes while navigating and editing Health, preserves review safet
     });
   });
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -100,7 +102,7 @@ test("Coach finishes while navigating and editing Health, preserves review safet
     .getByRole("button", { name: "Daily check-in", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Water today", { exact: true }).fill("500");
+  await dialog.getByLabel("Bodyweight", { exact: true }).fill("80.4");
   await dialog
     .getByRole("button", { name: "Save check-in", exact: true })
     .click();
@@ -178,7 +180,7 @@ test("Coach finishes while navigating and editing Health, preserves review safet
   await expect(page.locator(".agent-page").getByRole("alert")).toContainText(
     "Ask Coach for a fresh proposal",
   );
-  expect(state.health.checkins[0].waterMl).toBe(500);
+  expect(state.health.checkins[0].bodyweight).toBe(80.4);
   expect(state.health.checkins[0].sleepHours).toBeNull();
   expect(revision).toBe(1);
   expect(saves).toBe(1);

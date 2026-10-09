@@ -120,6 +120,12 @@ function servedBy(
 export const FILTER_FALLBACK_MODEL = "google/gemini-3.8-flash";
 export type ModelOptions = {
   purpose?: "video_review";
+  // Room for a long reply, such as a save of many entries, after one was
+  // cut off at the ordinary limit.
+  longReply?: boolean;
+  // Told each tool a streamed reply starts calling, so Coach can say what
+  // it is doing while the call is written.
+  onTool?: (name: string) => void;
   model?: string;
   // Each call to the provider becomes a chat span under this one.
   span?: TraceSpan;
@@ -150,14 +156,15 @@ export function modelRequest(
   config: NonNullable<ReturnType<typeof providerConfig>>,
   options: ModelOptions = {},
 ) {
-  // Phase evidence plus replay cards need more room than a chat reply. Keep
-  // the ordinary chat budget unchanged and bound the video-specific allowance.
-  const outputLimit =
-    options.purpose === "video_review"
+  // Room for an ordinary reply, which also holds a save of a dozen or so
+  // entries or a visual, and is only a cap: Coach's replies stay short.
+  // Phase evidence plus replay cards need more room, and so does a save
+  // that was cut off once (callModel).
+  const outputLimit = options.longReply
+    ? 8000
+    : options.purpose === "video_review"
       ? 4800
-      : tools.some((t) => t.function.name === "show_visual")
-        ? 3200
-        : 1800;
+      : 4000;
   const model = options.model ?? config.model;
   if (config.kind === "openrouter")
     return {
@@ -211,6 +218,12 @@ export function modelRequest(
         ...(openAiChatModel(model)
           ? { max_completion_tokens: outputLimit }
           : { max_tokens: outputLimit }),
+        // Low effort: a round is about a quarter faster (Luna 5.0 to 3.7 s,
+        // Terra 7.5 to 5.8 s, 7 October 2026) and the Coach benchmark holds.
+        // A video review keeps the model's own effort for its evidence.
+        ...(openAiChatModel(model) && options.purpose !== "video_review"
+          ? { reasoning: { effort: "low" } }
+          : {}),
         provider: {
           require_parameters: true,
           data_collection: "deny",
@@ -234,6 +247,18 @@ export function modelRequest(
       },
     },
   };
+}
+// A tool call whose arguments are not whole JSON: a reply cut off at the
+// output limit, which providers do not always report as such. callModel
+// asks once more with more room; if that is cut off too, this message is
+// shown as it is.
+export class ReplyCutShort extends ProviderError {
+  constructor() {
+    super(
+      "Coach's reply was too long to finish, so nothing was saved. Send it again in two parts.",
+      502,
+    );
+  }
 }
 export function parseModelResponse(
   raw: unknown,
@@ -280,6 +305,13 @@ export function parseModelResponse(
     })
     .parse(raw);
   const m = response.choices[0].message;
+  const parsed = (args: string) => {
+    try {
+      return JSON.parse(args);
+    } catch {
+      throw new ReplyCutShort();
+    }
+  };
   return {
     ...messageSchema.parse({
       ...m,
@@ -288,7 +320,7 @@ export function parseModelResponse(
         ...t,
         function: {
           name: t.function.name,
-          arguments: JSON.parse(t.function.arguments),
+          arguments: parsed(t.function.arguments),
         },
       })),
     }),
@@ -408,8 +440,47 @@ export async function callModel(
     (options.model ?? config.model) !== FILTER_FALLBACK_MODEL;
   const started = Date.now();
   let blocked: ModelUsage | undefined;
+  // A reply cut off in a tool call, such as a save of many entries, is
+  // asked for once more with room for a long reply. Text already shown is
+  // not streamed again.
+  const attempt = async (
+    attemptOptions: ModelOptions,
+    fallback?: boolean,
+  ): Promise<ModelResponse> => {
+    let streamed = false;
+    try {
+      return await attemptOnce(
+        messages,
+        tools,
+        signal,
+        onText &&
+          ((delta) => {
+            streamed = true;
+            onText(delta);
+          }),
+        attemptOptions,
+        fallback,
+      );
+    } catch (e) {
+      if (!(e instanceof ReplyCutShort) || attemptOptions.longReply) throw e;
+      console.warn(
+        JSON.stringify({
+          event: "coach_reply_cut_short",
+          model: attemptOptions.model ?? config?.model ?? null,
+        }),
+      );
+      return attemptOnce(
+        messages,
+        tools,
+        signal,
+        streamed ? undefined : onText,
+        { ...attemptOptions, longReply: true },
+        fallback,
+      );
+    }
+  };
   try {
-    const response = await attempt(messages, tools, signal, onText, options);
+    const response = await attempt(options);
     if (!response.filtered || !canRetry) return response;
     blocked = response.served;
   } catch (e) {
@@ -424,10 +495,6 @@ export async function callModel(
   );
   const ms = Date.now() - started;
   const response = await attempt(
-    messages,
-    tools,
-    signal,
-    onText,
     { ...options, model: FILTER_FALLBACK_MODEL },
     true,
   );
@@ -451,7 +518,7 @@ export function usageAttributes(served?: ModelUsage): SpanAttributes {
 
 // One call to the provider, traced as one chat span when the caller passed
 // a span: model, tokens, cost and timings, never the messages.
-async function attempt(
+async function attemptOnce(
   messages: ModelMessage[],
   tools: ToolDefinition[],
   signal: AbortSignal,
@@ -543,7 +610,14 @@ async function requestModel(
   let raw: unknown;
   try {
     raw = onText
-      ? await readModelStream(response, config.kind, onText, signal, seen)
+      ? await readModelStream(
+          response,
+          config.kind,
+          onText,
+          signal,
+          seen,
+          options.onTool,
+        )
       : await readReply(response);
   } catch (error) {
     await recordModelCall(servedBy(seen.model, seen.usage), request.body.model);

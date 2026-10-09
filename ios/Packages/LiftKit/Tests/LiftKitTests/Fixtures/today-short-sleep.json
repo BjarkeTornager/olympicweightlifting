@@ -1,0 +1,158 @@
+{
+  "date": "2026-09-26",
+  "revision": 12,
+  "name": "Alex",
+  "sleep": {
+    "hours": 7.5,
+    "text": "7 h 30 min",
+    "fromAppleHealth": true,
+    "averageHours": 6.216666666666667,
+    "nights": 7
+  },
+  "sleepNote": {
+    "id": "sleep-short",
+    "title": "Your nights have been on the short side.",
+    "observation": "Your 7 logged nights from the last two weeks average 6 h 13 min, under the 7 hours or more most adults need.",
+    "invitation": "There’s no need to chase a number. If it feels doable, we could find one small change that gives you more time asleep.",
+    "prompt": "My sleep has been on the short side lately. Help me find one realistic change that gives me more time asleep."
+  },
+  "vitals": {
+    "date": "2026-09-26",
+    "restingHeartRate": 52,
+    "heartRateVariabilityMs": 61.4,
+    "averageHeartRate": 71,
+    "steps": 9120,
+    "activeEnergyKcal": 540
+  },
+  "checkin": {
+    "energy": 4,
+    "soreness": 2,
+    "bodyweight": 81.4,
+    "notes": ""
+  },
+  "body": {
+    "bodyweight": 81.4,
+    "bodyweightDate": "2026-09-26"
+  },
+  "nutrition": {
+    "calories": 300,
+    "protein": 11,
+    "carbs": 54,
+    "fat": 5,
+    "meals": [
+      {
+        "id": "5b7f0c43-7a57-4a53-9a4c-2f8cf2f0c001",
+        "name": "Oats with berries",
+        "type": "breakfast",
+        "calories": 300,
+        "protein": 11,
+        "estimated": true,
+        "createdAt": "2026-09-26T18:00:00.000Z"
+      }
+    ]
+  },
+  "hydration": {
+    "totalMl": 750,
+    "targetMl": 2500,
+    "estimatedTarget": false,
+    "drinks": [
+      {
+        "id": "1d9e3f8e-2a51-4c1e-9d0b-0c1f7c1e2a14",
+        "ml": 500,
+        "kind": "water",
+        "name": "",
+        "at": "2026-09-26T18:00:00.000Z"
+      },
+      {
+        "id": "2e0f3f8e-2a51-4c1e-9d0b-0c1f7c1e2a15",
+        "ml": 250,
+        "kind": "coffee",
+        "name": "",
+        "at": "2026-09-26T18:00:00.000Z"
+      }
+    ],
+    "targetLowMl": 2000,
+    "targetHighMl": 3000,
+    "restDayTargetMl": 2000,
+    "liftingDayTargetMl": 2750,
+    "note": "An estimate from your weight and the day's training, not a minimum. Thirst and pale urine are good everyday signs."
+  },
+  "burned": {
+    "kcal": 540,
+    "source": "apple-health",
+    "estimated": true,
+    "note": "Active energy from Apple Health, so far",
+    "lines": [
+      {
+        "label": "Active energy",
+        "kcal": 540,
+        "text": "~540",
+        "note": "Apple Health, so far"
+      },
+      {
+        "label": "Training",
+        "kcal": 610,
+        "text": "~610",
+        "note": "Estimated"
+      }
+    ],
+    "context": "Doesn't include the energy your body uses at rest."
+  },
+  "supplements": {
+    "taken": [
+      {
+        "id": "3f1a4f8e-2a51-4c1e-9d0b-0c1f7c1e2a16",
+        "name": "Vitamin D",
+        "amount": "1000 IU",
+        "at": "2026-09-26T18:00:00.000Z"
+      }
+    ],
+    "usual": [
+      {
+        "name": "Creatine",
+        "amount": "5 g"
+      }
+    ]
+  },
+  "strengthToday": [],
+  "activities": [
+    {
+      "id": "6f0a3f8e-2a51-4c1e-9d0b-0c1f7c1e2a10",
+      "activity": "running",
+      "title": "Outdoor Run",
+      "date": "2026-09-26",
+      "durationSeconds": 3000,
+      "durationText": "50 min",
+      "distanceKm": 10,
+      "averageHeartRate": 148,
+      "maxHeartRate": 171,
+      "caloriesKcal": 612,
+      "caloriesText": "~610 kcal · watch",
+      "fromAppleHealth": true,
+      "hasRoute": false
+    }
+  ],
+  "sessionsThisWeek": 2,
+  "priorities": [
+    {
+      "id": "training",
+      "category": "TRAINING",
+      "title": "Your training is recorded",
+      "reason": "1 session saved today. Review your work or ask Coach how it fits your week.",
+      "action": "Review session"
+    },
+    {
+      "id": "nutrition",
+      "category": "NUTRITION",
+      "title": "Keep your food picture up to date",
+      "reason": "300 kcal and 11 g protein across 1 logged meal. These are recorded totals, not your full daily intake.",
+      "action": "Review food"
+    }
+  ],
+  "firstSteps": {
+    "appleHealth": true,
+    "meal": true,
+    "goals": false
+  },
+  "journalStartDate": "2026-09-20"
+}

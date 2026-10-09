@@ -4,11 +4,19 @@ import type { JournalState, Snapshot } from "./model";
 import { nutritionSchema } from "./nutrition";
 import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
+import { moveCheckinWater } from "./hydration";
+import type { JournalPatch } from "./journal-patch";
 export type LocalRecord = Snapshot & {
   accountId: string;
   seq: number;
   dirty: boolean;
   lastSyncedAt?: string;
+  // The server's version of the journal this copy last matched, so a check
+  // can ask whether it changed without downloading it.
+  version?: string;
+  // While there are unsynced edits: the server's journal at `revision` they
+  // were made to, so a save sends only what changed.
+  base?: JournalState;
   foodTagsVersion?: 1;
   coachJournalVersion?: 1;
   liftingCoachVersion?: 1;
@@ -24,26 +32,30 @@ export type LocalRecord = Snapshot & {
     revision: number;
     state: JournalState;
     seq: number;
+    // The changes from `base`, sent instead of the whole journal.
+    patch?: JournalPatch;
   };
-  conflict?: Snapshot;
+  conflict?: Snapshot & { version?: string };
 };
 interface LocalDB extends DBSchema {
   journals: { key: string; value: LocalRecord };
 }
 let connection: Promise<IDBPDatabase<LocalDB>> | undefined;
 function upgradeLocal(record: LocalRecord): LocalRecord {
-  const upgrade = (state: JournalState) => ({
-    ...state,
-    nutrition: nutritionSchema.parse(state.nutrition ?? {}),
-    health: healthSchema.parse(state.health ?? {}),
-    cardio: cardioSchema.parse(state.cardio ?? {}),
-  });
+  const upgrade = (state: JournalState) =>
+    moveCheckinWater({
+      ...state,
+      nutrition: nutritionSchema.parse(state.nutrition ?? {}),
+      health: healthSchema.parse(state.health ?? {}),
+      cardio: cardioSchema.parse(state.cardio ?? {}),
+    });
   return {
     ...record,
     state: upgrade(record.state),
     ...(record.undo
       ? { undo: { ...record.undo, state: upgrade(record.undo.state) } }
       : {}),
+    ...(record.base ? { base: upgrade(record.base) } : {}),
     ...(record.conflict
       ? {
           conflict: {

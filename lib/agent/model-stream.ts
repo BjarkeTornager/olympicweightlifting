@@ -126,6 +126,8 @@ export async function readModelStream(
   onText: (delta: string) => void,
   signal: AbortSignal,
   seen: StreamUsage = {},
+  // Told each tool the model starts calling, as its arguments begin.
+  onTool?: (name: string) => void,
 ) {
   const reader = response.body?.getReader();
   if (!reader) throw Error("The assistant returned an empty response.");
@@ -135,11 +137,13 @@ export async function readModelStream(
     pending = "",
     finished = false,
     terminal = false,
-    blocked = false;
+    blocked = false,
+    cut = false;
   const calls = new Map<
     number,
     { id: string; function: { name: string; arguments: string } }
   >();
+  const announced = new Set<number>();
   const ollamaCalls: NonNullable<
     NonNullable<z.infer<typeof ollamaChunk>["message"]>["tool_calls"]
   > = [];
@@ -169,7 +173,10 @@ export async function readModelStream(
         blocked = true;
         return;
       }
-      if (
+      // A tool call cut off at the output limit is read as it is, so the
+      // caller can ask again with more room.
+      if (choice.finish_reason === "length" && calls.size) cut = true;
+      else if (
         choice.finish_reason &&
         !["stop", "tool_calls"].includes(choice.finish_reason)
       )
@@ -191,6 +198,16 @@ export async function readModelStream(
         )
           throw Error("The assistant tool response was too large.");
         calls.set(t.index, call);
+        // The name is whole once the arguments start.
+        if (
+          onTool &&
+          call.function.name &&
+          t.function?.arguments &&
+          !announced.has(t.index)
+        ) {
+          announced.add(t.index);
+          onTool(call.function.name);
+        }
       }
     } else {
       const chunk = ollamaChunk.parse(raw);
@@ -260,6 +277,7 @@ export async function readModelStream(
           usage: seen.usage,
           choices: [
             {
+              ...(cut ? { finish_reason: "length" } : {}),
               message: {
                 role: "assistant",
                 content,

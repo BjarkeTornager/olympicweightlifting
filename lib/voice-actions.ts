@@ -52,6 +52,13 @@ import {
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const summarySchema = z.string().trim().min(1).max(500);
 
+// Models send an empty value, zero or null for a field they leave out.
+const blank = (v: unknown) =>
+  v === "" || v === 0 || v === null ? undefined : v;
+const optionalText = (max: number) =>
+  z.preprocess(blank, z.string().trim().max(max).optional());
+const optionalNumber = (schema: z.ZodNumber) =>
+  z.preprocess(blank, schema.optional());
 const exercisesSchema = z
   .array(
     z.object({
@@ -62,6 +69,7 @@ const exercisesSchema = z
             weight_kg: z.number().min(0).max(1000),
             reps: z.number().int().min(1).max(1000),
             made: z.boolean().default(true),
+            rpe: optionalNumber(z.number().min(1).max(10)),
           }),
         )
         .min(1)
@@ -97,13 +105,6 @@ const mealArgs = z.object({
   photo_ids: z.array(z.string().uuid()).max(4).optional(),
 });
 
-// Models send an empty value, zero or null for a field they leave out.
-const blank = (v: unknown) =>
-  v === "" || v === 0 || v === null ? undefined : v;
-const optionalText = (max: number) =>
-  z.preprocess(blank, z.string().trim().max(max).optional());
-const optionalNumber = (schema: z.ZodNumber) =>
-  z.preprocess(blank, schema.optional());
 // A number said as text ("72.5") is still that text on a card.
 const cellText = (max: number) =>
   z.preprocess(
@@ -256,6 +257,7 @@ const workoutFrom = (
       weight: s.weight_kg,
       reps: s.reps,
       result: s.made ? ("success" as const) : ("miss" as const),
+      ...(s.rpe ? { rpe: s.rpe } : {}),
     })),
   })),
 });

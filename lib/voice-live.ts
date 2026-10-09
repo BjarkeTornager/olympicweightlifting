@@ -201,10 +201,12 @@ export function appendLine(
 // of a second, like someone speaking to the phone; otherwise the model hears
 // silence. The start of that speech is kept, not clipped. When the coach is
 // quiet, everything passes as normal.
+// Half a second of sound well above the room, as when someone speaks to the
+// phone: a cough, a clatter or a TV across the room stays out.
 export function createBargeInGate({
-  holdChunks = 3,
-  ratio = 3,
-  minLevel = 0.02,
+  holdChunks = 5,
+  ratio = 4,
+  minLevel = 0.03,
   // How loud, relative to the coach's own playback, the microphone must be.
   // Echo reaching the microphone is far quieter than the playback (the
   // phone's echo cancellation removes most of it); someone speaking to the

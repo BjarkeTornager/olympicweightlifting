@@ -144,14 +144,27 @@ public actor HealthSync {
     for _ in 0..<10 {
       let page = try await workoutPage(anchor: anchor, now: now, calendar: calendar)
       guard first || !page.workouts.isEmpty || !page.deleted.isEmpty else { break }
-      let request = Components.Schemas.HealthSyncRequest(
+      var request = Components.Schemas.HealthSyncRequest(
         timezone: TimeZone.current.identifier,
         sleep: first ? nights : [],
         days: first ? days : [],
         workouts: page.workouts,
         deletedWorkoutIds: page.deleted
       )
-      let result = try await client.syncHealth(body: .json(request)).value()
+      let result: Components.Schemas.HealthSyncResult
+      do {
+        result = try await client.syncHealth(body: .json(request)).value()
+      } catch let failure as APIFailure
+        where failure.status == 400 && Self.namesSources(request.sleep ?? [])
+      {
+        // A server from before sleep sources refuses the whole batch (this
+        // build can reach TestFlight before the deploy, or the server can be
+        // rolled back): send the nights as older builds did, so the rest
+        // still syncs.
+        log.info("Sleep sources refused; sending the nights without them")
+        request.sleep = Self.withoutSources(request.sleep ?? [])
+        result = try await client.syncHealth(body: .json(request)).value()
+      }
       if first {
         summary.nightsImported = result.sleep.filter { ["imported", "updated"].contains($0.result) }.count
         summary.daysUpdated = result.daysUpdated
@@ -182,7 +195,8 @@ public actor HealthSync {
   // MARK: Sleep
 
   /// One night per waking date: samples from noon the day before until noon,
-  /// clipped to that window as the server requires.
+  /// clipped to that window as the server requires. Each says where it came
+  /// from, so the server can take the night from one source.
   private func sleepNights(dates: [Date], now: Date, calendar: Calendar) async throws
     -> [Components.Schemas.SleepNight]
   {
@@ -212,7 +226,12 @@ public actor HealthSync {
         let b = min(sample.endDate, until)
         guard a < b, let value = Self.sleepValue(sample.value) else { continue }
         if value != .awake && value != .inBed { asleep = true }
-        items.append(.init(start: format.string(from: a), end: format.string(from: b), value: value))
+        let source = sample.sourceRevision
+        items.append(
+          .init(
+            start: format.string(from: a), end: format.string(from: b), value: value,
+            source: Self.sleepSource(
+              bundle: source.source.bundleIdentifier, product: source.productType, name: source.source.name)))
       }
       guard asleep else { return nil }
       if items.count > 1000 { items = items.filter { $0.value != .inBed && $0.value != .awake } }
@@ -227,6 +246,41 @@ public actor HealthSync {
 
   static func noon(before day: Date, calendar: Calendar) -> Date? {
     calendar.date(byAdding: .day, value: -1, to: day).flatMap { noon(of: $0, calendar: calendar) }
+  }
+
+  /// Where a sleep sample came from, without the device's own name ("Sam's
+  /// Apple Watch"): "Apple Watch" or "iPhone" for Apple's own tracking, else
+  /// the app's name, as the server expects.
+  static func sleepSource(bundle: String, product: String?, name: String) -> String? {
+    if bundle.hasPrefix("com.apple.health") {
+      if product?.hasPrefix("Watch") == true { return "Apple Watch" }
+      if product?.hasPrefix("iPad") == true { return "iPad" }
+      return "iPhone"
+    }
+    // At most 60 UTF-16 units, as the server counts them.
+    var app = ""
+    for character in name.trimmingCharacters(in: .whitespacesAndNewlines) {
+      guard app.utf16.count + character.utf16.count <= 60 else { break }
+      app.append(character)
+    }
+    return app.isEmpty ? nil : app
+  }
+
+  static func namesSources(_ nights: [Components.Schemas.SleepNight]) -> Bool {
+    nights.contains { $0.samples.contains { $0.source != nil } }
+  }
+
+  /// The nights as builds from before sleep sources sent them.
+  static func withoutSources(_ nights: [Components.Schemas.SleepNight]) -> [Components.Schemas.SleepNight] {
+    nights.map { night in
+      var night = night
+      night.samples = night.samples.map { sample in
+        var sample = sample
+        sample.source = nil
+        return sample
+      }
+      return night
+    }
   }
 
   static func sleepValue(_ raw: Int) -> Components.Schemas.SleepNight.SamplesPayloadPayload.ValuePayload? {

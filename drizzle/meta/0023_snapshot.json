@@ -1,5 +1,5 @@
 {
-  "id": "cb9cc03b-9714-4516-84ec-4d825dc799fe",
+  "id": "9eb2564d-da81-4b71-bd81-def9f118418d",
   "prevId": "25a5a778-1b12-43dd-8ef5-548b3a12b565",
   "version": "7",
   "dialect": "postgresql",
@@ -1432,24 +1432,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "workout": {
-          "name": "workout",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -2345,6 +2327,58 @@
         "voice_calls_user_id_users_id_fk": {
           "name": "voice_calls_user_id_users_id_fk",
           "tableFrom": "voice_calls",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.voice_conversations": {
+      "name": "voice_conversations",
+      "schema": "",
+      "columns": {
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "call_id": {
+          "name": "call_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "voice_conversations_user_id_users_id_fk": {
+          "name": "voice_conversations_user_id_users_id_fk",
+          "tableFrom": "voice_conversations",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"

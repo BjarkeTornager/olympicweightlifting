@@ -1,19 +1,24 @@
 import { z } from "zod";
 
-// The language Coach writes and speaks in, chosen in the iPhone app's
-// Profile. Without one (the website, older apps) typed Coach answers in the
-// athlete's own language and the voice coach speaks English.
+// The language Coach speaks in, chosen in the iPhone app's Profile, and the
+// one typed Coach writes in when a message doesn't show its own. Typed Coach
+// answers a message in the language it is written in; without a choice (the
+// website, older apps) the voice coach speaks English.
 export const coachLanguageSchema = z.enum(["en", "da"]);
 export type CoachLanguage = z.infer<typeof coachLanguageSchema>;
 
 const names: Record<CoachLanguage, string> = { en: "English", da: "Danish" };
 
-/** One line for typed Coach's per-message context. */
-export function replyLanguage(language?: CoachLanguage) {
-  if (!language) return "";
-  return language === "da"
-    ? "\nThe athlete has chosen Danish for Coach: write every reply in Danish (dansk), whatever language their message is in. Keep numbers, units and the exercise names they use."
-    : "\nThe athlete has chosen English for Coach: write every reply in English, whatever language their message is in.";
+const replyIn = (language: CoachLanguage) =>
+  language === "da" ? "Danish (dansk)" : "English";
+/** One line for typed Coach's per-message context: the language the message
+ * is written in, when its words tell (lib/text-language.ts), otherwise the
+ * one chosen in the app. Without either, Coach follows the message. */
+export function replyLanguage(chosen?: CoachLanguage, written?: CoachLanguage) {
+  if (written)
+    return `\nThe athlete wrote this message in ${names[written]}: reply in ${replyIn(written)}. Keep numbers, units and the exercise names they use.`;
+  if (!chosen) return "";
+  return `\nThe athlete has chosen ${names[chosen]} for Coach: reply in ${replyIn(chosen)} unless they clearly write in another language. Keep numbers, units and the exercise names they use.`;
 }
 
 /** The voice coach's first rule: one language, and mishearings aren't a

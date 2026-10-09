@@ -4,6 +4,8 @@ import { formatSleepDuration } from "@/lib/health";
 import { formatDuration } from "@/lib/cardio";
 import { totalNutrients } from "@/lib/nutrition";
 import { exerciseName } from "@/lib/domain";
+import { plannedSetsText } from "@/lib/training";
+import { isValidLoggedSet } from "@/js/progression.js";
 import { MealDetails } from "./meal-details";
 import { CheckinDetails } from "./health";
 import { CardioDetails } from "./cardio";
@@ -65,11 +67,16 @@ export function CoachEntryDetails({
             <div key={e.id}>
               <h3>{exerciseName(e.exerciseId)}</h3>
               <p>
-                {e.sets
-                  .map(
-                    (s) =>
-                      `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}${s.rpe ? ` · RPE ${s.rpe}` : ""}`,
-                  )
+                {[
+                  ...e.sets
+                    .filter(isValidLoggedSet)
+                    .map(
+                      (s) =>
+                        `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}${s.rpe ? ` · RPE ${s.rpe}` : ""}`,
+                    ),
+                  plannedSetsText(e.sets),
+                ]
+                  .filter(Boolean)
                   .join(" · ")}
               </p>
             </div>

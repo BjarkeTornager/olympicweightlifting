@@ -7,7 +7,7 @@ import {
   Plus,
 } from "@/components/ui/icons";
 import { LogbookIcon, TickedLogIcon, WhistleIcon } from "../ui/journal-icons";
-import { days, today, program, exerciseName } from "@/lib/domain";
+import { athleteAge, days, today, program, exerciseName } from "@/lib/domain";
 import { planProgramDay } from "@/js/progression.js";
 import type { JournalState } from "@/lib/model";
 import { Button } from "../ui/button";
@@ -168,6 +168,7 @@ export function Workouts(props: Props) {
       sessions: state.sessions,
       programId: program.id,
       date,
+      age: athleteAge(state),
     });
     return (
       <>
@@ -253,7 +254,13 @@ export function Workouts(props: Props) {
                         ? "Manual load"
                         : target.status === "choose"
                           ? "Choose your starting load"
-                          : "Your next prescription"}
+                          : target.status === "return"
+                            ? "Lighter after a break"
+                            : target.status === "confirm"
+                              ? "Coach checks technique first"
+                              : target.resetWeight != null
+                                ? `Reset to ${target.resetWeight} kg suggested`
+                                : "Your next prescription"}
                   </span>
                   <Technique exerciseId={ex.videoRef ?? ex.exerciseId} />
                 </div>
@@ -367,6 +374,7 @@ export function Workouts(props: Props) {
               sessions: state.sessions,
               programId: program.id,
               date,
+              age: athleteAge(state),
             });
             return (
               <article className="panel picker-card" key={d.id}>

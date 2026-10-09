@@ -2,7 +2,12 @@
 import { useState } from "react";
 import { dateInProse, today } from "@/lib/domain";
 import { weeklyReview } from "@/lib/weekly-review";
-import { formatSleepDuration, offsetDate } from "@/lib/health";
+import {
+  aboutSleepDifference,
+  formatSleepDuration,
+  offsetDate,
+  SLEEP_AVERAGE_NIGHTS,
+} from "@/lib/health";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
@@ -26,6 +31,9 @@ export function WeeklyReview({
   );
   const activity = week.strengthSessions + week.cardioSessions;
   const sleepChange = report.changes.sleepHours;
+  // To 15 minutes: "about 45 min", or null for about the same.
+  const sleepDifference =
+    sleepChange == null ? null : aboutSleepDifference(sleepChange);
   return (
     <section className="weekly-review" aria-label="Your weekly review">
       <div className="coach-section-title">
@@ -80,10 +88,17 @@ export function WeeklyReview({
           <span>Sleep</span>
           <strong>
             {week.averageSleepHours == null
-              ? "Not recorded"
+              ? week.sleepNights
+                ? "Too few nights"
+                : "Not recorded"
               : formatSleepDuration(week.averageSleepHours)}
           </strong>
-          <small>{week.sleepNights}/7 nights logged · average</small>
+          <small>
+            {week.sleepNights}/7 nights logged ·{" "}
+            {week.averageSleepHours == null
+              ? `an average needs ${SLEEP_AVERAGE_NIGHTS}`
+              : "average"}
+          </small>
         </article>
         <article>
           <span>Food</span>
@@ -114,8 +129,8 @@ export function WeeklyReview({
         <ul>
           <li>
             {sleepChange == null
-              ? "There aren’t logged nights in both weeks to compare sleep."
-              : `${formatSleepDuration(Math.abs(sleepChange))} ${sleepChange >= 0 ? "more" : "less"} sleep on average across logged nights (${week.sleepNights} this week; ${previous.sleepNights} before).`}
+              ? `Comparing sleep needs at least ${SLEEP_AVERAGE_NIGHTS} logged nights in both weeks.`
+              : `Sleep averaged ${sleepDifference ? `${sleepDifference} ${sleepChange > 0 ? "longer" : "shorter"}` : "about the same"} across logged nights (${week.sleepNights} this week; ${previous.sleepNights} before).`}
           </li>
           <li>
             {activity} recorded sessions this week;{" "}

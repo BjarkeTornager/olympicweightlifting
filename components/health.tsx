@@ -4,7 +4,6 @@ import { AgreedPlans } from "./coach-memory";
 import { useState } from "react";
 import {
   Check,
-  Droplets,
   Dumbbell,
   HeartPulse,
   Moon,
@@ -19,6 +18,7 @@ import {
   formatSleepDuration,
   offsetDate,
   saveCheckin,
+  SLEEP_AVERAGE_NIGHTS,
   type Checkin,
   type CheckinPatch,
 } from "@/lib/health";
@@ -41,7 +41,6 @@ export function CheckinDetails({ checkin }: { checkin: Checkin }) {
       : `${formatSleepDuration(checkin.sleepHours)} sleep`,
     checkin.energy == null ? null : `Energy ${checkin.energy}/5`,
     checkin.soreness == null ? null : `Soreness ${checkin.soreness}/5`,
-    checkin.waterMl == null ? null : `${checkin.waterMl}\u00a0ml water`,
     checkin.bodyweight == null ? null : `${checkin.bodyweight} kg`,
   ].filter(Boolean);
   return (
@@ -79,7 +78,6 @@ function CheckinForm({
       sleepHours: c?.sleepHours ?? null,
       energy: c?.energy ?? null,
       soreness: c?.soreness ?? null,
-      waterMl: c?.waterMl ?? null,
       bodyweight: c?.bodyweight ?? null,
       notes: c?.notes ?? "",
     };
@@ -111,7 +109,6 @@ function CheckinForm({
               draft.sleepHours,
               draft.energy,
               draft.soreness,
-              draft.waterMl,
               draft.bodyweight,
             ];
             // A body fat reading alone doesn't need a check-in.
@@ -162,7 +159,6 @@ function CheckinForm({
         {(
           [
             ["sleepHours", "Sleep last night", "hours", Moon, 0, 24, "any"],
-            ["waterMl", "Water today", "ml total", Droplets, 0, 15000, 1],
             ["bodyweight", "Bodyweight", "kg", Scale, 20, 500, 0.1],
           ] as const
         ).map(([key, label, unit, Icon, min, max, step]) => (
@@ -484,13 +480,16 @@ export function HealthView({
         <section className="panel">
           <span>Sleep</span>
           <strong>
-            {view.sleepAverage ?? "–"}
-            <small>hours</small>
+            {view.sleepAverage == null
+              ? "–"
+              : formatSleepDuration(view.sleepAverage)}
           </strong>
           <p>
-            {view.sleepSamples
+            {view.sleepAverage != null
               ? `14-day average of ${view.sleepSamples} logged nights`
-              : "Log sleep to build your picture"}
+              : view.sleepSamples
+                ? `${view.sleepSamples} of ${SLEEP_AVERAGE_NIGHTS} nights logged for an average`
+                : "Log sleep to build your picture"}
           </p>
         </section>
         <section className="panel">

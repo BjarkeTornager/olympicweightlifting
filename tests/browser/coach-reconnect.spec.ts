@@ -1,4 +1,10 @@
-import { test, expect, browserUser } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import { emptyJournal } from "../../lib/domain";
 import type { Page } from "@playwright/test";
 
@@ -30,7 +36,7 @@ test("a suspended tab's write lock cannot block a clean journal or Coach submiss
   let sent = "",
     writes = 0;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") writes++;
+    if (isJournalSave(r.request())) writes++;
     return r.fulfill({
       json: { accountId: browserUser.id, state: emptyJournal(), revision: 2 },
     });
@@ -177,9 +183,9 @@ test("unsynced edits remain protected while another tab holds the write lock and
   let state = emptyJournal(),
     writes = 0;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
+    if (isJournalSave(r.request())) {
       writes++;
-      state = r.request().postDataJSON().state;
+      state = savedJournal(r.request(), state);
     }
     return r.fulfill({
       json: { accountId: browserUser.id, state, revision: writes },
@@ -276,9 +282,9 @@ test("a slow read cannot undo a newer sync from another tab or create a false co
     complete = resolve;
   });
   await context.route("**/api/journal", async (r) => {
-    if (r.request().method() === "PUT") {
+    if (isJournalSave(r.request())) {
       expect(r.request().postDataJSON().revision).toBe(revision);
-      state = r.request().postDataJSON().state;
+      state = savedJournal(r.request(), state);
       revision++;
     }
     const snapshot = { accountId: browserUser.id, state, revision };

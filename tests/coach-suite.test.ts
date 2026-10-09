@@ -48,7 +48,7 @@ const meal = (day = date, calories = 500) =>
 
 test("a bundle is one review, preserves omitted health fields and never partially changes its input", () => {
   const state = emptyJournal();
-  saveCheckin(state, { date, waterMl: 1500, notes: "Existing note" }, date);
+  saveCheckin(state, { date, bodyweight: 80, notes: "Existing note" }, date);
   const original = structuredClone(state);
   const m = meal();
   const { id, createdAt, ...input } = m;
@@ -68,7 +68,7 @@ test("a bundle is one review, preserves omitted health fields and never partiall
     date,
   );
   assert.equal(prepared.entries?.length, 3);
-  assert.equal(prepared.state.health.checkins[0].waterMl, 1500);
+  assert.equal(prepared.state.health.checkins[0].bodyweight, 80);
   assert.equal(prepared.state.health.checkins[0].notes, "Existing note");
   assert.equal(prepared.state.nutrition.meals.length, 1);
   assert.equal(prepared.state.cardio.sessions.length, 1);
@@ -280,13 +280,21 @@ test("weekly evidence uses complete food days, observed sleep including zero, an
   saveCheckin(state, { date, sleepHours: 0 }, date);
   saveCheckin(state, { date: offsetDate(date, -1), sleepHours: 8 }, date);
   saveCheckin(state, { date: offsetDate(date, -8), sleepHours: 7 }, date);
+  assert.equal(
+    weeklyReview(state, date).current.averageSleepHours,
+    null,
+    "two nights are too few for an average",
+  );
+  for (const offset of [-2, -3, -4])
+    saveCheckin(state, { date: offsetDate(date, offset), sleepHours: 4 }, date);
   const report = weeklyReview(state, date);
   assert.equal(report.current.averageCalories, 2100);
   assert.equal(report.current.foodLoggedDays, 2);
   assert.equal(report.current.completeFoodDays, 1);
   assert.equal(report.changes.calories, 200);
   assert.equal(report.current.averageSleepHours, 4);
-  assert.equal(report.current.sleepNights, 2);
+  assert.equal(report.current.sleepNights, 5);
+  assert.equal(report.changes.sleepHours, null, "one night the week before");
   assert.equal(
     report.current.days.at(-1)?.meals[0].id,
     state.nutrition.meals[0].id,

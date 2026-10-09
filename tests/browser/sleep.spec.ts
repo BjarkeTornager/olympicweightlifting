@@ -1,4 +1,4 @@
-import { test, expect, coachTask } from "./fixtures";
+import { test, expect, coachTask, savedJournal } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { emptyJournal, today } from "../../lib/domain";
@@ -23,7 +23,7 @@ test.describe("sleep with Coach", () => {
         saves = 0;
       saveCheckin(
         state,
-        { date, waterMl: 750, bodyweight: 80, notes: "Keep this note" },
+        { date, bodyweight: 80, notes: "Keep this note" },
         date,
       );
       const checkin = { ...state.health.checkins[0], sleepHours: 7 + 47 / 60 };
@@ -54,7 +54,7 @@ test.describe("sleep with Coach", () => {
       );
       await context.route("**/api/journal", (r) => {
         if (r.request().method() !== "GET") {
-          state = r.request().postDataJSON().state;
+          state = savedJournal(r.request(), state);
           revision++;
         }
         return r.fulfill({ json: { accountId: user.id, state, revision } });
@@ -135,9 +135,7 @@ test.describe("sleep with Coach", () => {
       await expect(page.locator(".checkin-details")).toContainText(
         "7 h 47 min sleep",
       );
-      await expect(page.locator(".checkin-details")).toContainText(
-        "750 ml water",
-      );
+      await expect(page.locator(".checkin-details")).toContainText("80 kg");
       expect(saves).toBe(0);
       await page
         .getByRole("button", { name: "Save this change", exact: true })
@@ -157,13 +155,13 @@ test.describe("sleep with Coach", () => {
       );
       await page.getByRole("button", { name: "Edit", exact: true }).click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("Water today", { exact: true }).fill("1000");
+      await dialog.getByLabel("Bodyweight", { exact: true }).fill("80.5");
       await dialog
         .getByRole("button", { name: "Save check-in", exact: true })
         .click();
       await expect(dialog).toHaveCount(0);
       await expect(page.locator(".health-records article")).toContainText(
-        "1000 ml water",
+        "80.5 kg",
       );
       await expect(page.locator(".health-records article")).toContainText(
         "7 h 47 min sleep",

@@ -215,17 +215,21 @@ export function cardioBurn(
   };
 }
 
-// A lifting session from how long it took (see sessionMinutes): none for an
-// untimed one, or one too short or long to be a session.
+// A lifting session's length (see sessionMinutes), or null for an untimed
+// one or one too short or long to be a session: an unfinished session left
+// open for hours is not training time.
+export function workoutMinutes(workout: Workout) {
+  const minutes = sessionMinutes(workout);
+  return minutes != null && minutes >= 10 && minutes <= 240 ? minutes : null;
+}
+
 export function strengthBurn(
   state: JournalState,
   workout: Workout,
 ): Burn | null {
   const weight = bodyweightKg(state, workout.date);
-  const minutes = sessionMinutes(workout);
+  const minutes = workoutMinutes(workout);
   if (!weight || minutes == null) return null;
-  // An unfinished session left open for hours is not training time.
-  if (!(minutes >= 10 && minutes <= 240)) return null;
   return {
     kcal: tens(LIFTING_NET_KCAL_PER_KG_HOUR * weight * (minutes / 60)),
     estimated: true,

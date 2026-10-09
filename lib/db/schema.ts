@@ -361,6 +361,19 @@ export const rateLimits = pgTable("request_limits", {
 });
 
 // Spoken conversations with Coach, kept so Coach can recall them later.
+// Which account each ElevenLabs conversation belongs to, so a photo is only
+// ever handed to the caller's own conversation. The phone registers the id
+// when the call starts; a photo for an unregistered id registers it.
+export const voiceConversations = pgTable("voice_conversations", {
+  conversationId: text("conversation_id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  callId: text("call_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 export const voiceCalls = pgTable(
   "voice_calls",
   {

@@ -432,6 +432,23 @@ test("heavy manual work counts 2.0 and is saved in a shape older versions of the
   assert.equal(resent.profile.body?.targetWeightKg, 80);
   assert.equal(resent.profile.heavyManualWork, true);
   assert.equal(planForState(resent, today)?.maintenanceKcal, 3960);
+  // An older version re-saving the goals (a server still draining a
+  // deploy, a rollback, or a page loaded before it) rewrites profile.body
+  // and leaves the flag alone. It shows heavy manual work as "Physical
+  // work" and can only send "high" back, so the level stays as the athlete
+  // last chose it; tying the flag to the save's stamp would drop it on any
+  // save there, a new goal weight included. Another level saved there
+  // counts.
+  const older = structuredClone(saved);
+  older.profile.body = {
+    ...older.profile.body!,
+    targetWeightKg: 80,
+    updatedAt: "2026-09-26T12:00:00.000Z",
+  };
+  assert.equal(journalSchema.parse(older).profile.heavyManualWork, true);
+  assert.equal(goalsForState(older)?.activity, "very_high");
+  older.profile.body = { ...older.profile.body, activity: "moderate" };
+  assert.equal(goalsForState(older)?.activity, "moderate");
   // Another level clears the flag.
   applyGoals(state, athlete, today);
   assert.equal(state.profile.heavyManualWork, undefined);

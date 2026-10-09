@@ -461,6 +461,7 @@ final class VoiceCall {
       }
     case .conversation(let id):
       conversationID = id
+      register(conversation: id)
     case .failed(let reason):
       if waiting != nil {
         connected(.failure(VoiceError(reason)))
@@ -807,6 +808,21 @@ final class VoiceCall {
   static func transcriptEntries(_ lines: [Line]) -> [[String: String]] {
     lines.filter(\.spoken).suffix(400).map {
       ["role": $0.role == .you ? "you" : "coach", "text": String($0.text.prefix(4000))]
+    }
+  }
+
+  /// Registers the ElevenLabs conversation to this account as the call
+  /// starts, so nothing from another account can be handed to it. A photo
+  /// registers it too, should this fail.
+  private func register(conversation: String) {
+    guard let session = app.session,
+      let json = try? JSONSerialization.data(withJSONObject: [
+        "conversationId": conversation, "callId": id.uuidString.lowercased(),
+      ])
+    else { return }
+    Task.detached {
+      _ = try? await RawRequest.send(
+        "api/voice/conversation", json: json, token: session.token, account: session.accountID, timeout: 10)
     }
   }
 

@@ -242,8 +242,9 @@
       "id": "7a1c3f8e-2a51-4c1e-9d0b-0c1f7c1e2a11",
       "title": "Gym Accessories",
       "date": "2026-09-25",
-      "exercises": 5,
-      "loggedSets": 0
+      "exercises": 6,
+      "loggedSets": 1,
+      "topSet": "Standing cable reverse fly 15 kg × 10"
     }
   ],
   "bests": [],
@@ -293,8 +294,8 @@
     {
       "start": "2026-09-21",
       "sessions": 1,
-      "sets": 0,
-      "tonnageKg": 0
+      "sets": 1,
+      "tonnageKg": 150
     }
   ],
   "exercises": [
@@ -356,7 +357,11 @@
     {
       "id": "push_press",
       "name": "Push press",
-      "category": "Jerk"
+      "category": "Jerk",
+      "aliases": [
+        "overhead press",
+        "military press"
+      ]
     },
     {
       "id": "back_squat",
@@ -391,17 +396,29 @@
     {
       "id": "romanian_deadlift",
       "name": "Romanian deadlift",
-      "category": "Accessory"
+      "category": "Accessory",
+      "aliases": [
+        "RDL",
+        "barbell RDL"
+      ]
     },
     {
       "id": "strict_press",
       "name": "Strict press",
-      "category": "Accessory"
+      "category": "Accessory",
+      "aliases": [
+        "overhead press",
+        "military press"
+      ]
     },
     {
       "id": "barbell_row",
       "name": "Barbell row",
-      "category": "Accessory"
+      "category": "Accessory",
+      "aliases": [
+        "bent over row",
+        "bent row"
+      ]
     },
     {
       "id": "split_squat",
@@ -411,157 +428,293 @@
     {
       "id": "dead_bug",
       "name": "Dead bug",
-      "category": "Accessory"
+      "category": "Accessory",
+      "aliases": [
+        "deadbug"
+      ]
     },
     {
       "id": "bench_press",
       "name": "Barbell bench press",
-      "category": "Chest"
+      "category": "Chest",
+      "aliases": [
+        "bench press",
+        "flat bench",
+        "barbell chest press"
+      ]
     },
     {
       "id": "dumbbell_bench_press",
       "name": "Dumbbell bench press",
-      "category": "Chest"
+      "category": "Chest",
+      "aliases": [
+        "DB bench press",
+        "flat dumbbell press"
+      ]
     },
     {
       "id": "incline_dumbbell_press",
       "name": "Incline dumbbell press",
-      "category": "Chest"
+      "category": "Chest",
+      "aliases": [
+        "incline DB bench press",
+        "upper chest press"
+      ]
     },
     {
       "id": "chest_press_machine",
       "name": "Machine chest press",
-      "category": "Chest"
+      "category": "Chest",
+      "aliases": [
+        "seated chest press",
+        "chest press machine"
+      ]
     },
     {
       "id": "cable_fly",
       "name": "Cable chest fly",
-      "category": "Chest"
+      "category": "Chest",
+      "aliases": [
+        "cable crossover",
+        "cable flyes",
+        "cable pec fly"
+      ]
     },
     {
       "id": "push_up",
       "name": "Push-up",
-      "category": "Chest"
+      "category": "Chest",
+      "aliases": [
+        "push up",
+        "press up",
+        "press-up"
+      ]
     },
     {
       "id": "lat_pulldown",
       "name": "Lat pulldown",
-      "category": "Back"
+      "category": "Back",
+      "aliases": [
+        "lat pull down",
+        "wide grip pulldown"
+      ]
     },
     {
       "id": "seated_cable_row",
       "name": "Seated cable row",
-      "category": "Back"
+      "category": "Back",
+      "aliases": [
+        "low cable row",
+        "seated row"
+      ]
     },
     {
       "id": "dumbbell_row",
       "name": "Single-arm dumbbell row",
-      "category": "Back"
+      "category": "Back",
+      "aliases": [
+        "one arm row",
+        "single arm DB row",
+        "dumbbell row"
+      ]
     },
     {
       "id": "pull_up",
       "name": "Pull-up",
-      "category": "Back"
+      "category": "Back",
+      "aliases": [
+        "pull up",
+        "overhand pullup"
+      ]
     },
     {
       "id": "dumbbell_shoulder_press",
       "name": "Dumbbell shoulder press",
-      "category": "Shoulders"
+      "category": "Shoulders",
+      "aliases": [
+        "DB overhead press",
+        "dumbbell overhead press"
+      ]
     },
     {
       "id": "lateral_raise",
       "name": "Dumbbell lateral raise",
-      "category": "Shoulders"
+      "category": "Shoulders",
+      "aliases": [
+        "side raise",
+        "DB lateral raise"
+      ]
     },
     {
       "id": "face_pull",
       "name": "Cable face pull",
-      "category": "Shoulders"
+      "category": "Shoulders",
+      "aliases": [
+        "rope face pull",
+        "rear delt cable"
+      ]
     },
     {
       "id": "reverse_fly",
       "name": "Dumbbell reverse fly",
-      "category": "Shoulders"
+      "category": "Shoulders",
+      "aliases": [
+        "rear delt fly",
+        "rear delt flyes",
+        "reverse dumbbell fly"
+      ]
     },
     {
       "id": "dumbbell_curl",
       "name": "Dumbbell biceps curl",
-      "category": "Arms"
+      "category": "Arms",
+      "aliases": [
+        "DB curl",
+        "bicep curl",
+        "double arm curl"
+      ]
     },
     {
       "id": "hammer_curl",
       "name": "Hammer curl",
-      "category": "Arms"
+      "category": "Arms",
+      "aliases": [
+        "neutral grip curl",
+        "DB hammer curl"
+      ]
     },
     {
       "id": "cable_triceps_pushdown",
       "name": "Cable triceps pushdown",
-      "category": "Arms"
+      "category": "Arms",
+      "aliases": [
+        "tricep pushdown",
+        "triceps pressdown",
+        "rope pushdown"
+      ]
     },
     {
       "id": "overhead_triceps_extension",
       "name": "Dumbbell overhead triceps extension",
-      "category": "Arms"
+      "category": "Arms",
+      "aliases": [
+        "overhead tricep extension",
+        "French press"
+      ]
     },
     {
       "id": "deadlift",
       "name": "Conventional deadlift",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "barbell deadlift",
+        "conventional barbell deadlift"
+      ]
     },
     {
       "id": "goblet_squat",
       "name": "Goblet squat",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "DB goblet squat",
+        "kettlebell squat"
+      ]
     },
     {
       "id": "leg_press",
       "name": "Seated leg press",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "leg press machine",
+        "horizontal leg press"
+      ]
     },
     {
       "id": "leg_extension",
       "name": "Leg extension",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "quad extension",
+        "knee extension machine"
+      ]
     },
     {
       "id": "seated_leg_curl",
       "name": "Seated leg curl",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "hamstring curl",
+        "seated hamstring curl"
+      ]
     },
     {
       "id": "hip_thrust",
       "name": "Barbell hip thrust",
-      "category": "Glutes"
+      "category": "Glutes",
+      "aliases": [
+        "hip thrust",
+        "barbell glute thrust"
+      ]
     },
     {
       "id": "glute_bridge",
       "name": "Glute bridge",
-      "category": "Glutes"
+      "category": "Glutes",
+      "aliases": [
+        "floor bridge",
+        "hip bridge"
+      ]
     },
     {
       "id": "bulgarian_split_squat",
       "name": "Bulgarian split squat",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "rear foot elevated split squat",
+        "RFESS"
+      ]
     },
     {
       "id": "reverse_lunge",
       "name": "Reverse lunge",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "backward lunge",
+        "reverse lunges"
+      ]
     },
     {
       "id": "standing_calf_raise",
       "name": "Standing calf raise",
-      "category": "Legs"
+      "category": "Legs",
+      "aliases": [
+        "calf raises",
+        "heel raise"
+      ]
     },
     {
       "id": "hanging_knee_raise",
       "name": "Hanging knee raise",
-      "category": "Core"
+      "category": "Core",
+      "aliases": [
+        "hanging knee raises",
+        "hanging abs"
+      ]
     },
     {
       "id": "crunch",
       "name": "Abdominal crunch",
-      "category": "Core"
+      "category": "Core",
+      "aliases": [
+        "ab crunch",
+        "abs crunch",
+        "crunches"
+      ]
+    },
+    {
+      "id": "custom:Standing cable reverse fly",
+      "name": "Standing cable reverse fly",
+      "category": "Your exercises"
     }
   ]
 }

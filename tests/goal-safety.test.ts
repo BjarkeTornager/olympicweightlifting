@@ -827,7 +827,19 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
     const today = buildToday(state, 1, date, new Set());
     const notes = today.body?.goalNotes ?? [];
     const plan = planForState(state, date)!;
-    if (notes.join() === TARGETS_DIFFER) return notes;
+    if (notes[0] === TARGETS_DIFFER) {
+      // Only the plan's notes about the athlete may follow, with its goal.
+      if (notes.length > 1)
+        assert.equal(state.nutrition.targets.goal, plan.direction);
+      for (const note of notes.slice(1)) {
+        assert.ok(plan.notes.includes(note));
+        assert.match(
+          note,
+          /^(Under 18|In pregnancy|While you're breastfeeding) the plan /,
+        );
+      }
+      return notes;
+    }
     assert.deepEqual(notes, plan.notes);
     assert.equal(state.nutrition.targets.goal, plan.direction);
     assert.ok(Math.abs(today.nutrition.targetCalories! - plan.calories) <= 100);
@@ -888,6 +900,91 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
   assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
   state.nutrition.targets.calories = 0;
   assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+});
+
+test("targets saved before maintenance rose stay as they were, and the iPhone says the plan differs but keeps its advice for teenagers and new mothers", () => {
+  // Goals with the daily targets the previous plan saved for them, which
+  // counted "On my feet some" as 1.375 times resting energy.
+  const saved = (
+    goals: Goals,
+    targets: ReturnType<typeof emptyJournal>["nutrition"]["targets"],
+  ) => {
+    const state = emptyJournal();
+    state.profile.body = { ...goals, updatedAt: "2026-09-20T10:00:00.000Z" };
+    state.nutrition.targets = { ...targets };
+    return state;
+  };
+  // Raised maintenance never rewrites them; Food and the iPhone keep
+  // showing them, and the plan is now higher.
+  const afterRelease = (
+    state: ReturnType<typeof emptyJournal>,
+    planned: number,
+  ) => {
+    const before = structuredClone(state.nutrition.targets);
+    assert.equal(regateLegacyTargets(state, today, "Europe/Copenhagen"), false);
+    assert.deepEqual(state.nutrition.targets, before);
+    assert.equal(planForState(state, today)!.calories, planned);
+    const native = buildToday(state, 1, today, new Set());
+    assert.equal(native.nutrition.targetCalories, before.calories);
+    return native.body?.goalNotes;
+  };
+  // An adult losing weight, 2,350 kcal saved and 2,640 planned: the line
+  // alone.
+  assert.deepEqual(
+    afterRelease(
+      saved(athlete, {
+        goal: "lose",
+        calories: 2350,
+        protein: 176,
+        carbs: 254,
+        fat: 70,
+      }),
+      2640,
+    ),
+    [TARGETS_DIFFER],
+  );
+  // Under 18 the line, then the reason the plan sets no deficit.
+  const girl = {
+    ...teen,
+    sex: "female" as const,
+    heightCm: 165,
+    weightKg: 60,
+    targetWeightKg: 55,
+    trainingDays: 3,
+  };
+  const girlNotes = afterRelease(
+    saved(girl, {
+      goal: "maintain",
+      calories: 2120,
+      protein: 108,
+      carbs: 289,
+      fat: 59,
+    }),
+    2350,
+  );
+  assert.equal(girlNotes?.length, 2);
+  assert.equal(girlNotes?.[0], TARGETS_DIFFER);
+  assert.match(
+    girlNotes![1],
+    /^Under 18 the plan doesn't set a calorie deficit/,
+  );
+  // Breastfeeding: the line, then the advice to talk to a midwife.
+  const mum = saved(mother, {
+    goal: "maintain",
+    calories: 2700,
+    protein: 126,
+    carbs: 380,
+    fat: 75,
+  });
+  mum.profile.goalChecks = {
+    pregnancy: "breastfeeding",
+    lowWeightConfirmedKg: null,
+    updatedAt: "2026-09-20T10:00:00.000Z",
+  };
+  const mumNotes = afterRelease(mum, 2920);
+  assert.equal(mumNotes?.length, 2);
+  assert.equal(mumNotes?.[0], TARGETS_DIFFER);
+  assert.match(mumNotes![1], /talk to your midwife or health visitor/);
 });
 
 test("old saved targets that break a hard limit follow the plan again, once; others are left alone", () => {

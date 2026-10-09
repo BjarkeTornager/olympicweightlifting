@@ -30,16 +30,20 @@ const lines = {
 
 export const coachLines = (language: CoachLanguage = "en") => lines[language];
 
-/** The language of a reply: the one chosen in the app, or else the one the
-    athlete writes in, which Coach answers in. `texts` are read in turn until
-    one tells: the athlete's words, then Coach's answer in the same message,
-    then the conversation before it (earlierWords). */
+/** The language of a reply: the one the athlete's words are written in,
+    which Coach answers in, then the one chosen in the app. Without either,
+    `texts` after the athlete's words are read in turn until one tells:
+    Coach's answer in the same message, then the conversation before it
+    (earlierWords). */
 export function linesLanguage(
   chosen: CoachLanguage | undefined,
   ...texts: (string | undefined)[]
 ): CoachLanguage {
+  const [words, ...rest] = texts;
+  const own = words ? writtenLanguage(words) : undefined;
+  if (own) return own;
   if (chosen) return chosen;
-  for (const text of texts) {
+  for (const text of rest) {
     const language = text ? writtenLanguage(text) : undefined;
     if (language) return language;
   }

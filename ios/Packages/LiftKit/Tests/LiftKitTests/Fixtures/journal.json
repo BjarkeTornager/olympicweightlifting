@@ -6,7 +6,7 @@
       "date": "2026-09-26",
       "kind": "cardio",
       "title": "Outdoor Run",
-      "detail": "50 min · 10 km · 148 bpm avg · 612 kcal",
+      "detail": "50 min · 10 km · 148 bpm avg · ~610 kcal · watch",
       "fromAppleHealth": true,
       "hasRoute": false,
       "activity": "running",
@@ -32,7 +32,7 @@
           },
           {
             "label": "Energy",
-            "value": "612 kcal"
+            "value": "~610 kcal · watch"
           }
         ]
       }
@@ -136,7 +136,8 @@
           },
           {
             "label": "Active energy",
-            "value": "540 kcal"
+            "note": "Apple's estimate",
+            "value": "~540 kcal"
           }
         ],
         "footnote": "From Apple Health"
@@ -147,7 +148,7 @@
       "date": "2026-09-25",
       "kind": "strength",
       "title": "Gym Accessories",
-      "detail": "5 exercises · 0 sets",
+      "detail": "6 exercises · 1 set · length not recorded",
       "fromAppleHealth": false
     }
   ]

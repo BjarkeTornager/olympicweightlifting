@@ -636,6 +636,9 @@
           "caloriesKcal": {
             "type": "number"
           },
+          "caloriesText": {
+            "type": "string"
+          },
           "fromAppleHealth": {
             "type": "boolean"
           },
@@ -743,12 +746,44 @@
           },
           "note": {
             "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BurnedLine"
+            }
+          },
+          "context": {
+            "type": "string"
           }
         },
         "required": [
           "kcal",
           "source",
           "estimated",
+          "note"
+        ]
+      },
+      "BurnedLine": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "kcal": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "kcal",
+          "text",
           "note"
         ]
       },
@@ -1363,6 +1398,12 @@
           },
           "category": {
             "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -3506,6 +3547,9 @@
           },
           "activeEnergyKcal": {
             "type": "integer"
+          },
+          "activeEnergyUnusual": {
+            "type": "boolean"
           }
         },
         "required": [

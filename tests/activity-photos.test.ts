@@ -47,3 +47,36 @@ test("Cached browsers receive compatible cardio records without discarding store
   );
   assert.deepEqual(current.state.cardio.sessions[0].photoIds, [photoId]);
 });
+
+test("Cached browsers receive activities without where their calories came from", () => {
+  const state = emptyJournal();
+  saveCardio(
+    state,
+    {
+      activity: "rowing",
+      date: "2026-09-12",
+      durationSeconds: 900,
+      caloriesKcal: 88,
+    },
+    "2026-09-12",
+  );
+  const snapshot = { state, revision: 1 };
+  const legacy = foodSnapshotForClient(
+    new Request("https://example.test/api/journal", {
+      headers: { "x-activity-photos-version": "1" },
+    }),
+    snapshot,
+  );
+  assert.equal(legacy.state.cardio.sessions[0].caloriesSource, undefined);
+  assert.equal(snapshot.state.cardio.sessions[0].caloriesSource, "entered");
+  const current = foodSnapshotForClient(
+    new Request("https://example.test/api/journal", {
+      headers: {
+        "x-activity-photos-version": "1",
+        "x-calories-source-version": "1",
+      },
+    }),
+    snapshot,
+  );
+  assert.equal(current.state.cardio.sessions[0].caloriesSource, "entered");
+});

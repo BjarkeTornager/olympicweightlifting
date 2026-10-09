@@ -149,6 +149,15 @@ extension LedgerColumn where Accessory == EmptyView {
   }
 }
 
+/// One of the day's burned figures as printed: "Active energy", "~610",
+/// "Apple Health, so far". The text is empty when lifting was logged without
+/// a length, so there is no figure.
+struct LedgerBurn: Equatable {
+  let label: String
+  let text: String
+  let note: String
+}
+
 /// The day's energy, protein and water, set like a ledger: one hero number
 /// over a ruler of marks, and a pair below. At the largest text sizes the
 /// pair stacks.
@@ -156,8 +165,11 @@ struct Ledger: View {
   let energy: LedgerLine
   let protein: LedgerLine
   let water: LedgerLine
-  /// Energy burned today, as printed ("205", "~205"), beside the scale.
-  var burned: String?
+  /// Energy burned today under the scale, a figure to a line and never
+  /// added together: Apple Health's active energy, then training.
+  var burned: [LedgerBurn] = []
+  /// "Doesn't include the energy your body uses at rest."
+  var burnedContext: String?
   /// The chart the energy column opens.
   var energyLink: Trend?
   var setTarget: (() -> Void)?
@@ -170,17 +182,16 @@ struct Ledger: View {
         line: energy, role: .hero, markWidth: 7, meterHeight: 32, link: energyLink,
         setTarget: offer(energy)
       ) {
-        if let burned {
-          HStack(spacing: 5) {
-            Key(tint: Theme.activity)
-            Text("Burned \(Text(burned).fontWeight(.semibold).foregroundStyle(Theme.ink)) kcal")
-          }
-          .accessibilityElement(children: .combine)
-        } else if let over = over(energy) {
+        if let over = over(energy) {
           Text(over)
         }
       }
-      .padding(.vertical, 14)
+      .padding(.top, 14)
+      .padding(.bottom, burned.isEmpty ? 14 : 8)
+      if !burned.isEmpty {
+        BurnedLines(lines: burned, context: burnedContext)
+          .padding(.bottom, 14)
+      }
       Rectangle().fill(Theme.rule).frame(height: 1)
       let stacked = typeSize >= .xxxLarge
       let layout =
@@ -220,6 +231,39 @@ struct Ledger: View {
   private func over(_ line: LedgerLine) -> String? {
     guard let target = line.target, line.value > target else { return nil }
     return "\(Format.number(line.value - target)) above target"
+  }
+}
+
+/// What the day burned, a line to each figure with where it came from:
+/// "Active energy ~610 kcal · Apple Health, so far". Every figure is an
+/// estimate, so each carries its "~".
+struct BurnedLines: View {
+  let lines: [LedgerBurn]
+  var context: String?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 3) {
+      ForEach(lines, id: \.label) { line in
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+          Key(tint: Theme.activity)
+          if line.text.isEmpty {
+            Text("\(line.label) · \(line.note)")
+          } else {
+            Text(
+              "\(line.label) \(Text(line.text).fontWeight(.semibold).foregroundStyle(Theme.ink)) kcal · \(line.note)"
+            )
+          }
+        }
+        .accessibilityElement(children: .combine)
+      }
+      if let context {
+        Text(context)
+      }
+    }
+    .font(.caption2.weight(.medium).monospacedDigit())
+    .foregroundStyle(Theme.inkSecondary)
+    .fixedSize(horizontal: false, vertical: true)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
@@ -477,7 +521,11 @@ private struct LedgerPreview: View {
           water: LedgerLine(
             title: "Drinks", tint: Theme.water, value: 500, target: 2250, perMark: 250, number: "500", unit: "ml",
             targetText: "about 2.25 L", scale: "2 of 9 glasses", spokenUnit: "millilitres"),
-          burned: "205")
+          burned: [
+            .init(label: "Active energy", text: "~610", note: "Apple Health, so far"),
+            .init(label: "Training", text: "~530", note: "Estimated"),
+          ],
+          burnedContext: "Doesn't include the energy your body uses at rest.")
         CheckInBlock(title: "Check in with Coach", detail: "Coach logs your day as you talk")
         FolioSection("Recovery", meta: "Seven days")
         Grid(horizontalSpacing: 16, verticalSpacing: 14) {

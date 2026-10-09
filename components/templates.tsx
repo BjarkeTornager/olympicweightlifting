@@ -194,9 +194,11 @@ export function Templates({
                     <Trash2 size={17} />
                   </Button>
                 </div>
-                <p className="exercise-logging-note">
-                  {exerciseLoggingNotes(entry.exerciseId)}
-                </p>
+                {exerciseLoggingNotes(entry.exerciseId) && (
+                  <p className="exercise-logging-note">
+                    {exerciseLoggingNotes(entry.exerciseId)}
+                  </p>
+                )}
                 {entry.sets.map((set, i) => (
                   <div className="routine-set" key={i}>
                     <label>
@@ -266,6 +268,7 @@ export function Templates({
             <ExercisePicker
               label="Add exercise"
               value=""
+              state={state}
               addImmediately
               onChange={(id) => {
                 if (id)

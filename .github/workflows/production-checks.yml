@@ -8,6 +8,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # About 18 minutes normally; a hung step fails instead of holding a
+    # merge and a deploy for GitHub's six-hour default.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:18-alpine
@@ -33,7 +36,19 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg python3-venv libseccomp2 libgl1 libglib2.0-0
+      # A slow package mirror once held this step for over two hours. Each
+      # attempt gets four minutes, and a hung one is tried again.
+      - name: Install system packages
+        timeout-minutes: 15
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 240 apt-get update &&
+              sudo timeout 240 apt-get install -y ffmpeg python3-venv libseccomp2 libgl1 libglib2.0-0 &&
+              exit 0
+            echo "Package install attempt $attempt failed or timed out."
+            sleep 10
+          done
+          exit 1
       - run: python3 -m venv /tmp/lift-video-env && /tmp/lift-video-env/bin/pip install -r scripts/video/requirements.txt && /tmp/lift-video-env/bin/python scripts/video/install_model.py /tmp/lift-video-model/pose.task
       - run: npm ci
       - run: npm run db:migrate
@@ -45,6 +60,7 @@ jobs:
       # The Restate endpoint in the standalone build, with its bundled SDK.
       - run: node --import tsx scripts/restate-smoke.ts
       - run: npx playwright install --with-deps chromium firefox
+        timeout-minutes: 15
       - run: npm run test:browser -- --project=chromium --project=firefox
       - uses: actions/upload-artifact@v6
         if: failure()
@@ -56,6 +72,8 @@ jobs:
     # timestamps for the H.264 fixture. Use native WebKit for Safari coverage
     # so source-pixel and frame-alignment assertions remain strict.
     runs-on: macos-latest
+    # About 15 minutes normally.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v5

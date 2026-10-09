@@ -1,5 +1,12 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import {
+  test as base,
+  expect,
+  type Page,
+  type Request,
+} from "@playwright/test";
 import { emptyJournal } from "../../lib/domain";
+import { applyJournalPatch } from "../../lib/journal-patch";
+import type { JournalState } from "../../lib/model";
 // Ordinary product workflows now require an authenticated account. Security
 // tests import Playwright directly and never receive this mocked session.
 export const browserUser = {
@@ -59,8 +66,8 @@ export const test = base.extend<{
         }),
       );
       await context.route("**/api/journal", (r) => {
-        if (r.request().method() === "PUT") {
-          state = r.request().postDataJSON().state;
+        if (isJournalSave(r.request())) {
+          state = savedJournal(r.request(), state);
           revision++;
         }
         return r.fulfill({
@@ -91,6 +98,19 @@ export const test = base.extend<{
   ],
 });
 export { expect };
+// A journal save from the website: the whole journal (PUT) or its changes
+// to the copy at a revision (PATCH).
+export const isJournalSave = (request: Request) =>
+  ["PUT", "PATCH"].includes(request.method());
+// The journal a save leaves, given the one it was made to.
+export function savedJournal(request: Request, current: JournalState) {
+  const body = request.postDataJSON();
+  return (
+    body.patch
+      ? applyJournalPatch(structuredClone(current), body.patch)
+      : body.state
+  ) as JournalState;
+}
 export async function openJournalArea(page: Page, name: string) {
   await page.locator('nav a[href="#journal"]:visible').first().click();
   await page

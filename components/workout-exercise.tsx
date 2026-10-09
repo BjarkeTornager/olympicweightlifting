@@ -454,9 +454,11 @@ export function WorkoutExercise({
                   .join(" · ") || "No logged sets"}
               </p>
             )}
-            <p className="exercise-logging-note">
-              {exerciseLoggingNotes(entry.exerciseId)}
-            </p>
+            {exerciseLoggingNotes(entry.exerciseId) && (
+              <p className="exercise-logging-note">
+                {exerciseLoggingNotes(entry.exerciseId)}
+              </p>
+            )}
           </details>
           <details className="notes">
             <summary>Notes & coach cue</summary>

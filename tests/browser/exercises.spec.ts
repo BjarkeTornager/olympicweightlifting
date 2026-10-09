@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, isJournalSave } from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 
 test("gym library filters, aliases and attributed technique guides work on a narrow phone", async ({
@@ -86,7 +86,7 @@ test("a gym routine retains new exercises and logs after reload; changing search
   const routineSynced = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/journal") &&
-      r.request().method() === "PUT" &&
+      isJournalSave(r.request()) &&
       r.status() === 200,
   );
   await page.getByRole("button", { name: "Save routine", exact: true }).click();
@@ -116,14 +116,10 @@ test("a gym routine retains new exercises and logs after reload; changing search
   const workoutSynced = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/journal") &&
-      r.request().method() === "PUT" &&
+      isJournalSave(r.request()) &&
       r.status() === 200 &&
-      r
-        .request()
-        .postDataJSON()
-        .state.activeWorkout?.exercises.some(
-          (e: { exerciseId: string }) => e.exerciseId === "seated_leg_curl",
-        ),
+      // The whole journal or only the changes: either names the exercise.
+      r.request().postData()!.includes('"exerciseId":"seated_leg_curl"'),
   );
   await addButton.click();
   await workoutSynced;
@@ -147,4 +143,68 @@ test("a gym routine retains new exercises and logs after reload; changing search
   await expect(
     page.getByLabel("Log set 1 as made", { exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("an exercise the library lacks is added as the athlete's own, then listed as theirs", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#workout/choose");
+  await page.getByRole("button", { name: "New routine" }).click();
+  await page.getByLabel("Routine name").fill("Upper back");
+  const search = page.getByRole("searchbox", { name: "Find an exercise" });
+  // A library exercise, named in the plural, is offered as itself.
+  await search.fill("front squats");
+  await expect(
+    page.locator("option", { hasText: /as a new exercise/ }),
+  ).toHaveCount(0);
+  await search.fill("standing  cable reverse fly");
+  await expect(
+    page.getByText("“Standing cable reverse fly” isn’t in the library."),
+  ).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Add exercise", exact: true })
+    .selectOption("custom:Standing cable reverse fly");
+  await expect(
+    page.getByRole("group", { name: "Standing cable reverse fly" }),
+  ).toBeVisible();
+  const saved = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/journal") &&
+      isJournalSave(r.request()) &&
+      r.status() === 200 &&
+      r
+        .request()
+        .postData()!
+        .includes('"exerciseId":"custom:Standing cable reverse fly"'),
+  );
+  await page.getByRole("button", { name: "Save routine", exact: true }).click();
+  await saved;
+  await page.reload();
+  await page
+    .locator(".routine-list")
+    .getByRole("button", { name: "Start", exact: true })
+    .click();
+  await expect(
+    page
+      .locator(".exercise-toggle")
+      .filter({ hasText: "Standing cable reverse fly" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Your own exercise. No demo video yet.").first(),
+  ).toBeVisible();
+  // Next time it is one of theirs, not new again.
+  await page
+    .getByRole("searchbox", { name: "Find an exercise or activity" })
+    .fill("reverse fly");
+  const add = page.getByRole("combobox", {
+    name: "Add an exercise or activity",
+    exact: true,
+  });
+  await expect(
+    add.locator('optgroup[label="Your exercises"] option'),
+  ).toHaveText(["Standing cable reverse fly"]);
+  await expect(
+    add.locator("option", { hasText: /as a new exercise/ }),
+  ).toHaveCount(0);
 });

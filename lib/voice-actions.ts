@@ -245,10 +245,12 @@ const workoutFrom = (
   title: string,
   day: string,
   exercises: z.infer<typeof exercisesSchema>,
+  durationMinutes?: number,
 ) => ({
   title,
   date: day,
   category: "open" as const,
+  ...(durationMinutes != null ? { durationMinutes } : {}),
   exercises: exercises.map((e) => ({
     exerciseId: e.exercise,
     sets: e.sets.map((s) => ({
@@ -291,12 +293,20 @@ const mealFrom = (a: z.infer<typeof mealArgs>, photoIds: string[]) => ({
   photoIds,
 });
 
+// Models sometimes send 0 for "not said".
+const durationMinutes = z.preprocess(
+  (v) => v || undefined,
+  z.number().int().min(5).max(600).optional(),
+);
+
 export const voiceToolArgs = {
   log_training: z.object({
     summary: summarySchema,
     date,
     title: z.string().trim().min(1).max(120),
     finished: z.boolean().default(true),
+    // Only when the athlete said how long the workout took.
+    duration_minutes: durationMinutes,
     exercises: exercisesSchema,
   }),
   // Read-only: the journal for a short date range, with ids for corrections.
@@ -309,6 +319,7 @@ export const voiceToolArgs = {
     summary: summarySchema,
     session_id: z.string().min(1).max(160),
     title: z.string().trim().min(1).max(120),
+    duration_minutes: durationMinutes,
     exercises: exercisesSchema,
   }),
   delete_meal: z.object({ summary: summarySchema, meal_id: z.string().uuid() }),
@@ -413,7 +424,12 @@ export function voiceAction(
   switch (name) {
     case "log_training": {
       const a = voiceToolArgs.log_training.parse(raw);
-      const workout = workoutFrom(a.title, a.date, a.exercises);
+      const workout = workoutFrom(
+        a.title,
+        a.date,
+        a.exercises,
+        a.duration_minutes,
+      );
       const completion = a.finished ? "completed" : "ongoing";
       // Same-day training continues the workout already there.
       if (state.activeWorkout?.date === a.date)
@@ -442,7 +458,12 @@ export function voiceAction(
       return {
         kind: "update_session",
         sessionId: session.id,
-        workout: workoutFrom(a.title, session.date, a.exercises),
+        workout: workoutFrom(
+          a.title,
+          session.date,
+          a.exercises,
+          a.duration_minutes,
+        ),
       };
     }
     case "log_meal": {

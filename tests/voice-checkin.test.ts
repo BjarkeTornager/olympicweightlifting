@@ -932,24 +932,24 @@ test("background noise does not interrupt the coach, but speaking does", async (
     assert.deepEqual(gate(chunk(0.01), false), [chunk(0.01)]);
   // While the coach speaks, steady background noise is silenced.
   for (let i = 0; i < 10; i++) assert.ok(silent(gate(chunk(0.015), true)));
-  // A short clang (two chunks) is silenced too.
-  assert.ok(silent(gate(chunk(0.5), true)));
-  assert.ok(silent(gate(chunk(0.5), true)));
+  // A short clang, or a burst of sound under half a second, is silenced too.
+  for (let i = 0; i < 4; i++) assert.ok(silent(gate(chunk(0.5), true)));
   assert.ok(silent(gate(chunk(0.01), true)));
+  // A distant voice, a little above the room, stays out however long.
+  for (let i = 0; i < 10; i++) assert.ok(silent(gate(chunk(0.025), true)));
   // Sustained speech opens the gate and keeps its beginning.
-  assert.ok(silent(gate(chunk(0.2), true)));
-  assert.ok(silent(gate(chunk(0.2), true)));
+  for (let i = 0; i < 4; i++) assert.ok(silent(gate(chunk(0.2), true)));
   const opened = gate(chunk(0.2), true);
-  assert.equal(opened.length, 3);
+  assert.equal(opened.length, 5);
   assert.ok(opened.every((c) => c.some((x) => x !== 0)));
   // The coach's own voice echoing back is not the athlete, even when
   // sustained; the athlete must be clearly louder than the playback.
   const echoGate = createBargeInGate();
   for (let i = 0; i < 10; i++)
     assert.ok(silent(echoGate(chunk(0.08), true, 0.2)));
-  assert.ok(silent(echoGate(chunk(0.5), true, 0.2)));
-  assert.ok(silent(echoGate(chunk(0.5), true, 0.2)));
-  assert.equal(echoGate(chunk(0.5), true, 0.2).length, 3);
+  for (let i = 0; i < 4; i++)
+    assert.ok(silent(echoGate(chunk(0.5), true, 0.2)));
+  assert.equal(echoGate(chunk(0.5), true, 0.2).length, 5);
   // Once open, everything passes until the coach stops.
   assert.deepEqual(gate(chunk(0.01), true), [chunk(0.01)]);
   assert.deepEqual(gate(chunk(0.01), false), [chunk(0.01)]);

@@ -1,4 +1,11 @@
-import { test, expect, browserUser, coachTask } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  coachTask,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
 import { mealSchema } from "../../lib/nutrition";
@@ -33,8 +40,8 @@ test("quick capture is reachable on phones, preserves a draft and can repeat and
   state.nutrition.meals.push(meal);
   state.nutrition.completeDays = [today()];
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

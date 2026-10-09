@@ -83,7 +83,7 @@ test("four-week lifting bounds exclude future, old, unfinished and merely prescr
     report.weeks.reduce((sum, w) => sum + w.sessions, 0),
     2,
   );
-  const filtered = liftingReview(state, date, "front_squat");
+  const filtered = liftingReview(state, date, ["front_squat"]);
   assert.equal(filtered.recordedSessions, 0);
   assert.equal(filtered.exercises.length, 0);
   assert.equal(

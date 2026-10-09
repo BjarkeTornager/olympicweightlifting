@@ -1,4 +1,10 @@
-import { test, expect, browserUser } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import {
   createWorkout,
@@ -61,8 +67,8 @@ test("a short night, the under-18 technique check and a proposed reset are one t
   let state = journal(),
     revision = 0;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

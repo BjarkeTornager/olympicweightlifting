@@ -503,7 +503,8 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
   const native = buildToday(own, 1, today, new Set());
   assert.equal(native.nutrition.targetProtein, 70);
   assert.deepEqual(native.body?.goalNotes, plan.notes);
-  // Another target set by hand still says the targets differ.
+  // Another target set by hand still says the targets differ, and the
+  // kidney advice follows that line, as a note about the athlete.
   const calories = prepareAction(
     own,
     { kind: "set_diet_targets", targets: { calories: 2600 } },
@@ -511,7 +512,9 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
   ).state;
   assert.deepEqual(notesForTargets(plan, calories.nutrition.targets), [
     TARGETS_DIFFER,
+    ...plan.notes.filter((note) => note.startsWith("As you have kidney")),
   ]);
+  assert.equal(notesForTargets(plan, calories.nutrition.targets).length, 2);
   // Coach's goals review, like the form, keeps it and says so.
   const reviewed = prepareAction(
     own,

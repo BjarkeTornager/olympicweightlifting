@@ -11,6 +11,7 @@ import {
   cardioFromWorkout,
   entryDigest,
   healthSyncSchema,
+  labelImportedCalories,
   type HealthWorkout,
 } from "../lib/health-sync";
 import { addDrink } from "../lib/hydration";
@@ -204,7 +205,10 @@ test("Today and the journal feed describe the day for the app", () => {
   const today = buildToday(state, 3, date, new Set([run.id]));
   assert.equal(today.hydration.totalMl, 500);
   assert.equal(today.vitals?.restingHeartRate, 52);
+  assert.equal(today.vitals?.activeEnergyKcal, 540);
+  assert.equal(today.vitals?.activeEnergyUnusual, undefined);
   assert.equal(today.activities[0].fromAppleHealth, true);
+  assert.equal(today.activities[0].caloriesText, "~610 kcal · watch");
   assert.equal(today.activities[0].averageHeartRate, 148);
   assert.equal(today.activeWorkout?.title, days[0].title);
   assert.equal(today.nextSession, undefined);
@@ -238,6 +242,31 @@ test("Today and the journal feed describe the day for the app", () => {
       "Active energy",
     ],
   );
+});
+
+test("an implausible active energy is held within range and flagged under the steps too", () => {
+  const state = emptyJournal();
+  state.health.vitals = [
+    {
+      date,
+      restingHeartRate: null,
+      heartRateVariabilityMs: null,
+      averageHeartRate: null,
+      steps: 9120,
+      activeEnergyKcal: 15000,
+      source: "apple-health",
+      updatedAt: now.toISOString(),
+    },
+  ];
+  const today = buildToday(state, 3, date, new Set());
+  assert.equal(today.vitals?.activeEnergyKcal, 10000);
+  assert.equal(today.vitals?.activeEnergyUnusual, true);
+  assert.deepEqual(
+    today.burned?.lines?.map((l) => [l.text, l.note]),
+    [["~10,000", "Apple Health, so far; unusually high, worth checking there"]],
+  );
+  const trends = buildTrends(state, date, 1);
+  assert.equal(trends.days.at(-1)?.activeEnergyKcal, 10000);
 });
 
 test("journal items carry their full details: meals item by item, sleep with its night", () => {
@@ -700,6 +729,49 @@ test("a workout already logged by hand is enriched rather than duplicated", () =
   assert.equal(state.cardio.sessions[0].title, "Morning run");
   assert.equal(state.cardio.sessions[0].averageHeartRate, 148);
   assert.equal(state.cardio.sessions[0].caloriesKcal, 612);
+  // The import filled the calories, so they are the watch's.
+  assert.equal(state.cardio.sessions[0].caloriesSource, "apple-health");
+  // A figure the athlete typed stays theirs, and is labelled so everywhere.
+  const typed = emptyJournal();
+  typed.cardio.sessions.push({
+    ...manual,
+    id: crypto.randomUUID(),
+    caloriesKcal: 350,
+    caloriesSource: "entered",
+  });
+  const run = workout({ id: crypto.randomUUID() });
+  assert.equal(
+    applyWorkout(typed, run, undefined, new Set(), tz, now).result,
+    "matched",
+  );
+  assert.equal(typed.cardio.sessions[0].caloriesKcal, 350);
+  assert.equal(typed.cardio.sessions[0].caloriesSource, "entered");
+  const today = buildToday(typed, 3, date, new Set([run.id]));
+  assert.equal(today.activities[0].caloriesText, "~350 kcal · as entered");
+});
+
+test("calories imported before sources were kept are labelled once, unless edited since", () => {
+  const state = emptyJournal();
+  const imported = cardioFromWorkout(workout(), tz, now);
+  delete imported.caloriesSource;
+  const edited = {
+    ...cardioFromWorkout(workout({ id: crypto.randomUUID() }), tz, now),
+    caloriesSource: undefined,
+  };
+  const receipts = [
+    { cardioId: imported.id, entryDigest: entryDigest(imported) },
+    { cardioId: edited.id, entryDigest: entryDigest(edited) },
+  ];
+  edited.caloriesKcal = 500;
+  state.cardio.sessions = [imported, edited];
+  assert.equal(labelImportedCalories(state, receipts), true);
+  assert.deepEqual(
+    state.cardio.sessions.map((s) => s.caloriesSource),
+    ["apple-health", undefined],
+  );
+  // Labelling doesn't count as an edit, so Apple Health may still update it.
+  assert.equal(entryDigest(state.cardio.sessions[0]), receipts[0].entryDigest);
+  assert.equal(labelImportedCalories(state, receipts), false);
 });
 
 test("strength workouts on a logged lifting day are skipped; future workouts wait", () => {
@@ -723,6 +795,290 @@ test("strength workouts on a logged lifting day are skipped; future workouts wai
   const later = applyWorkout(state, tomorrow, undefined, new Set(), tz, now);
   assert.equal(later.result, "skipped");
   assert.equal(later.receipt, undefined, "retried on the next sync");
+  assert.equal(state.cardio.sessions.length, 0);
+});
+
+test("an opened activity gives the calories its Journal row gives", () => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 80;
+  const strength = (caloriesKcal: number) =>
+    cardioFromWorkout(
+      workout({
+        id: crypto.randomUUID(),
+        kind: "strength",
+        name: "Strength Training",
+        durationSeconds: 1800,
+        distanceKm: undefined,
+        caloriesKcal,
+      }),
+      tz,
+      now,
+    );
+  state.cardio.sessions = [strength(612), strength(0)];
+  const feed = buildJournal(state, 1, "2026-09-27", 14, new Set());
+  const energy = (i: number) =>
+    feed.items
+      .filter((item) => item.kind === "cardio")
+      [i].details!.lines.find((l) => l.label === "Energy")?.value;
+  // The watch's figure to the nearest 10, labelled, as in the row.
+  assert.match(feed.items[0].detail, /~610 kcal · watch/);
+  assert.equal(energy(0), "~610 kcal · watch");
+  // A recorded 0 for half an hour is a gap: the app's estimate, as in the
+  // row, never "~0 kcal".
+  assert.match(feed.items[1].detail, /~160 kcal est\./);
+  assert.equal(energy(1), "~160 kcal est.");
+  // A Coach review has no journal at hand: the recorded figure alone.
+  const review = (cardio: (typeof state.cardio.sessions)[number]) =>
+    receiptView(
+      {
+        id: "r",
+        title: "Log your cardio",
+        detail: "",
+        workout: null,
+        expiresAt: "2026-09-27T18:00:00.000Z",
+        cardio,
+      },
+      now,
+    ).entries![0].lines.find((l) => l.label === "Energy")?.value;
+  assert.equal(review(state.cardio.sessions[0]), "~610 kcal · watch");
+  assert.equal(review(state.cardio.sessions[1]), undefined);
+});
+
+test("Apple Health lifting beside an open session waits, then counts once", () => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 88;
+  const lifting = workout({
+    id: crypto.randomUUID(),
+    kind: "strength",
+    name: "Strength Training",
+    start: "2026-09-26T17:05:00+02:00",
+    end: "2026-09-26T18:25:00+02:00",
+    durationSeconds: 4800,
+    distanceKm: undefined,
+    caloriesKcal: 410,
+  });
+  // The session is still open in the journal: nothing is imported yet, and
+  // the workout is kept as sent until the session is finished.
+  state.activeWorkout = createWorkout(state, days[0], date);
+  const deferred = applyWorkout(state, lifting, undefined, new Set(), tz, now);
+  assert.equal(deferred.result, "deferred");
+  assert.equal(deferred.receipt?.status, "deferred");
+  assert.deepEqual(deferred.receipt?.workout, lifting);
+  assert.equal(state.cardio.sessions.length, 0);
+  // Finished at 18:30 after the first set at 17:10: the same session.
+  const session = {
+    ...state.activeWorkout,
+    firstSetAt: "2026-09-26T15:10:00.000Z",
+    finishedAt: "2026-09-26T16:30:00.000Z",
+    durationMinutes: 80,
+  };
+  state.activeWorkout = null;
+  state.sessions.push(session);
+  const receipt = { userId: "u", ...deferred.receipt! };
+  const matched = applyWorkout(state, lifting, receipt, new Set(), tz, now);
+  assert.equal(matched.result, "skipped");
+  assert.equal(matched.receipt?.workout, null);
+  assert.equal(state.cardio.sessions.length, 0);
+  // A separate watch workout that evening is training of its own.
+  const evening = workout({
+    ...lifting,
+    id: crypto.randomUUID(),
+    start: "2026-09-26T20:00:00+02:00",
+    end: "2026-09-26T20:45:00+02:00",
+    durationSeconds: 2700,
+  });
+  assert.equal(
+    applyWorkout(state, evening, undefined, new Set(), tz, now).result,
+    "imported",
+  );
+  assert.equal(state.cardio.sessions.length, 1);
+  // Lifting saved without any times, as a session told to Coach is, can't
+  // be told apart, so it is the same.
+  state.cardio.sessions = [];
+  state.sessions = [
+    {
+      ...session,
+      firstSetAt: undefined,
+      startedAt: undefined,
+      finishedAt: undefined,
+      durationMinutes: null,
+    },
+  ];
+  assert.equal(
+    applyWorkout(state, evening, undefined, new Set(), tz, now).result,
+    "skipped",
+  );
+});
+
+test("lifting logged after the watch's workout is that workout, however it was logged", async (t) => {
+  const { prepareWorkoutProgress } =
+    await import("../lib/agent/prepare-workouts");
+  const { finishWorkout, hasLoggedSet, startClock } =
+    await import("../lib/domain");
+  const { burnedToday } = await import("../lib/energy");
+  // Trained 17:00-18:30 with the watch's strength workout running.
+  const watch = workout({
+    id: crypto.randomUUID(),
+    kind: "strength",
+    name: "Traditional Strength Training",
+    start: "2026-09-26T17:00:00+02:00",
+    end: "2026-09-26T18:30:00+02:00",
+    durationSeconds: 5400,
+    distanceKm: undefined,
+    caloriesKcal: 420,
+  });
+  const fromWatch = new Set([watch.id]);
+  // Told to Coach at 19:30, before the phone synced: one go, no length.
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-26T17:30:00Z"),
+  });
+  const told = emptyJournal();
+  told.profile.bodyweight = 88;
+  prepareWorkoutProgress(
+    told,
+    {
+      kind: "log_workout_progress",
+      workout: {
+        title: "Snatch day",
+        date,
+        category: "weightlifting",
+        exercises: [
+          {
+            exerciseId: "snatch",
+            sets: [{ weight: 80, reps: 2, result: "success" }],
+          },
+        ],
+      },
+      completion: "completed",
+    },
+    date,
+  );
+  assert.equal(told.sessions[0].firstSetAt, told.sessions[0].finishedAt);
+  assert.equal(told.sessions[0].durationMinutes, null);
+  t.mock.timers.reset();
+  assert.equal(
+    applyWorkout(told, watch, undefined, fromWatch, tz, now).result,
+    "skipped",
+  );
+  assert.equal(told.cardio.sessions.length, 0);
+  // The session's own line says it has no length, rather than 420.
+  assert.equal(burnedToday(told, date)?.training?.count, 0);
+  assert.equal(burnedToday(told, date)?.training?.untimed, 1);
+  // Typed in on the website from 19:00 to 19:15: 15 minutes, never added
+  // to the watch's 420.
+  const typed = emptyJournal();
+  typed.profile.bodyweight = 88;
+  typed.activeWorkout = createWorkout(typed, days[0], date);
+  const draft = typed.activeWorkout;
+  const before = hasLoggedSet(draft);
+  Object.assign(draft.exercises[0].sets[0], {
+    weight: "60",
+    reps: "2",
+    result: "success",
+    logged: true,
+  });
+  startClock(draft, before, new Date("2026-09-26T17:00:00Z"));
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-26T17:15:00Z"),
+  });
+  const entered = finishWorkout(typed);
+  t.mock.timers.reset();
+  assert.equal(entered.sessions[0].durationMinutes, 15);
+  assert.equal(
+    applyWorkout(entered, watch, undefined, fromWatch, tz, now).result,
+    "skipped",
+  );
+  assert.equal(burnedToday(entered, date)?.training?.kcal, 90);
+  // A session finished before the watch's workout began is other lifting.
+  const morning = emptyJournal();
+  morning.sessions.push({
+    ...createWorkout(morning, days[0], date),
+    firstSetAt: "2026-09-26T06:00:00.000Z",
+    finishedAt: "2026-09-26T07:30:00.000Z",
+    durationMinutes: 90,
+  });
+  assert.equal(
+    applyWorkout(morning, watch, undefined, fromWatch, tz, now).result,
+    "imported",
+  );
+});
+
+test("an open session holds Apple Health lifting back only while it can be that lifting", () => {
+  const lifting = (day: string) =>
+    workout({
+      id: crypto.randomUUID(),
+      kind: "strength",
+      name: "Strength Training",
+      start: `${day}T17:00:00+02:00`,
+      end: `${day}T18:30:00+02:00`,
+      durationSeconds: 5400,
+      distanceKm: undefined,
+      caloriesKcal: 420,
+    });
+  const open = (day: string, logged: boolean) => {
+    const state = emptyJournal();
+    state.activeWorkout = createWorkout(state, days[0], day);
+    if (logged)
+      Object.assign(state.activeWorkout.exercises[0].sets[0], {
+        weight: "60",
+        reps: "2",
+        result: "success",
+        logged: true,
+      });
+    return state;
+  };
+  const result = (state: ReturnType<typeof open>, day: string, at: string) =>
+    applyWorkout(state, lifting(day), undefined, new Set(), tz, new Date(at))
+      .result;
+  // Started but nothing logged: it waits three hours after the workout
+  // ended, in case the athlete fills the session in afterwards.
+  assert.equal(
+    result(open(date, false), date, "2026-09-26T19:00:00Z"),
+    "deferred",
+  );
+  assert.equal(
+    result(open(date, false), date, "2026-09-26T19:31:00Z"),
+    "imported",
+  );
+  // Lifting logged in it: it waits for Finish that day.
+  assert.equal(
+    result(open(date, true), date, "2026-09-26T21:00:00Z"),
+    "deferred",
+  );
+  // Left open past its day: lifting logged in it is that workout, and an
+  // empty one holds nothing back.
+  const before = "2026-09-25";
+  assert.equal(
+    result(open(before, true), before, now.toISOString()),
+    "skipped",
+  );
+  assert.equal(
+    result(open(before, false), before, now.toISOString()),
+    "imported",
+  );
+  // Filled in after the workout and finished: the same lifting.
+  const state = open(date, false);
+  const w = lifting(date);
+  const deferred = applyWorkout(state, w, undefined, new Set(), tz, now);
+  assert.equal(deferred.result, "deferred");
+  state.sessions.push({
+    ...state.activeWorkout!,
+    firstSetAt: "2026-09-26T17:00:00.000Z",
+    finishedAt: "2026-09-26T17:20:00.000Z",
+    durationMinutes: 20,
+  });
+  state.activeWorkout = null;
+  const settled = applyWorkout(
+    state,
+    w,
+    { userId: "u", ...deferred.receipt! },
+    new Set(),
+    tz,
+    now,
+  );
+  assert.equal(settled.result, "skipped");
   assert.equal(state.cardio.sessions.length, 0);
 });
 

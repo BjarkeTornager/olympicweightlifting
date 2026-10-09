@@ -10,7 +10,9 @@ export function Technique({ exerciseId }: { exerciseId: string }) {
   if (!ex?.videoId)
     return (
       <span className="fine-print">
-        Choose an exercise variation with your coach.
+        {exerciseId.startsWith("custom:")
+          ? "Your own exercise. No demo video yet."
+          : "Choose an exercise variation with your coach."}
       </span>
     );
   return (

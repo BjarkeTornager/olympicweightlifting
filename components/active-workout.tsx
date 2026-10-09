@@ -6,9 +6,11 @@ import {
   createEntry,
   finishWorkout,
   followsProgramme,
+  hasLoggedSet,
   replanDraft,
   setTechniqueChecked,
   setWorkoutRecovery,
+  startClock,
 } from "@/lib/domain";
 import { isValidLoggedSet } from "@/js/progression.js";
 import { restSeconds } from "@/lib/exercises";
@@ -93,8 +95,12 @@ export function ActiveWorkout({
     void update(fn).catch((e) => notify(e.message));
   const changeEntry = (id: string, fn: (e: Entry) => void) =>
     save((s) => {
-      const entry = s.activeWorkout?.exercises.find((e) => e.id === id);
-      if (entry) fn(entry);
+      const workout = s.activeWorkout;
+      const entry = workout?.exercises.find((e) => e.id === id);
+      if (!workout || !entry) return;
+      const started = hasLoggedSet(workout);
+      fn(entry);
+      startClock(workout, started);
     });
   const logged = draft.exercises.reduce(
       (n, e) => n + e.sets.filter(isValidLoggedSet).length,

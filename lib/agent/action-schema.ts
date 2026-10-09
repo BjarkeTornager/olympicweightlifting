@@ -66,6 +66,15 @@ export const trainingInputSchema = z
     date,
     category: z.enum(["accessories", "weightlifting", "open"]),
     notes: z.string().max(2000).optional(),
+    durationMinutes: z
+      .number()
+      .int()
+      .min(5)
+      .max(600)
+      .optional()
+      .describe(
+        "How long the whole session took, in minutes, only when the athlete said so. Never a guess.",
+      ),
     exercises: z
       .array(
         z.object({ exerciseId, sets: z.array(set).min(1).max(30) }).strict(),

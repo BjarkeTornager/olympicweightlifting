@@ -86,6 +86,8 @@ struct HealthMappingTests {
     #expect(kind(.swimming, indoor: true) == ("swimming", "Pool Swim"))
     #expect(kind(.traditionalStrengthTraining) == ("strength", "Strength Training"))
     #expect(kind(.yoga) == ("other", "Yoga"))
+    #expect(kind(.stairClimbing) == ("other", "Stair Climbing"))
+    #expect(kind(.stairs) == ("other", "Stairs"))
   }
 
   @Test("Timestamps carry the local offset the server expects")

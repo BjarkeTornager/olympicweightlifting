@@ -242,6 +242,25 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // previous hash (14390d3e…). Health, privacy and evidence text is
     // unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // (PR 10, energy expenditure), and carried onto the 2026-10-05 text on
+    // 2026-10-09 without change: the health paragraph's calories rule
+    // gains two sentences. activeEnergy and burnedInTraining overlap, since
+    // a watch counts the training it saw, so Coach quotes them separately,
+    // never adds them together and never subtracts either from food eaten,
+    // as the voice coach already does; and when burnedInTraining lists
+    // lifting_sessions_without_length or entries_without_estimate, Coach
+    // says its figure leaves those out. Removing them reproduces the
+    // previous hash (14eaff26…). Health, privacy and action policy text is
+    // otherwise unchanged.
+    // Revised 2026-10-09, deliberate and reviewed, from the review of PR 10:
+    // the cardio paragraph stops calling a watch's calories measured, since
+    // they are an estimate too. "the app estimates calories burned itself
+    // when none was measured" now ends "when none was recorded", and
+    // "Activity calories, measured or estimated," now reads "Activity
+    // calories, recorded or estimated,". Restoring those two words
+    // reproduces the previous hash (7786ae88…). Health, privacy and action
+    // policy text is otherwise unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
     // (PR 4, maintenance and training), brought in after the notes above,
     // in the goal-setup paragraph only: goal setup also asks the usual
     // session length, which the plan now uses to count training energy for
@@ -250,7 +269,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // activity gains very_high for heavy manual work, which the plan counts
     // at 2.0 times resting energy ("(low/moderate/high)" gains it).
     // Restoring those three phrases reproduces the previous hash
-    // (14eaff26…). Health, privacy and evidence text is unchanged.
+    // (935bdded…). Health, privacy and evidence text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 5, macros), so Coach describes the macros the plan now sets: the
     // goal-setup paragraph adds protein from a height-adjusted weight at a
@@ -260,11 +279,37 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // height-adjusted weight at a BMI of 30 or more while losing
     // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
     // gaining. Restoring those three phrases reproduces the previous hash
-    // (5d6a23d3…). Health, privacy and evidence text is unchanged.
-    "0071e2d0df3d7dc008774aaf3595d48f663195089eada1828b2a04f328ec5650",
+    // (74eef4c7…). Health, privacy and evidence text is unchanged.
+    "49dda6a478176ba8a8edaba86727cbd14284b3f386686dc6e543dd64c4a61251",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
+});
+
+test("Coach quotes active energy and training apart, as estimates, never added together", () => {
+  const prompt = systemPrompt();
+  assert.match(
+    prompt,
+    /activeEnergy \(Apple Health's estimate of all movement so far\) and burnedInTraining overlap/,
+  );
+  assert.match(
+    prompt,
+    /quote them separately, never add them together, and never subtract either from food eaten/,
+  );
+  assert.match(
+    prompt,
+    /entries_without_estimate, say its figure leaves those out/,
+  );
+  // A watch's calories are an estimate too, never called measured.
+  assert.doesNotMatch(prompt, /when none was measured|measured or estimated/);
+  assert.match(prompt, /Activity calories, recorded or estimated, are/);
+  // The site help agrees with what Today shows.
+  assert.doesNotMatch(siteHelp.health, /measured when a watch recorded it/);
+  assert.match(
+    siteHelp.health,
+    /calories burned, always an estimate \(a watch's included\) of the energy used above rest/,
+  );
+  assert.match(siteHelp.health, /never added together/);
 });
 
 test("Coach policy separates reported events, previews and advice", () => {

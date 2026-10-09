@@ -1,4 +1,5 @@
-import { uid } from "./domain";
+import { hasLoggedSet, startClock, uid } from "./domain";
+import { sessionMinutes } from "./session-length";
 import { journalSchema, type JournalState, type Workout } from "./model";
 
 export type WorkoutStatus = "ongoing" | "completed";
@@ -18,6 +19,7 @@ export function appendWorkoutSets(
   workout: Workout,
   exercises: ReportedExercise[],
 ) {
+  const started = hasLoggedSet(workout);
   for (const reported of exercises) {
     const matches = workout.exercises.filter(
       (e) => e.exerciseId === reported.exerciseId,
@@ -55,6 +57,7 @@ export function appendWorkoutSets(
     }
     entry.completed = entry.sets.every((s) => Boolean(s.logged || s.result));
   }
+  startClock(workout, started);
 }
 
 export function mergeWorkoutSessions(
@@ -121,6 +124,12 @@ export function mergeWorkoutSessions(
     .sort();
   if (status === "ongoing") delete merged.finishedAt;
   else if (finished.length) merged.finishedAt = finished.at(-1);
+  // The entries' own lengths added up, never the gap between them.
+  const minutes = sources
+    .map(sessionMinutes)
+    .filter((m): m is number => m != null);
+  const total = minutes.reduce((sum, m) => sum + m, 0);
+  merged.durationMinutes = minutes.length && total <= 1440 ? total : null;
   const next = structuredClone(state);
   next.sessions = next.sessions.filter((s) => !sessionIds.includes(s.id));
   if (status === "ongoing") next.activeWorkout = merged;

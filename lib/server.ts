@@ -251,13 +251,20 @@ export async function writeJournal(
     }
     const revision = row.revision + 1;
     // Old clients omit photoIds; explicit [] is the supported unlink operation.
+    // They omit where calories came from too: an unchanged figure keeps it.
     state.cardio.sessions = state.cardio.sessions.map((entry) => {
       const before = previous.cardio.sessions.find((s) => s.id === entry.id);
-      return input.preserveMissingActivityPhotos &&
+      const kept =
+        input.preserveMissingActivityPhotos &&
         entry.photoIds === undefined &&
         before?.photoIds
-        ? { ...entry, photoIds: before.photoIds }
-        : entry;
+          ? { ...entry, photoIds: before.photoIds }
+          : entry;
+      return kept.caloriesSource === undefined &&
+        before?.caloriesSource &&
+        before.caloriesKcal === kept.caloriesKcal
+        ? { ...kept, caloriesSource: before.caloriesSource }
+        : kept;
     });
     const activityPhotoIds = [
       ...new Set(state.cardio.sessions.flatMap((s) => s.photoIds ?? [])),

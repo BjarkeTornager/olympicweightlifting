@@ -1,8 +1,8 @@
-import { bodyweightKg, workoutMinutes } from "./energy";
+import { bodyweightKg, dayTraining, workoutMinutes } from "./energy";
 import { z } from "zod";
 import { foodDate } from "./nutrition";
 import type { CardioEntry } from "./cardio";
-import type { JournalState } from "./model";
+import type { JournalState, Workout } from "./model";
 
 // Drinks through the day, each added on rather than overwriting a total.
 export const drinkKinds = [
@@ -213,35 +213,24 @@ function drinksBaseMl(state: JournalState, date: string) {
   };
 }
 
-// Apple Health strength workouts arrive as "other" activities with these
-// titles (HealthSync.swift).
-const importedStrengthTitles = [
-  "strength training",
-  "functional strength training",
-  "core training",
-];
-const importedStrength = (c: CardioEntry) =>
-  c.activity === "other" &&
-  importedStrengthTitles.includes(c.title.trim().toLowerCase());
-
 // Minutes trained that day: timed lifting sessions and every activity,
 // which includes strength workouts imported from Apple Health. A session
 // without usable start and finish times counts as the athlete's usual
-// session length. On a day with logged lifting, an imported strength
-// workout is that same session, as health-sync.ts treats one that arrives
-// after it (a watch stopped before Finish, or a session told to Coach in
-// the evening, imports first): the longer of the two counts, not both.
+// session length. An imported strength workout that is a session logged
+// that day (see sameLifting in energy.ts: a session told to Coach in the
+// evening, say, after the watch's workout imported) counts once with it,
+// the longer of the two; one apart from the day's lifting adds on.
 export function trainingMinutes(state: JournalState, date: string) {
   const usual = state.profile.body?.sessionMinutes ?? 75;
   const minutes = (entries: CardioEntry[]) =>
     entries.reduce((sum, c) => sum + c.durationSeconds / 60, 0);
-  const lifting = state.sessions
-    .filter((s) => s.date === date)
-    .reduce((sum, s) => sum + (workoutMinutes(s) ?? usual), 0);
-  const activities = state.cardio.sessions.filter((c) => c.date === date);
+  const lifting = (sessions: Workout[]) =>
+    sessions.reduce((sum, s) => sum + (workoutMinutes(s) ?? usual), 0);
+  const day = dayTraining(state, date);
   return (
-    Math.max(lifting, minutes(activities.filter(importedStrength))) +
-    minutes(activities.filter((c) => !importedStrength(c)))
+    lifting(day.sessions) +
+    minutes(day.activities) +
+    Math.max(lifting(day.same.sessions), minutes(day.same.activities))
   );
 }
 

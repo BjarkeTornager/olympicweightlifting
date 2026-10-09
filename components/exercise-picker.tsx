@@ -1,27 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { searchExercises } from "@/lib/exercises";
+import {
+  exerciseKey,
+  newExerciseFor,
+  ownExercises,
+  searchExercises,
+} from "@/lib/exercises";
 import { cardioLabels, searchCardioActivities } from "@/lib/cardio";
+import type { JournalState } from "@/lib/model";
 
 /** Native select keeps choosing exercises reliable on iPhone and with a keyboard. */
 export function ExercisePicker({
   label,
   value,
   onChange,
+  state,
   addImmediately = false,
   includeActivities = false,
 }: {
   label: string;
   value: string;
   onChange: (id: string) => void;
+  // The athlete's journal, for their own exercises and a typed new one.
+  state: JournalState;
   addImmediately?: boolean;
   includeActivities?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const items = searchExercises(query);
   const activities = includeActivities ? searchCardioActivities(query) : [];
-  const hasResults = items.length > 0 || activities.length > 0;
+  // Their own exercises with a word starting with each typed word.
+  const words = exerciseKey(query).split(" ").filter(Boolean);
+  const own = ownExercises(state).filter((e) => {
+    const name = exerciseKey(e.id).split(" ");
+    return words.every((w) => name.some((n) => n.startsWith(w)));
+  });
+  // Anything else typed can be saved as their own: offered after the
+  // matches, so a library exercise with that name comes first.
+  const fresh = newExerciseFor(state, query);
+  const hasResults =
+    items.length > 0 || activities.length > 0 || own.length > 0;
   return (
     <div className="exercise-picker">
       <label>
@@ -56,10 +75,21 @@ export function ExercisePicker({
               ? includeActivities
                 ? "Choose exercise or activity"
                 : "Choose exercise"
-              : includeActivities
-                ? "No matching exercises or activities"
-                : "No matching exercises"}
+              : fresh
+                ? "Not in the library yet"
+                : includeActivities
+                  ? "No matching exercises or activities"
+                  : "No matching exercises"}
           </option>
+          {own.length > 0 && (
+            <optgroup label="Your exercises">
+              {own.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {activities.length > 0 && (
             <optgroup label="Cardio & movement">
               {activities.map((activity) => (
@@ -80,12 +110,27 @@ export function ExercisePicker({
                 ))}
             </optgroup>
           ))}
+          {fresh && (
+            <optgroup label="New exercise">
+              <option value={fresh.id}>
+                Add “{fresh.name}” as a new exercise
+              </option>
+            </optgroup>
+          )}
         </select>
       </label>
-      {!hasResults && (
+      {fresh ? (
         <p className="fine-print" role="status">
-          Try another name, muscle or equipment.
+          {hasResults
+            ? `Not in the list? The last choice adds “${fresh.name}” as a new exercise.`
+            : `“${fresh.name}” isn’t in the library. Choose “Add as a new exercise” to save it as your own.`}
         </p>
+      ) : (
+        !hasResults && (
+          <p className="fine-print" role="status">
+            Try another name, muscle or equipment.
+          </p>
+        )
       )}
     </div>
   );

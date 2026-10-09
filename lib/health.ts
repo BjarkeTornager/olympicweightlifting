@@ -15,10 +15,13 @@ const values = {
   sleepHours: z.number().finite().min(0).max(24).nullable(),
   energy: z.number().int().min(1).max(5).nullable(),
   soreness: z.number().int().min(1).max(5).nullable(),
-  waterMl: z.number().finite().int().min(0).max(15000).nullable(),
   bodyweight: z.number().finite().min(20).max(500).nullable(),
   notes: z.string().trim().max(2000),
 };
+// The check-in's water total from before drinks were logged one at a time.
+// Older journals and cached apps still send it; it is moved into a drink
+// (moveCheckinWater) and nothing new writes it.
+const legacyWaterMl = z.number().finite().int().min(0).max(15000).nullable();
 export const checkinPatchSchema = z
   .object({ date: foodDate, ...values })
   .partial()
@@ -34,7 +37,7 @@ export const checkinSchema = z
     sleepHours: values.sleepHours.default(null),
     energy: values.energy.default(null),
     soreness: values.soreness.default(null),
-    waterMl: values.waterMl.default(null),
+    waterMl: legacyWaterMl.default(null),
     bodyweight: values.bodyweight.default(null),
     notes: values.notes.default(""),
     updatedAt: z.string().datetime(),
@@ -45,6 +48,10 @@ export const checkinSchema = z
         start: z.string().datetime(),
         end: z.string().datetime(),
         importedAt: z.string().datetime(),
+        // The one source the night was taken from, as the iPhone names it
+        // ("Apple Watch", "iPhone" or an app's name). Absent from imports
+        // that did not say.
+        source: z.string().trim().min(1).max(60).optional(),
       })
       .strict()
       .optional(),
@@ -121,6 +128,23 @@ export function formatSleepDuration(hours: number) {
   ]
     .filter(Boolean)
     .join(" ");
+}
+// An average of logged nights needs at least five of them: fewer is too
+// noisy to say much (a tracker needs about a week for a reliable mean).
+export const SLEEP_AVERAGE_NIGHTS = 5;
+// The average of these nights in hours, to the minute, or null when there
+// are too few.
+export function sleepAverage(hours: number[]) {
+  return hours.length >= SLEEP_AVERAGE_NIGHTS
+    ? Math.round((hours.reduce((sum, h) => sum + h, 0) / hours.length) * 60) /
+        60
+    : null;
+}
+// A difference in sleep, rounded to 15 minutes as the measurements allow:
+// "about 45 min", or null when it rounds to nothing.
+export function aboutSleepDifference(hours: number) {
+  const quarters = Math.round(Math.abs(hours) * 4);
+  return quarters ? `about ${formatSleepDuration(quarters / 4)}` : null;
 }
 export function saveCheckin(
   state: JournalState,
@@ -280,12 +304,8 @@ export function dailyHealth(state: JournalState, date: string) {
         }
       : null,
     recentCheckins,
-    sleepAverage: sleep.length
-      ? Math.round(
-          (sleep.reduce((sum, c) => sum + c.sleepHours!, 0) / sleep.length) *
-            10,
-        ) / 10
-      : null,
+    // From at least five logged nights, to the minute.
+    sleepAverage: sleepAverage(sleep.map((c) => c.sleepHours!)),
     sleepSamples: sleep.length,
     vitals: recentVitals.find((v) => v.date === date) ?? null,
     recentVitals,

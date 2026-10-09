@@ -14,6 +14,7 @@ import {
   type HealthWorkout,
 } from "../lib/health-sync";
 import { addDrink } from "../lib/hydration";
+import { offsetDate } from "../lib/health";
 import { journalSchema } from "../lib/model";
 import { mealSchema } from "../lib/nutrition";
 import {
@@ -116,6 +117,13 @@ test("every action the app can send is a valid journal action", () => {
       setChanges: { reps: 3 },
     },
     {
+      kind: "correct_workout_set",
+      workoutId: "w",
+      entryId: "e",
+      setId: "s",
+      setChanges: { rpe: 8 },
+    },
+    {
       kind: "create_training_program",
       trainingProgram: {
         name: "Block",
@@ -144,9 +152,16 @@ test("every action the app can send is a valid journal action", () => {
     },
     { kind: "delete_training_program", trainingProgramId: crypto.randomUUID() },
   ];
-  // "use_programme" is the app's own action, not a Coach action.
+  // The app's own actions are not Coach actions.
+  const appOnly = [
+    { kind: "use_programme", programmeId: "stability-power-base-v1" },
+    { kind: "set_workout_recovery", recovery: "limited" },
+    { kind: "confirm_technique", checked: true },
+    { kind: "take_load_reset", entryId: "e" },
+    { kind: "set_hydration_target", hidden: true },
+  ];
   assert.equal(
-    new Set(examples.map((e) => e.kind)).size + 1,
+    new Set(examples.map((e) => e.kind)).size + appOnly.length,
     nativeAction.options.length,
   );
   for (const action of examples) {
@@ -161,11 +176,10 @@ test("every action the app can send is a valid journal action", () => {
     });
     assert.doesNotThrow(() => actionSchema.parse(action), action.kind);
   }
-  actionRequest.parse({
-    id: crypto.randomUUID(),
-    timezone: tz,
-    action: { kind: "use_programme", programmeId: "stability-power-base-v1" },
-  });
+  for (const action of appOnly) {
+    actionRequest.parse({ id: crypto.randomUUID(), timezone: tz, action });
+    assert.equal(actionSchema.safeParse(action).success, false, action.kind);
+  }
 });
 
 test("Today and the journal feed describe the day for the app", () => {
@@ -290,6 +304,13 @@ test("journal items carry their full details: meals item by item, sleep with its
     { label: "Night", value: "23:40 to 07:10" },
   ]);
   assert.equal(sleep.footnote, "From Apple Health");
+  state.health.checkins[0].sleepImport!.source = "Apple Watch";
+  assert.equal(
+    buildJournal(state, 1, "2026-09-27", 14, new Set()).items.find(
+      (i) => i.kind === "sleep",
+    )!.details!.footnote,
+    "From Apple Health, Apple Watch",
+  );
   const checkin = byKind("checkin").details!;
   assert.deepEqual(
     checkin.lines.map((l) => l.label),
@@ -481,6 +502,29 @@ test("a receipt opens to show what was saved, item by item", () => {
   ]);
   assert.match(batch.entries![0].footnote!, /of about 2.5 L that day/);
   assert.equal(batch.entries![2].summary, "330 ml cola.");
+  // A usual size is "about"; a hidden target is left out.
+  const glass = receiptView(
+    {
+      id: "g",
+      title: "Log a drink",
+      detail: "about 250 ml water. 1.2 L on 2026-09-26.",
+      workout: null,
+      status: "saved",
+      expiresAt: now.toISOString(),
+      drink: {
+        name: "water",
+        ml: 250,
+        date,
+        estimated: true,
+        dayTotalMl: 1200,
+      },
+    },
+    now,
+  );
+  assert.deepEqual(glass.entries![0].lines, [
+    { label: "Water", value: "about 250 ml" },
+  ]);
+  assert.equal(glass.entries![0].footnote, "1.2 L that day");
 
   // Targets show the goal label and every target, with what changed.
   const targets = receiptView(
@@ -716,6 +760,42 @@ test("trends give one row per day, oldest first, with gaps left empty", () => {
   assert.equal(trends.days[2].waterMl, undefined, "no drinks is not 0 ml");
 });
 
+test("Today and Trends give the drinks range and estimates, and respect a hidden target", () => {
+  const state = emptyJournal();
+  state.profile.bodyweight = 88;
+  addDrink(state, { date, ml: 250, kind: "water", estimated: true }, now);
+  addDrink(state, { date, ml: 330, kind: "beer" }, now);
+  let water = buildToday(state, 1, date, new Set()).hydration;
+  assert.equal(water.targetMl, 2250);
+  assert.deepEqual(
+    [water.targetLowMl, water.targetHighMl, water.targetHidden],
+    [1750, 2750, undefined],
+  );
+  assert.deepEqual(
+    [water.restDayTargetMl, water.liftingDayTargetMl],
+    [2250, 3000],
+  );
+  assert.match(water.note!, /not a minimum/);
+  assert.deepEqual(
+    water.drinks.map((d) => [d.kind, d.estimated]),
+    [
+      ["water", true],
+      ["beer", undefined],
+    ],
+  );
+  assert.equal(buildTrends(state, date, 3).waterTargetHidden, undefined);
+  assert.equal(buildTrends(state, date, 3).waterTargetMl, 2250);
+  state.preferences.hideHydrationTarget = true;
+  water = buildToday(state, 1, date, new Set()).hydration;
+  assert.equal(water.targetHidden, true);
+  assert.equal(water.totalMl, 580, "drinks still count");
+  // Builds from before 4 October don't know targetHidden: they read a 0
+  // target as none, so they show no meter and no reminder naming it.
+  assert.equal(water.targetMl, 0);
+  const trends = buildTrends(state, date, 3);
+  assert.deepEqual([trends.waterTargetHidden, trends.waterTargetMl], [true, 0]);
+});
+
 test("Coach's view of the day includes Apple Health heart rate and workout details", async () => {
   const { dayForCoach, describeDay } = await import("../lib/journal-summary");
   const { dailyHealth } = await import("../lib/health");
@@ -887,6 +967,37 @@ test("Today names the day the journal began, which the issue number counts from"
     updatedAt: now.toISOString(),
   });
   assert.equal(start(), "2026-09-12");
+});
+
+test("Today carries Coach's note on short sleep, from five nights, unless advice is only on request", () => {
+  const state = emptyJournal();
+  const night = (offset: number, sleepHours: number) =>
+    state.health.checkins.push({
+      date: offsetDate(date, -offset),
+      sleepHours,
+      energy: null,
+      soreness: null,
+      waterMl: null,
+      bodyweight: null,
+      notes: "",
+      updatedAt: now.toISOString(),
+    });
+  for (const offset of [0, 1, 2, 3]) night(offset, 6.25);
+  let today = buildToday(state, 1, date, new Set());
+  assert.equal(today.sleepNote, undefined);
+  assert.equal(today.sleep.averageHours, undefined, "four nights");
+  assert.equal(today.sleep.nights, 4);
+  night(5, 6.25);
+  today = buildToday(state, 2, date, new Set());
+  assert.equal(today.sleep.averageHours, 6.25);
+  assert.equal(today.sleepNote?.id, "sleep-short");
+  assert.match(today.sleepNote!.observation, /average 6 h 15 min/);
+  assert.match(today.sleepNote!.prompt, /more time asleep/);
+  state.profile.coaching = { initiative: "on-request", focus: "" };
+  assert.equal(buildToday(state, 3, date, new Set()).sleepNote, undefined);
+  state.profile.coaching.initiative = "gentle";
+  for (const c of state.health.checkins) c.sleepHours = 8;
+  assert.equal(buildToday(state, 4, date, new Set()).sleepNote, undefined);
 });
 
 test("A new journal's first steps show until all are done, for two weeks", () => {

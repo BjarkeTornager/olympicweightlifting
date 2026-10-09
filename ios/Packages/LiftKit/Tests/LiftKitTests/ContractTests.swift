@@ -37,6 +37,20 @@ struct ContractTests {
     #expect(older.journalStartDate == nil && older.date == "2026-09-26")
   }
 
+  @Test("Today carries Coach's note on short sleep, and the average from five nights")
+  func todayShortSleep() throws {
+    let today = try fixture("today-short-sleep", as: Components.Schemas.Today.self)
+    #expect(today.sleep.nights == 7)
+    #expect(today.sleep.averageHours != nil)
+    let note = try #require(today.sleepNote)
+    #expect(note.id == "sleep-short")
+    #expect(note.observation.contains("7 logged nights"))
+    #expect(!note.prompt.isEmpty)
+    // One night is too few for an average, and no note.
+    let plain = try fixture("today", as: Components.Schemas.Today.self)
+    #expect(plain.sleep.nights == 1 && plain.sleep.averageHours == nil && plain.sleepNote == nil)
+  }
+
   @Test func journal() throws {
     let feed = try fixture("journal", as: Components.Schemas.JournalFeed.self)
     #expect(Set(feed.items.map(\.kind)).isSuperset(of: ["cardio", "meal", "sleep", "vitals", "strength"]))
@@ -136,6 +150,19 @@ struct ContractTests {
     #expect(item.kind == "yoga-class")
   }
 
+  @Test("The workout in progress says why each load, where rest starts, and the day's recovery")
+  func workoutInProgress() throws {
+    let workout = try fixture("workout", as: Components.Schemas.WorkoutDetail.self)
+    #expect(workout.recovery == "auto" && workout.techniqueCheck == false)
+    #expect(workout.recoveryHint?.hasPrefix("You slept 5 h 30 min before this session.") == true)
+    let snatch = workout.exercises[0]
+    #expect(snatch.progression?.status == "confirm" && snatch.restSeconds == 180)
+    #expect(workout.exercises[1].progression?.resetWeight == 72)
+    #expect(workout.exercises[2].sets[0].rpe == 7)
+    // A load the athlete chooses needs no reason; an accessory rests 90 s.
+    #expect(workout.exercises[3].progression == nil && workout.exercises[3].restSeconds == 90)
+  }
+
   @Test("Train decodes from a server that hasn't deployed its newest fields yet")
   func trainingFromOlderServer() throws {
     let url = try #require(Bundle.module.url(forResource: "Fixtures/training", withExtension: "json"))
@@ -147,6 +174,16 @@ struct ContractTests {
     let older = try JSONDecoder().decode(
       Components.Schemas.Training.self, from: JSONSerialization.data(withJSONObject: json))
     #expect(older.bests == nil && older.weeks == nil)
+  }
+
+  @Test("The exercise list has the library's other names and the athlete's own exercises")
+  func exerciseOptions() throws {
+    let training = try fixture("training", as: Components.Schemas.Training.self)
+    let rdl = try #require(training.exercises.first { $0.id == "romanian_deadlift" })
+    #expect(rdl.aliases?.contains("RDL") == true)
+    let own = try #require(training.exercises.first { $0.category == "Your exercises" })
+    #expect(own.id == "custom:Standing cable reverse fly" && own.name == "Standing cable reverse fly")
+    #expect(own.aliases == nil)
   }
 
   @Test("A response this build can't read is told apart from other failures")

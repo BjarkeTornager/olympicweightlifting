@@ -24,19 +24,41 @@ const evening = localClock(
   "Europe/Copenhagen",
 );
 
-test("typed Coach replies in the chosen language, and in the athlete's own without one", () => {
+test("typed Coach replies in the language of the message, then the chosen one", () => {
   const time = morning.time;
   const unset = requestTime(morning.date, morning.timezone, time);
   assert.match(unset, /say "Good morning"/);
-  assert.doesNotMatch(unset, /has chosen/);
+  assert.doesNotMatch(unset, /has chosen|wrote this message/);
+  // No words that tell: the language chosen in the app.
   const danish = requestTime(morning.date, morning.timezone, time, "da");
   assert.match(danish, /say "Godmorgen"/);
   assert.match(
     danish,
-    /write every reply in Danish \(dansk\), whatever language/,
+    /chosen Danish for Coach: reply in Danish \(dansk\) unless they clearly write in another language/,
   );
   const english = requestTime(morning.date, morning.timezone, time, "en");
-  assert.match(english, /write every reply in English, whatever language/);
+  assert.match(english, /chosen English for Coach: reply in English unless/);
+  // An English message with Danish chosen is answered, and greeted, in
+  // English; a Danish one with English chosen in Danish.
+  const wroteEnglish = requestTime(
+    morning.date,
+    morning.timezone,
+    time,
+    "da",
+    "en",
+  );
+  assert.match(wroteEnglish, /wrote this message in English: reply in English/);
+  assert.match(wroteEnglish, /say "Good morning"/);
+  assert.doesNotMatch(wroteEnglish, /chosen/);
+  const wroteDanish = requestTime(
+    morning.date,
+    morning.timezone,
+    time,
+    "en",
+    "da",
+  );
+  assert.match(wroteDanish, /reply in Danish \(dansk\)/);
+  assert.match(wroteDanish, /say "Godmorgen"/);
 
   const turn = {
     id: crypto.randomUUID(),

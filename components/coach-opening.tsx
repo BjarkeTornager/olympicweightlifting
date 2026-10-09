@@ -1,7 +1,12 @@
 "use client";
 import { useState, useId } from "react";
 import { ChevronDown } from "@/components/ui/icons";
-import { coachSuggestion, coachingSchema } from "@/lib/coaching";
+import {
+  coachSuggestion,
+  coachingSchema,
+  quietOpenings,
+  weeklyOpenings,
+} from "@/lib/coaching";
 import type { JournalController } from "./journal";
 import { Button } from "./ui/button";
 import { WhistleIcon } from "./ui/journal-icons";
@@ -29,6 +34,16 @@ export function CoachOpening({
       return null;
     }
   });
+  // Openings hidden for a week, by id, with the date they were hidden.
+  const weekKey = `lift-coach-week:${account}`;
+  const [hiddenWeek, setHiddenWeek] = useState<Record<string, string>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(weekKey) ?? "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch {
+      return {};
+    }
+  });
   const [open, setOpen] = useState(!compact);
   if (
     !account ||
@@ -37,8 +52,13 @@ export function CoachOpening({
     journal.state.profile.coaching?.initiative === "on-request"
   )
     return null;
-  const suggestion = coachSuggestion(journal.state, date);
+  const suggestion = coachSuggestion(
+    journal.state,
+    date,
+    quietOpenings(hiddenWeek, date),
+  );
   if (compact && suggestion.id === "get-to-know-you") return null;
+  const weekly = weeklyOpenings.includes(suggestion.id);
   return (
     <aside
       className={`coach-opening ${compact ? "compact" : ""}`}
@@ -69,17 +89,26 @@ export function CoachOpening({
             Talk it through
           </Button>
           <button
-            title="Hide this suggestion for today on this device"
+            title={
+              weekly
+                ? "Hide this suggestion for a week on this device"
+                : "Hide this suggestion for today on this device"
+            }
             onClick={() => {
+              const week = weekly
+                ? { ...hiddenWeek, [suggestion.id]: date }
+                : hiddenWeek;
               setHiddenDate(date);
+              setHiddenWeek(week);
               try {
                 localStorage.setItem(key, date);
+                if (weekly) localStorage.setItem(weekKey, JSON.stringify(week));
               } catch {
                 /* In-memory dismissal still works. */
               }
             }}
           >
-            Hide for today
+            {weekly ? "Hide for a week" : "Hide for today"}
           </button>
         </div>
         <small className="coach-opening-source">

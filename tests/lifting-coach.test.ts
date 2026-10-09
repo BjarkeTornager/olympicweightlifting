@@ -35,7 +35,11 @@ test("lifting evidence separates explicit outcomes, unrated work and unknown rec
   assert.equal(report.rpeSets, 2);
   assert.equal(report.weeks[0].averageSleepHours, null);
   assert.equal(report.weeks[0].averageReportedRpe, null);
-  assert.equal(report.weeks[3].averageSleepHours, 7.5);
+  assert.equal(
+    report.weeks[3].averageSleepHours,
+    null,
+    "one night is too few for an average",
+  );
   assert.equal(report.weeks[3].sleepNights, 1);
   assert.equal(report.activeWorkout?.loggedSets, 0);
   assert.deepEqual(report.exercises[0].bestRecordedSet, {
@@ -79,7 +83,7 @@ test("four-week lifting bounds exclude future, old, unfinished and merely prescr
     report.weeks.reduce((sum, w) => sum + w.sessions, 0),
     2,
   );
-  const filtered = liftingReview(state, date, "front_squat");
+  const filtered = liftingReview(state, date, ["front_squat"]);
   assert.equal(filtered.recordedSessions, 0);
   assert.equal(filtered.exercises.length, 0);
   assert.equal(

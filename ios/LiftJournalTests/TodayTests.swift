@@ -59,22 +59,42 @@ struct TodayTests {
         == "One meal so far. Sleep was close to your weekly average.")
   }
 
-  @Test("Sleep is compared with the athlete's own week: within 15 minutes reads as close")
+  @Test("Sleep is compared with the athlete's own week, to about 15 minutes: within them reads as close")
   func sleep() {
     #expect(DaySummary(sleepHours: 7.25, sleepAverage: 7.2).text == "Sleep was close to your weekly average.")
     #expect(DaySummary(sleepHours: 7.45, sleepAverage: 7.2).text == "Sleep was close to your weekly average.")
+    // 21 minutes rounds to 15.
+    #expect(DaySummary(sleepHours: 7.55, sleepAverage: 7.2).text == "Sleep was close to your weekly average.")
     #expect(
-      DaySummary(sleepHours: 7.9, sleepAverage: 7.2).text == "Sleep was 42 min longer than your weekly average.")
+      DaySummary(sleepHours: 7.6, sleepAverage: 7.2).text == "Sleep was about 30 min longer than your weekly average.")
+    #expect(
+      DaySummary(sleepHours: 7.9, sleepAverage: 7.2).text == "Sleep was about 45 min longer than your weekly average.")
     #expect(
       DaySummary(meals: 2, sleepHours: 6.2, sleepAverage: 7.2).text
-        == "Two meals so far. Sleep was 1 h shorter than your weekly average.")
+        == "Two meals so far. Sleep was about 1 h shorter than your weekly average.")
+    #expect(
+      DaySummary(sleepHours: 5.9, sleepAverage: 7.2).text
+        == "Sleep was about 1 h 15 min shorter than your weekly average.")
     // Without a week to compare with, sleep is not mentioned.
     #expect(DaySummary(sleepHours: 7.5, sleepAverage: nil).text == nil)
   }
 
+  @Test("Coach's note on short sleep, once hidden, stays away for a week")
+  func sleepNote() {
+    let saved = SleepNote.hide("sleep-short", today: "2026-10-04")
+    #expect(saved == "sleep-short 2026-10-04")
+    #expect(SleepNote.hidden("sleep-short", saved: saved, today: "2026-10-04"))
+    #expect(SleepNote.hidden("sleep-short", saved: saved, today: "2026-10-10"))
+    #expect(!SleepNote.hidden("sleep-short", saved: saved, today: "2026-10-11"))
+    // Not before it was hidden, not another note, and not from nothing.
+    #expect(!SleepNote.hidden("sleep-short", saved: saved, today: "2026-10-03"))
+    #expect(!SleepNote.hidden("sleep-other", saved: saved, today: "2026-10-05"))
+    #expect(!SleepNote.hidden("sleep-short", saved: "", today: "2026-10-05"))
+  }
+
   @Test("It fits two lines: the minutes go first, then the sleep sentence")
   func length() {
-    let long = DaySummary(activities: ["running"], meals: 1, checkedIn: true, sleepHours: 7.5, sleepAverage: 7.18)
+    let long = DaySummary(activities: ["running"], meals: 1, checkedIn: true, sleepHours: 7.5, sleepAverage: 7)
     #expect(long.text == "A run, a meal and a check-in so far. Sleep was longer than your weekly average.")
     let longer = DaySummary(
       activities: ["running", "walking", "cycling", "swimming"], workouts: 2, meals: 3, checkedIn: true,
@@ -145,6 +165,11 @@ struct TodayTests {
     #expect(lines[0].id == "1")
     #expect(lines[0].latest.id == "6")
     #expect(DrinkLine.lines([]).isEmpty)
+    // A usual size Coach saved without a volume is "about", on its own line.
+    var glass = drink("7", 250)
+    glass.estimated = true
+    let mixed = DrinkLine.lines([drink("1", 250), glass, glass])
+    #expect(mixed.map(\.amount) == ["250 ml", "2 × about 250 ml"])
   }
 
   @Test("Each day of the journal is an issue, and weeks are ISO weeks")
@@ -204,6 +229,23 @@ struct TodayTests {
     #expect(Format.litres(500) == ("500", "ml"))
     #expect(Format.count(2) == "two")
     #expect(Format.count(12) == "12")
+  }
+
+  @Test("Account marks the drinks targets as estimated while no weight is known, and says so")
+  func drinksTargets() {
+    func water(estimated: Bool, hidden: Bool? = nil, rest: Int? = 2000, lifting: Int? = 2750)
+      -> Components.Schemas.Hydration
+    {
+      .init(
+        totalMl: 0, targetMl: hidden == true ? 0 : 2000, estimatedTarget: estimated, drinks: [],
+        targetHidden: hidden, restDayTargetMl: rest, liftingDayTargetMl: lifting)
+    }
+    #expect(DrinksTargets.line(water(estimated: true)) == "2 L rest · 2.75 L lifting, estimated")
+    #expect(DrinksTargets.basis(water(estimated: true)) == "a general estimate until your weight is known")
+    #expect(DrinksTargets.line(water(estimated: false)) == "2 L rest · 2.75 L lifting")
+    #expect(DrinksTargets.basis(water(estimated: false)) == "an estimate from your weight and the day's training")
+    #expect(DrinksTargets.line(water(estimated: true, rest: nil, lifting: nil)) == "2 L a day, estimated")
+    #expect(DrinksTargets.line(water(estimated: true, hidden: true)) == "Hidden on Today")
   }
 
   @Test("A target of 0 is no target: no Account row, no line in Trends, no meter on Today")

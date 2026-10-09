@@ -139,8 +139,14 @@ test("an exercise name used as a filter id reads that exercise; an unknown one i
     summary("squats"),
     /No exercise has the id "squats"\. Use an exact exerciseId such as .*back_squat/,
   );
+  // A plural is the same exercise; a name nothing has is refused.
+  assert.equal((await summary("clean and jerks")).sessions, 1);
   await assert.rejects(
-    runReadTool("lifting_review", { exerciseId: "clean and jerks" }, ctx),
+    runReadTool(
+      "lifting_review",
+      { exerciseId: "clean and jerk complex" },
+      ctx,
+    ),
     /No exercise has the id/,
   );
   // A filtered read still doesn't count as reading every session of the dates.

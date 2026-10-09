@@ -1,4 +1,10 @@
-import { test, expect, browserUser } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import { emptyJournal, today } from "../../lib/domain";
 import { mealSchema } from "../../lib/nutrition";
 import AxeBuilder from "@axe-core/playwright";
@@ -40,9 +46,9 @@ test("meal and ingredient tags survive editing and reload, filter history and re
     }),
   ];
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
+    if (isJournalSave(r.request())) {
       expect(r.request().headers()["x-food-tags-version"]).toBe("1");
-      state = r.request().postDataJSON().state;
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

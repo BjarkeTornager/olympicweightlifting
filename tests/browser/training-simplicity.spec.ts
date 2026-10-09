@@ -1,4 +1,11 @@
-import { test, expect, browserUser, openJournalArea } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  openJournalArea,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import {
   createWorkout,
@@ -19,8 +26,8 @@ async function activeWorkout(context: BrowserContext) {
   );
   const workoutId = state.activeWorkout.id;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

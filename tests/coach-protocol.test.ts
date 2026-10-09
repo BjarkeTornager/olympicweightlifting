@@ -132,6 +132,31 @@ test("streamed exercise lookup batches reach the bounded engine recovery path", 
   );
 });
 
+test("a streamed tool call is reported once, when its arguments start", async () => {
+  const frame = (tool_calls: unknown[], finish_reason?: string) =>
+    sse({ choices: [{ delta: { tool_calls }, finish_reason }] });
+  const stream =
+    frame([{ index: 0, id: "a", function: { name: "log_", arguments: "" } }]) +
+    frame([{ index: 0, function: { name: "entry", arguments: '{"kind":' } }]) +
+    frame([{ index: 0, function: { arguments: '"record_meal"}' } }]) +
+    frame([
+      { index: 1, id: "b", function: { name: "show_visual", arguments: "{}" } },
+    ]) +
+    frame([], "tool_calls") +
+    "data: [DONE]\n\n";
+  const told: string[] = [];
+  const raw = await readModelStream(
+    chunks(stream),
+    "openrouter",
+    () => {},
+    AbortSignal.timeout(1000),
+    {},
+    (name) => told.push(name),
+  );
+  assert.deepEqual(told, ["log_entry", "show_visual"]);
+  assert.equal(parseModelResponse(raw, "openrouter").tool_calls?.length, 2);
+});
+
 test("provider streams reassemble split UTF-8, tool arguments and SSE frames without exposing reasoning", async () => {
   const stream =
     ": processing\r\n\r\n" +

@@ -104,6 +104,15 @@ export function cardioBurn(
   };
 }
 
+// A session's length from its start to its finish, or null without both
+// times. An unfinished session left open for hours is not training time.
+export function workoutMinutes(workout: Workout) {
+  if (!workout.startedAt || !workout.finishedAt) return null;
+  const minutes =
+    (Date.parse(workout.finishedAt) - Date.parse(workout.startedAt)) / 60000;
+  return minutes >= 10 && minutes <= 240 ? minutes : null;
+}
+
 // A lifting session at about 5 METs (Compendium 2024, 02052), 1 of them
 // resting energy: about 4 kcal per kg per hour above rest. The goal plan
 // adds that net figure to maintenance, which already counts resting energy,
@@ -118,11 +127,8 @@ export function strengthBurn(
   workout: Workout,
 ): Burn | null {
   const weight = bodyweightKg(state, workout.date);
-  if (!weight || !workout.startedAt || !workout.finishedAt) return null;
-  const minutes =
-    (Date.parse(workout.finishedAt) - Date.parse(workout.startedAt)) / 60000;
-  // An unfinished session left open for hours is not training time.
-  if (!(minutes >= 10 && minutes <= 240)) return null;
+  const minutes = workoutMinutes(workout);
+  if (!weight || minutes == null) return null;
   return {
     kcal: Math.round(LIFTING_MET * weight * (minutes / 60)),
     estimated: true,

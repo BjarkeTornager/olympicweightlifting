@@ -13,10 +13,14 @@ struct DaySummary: Equatable {
   var meals = 0
   var checkedIn = false
   var sleepHours: Double?
-  /// The average of the nights before, from the last week.
+  /// The average of the nights before, from the last week, when there
+  /// are enough of them (`nightsForAverage`).
   var sleepAverage: Double?
 
-  /// Within this many minutes, last night reads as close to the average.
+  /// An average needs at least this many nights, as on the server.
+  static let nightsForAverage = 5
+  /// Differences are rounded to this many minutes, as a week of nights
+  /// allows; within it, last night reads as close to the average.
   static let closeTo = 15
   /// About two lines of the standfirst at the default text size. A longer
   /// summary drops the minutes from the sleep sentence, then the sentence.
@@ -77,13 +81,14 @@ struct DaySummary: Equatable {
     return list.prefix(1).uppercased() + list.dropFirst() + " so far."
   }
 
-  /// "Sleep was close to your weekly average.", or by how much it was longer
-  /// or shorter, `exact`ly or not.
+  /// "Sleep was close to your weekly average.", or by about how much it was
+  /// longer or shorter, to 15 minutes, or without the minutes.
   private func sleep(exact: Bool) -> String? {
     guard let hours = sleepHours, let average = sleepAverage, hours > 0, average > 0 else { return nil }
-    let minutes = Int(((hours - average) * 60).rounded())
+    let step = Double(Self.closeTo)
+    let minutes = Int(((hours - average) * 60 / step).rounded() * step)
     if abs(minutes) <= Self.closeTo { return "Sleep was close to your weekly average." }
-    let by = exact ? "\(Self.duration(abs(minutes))) " : ""
+    let by = exact ? "about \(Self.duration(abs(minutes))) " : ""
     return "Sleep was \(by)\(minutes > 0 ? "longer" : "shorter") than your weekly average."
   }
 

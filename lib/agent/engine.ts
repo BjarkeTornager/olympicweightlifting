@@ -708,6 +708,9 @@ async function turn(
         totalMs: metrics.totalMs ?? Date.now() - turnStarted,
         firstTextMs: metrics.firstTextMs ?? null,
         ...turnTotals(metrics),
+        tools: metrics.rounds
+          .filter((r) => !r.filtered)
+          .map((r) => r.tools ?? []),
       }),
     );
   };
@@ -851,6 +854,9 @@ async function turn(
       metrics.rounds.push({
         ...served,
         ms: Date.now() - roundStarted - (blocked?.ms ?? 0),
+        ...(result.tool_calls?.length
+          ? { tools: result.tool_calls.map((c) => c.function.name) }
+          : {}),
       });
       messages.push(message);
       if (answering !== undefined) {

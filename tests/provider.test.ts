@@ -457,3 +457,52 @@ test("a save cut off at the output limit is asked for once more with room for a 
   );
   assert.deepEqual(limits, [4000, 8000]);
 });
+
+test("a connection dropped before any reply is asked for once more; a Stop is not", async (t) => {
+  const { mock } = await import("node:test");
+  const { callModel, dropped } = await import("../lib/agent/provider");
+  process.env.AGENT_PROVIDER = "openrouter";
+  process.env.AGENT_MODEL = "openai/gpt-5.6-luna";
+  process.env.OPENROUTER_API_KEY = "test-key";
+  const reset = () =>
+    Object.assign(new TypeError("fetch failed"), {
+      cause: Object.assign(new Error("read ECONNRESET"), {
+        code: "ECONNRESET",
+      }),
+    });
+  assert.equal(dropped(reset()), true);
+  assert.equal(
+    dropped(Object.assign(new Error("socket"), { code: "UND_ERR_SOCKET" })),
+    true,
+  );
+  assert.equal(dropped(new DOMException("Stopped", "AbortError")), false);
+  assert.equal(dropped(new Error("Unexpected end of JSON input")), false);
+  let calls = 0;
+  let failures = 1;
+  const fetch = mock.method(globalThis, "fetch", async () => {
+    calls++;
+    if (failures-- > 0) throw reset();
+    return Response.json({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: "Logged." },
+        },
+      ],
+    });
+  });
+  t.after(() => fetch.mock.restore());
+  const ask = () =>
+    callModel(
+      [{ role: "user", content: "Log my oats" }],
+      [],
+      AbortSignal.timeout(5000),
+    );
+  assert.equal((await ask()).content, "Logged.");
+  assert.equal(calls, 2);
+  // Dropped twice: the second failure is the turn's.
+  calls = 0;
+  failures = 2;
+  await assert.rejects(ask(), /fetch failed/);
+  assert.equal(calls, 2);
+});

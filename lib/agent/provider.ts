@@ -248,6 +248,29 @@ export function modelRequest(
     },
   };
 }
+// A connection to the provider that dropped (reset, refused, timed out at
+// the socket) rather than an answer, a Stop or the turn's own time limit.
+const droppedCodes = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+]);
+export function dropped(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "AbortError" || error.name === "TimeoutError")
+    return false;
+  const code = (value: unknown) =>
+    (value as { code?: unknown } | undefined)?.code;
+  const codes = [code(error), code(error.cause)];
+  return (
+    codes.some((c) => typeof c === "string" && droppedCodes.has(c)) ||
+    (error.name === "TypeError" &&
+      /^(fetch failed|terminated)$/.test(error.message))
+  );
+}
 // A tool call whose arguments are not whole JSON: a reply cut off at the
 // output limit, which providers do not always report as such. callModel
 // asks once more with more room; if that is cut off too, this message is
@@ -442,7 +465,9 @@ export async function callModel(
   let blocked: ModelUsage | undefined;
   // A reply cut off in a tool call, such as a save of many entries, is
   // asked for once more with room for a long reply. Text already shown is
-  // not streamed again.
+  // not streamed again. A connection dropped before any of the reply came
+  // is asked for once more too.
+  let reconnected = false;
   const attempt = async (
     attemptOptions: ModelOptions,
     fallback?: boolean,
@@ -462,6 +487,16 @@ export async function callModel(
         fallback,
       );
     } catch (e) {
+      if (!streamed && !reconnected && !signal.aborted && dropped(e)) {
+        reconnected = true;
+        console.warn(
+          JSON.stringify({
+            event: "coach_connection_retry",
+            model: attemptOptions.model ?? config?.model ?? null,
+          }),
+        );
+        return attempt(attemptOptions, fallback);
+      }
       if (!(e instanceof ReplyCutShort) || attemptOptions.longReply) throw e;
       console.warn(
         JSON.stringify({

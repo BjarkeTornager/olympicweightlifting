@@ -5,6 +5,7 @@ import {
   energyQuestionsFor,
   goalsForState,
   goalsHeading,
+  notesAboutAthlete,
   notesForTargets,
   planForState,
   planTargets,
@@ -427,8 +428,11 @@ export function setDailyTargets(
 // What is said beside the saved targets: the plan's notes when they are the
 // plan's, a line saying the plan suggests new ones, or that they are the
 // athlete's own, with the plan's estimate; otherwise that they differ.
-// Builds of the app from before suggestions show these notes but no
-// suggestion, so the line says where to find it.
+// With the same goal, the plan's notes about the athlete (under 18,
+// pregnancy, breastfeeding, a limit on protein) follow any of those lines,
+// as their advice holds whatever the targets. Builds of the app from before
+// suggestions show these notes but no suggestion, so the line says where to
+// find it.
 export function targetNotes(
   state: JournalState,
   today: string,
@@ -436,18 +440,21 @@ export function targetNotes(
 ) {
   const plan = proposal?.plan ?? planForState(state, today);
   if (!plan) return [];
+  const saved = state.nutrition.targets;
   if (proposal) {
     const kcal = dailyTarget(proposal.targets.calories);
     return [
       `Your goals plan suggests new daily targets${kcal != null ? `, about ${fmt(kcal)} kcal a day` : ""}. You can take them on Today on the website, or in the latest app.`,
+      ...notesAboutAthlete(plan, saved),
     ];
   }
-  const notes = notesForTargets(plan, state.nutrition.targets);
+  const notes = notesForTargets(plan, saved);
   return notes[0] === TARGETS_DIFFER &&
     targetsInForce(state).source === "manual" &&
     plan.dailyTargets
     ? [
         `These are your own daily targets; your goals plan's estimate is about ${fmt(plan.calories)} kcal a day.`,
+        ...notesAboutAthlete(plan, saved),
       ]
     : notes;
 }

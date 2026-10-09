@@ -14,6 +14,7 @@ import {
   planGoals,
   POSTPARTUM_WEEKS,
   savedTraining,
+  SESSION_MINUTES,
   splitGoals,
   type BodyGoalsInput,
 } from "@/lib/body-goals";
@@ -437,20 +438,24 @@ function GoalsForm({
     sessionMinutes: number(draft.sessionMinutes),
   });
   const split = parsed.success ? splitGoals(parsed.data) : null;
-  // When only sex or everyday activity is left to choose, the form names
-  // it: Save stays disabled, so the browser never points at the select.
+  // Save stays disabled until the plan can be worked out, so the browser
+  // never points at a field: the form names a session length outside the
+  // plan's range, and the choices still to make when only those are left.
+  const issues = parsed.success ? [] : parsed.error.issues;
   const unchosen = [
     ...(draft.sex ? [] : ["your sex"]),
     ...(draft.activity ? [] : ["how active you are outside training"]),
   ];
   const waiting =
-    !parsed.success &&
-    unchosen.length > 0 &&
-    parsed.error.issues.every(
-      (issue) => issue.path[0] === "sex" || issue.path[0] === "activity",
-    )
-      ? `Choose ${unchosen.join(" and ")} to see your daily plan.`
-      : "Fill in the numbers to see your daily plan.";
+    draft.sessionMinutes.trim() &&
+    issues.some((issue) => issue.path[0] === "sessionMinutes")
+      ? `Give the session length in whole minutes, from ${SESSION_MINUTES.min} to ${SESSION_MINUTES.max}.`
+      : unchosen.length > 0 &&
+          issues.every(
+            (issue) => issue.path[0] === "sex" || issue.path[0] === "activity",
+          )
+        ? `Choose ${unchosen.join(" and ")} to see your daily plan.`
+        : "Fill in the numbers to see your daily plan.";
   const preview =
     split &&
     ((lowWeightConfirmed: boolean, answered = true) =>

@@ -25,6 +25,7 @@ import {
   workout,
   type Scenario,
 } from "./bench";
+import { exerciseKey } from "../../lib/exercises";
 
 const { today, yesterday, twoDaysAgo, lastTuesday } = dates;
 const item = (
@@ -241,6 +242,131 @@ export const scenarios: Scenario[] = [
               [90, 3, true],
               [90, 3, true],
             ]),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // A real failure: Coach found no library match, would not save without
+    // guessing, and offered the athlete's own exercise only when pushed.
+    id: "exercise-not-in-library",
+    title:
+      "Sets for an exercise the library lacks are logged as the athlete's own",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, {
+        back_squat: [
+          [100, 5],
+          [100, 5],
+        ],
+      });
+    },
+    turns: [
+      {
+        en: "I just did standing cable reverse fly: 10 reps at 10 kg, 10 at 15 kg, then 8 at 15 kg twice. Log it to my workout.",
+        da: "Jeg har lige lavet standing cable reverse fly: 10 gentagelser på 10 kg, 10 på 15 kg og så 8 på 15 kg to gange. Gem det i min træning.",
+        expects: "save",
+        check: (c) => {
+          const entries = (c.after.activeWorkout?.exercises ?? []).filter(
+            (e) => exerciseKey(e.exerciseId) === "standing cable reverse fly",
+          );
+          return [
+            ...expect(
+              entries.length === 1 &&
+                entries[0].exerciseId.startsWith("custom:"),
+              `Expected one custom:Standing cable reverse fly entry, got ${JSON.stringify(entries.map((e) => e.exerciseId))}`,
+            ),
+            ...sameSets(
+              "standing cable reverse fly",
+              activeSets(c.after, entries[0]?.exerciseId ?? ""),
+              [
+                [10, 10, true],
+                [15, 10, true],
+                [15, 8, true],
+                [15, 8, true],
+              ],
+            ),
+            ...expect(
+              !activeSets(c.after, "reverse_fly").length,
+              "Logged as the dumbbell reverse fly instead",
+            ),
+            ...sameSets("back squat kept", activeSets(c.after, "back_squat"), [
+              [100, 5, true],
+              [100, 5, true],
+            ]),
+            ...onlyChanged(c, ["activeWorkout"]),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // The other side of the same rule: a catalogue lift named the way people
+    // say it, in the plural, is still the catalogue lift, never a new
+    // exercise of the athlete's own.
+    id: "plural-catalogue-lift",
+    title: "A catalogue lift named in the plural is logged as that lift",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, { romanian_deadlift: [[80, 8]] });
+    },
+    turns: [
+      {
+        en: "Just did front squats: 3 sets of 3 at 90 kg. Log them.",
+        da: "Har lige lavet front squats: 3 sæt af 3 på 90 kg. Gem dem.",
+        expects: "save",
+        check: (c) => [
+          ...sameSets("front squat", activeSets(c.after, "front_squat"), [
+            [90, 3, true],
+            [90, 3, true],
+            [90, 3, true],
+          ]),
+          ...expect(
+            !(c.after.activeWorkout?.exercises ?? []).some((e) =>
+              e.exerciseId.startsWith("custom:"),
+            ),
+            "Saved a catalogue lift as the athlete's own exercise",
+          ),
+          ...onlyChanged(c, ["activeWorkout"]),
+        ],
+      },
+    ],
+  },
+  {
+    id: "plan-exercise-not-in-library",
+    title: "An exercise still to do is added to the workout in progress",
+    category: "strength",
+    split: "heldout",
+    seed: (s) => {
+      s.activeWorkout = workout(today, { back_squat: [[100, 5]] });
+    },
+    turns: [
+      {
+        en: "Add 3 sets of 12 standing cable reverse fly at 10 kg to my workout for later, after the squats.",
+        da: "Tilføj 3 sæt med 12 standing cable reverse fly på 10 kg til min træning, jeg tager dem efter squats.",
+        expects: "review",
+        check: (c) => {
+          const planned = c.proposals
+            .find((p) => !p.status)
+            ?.workout?.exercises.find(
+              (e) => exerciseKey(e.exerciseId) === "standing cable reverse fly",
+            );
+          return [
+            ...expect(
+              planned?.sets.length === 3 &&
+                planned.sets.every(
+                  (s) =>
+                    !s.logged &&
+                    !s.result &&
+                    Number(s.weight) === 10 &&
+                    Number(s.reps) === 12,
+                ),
+              `Expected 3 planned sets of 12 at 10 kg, got ${JSON.stringify(planned?.sets ?? null)}`,
+            ),
+            ...onlyChanged(c),
           ];
         },
       },
@@ -507,6 +633,97 @@ export const scenarios: Scenario[] = [
                 near(run[0].distanceKm, 5) &&
                 run[0].durationSeconds === 1650,
               `Run ${JSON.stringify(run.map((r) => [r.distanceKm, r.durationSeconds]))}`,
+            ),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // A real failure: Coach asked whether to save the food and drinks or the
+    // five supplements first, because a save then held six entries.
+    id: "food-drinks-supplements",
+    title: "Food, drinks and five supplements in one message, one save",
+    category: "several",
+    split: "heldout",
+    turns: [
+      {
+        en: "Can you add two glasses of water. 1 glass of kefir. 1 handful of raisins. 5 rye bread slices. 5 panfried eggs. 1 banana. And 4 omega 3, 2 multivitamin, 1 magnesium, 1 Q10, and 6800 mg of creatine.",
+        da: "Kan du tilføje to glas vand. 1 glas kefir. 1 håndfuld rosiner. 5 skiver rugbrød. 5 spejlæg. 1 banan. Og 4 omega 3, 2 multivitaminer, 1 magnesium, 1 Q10 og 6800 mg kreatin.",
+        at: "13:00",
+        expects: "save",
+        check: (c) => {
+          const meals = c.after.nutrition.meals.filter((m) => m.date === today);
+          const foods = meals
+            .flatMap((m) => m.items.map((i) => i.name.toLowerCase()))
+            .join(" | ");
+          const supplements = (c.after.health.supplements ?? [])
+            .filter((x) => x.date === today)
+            .map((x) => x.name.toLowerCase())
+            .join(" | ");
+          return [
+            ...expect(
+              ["raisin|rosin", "rye|rug", "egg|æg", "banana|banan"].every((w) =>
+                new RegExp(w).test(foods),
+              ),
+              `Food: ${foods}`,
+            ),
+            ...expect(
+              water(c.after, today) >= 400,
+              `Water ${water(c.after, today)} ml`,
+            ),
+            ...expect(
+              /kefir/i.test(
+                JSON.stringify([
+                  c.after.health.drinks ?? [],
+                  c.after.nutrition.meals,
+                ]),
+              ),
+              "No kefir",
+            ),
+            ...expect(
+              ["omega", "multi", "magnes", "q10", "creatin|kreatin"].every(
+                (w) => new RegExp(w).test(supplements),
+              ),
+              `Supplements: ${supplements}`,
+            ),
+          ];
+        },
+      },
+    ],
+  },
+  {
+    // A whole day at once: more entries than one ordinary reply has room
+    // for, so the save may first be cut off and asked for again.
+    id: "whole-day",
+    title: "Four meals, drinks, six supplements and a check-in in one message",
+    category: "several",
+    split: "heldout",
+    turns: [
+      {
+        en: "Log my whole day please. Breakfast: oatmeal with milk and blueberries, 2 boiled eggs. Lunch: chicken salad with feta and a wholegrain roll. Snack: an apple and a protein bar. Dinner: salmon, rice and broccoli. Drinks: 3 glasses of water, 2 coffees with milk and a beer. Supplements: vitamin D, fish oil, magnesium, zinc, creatine 5 g and a multivitamin. I slept 7 hours and my energy is 4 out of 5.",
+        da: "Gem hele min dag. Morgenmad: havregryn med mælk og blåbær, 2 kogte æg. Frokost: kyllingesalat med feta og en fuldkornsbolle. Mellemmåltid: et æble og en proteinbar. Aftensmad: laks, ris og broccoli. Drikke: 3 glas vand, 2 kaffe med mælk og en øl. Kosttilskud: D-vitamin, fiskeolie, magnesium, zink, kreatin 5 g og en multivitamin. Jeg sov 7 timer og min energi er 4 ud af 5.",
+        at: "13:00",
+        expects: "save",
+        check: (c) => {
+          const meals = c.after.nutrition.meals.filter((m) => m.date === today);
+          const supplements = (c.after.health.supplements ?? []).filter(
+            (x) => x.date === today,
+          );
+          const drinks = (c.after.health.drinks ?? []).filter(
+            (d) => d.date === today,
+          );
+          const checkin = checkinOn(c.after, today);
+          return [
+            ...expect(meals.length >= 4, `${meals.length} meals`),
+            ...expect(
+              supplements.length >= 6,
+              `${supplements.length} supplements`,
+            ),
+            ...expect(drinks.length >= 3, `${drinks.length} drinks`),
+            ...expect(
+              near(checkin?.sleepHours, 7) && checkin?.energy === 4,
+              `Check-in ${checkin?.sleepHours} h, energy ${checkin?.energy}`,
             ),
           ];
         },

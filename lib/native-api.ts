@@ -1,10 +1,15 @@
 import { supplementsForDay } from "./supplements";
 import {
+  activeEnergyKcal,
   burnText,
-  burnedNote,
+  burnedContext,
+  burnedLines,
   burnedToday,
   cardioBurn,
+  recordedBurn,
   strengthBurn,
+  unusualActiveEnergy,
+  type Burn,
 } from "./energy";
 import { z } from "zod";
 import { cardioActivities, cardioTitle, formatDuration } from "./cardio";
@@ -55,6 +60,8 @@ import { localClock, timeZoneSchema } from "./reminders";
 import { withoutEmDashes } from "./agent/coach-style";
 import type { ActionPreview, PreviewEntry } from "./agent/actions";
 import { exerciseName } from "./domain";
+import { sessionMinutes } from "./session-length";
+import { plannedSetsText } from "./training";
 import { isValidLoggedSet } from "../js/progression.js";
 
 // The iPhone app's contract. These schemas are the single description of
@@ -163,6 +170,9 @@ const activityView = z
     averageHeartRate: int.optional(),
     maxHeartRate: int.optional(),
     caloriesKcal: z.number().optional(),
+    // Calories burned as printed, always an estimate with where it came
+    // from: "~610 kcal · watch", "~240 kcal est.". Optional: older servers.
+    caloriesText: z.string().optional(),
     fromAppleHealth: z.boolean(),
     // A GPS route was recorded: GET /api/v1/activities/{id}/route draws it.
     hasRoute: z.boolean().optional(),
@@ -178,7 +188,11 @@ const vitalsView = z
     heartRateVariabilityMs: z.number().optional(),
     averageHeartRate: int.optional(),
     steps: int.optional(),
+    // Apple's estimate, held within 0-10,000 kcal and to the nearest 10.
     activeEnergyKcal: int.optional(),
+    // Above 6,000 kcal: worth checking in Apple Health. Optional: older
+    // servers.
+    activeEnergyUnusual: z.boolean().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Vitals" });
@@ -300,14 +314,30 @@ const bodyView = z
   .strict()
   .register(nativeResponses, { id: "Body" });
 
-// Calories burned today: Apple Health's active energy, or the training
-// total when that is missing. Never offsets the food target.
+// One of Today's burned figures: "Active energy", "~610", "Apple Health, so
+// far". The text is empty for lifting logged without a length.
+const burnedLineView = z
+  .object({
+    label: z.string(),
+    kcal: int,
+    text: z.string(),
+    note: z.string(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "BurnedLine" });
+// Calories burned today, never added together and never offsetting the food
+// target: kcal, source and note are the leading figure, Apple Health's active
+// energy or else the training estimate, for builds that show one line.
 const burnedView = z
   .object({
     kcal: int,
     source: z.enum(["apple-health", "training"]),
     estimated: z.boolean(),
     note: z.string(),
+    // Optional: older servers. Every figure, the leading one first.
+    lines: z.array(burnedLineView).optional(),
+    // "Doesn't include the energy your body uses at rest."
+    context: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Burned" });
@@ -879,6 +909,7 @@ const routeText = (note?: RouteNote) => {
 };
 
 function activity(
+  state: JournalState,
   e: JournalState["cardio"]["sessions"][number],
   fromAppleHealth: Set<string>,
   routes: Map<string, RouteNote>,
@@ -894,6 +925,7 @@ function activity(
     averageHeartRate: e.averageHeartRate,
     maxHeartRate: e.maxHeartRate,
     caloriesKcal: e.caloriesKcal,
+    caloriesText: burnText(cardioBurn(state, e)) || undefined,
     fromAppleHealth: fromAppleHealth.has(e.id),
     hasRoute: routes.has(e.id),
     routeText: routeText(routes.get(e.id)),
@@ -1036,6 +1068,35 @@ export function journalStartDate(
   return first;
 }
 
+// Apple Health's active energy under the steps, held within range and flagged
+// when unusually high, as Today's Ledger shows it.
+const activeEnergy = (kcal?: number | null) =>
+  kcal == null
+    ? {}
+    : {
+        activeEnergyKcal: activeEnergyKcal(kcal),
+        ...(unusualActiveEnergy(kcal) ? { activeEnergyUnusual: true } : {}),
+      };
+
+// Today's burned figures, or nothing until there is one to show.
+function burnedForToday(burned: ReturnType<typeof burnedToday>) {
+  const lines = burned ? burnedLines(burned) : [];
+  const lead = lines.find((l) => l.text);
+  if (!burned || !lead) return undefined;
+  return {
+    kcal: lead.kcal,
+    source: burned.active ? ("apple-health" as const) : ("training" as const),
+    estimated: true,
+    note: burned.active
+      ? "Active energy from Apple Health, so far"
+      : lead.note === "Estimated"
+        ? "From training, estimated"
+        : `From training: ${lead.note.toLowerCase()}`,
+    lines,
+    context: burnedContext,
+  };
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
@@ -1084,7 +1145,7 @@ export function buildToday(
             heartRateVariabilityMs: vitals.heartRateVariabilityMs,
             averageHeartRate: vitals.averageHeartRate,
             steps: vitals.steps,
-            activeEnergyKcal: vitals.activeEnergyKcal,
+            ...activeEnergy(vitals.activeEnergyKcal),
           })
         : undefined,
       checkin:
@@ -1121,7 +1182,7 @@ export function buildToday(
           };
         }),
       }),
-      burned: burned ? { ...burned, note: burnedNote(burned) } : undefined,
+      burned: burnedForToday(burned),
       supplements: {
         taken: supplements.taken.map((s) => ({
           id: s.id,
@@ -1174,7 +1235,7 @@ export function buildToday(
       activities: state.cardio.sessions
         .filter((s) => s.date === date)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .map((e) => activity(e, fromAppleHealth, routes)),
+        .map((e) => activity(state, e, fromAppleHealth, routes)),
       sessionsThisWeek: health.sessionsThisWeek,
       priorities: health.priorities.map((p) => ({
         id: p.id,
@@ -1246,14 +1307,16 @@ export function buildJournal(
       kind: "strength",
       title: s.title,
       detail: [
-        `${s.exercises.length} exercises · ${loggedSets(s)} sets`,
-        burnText(strengthBurn(state, s)),
+        `${s.exercises.length} exercise${s.exercises.length === 1 ? "" : "s"} · ${loggedSets(s)} set${loggedSets(s) === 1 ? "" : "s"}`,
+        burnText(strengthBurn(state, s)) ||
+          (sessionMinutes(s) == null ? "length not recorded" : ""),
       ]
         .filter(Boolean)
         .join(" · "),
       fromAppleHealth: false,
     });
-  for (const e of state.cardio.sessions.filter((e) => inRange(e.date)))
+  for (const e of state.cardio.sessions.filter((e) => inRange(e.date))) {
+    const burn = cardioBurn(state, e);
     items.push({
       id: e.id,
       date: e.date,
@@ -1263,15 +1326,16 @@ export function buildJournal(
         formatDuration(e.durationSeconds),
         e.distanceKm != null ? kmText(e.distanceKm) : "",
         e.averageHeartRate != null ? `${e.averageHeartRate} bpm avg` : "",
-        burnText(cardioBurn(state, e)),
+        burnText(burn),
       ]
         .filter(Boolean)
         .join(" · "),
       fromAppleHealth: fromAppleHealth.has(e.id),
       hasRoute: routes.has(e.id),
       activity: e.activity,
-      details: receiptEntryView({ title: "", detail: "", cardio: e }),
+      details: receiptEntryView({ title: "", detail: "", cardio: e }, burn),
     });
+  }
   for (const m of state.nutrition.meals.filter((m) => inRange(m.date))) {
     const total = totalNutrients(m.items);
     items.push({
@@ -1354,7 +1418,10 @@ export function buildJournal(
             },
             v.activeEnergyKcal != null && {
               label: "Active energy",
-              value: `${v.activeEnergyKcal.toLocaleString("en-GB")} kcal`,
+              value: `~${activeEnergyKcal(v.activeEnergyKcal).toLocaleString("en-GB")} kcal`,
+              note: unusualActiveEnergy(v.activeEnergyKcal)
+                ? "Apple's estimate; unusually high, worth checking there"
+                : "Apple's estimate",
             },
           ].filter((line) => line !== false),
           footnote: "From Apple Health",
@@ -1478,6 +1545,9 @@ const dietGoalNames = {
 // website's review shows (meal items, sets, check-in values), as text.
 export function receiptEntryView(
   entry: ReceiptSource,
+  // An activity's calories as its Journal row gives them, when the journal
+  // is at hand; a Coach review shows the recorded figure alone.
+  burn?: Burn | null,
 ): z.infer<typeof receiptEntry> {
   if (entry.meal) {
     const meal = entry.meal,
@@ -1515,12 +1585,16 @@ export function receiptEntryView(
       lines: workout.exercises.map((e) => ({
         label: exerciseName(e.exerciseId),
         value:
-          e.sets
-            .filter((s) => s.weight !== "" && s.reps !== "")
-            .map(
-              (s) =>
-                `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}`,
-            )
+          [
+            ...e.sets
+              .filter(isValidLoggedSet)
+              .map(
+                (s) =>
+                  `${s.weight} kg × ${s.reps}${s.result === "miss" ? " (miss)" : ""}`,
+              ),
+            plannedSetsText(e.sets),
+          ]
+            .filter(Boolean)
             .join(", ") || "No sets yet",
       })),
       footnote: workout.athleteNotes || undefined,
@@ -1548,6 +1622,7 @@ export function receiptEntryView(
   }
   if (entry.cardio) {
     const c = entry.cardio;
+    const energy = burn !== undefined ? burn : recordedBurn(c);
     return defined({
       title: cardioTitle(c),
       date: c.date,
@@ -1569,10 +1644,7 @@ export function receiptEntryView(
           label: "Elevation gain",
           value: `${Math.round(c.elevationGainM)} m`,
         },
-        c.caloriesKcal != null && {
-          label: "Energy",
-          value: `${Math.round(c.caloriesKcal)} kcal`,
-        },
+        energy != null && { label: "Energy", value: burnText(energy) },
         c.effort != null && { label: "Effort", value: `${c.effort}/10` },
       ].filter((line) => line !== false),
       footnote: c.notes || undefined,
@@ -1687,7 +1759,7 @@ export function receiptView(
       batch && state !== "pending" ? batch.map(entryName).join(", ") : p.detail,
     state,
     entries: batch
-      ? batch.map(receiptEntryView)
+      ? batch.map((entry) => receiptEntryView(entry))
       : structured(p)
         ? [receiptEntryView(p)]
         : undefined,
@@ -2055,7 +2127,10 @@ export function buildTrends(
       restingHeartRate: vitals?.restingHeartRate,
       heartRateVariabilityMs: vitals?.heartRateVariabilityMs,
       steps: vitals?.steps,
-      activeEnergyKcal: vitals?.activeEnergyKcal,
+      activeEnergyKcal:
+        vitals?.activeEnergyKcal != null
+          ? activeEnergyKcal(vitals.activeEnergyKcal)
+          : undefined,
       waterMl: water.recorded ? water.totalMl : undefined,
       calories: meals.length ? food.calories : undefined,
       protein: meals.length ? food.protein : undefined,

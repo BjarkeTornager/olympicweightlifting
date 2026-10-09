@@ -13,7 +13,7 @@ import {
   parseLegacyBackup,
 } from "../lib/domain";
 import { journalSchema } from "../lib/model";
-import { canonicalJson } from "../lib/json";
+import { canonicalJson, jsonEqual } from "../lib/json";
 test("dates in a sentence read like the masthead and stay on one line", () => {
   assert.equal(dateInProse("2026-09-30", "2026-10-03"), "30\u00a0September");
   assert.equal(
@@ -75,6 +75,34 @@ test("JSONB key ordering does not turn an identical backup into a conflict", () 
   const reordered = JSON.parse(canonicalJson(state));
   assert.deepEqual(mergeImport(state, reordered), state);
   assert.notEqual(canonicalJson([1, 2]), canonicalJson([2, 1]));
+});
+test("JSON equality agrees with comparing canonical JSON, without building it", () => {
+  const state = emptyJournal();
+  state.activeWorkout = createWorkout(state, days[0], "2026-09-05");
+  const reordered = JSON.parse(canonicalJson(state));
+  assert.ok(jsonEqual(state, reordered));
+  const changed = structuredClone(reordered);
+  changed.activeWorkout.exercises[0].sets[0].weight = "61";
+  assert.ok(!jsonEqual(state, changed));
+  const cases: [unknown, unknown][] = [
+    [{ a: 1, b: undefined }, { a: 1 }],
+    [{ a: 1 }, { a: 1, b: null }],
+    [
+      [1, 2],
+      [2, 1],
+    ],
+    [[], {}],
+    ["80", 80],
+    [{ a: [{ b: 1 }] }, { a: [{ b: 1 }] }],
+    [null, undefined],
+    [0, -0],
+  ];
+  for (const [a, b] of cases)
+    assert.equal(
+      jsonEqual(a, b),
+      canonicalJson(a) === canonicalJson(b),
+      JSON.stringify([a, b]),
+    );
 });
 test("v1 migration preserves athlete values and active session", () => {
   const s = emptyJournal();

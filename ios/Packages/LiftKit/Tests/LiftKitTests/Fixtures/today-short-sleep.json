@@ -81,8 +81,23 @@
   "burned": {
     "kcal": 540,
     "source": "apple-health",
-    "estimated": false,
-    "note": "Active energy from Apple Health"
+    "estimated": true,
+    "note": "Active energy from Apple Health, so far",
+    "lines": [
+      {
+        "label": "Active energy",
+        "kcal": 540,
+        "text": "~540",
+        "note": "Apple Health, so far"
+      },
+      {
+        "label": "Training",
+        "kcal": 610,
+        "text": "~610",
+        "note": "Estimated"
+      }
+    ],
+    "context": "Doesn't include the energy your body uses at rest."
   },
   "supplements": {
     "taken": [
@@ -113,6 +128,7 @@
       "averageHeartRate": 148,
       "maxHeartRate": 171,
       "caloriesKcal": 612,
+      "caloriesText": "~610 kcal · watch",
       "fromAppleHealth": true,
       "hasRoute": false
     }

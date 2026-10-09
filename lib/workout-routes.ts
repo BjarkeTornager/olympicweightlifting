@@ -80,7 +80,8 @@ export async function saveRoutes(
     );
   for (const route of routes) {
     const receipt = receipts.find((r) => r.workoutId === route.workoutId);
-    if (!receipt) {
+    // A deferred workout may still become an entry.
+    if (!receipt || receipt.status === "deferred") {
       results.push({ workoutId: route.workoutId, result: "pending" });
       continue;
     }

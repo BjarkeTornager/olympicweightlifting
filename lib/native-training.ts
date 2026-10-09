@@ -8,7 +8,7 @@ import {
   program,
   proposedReset,
 } from "./domain";
-import { restSeconds } from "./exercises";
+import { ownExercises, restSeconds } from "./exercises";
 import type { JournalState, Plan, Workout } from "./model";
 import { nativeResponses } from "./native-api";
 import { nextTraining } from "./next-training";
@@ -155,7 +155,13 @@ const trainingWeek = z
   .strict()
   .register(nativeResponses, { id: "TrainingWeek" });
 const exerciseOption = z
-  .object({ id: z.string(), name: z.string(), category: z.string() })
+  .object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string(),
+    // Other names it is searched by, such as RDL.
+    aliases: z.array(z.string()).optional(),
+  })
   .strict()
   .register(nativeResponses, { id: "ExerciseOption" });
 export const trainingView = z
@@ -476,11 +482,19 @@ export function buildTraining(
         ),
       bests: personalBests(state),
       weeks: trainingWeeks(state, date),
-      exercises: EXERCISES.map((e) => ({
-        id: e.id,
-        name: e.name,
-        category: e.category ?? "Other",
-      })),
+      // The library, then the athlete's own exercises.
+      exercises: [
+        ...EXERCISES.map((e) => ({
+          id: e.id,
+          name: e.name,
+          category: e.category ?? "Other",
+          ...(e.aliases.length ? { aliases: e.aliases } : {}),
+        })),
+        ...ownExercises(state).map((e) => ({
+          ...e,
+          category: "Your exercises",
+        })),
+      ],
     }),
   );
 }

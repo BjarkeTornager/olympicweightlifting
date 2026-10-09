@@ -105,6 +105,23 @@ export function nativeFixtures() {
   state.cardio.sessions.push(run);
   const lift = createWorkout(state, days[0], "2026-09-25");
   lift.id = "7a1c3f8e-2a51-4c1e-9d0b-0c1f7c1e2a11";
+  // The athlete's own exercise, which the iPhone lists under Your exercises.
+  lift.exercises.push({
+    ...structuredClone(lift.exercises[0]),
+    id: "own-entry",
+    exerciseId: "custom:Standing cable reverse fly",
+    prescribed: {},
+    sets: [
+      {
+        ...structuredClone(lift.exercises[0].sets[0]),
+        id: "own-set",
+        weight: "15",
+        reps: "10",
+        result: "success",
+        logged: true,
+      },
+    ],
+  });
   state.sessions.push(lift);
   const imported = new Set([run.id]);
   // Goals for a 16-year-old who wants to lose weight, as the real plan

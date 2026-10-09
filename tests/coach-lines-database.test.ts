@@ -87,26 +87,39 @@ test(
         { directLogging: true },
       );
     try {
+      // Messages in the chosen language.
+      const said = {
+        en: [
+          "I slept 8 hours",
+          "Prepare 7 hours of sleep for me to review",
+          "How did I sleep",
+        ],
+        da: [
+          "Jeg har sovet 8 timer",
+          "Forbered 7 timers søvn, så jeg kan gennemgå det",
+          "Hvordan sov jeg",
+        ],
+      };
       for (const language of ["en", "da"] as const) {
         const account = await user(),
           lines = coachLines(language);
         const saved = await ask(
           account,
-          "I slept 8 hours",
+          said[language][0],
           language,
           model("log_entry"),
         );
         assert.equal(saved.reply, lines.saved);
         const review = await ask(
           account,
-          "Prepare 7 hours of sleep for me to review",
+          said[language][1],
           language,
           model("prepare_change", 7),
         );
         assert.equal(review.reply, lines.review);
         const unfinished = await ask(
           account,
-          "How did I sleep",
+          said[language][2],
           language,
           model("health_overview"),
         );
@@ -126,6 +139,19 @@ test(
           expected,
         );
       }
+      // A message in another language than the one chosen is answered in
+      // its own; words that don't tell take the chosen one.
+      const chosen = await user();
+      for (const [message, language, lines] of [
+        ["I slept 8 hours", "da", "en"],
+        ["Jeg har sovet 8 timer", "en", "da"],
+        ["8 h", "da", "da"],
+      ] as const)
+        assert.equal(
+          (await ask(chosen, message, language, model("log_entry"))).reply,
+          coachLines(lines).saved,
+          message,
+        );
       // The website chooses no language: Coach answers in the athlete's.
       const website = await user();
       assert.equal(

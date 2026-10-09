@@ -1,4 +1,11 @@
-import { test, expect, browserUser, coachTask } from "./fixtures";
+import {
+  test,
+  expect,
+  browserUser,
+  coachTask,
+  isJournalSave,
+  savedJournal,
+} from "./fixtures";
 import type { BrowserContext } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { emptyJournal, today } from "../../lib/domain";
@@ -11,8 +18,8 @@ async function fixture(context: BrowserContext, initial: JournalState) {
   let state = initial,
     revision = 1;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -278,8 +285,8 @@ test("manual Undo clears a newly saved brief after sync instead of resurrecting 
   let state = emptyJournal(),
     revision = 1;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      const next = r.request().postDataJSON().state as JournalState;
+    if (isJournalSave(r.request())) {
+      const next = savedJournal(r.request(), state);
       // Match the server's compatibility rule: omission preserves; null clears.
       if (next.profile.lifting === undefined)
         next.profile.lifting = state.profile.lifting;

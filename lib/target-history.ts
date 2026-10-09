@@ -221,8 +221,11 @@ const near = (a: number, b: number | null) =>
 // goals or in Settings. The weight given with the goals counts as that
 // day's weigh-in, and earlier ones don't count, as it is the athlete's
 // latest word on it. A weigh-in a quarter away from the one before is
-// passed over as a likely slip; the next one that agrees with it counts
-// again.
+// passed over as a likely slip; when the next one agrees with it, the
+// weight has really changed, and the two start afresh without the ones
+// before. Until a weight is backed up, by the goals, Settings or two
+// weigh-ins in a row that agree, the latest weigh-in is taken as given, so
+// a slip in the very first one lasts only until the next.
 export function currentWeightKg(state: JournalState, date: string) {
   const anchor = weightAnchor(state);
   const since = anchor && anchor.day <= date ? anchor : null;
@@ -238,14 +241,18 @@ export function currentWeightKg(state: JournalState, date: string) {
   if (since && !readings.some((r) => r.date === since.day))
     readings.unshift({ date: since.day, kg: since.kg });
   let trusted: number | null = since?.kg ?? (state.profile.bodyweight || null);
-  let previous: number | null = null;
-  const kept: typeof readings = [];
+  let backed = trusted != null;
+  let previous: (typeof readings)[number] | null = null;
+  let kept: typeof readings = [];
   for (const r of readings) {
-    if (trusted == null || near(r.kg, trusted) || near(r.kg, previous)) {
-      kept.push(r);
-      trusted = r.kg;
-    }
-    previous = r.kg;
+    const fits = near(r.kg, trusted);
+    const repeats = !fits && previous != null && near(r.kg, previous.kg);
+    if (fits) kept.push(r);
+    else if (repeats) kept = [previous!, r];
+    else if (!backed) kept = [r];
+    if (fits || repeats || !backed) trusted = r.kg;
+    backed ||= fits || repeats;
+    previous = r;
   }
   const week = kept.filter((r) => r.date >= daysBefore(date, 6));
   const weight = week.length

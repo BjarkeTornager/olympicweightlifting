@@ -223,11 +223,36 @@ struct TodayView: View {
         number: amount, unit: unit, targetText: "about \(target) \(targetUnit)",
         scale: "\(Format.number(water.totalMl / 250)) of \(Format.number(glasses)) glasses",
         spokenUnit: "millilitres"),
-      burned: today.burned.map { "\($0.estimated ? "~" : "")\(Format.number($0.kcal))" },
+      burned: Self.burned(today.burned),
+      burnedContext: today.burned?.context,
       energyLink: .food
     ) {
       model.openCoach(.message("Help me set my goals"))
     }
+  }
+
+  /// Today's burned figures, line by line. A server from before the lines
+  /// sends one figure, which is an estimate all the same.
+  static func burned(_ burned: Components.Schemas.Burned?) -> [LedgerBurn] {
+    guard let burned else { return [] }
+    guard let lines = burned.lines else {
+      return [.init(label: "Burned", text: "~\(Format.number(burned.kcal))", note: burned.note)]
+    }
+    return lines.map { .init(label: $0.label, text: $0.text, note: $0.note) }
+  }
+
+  /// Under the steps: Apple's active energy, which is its estimate, and
+  /// "Yesterday" when the cell shows yesterday's because today has nothing
+  /// from Apple Health yet. The server holds the figure within range and
+  /// flags one unusually high, as the Ledger does.
+  static func stepsNote(_ today: Today) -> String? {
+    guard let vitals = today.vitals else { return nil }
+    let energy = vitals.activeEnergyKcal.map {
+      "~\(Format.number((Double($0) / 10).rounded() * 10)) kcal active"
+        + (vitals.activeEnergyUnusual == true ? ", unusually high" : "")
+    }
+    let parts = [vitals.date == today.date ? nil : "Yesterday", energy].compactMap { $0 }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 
   // MARK: Recovery
@@ -257,7 +282,7 @@ struct TodayView: View {
         NavigationLink(value: Trend.activity) {
           MetricCell(
             title: "Steps", category: .activity, value: today.vitals?.steps.map(Format.number),
-            note: today.vitals?.activeEnergyKcal.map { "\(Format.number($0)) kcal active" },
+            note: Self.stepsNote(today),
             empty: model.health.connected ? "No steps yet today" : "Connect Apple Health", chartHeight: 58
           ) {
             Sparkline(values: series { $0.steps.map(Double.init) }, tint: Category.activity.tint, days: initials)
@@ -1109,7 +1134,7 @@ struct MovementSection: View {
       activity.durationText,
       activity.distanceKm.map { Format.decimal($0, digits: 2) + " km" },
       activity.averageHeartRate.map { "\($0) bpm" },
-      activity.caloriesKcal.map { "\(Format.number($0)) kcal" },
+      activity.caloriesText ?? activity.caloriesKcal.map { "~\(Format.number($0)) kcal" },
     ].compactMap { $0 }.joined(separator: " · ")
   }
 }

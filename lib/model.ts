@@ -112,6 +112,12 @@ export const workoutSchema = z
     progressionRevision: z.number().optional(),
     startedAt: z.string().optional(),
     finishedAt: z.string().optional(),
+    // When the first set was logged: lifting starts there, not when the
+    // draft was opened.
+    firstSetAt: z.string().optional(),
+    // How long the session took, saved when it is first finished or stated
+    // by the athlete; null when it wasn't timed. Edits and added sets keep it.
+    durationMinutes: z.number().int().min(0).max(1440).nullable().optional(),
     editingSessionId: z.string().nullish(),
     activeExerciseId: z.string().optional(),
     recovery: z.enum(["auto", "limited"]).default("auto"),

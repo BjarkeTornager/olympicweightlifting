@@ -162,6 +162,20 @@
       "when": 1791025239059,
       "tag": "0022_turn_events",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791233990988,
+      "tag": "0023_voice_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791581709290,
+      "tag": "0024_health_workout_deferred",
+      "breakpoints": true
     }
   ]
 }

@@ -209,16 +209,6 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   (coachingContext now carries the age, from the goals or Settings).
     // Privacy and action policy text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
-    // (PR 4, maintenance and training), in the goal-setup paragraph only:
-    // goal setup also asks the usual session length, which the plan now
-    // uses to count training energy for the sessions it sets ("training
-    // days available and experience" and "training days and experience"
-    // gain session length), and everyday activity gains very_high for heavy
-    // manual work, which the plan counts at 2.0 times resting energy
-    // ("(low/moderate/high)" gains it). Restoring those three phrases
-    // reproduces the previous hash (74336db6…). Health, privacy and
-    // evidence text is unchanged.
-    // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 11, water): the drinks paragraph only. Beer, wine and spirits join
     // the drinks with energy that also need a record_meal (alcohol has 7
     // kcal a gram); they count towards the drinks total, but Coach never
@@ -230,7 +220,60 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // paragraph. Restoring that paragraph reproduces the previous hash
     // (74336db6…). Health, privacy and evidence text is otherwise
     // unchanged.
-    // With PR 4 and PR 11 both merged the hash is 8bb2b289…, where PR 5 starts.
+    // Revised 2026-10-04, deliberate and reviewed at the owner's request
+    // ("Coach should be able to add any exercise that the user requests"):
+    // the core workout continuity paragraph gains three sentences. Any
+    // exercise the athlete names can be logged, planned or added: the
+    // catalogue id when it is the same movement, otherwise custom:<their
+    // name for it>, never a refusal, a request for permission or a
+    // different exercise, and the custom id already shown is reused. Sets
+    // still to do go into the ongoing workout with the new
+    // add_workout_exercise and are never logged as done (without that
+    // sentence Coach logged "jeg tager dem efter squats" as done in the
+    // Coach benchmark). The programmes paragraph's custom sentence no longer
+    // limits custom ids to "explicitly named" movements; it still forbids
+    // invented catalogue IDs. The server makes the ids canonical
+    // (custom-exercises.test.ts). Removing the three sentences and restoring
+    // the old one reproduces the previous hash (2457ba00…). Health, privacy
+    // and evidence text is unchanged.
+    // Revised 2026-10-05, deliberate and reviewed at the owner's request
+    // (Coach asked whether to save the food and drinks or the five
+    // supplements first, because a save held six entries): one report goes
+    // into ONE record_bundle of up to 30 entries, never split into several
+    // saves or a question about which to save first; only beyond 30 does
+    // Coach save the first 30 and say what is left. The server allows 30
+    // (BUNDLE_MAX). Restoring the "2–6 entries" sentence reproduces the
+    // previous hash (14390d3e…). Health, privacy and evidence text is
+    // unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // (PR 10, energy expenditure), and carried onto the 2026-10-05 text on
+    // 2026-10-09 without change: the health paragraph's calories rule
+    // gains two sentences. activeEnergy and burnedInTraining overlap, since
+    // a watch counts the training it saw, so Coach quotes them separately,
+    // never adds them together and never subtracts either from food eaten,
+    // as the voice coach already does; and when burnedInTraining lists
+    // lifting_sessions_without_length or entries_without_estimate, Coach
+    // says its figure leaves those out. Removing them reproduces the
+    // previous hash (14eaff26…). Health, privacy and action policy text is
+    // otherwise unchanged.
+    // Revised 2026-10-09, deliberate and reviewed, from the review of PR 10:
+    // the cardio paragraph stops calling a watch's calories measured, since
+    // they are an estimate too. "the app estimates calories burned itself
+    // when none was measured" now ends "when none was recorded", and
+    // "Activity calories, measured or estimated," now reads "Activity
+    // calories, recorded or estimated,". Restoring those two words
+    // reproduces the previous hash (7786ae88…). Health, privacy and action
+    // policy text is otherwise unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // (PR 4, maintenance and training), brought in after the notes above,
+    // in the goal-setup paragraph only: goal setup also asks the usual
+    // session length, which the plan now uses to count training energy for
+    // the sessions it sets ("training days available and experience" and
+    // "training days and experience" gain session length), and everyday
+    // activity gains very_high for heavy manual work, which the plan counts
+    // at 2.0 times resting energy ("(low/moderate/high)" gains it).
+    // Restoring those three phrases reproduces the previous hash
+    // (935bdded…). Health, privacy and evidence text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 5, macros), so Coach describes the macros the plan now sets: the
     // goal-setup paragraph adds protein from a height-adjusted weight at a
@@ -240,7 +283,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // height-adjusted weight at a BMI of 30 or more while losing
     // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
     // gaining. Restoring those three phrases reproduces the previous hash
-    // (8bb2b289…). Health, privacy and evidence text is unchanged.
+    // (74eef4c7…). Health, privacy and evidence text is unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 6, pregnancy, breastfeeding and kidney inputs):
     // - Goal setup's second message adds two optional health questions,
@@ -258,7 +301,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   figure or high-protein shakes, food first, and their doctor,
     //   midwife or dietitian advises.
     // Removing that paragraph and those two goal-setup additions
-    // reproduces the previous hash (b22e1af2…). Health, privacy and
+    // reproduces the previous hash (49dda6a4…). Health, privacy and
     // evidence text is otherwise unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 13, Coach goal-setup flow):
@@ -283,7 +326,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   never cut further for slow loss before checking the food logs are
     //   complete, and ask the low-energy questions again when due.
     // Removing that paragraph and those goal-setup additions reproduces
-    // the previous hash (d1edcd61…). Health, privacy and evidence text is
+    // the previous hash (9ec98b01…). Health, privacy and evidence text is
     // otherwise unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the review of PR 13,
     // in the goal-setup paragraph only:
@@ -298,7 +341,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   about every 3 months while a deficit is saved, passed with
     //   set_body_goals and the saved goals.
     // Restoring those two sentences reproduces the previous hash
-    // (13c7f73c…). Health, privacy and evidence text is otherwise
+    // (9590c886…). Health, privacy and evidence text is otherwise
     // unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the same review
     // (PR 7, one weight, one target), in the private-context paragraph
@@ -314,7 +357,7 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // (goals.targetsSet.source manual) stay theirs, with a suggestion only
     // at the goal or its date (target-proposals.ts). Restoring the
     // paragraph's previous sentences reproduces the previous hash
-    // (9344b50c…). Health, privacy and evidence text is otherwise
+    // (26c2b7ba…). Health, privacy and evidence text is otherwise
     // unchanged.
     // Revised 2026-10-04, deliberate and reviewed, from the review of PR 7,
     // in the private-context paragraph only: one added sentence. When
@@ -323,12 +366,38 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // goals at goals.currentWeightKg, with energySigns) rather than
     // set_diet_targets, which refuses a deficit's suggestion without them
     // (one-target.test.ts), as Today asks them on the website and iPhone.
-    // Removing that sentence reproduces the previous hash (174830b2…).
+    // Removing that sentence reproduces the previous hash (32e4383b…).
     // Health, privacy and evidence text is otherwise unchanged.
-    "c4b4cba9ef94290ed6a6c2e578300185f567ebf384f94e33f6e5ef969da70ae7",
+    "62b81d6b154e3a8f3c897457a1fd64197568a60b86fee25b29afdbe283e3c8e4",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
+});
+
+test("Coach quotes active energy and training apart, as estimates, never added together", () => {
+  const prompt = systemPrompt();
+  assert.match(
+    prompt,
+    /activeEnergy \(Apple Health's estimate of all movement so far\) and burnedInTraining overlap/,
+  );
+  assert.match(
+    prompt,
+    /quote them separately, never add them together, and never subtract either from food eaten/,
+  );
+  assert.match(
+    prompt,
+    /entries_without_estimate, say its figure leaves those out/,
+  );
+  // A watch's calories are an estimate too, never called measured.
+  assert.doesNotMatch(prompt, /when none was measured|measured or estimated/);
+  assert.match(prompt, /Activity calories, recorded or estimated, are/);
+  // The site help agrees with what Today shows.
+  assert.doesNotMatch(siteHelp.health, /measured when a watch recorded it/);
+  assert.match(
+    siteHelp.health,
+    /calories burned, always an estimate \(a watch's included\) of the energy used above rest/,
+  );
+  assert.match(siteHelp.health, /never added together/);
 });
 
 test("Coach policy separates reported events, previews and advice", () => {

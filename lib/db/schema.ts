@@ -77,13 +77,18 @@ export const healthWorkoutImports = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     workoutId: text("workout_id").notNull(),
     cardioId: text("cardio_id"),
-    // "imported", "matched" (enriched a manual entry) or "removed".
+    // "imported", "matched" (enriched a manual entry), "skipped" (lifting
+    // already logged), "deferred" (lifting while a session was open) or
+    // "removed".
     status: text("status").notNull(),
     digest: text("digest").notNull(),
     entryDigest: text("entry_digest"),
     importedAt: timestamp("imported_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // A deferred workout as Apple Health sent it, kept until the session it
+    // ran beside is finished; the phone does not send it again.
+    workout: jsonb("workout"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.workoutId] })],
 );
@@ -353,6 +358,19 @@ export const rateLimits = pgTable("request_limits", {
 });
 
 // Spoken conversations with Coach, kept so Coach can recall them later.
+// Which account each ElevenLabs conversation belongs to, so a photo is only
+// ever handed to the caller's own conversation. The phone registers the id
+// when the call starts; a photo for an unregistered id registers it.
+export const voiceConversations = pgTable("voice_conversations", {
+  conversationId: text("conversation_id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  callId: text("call_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 export const voiceCalls = pgTable(
   "voice_calls",
   {

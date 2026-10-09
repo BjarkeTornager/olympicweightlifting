@@ -1,0 +1,1 @@
+ALTER TABLE "health_workout_imports" ADD COLUMN IF NOT EXISTS "workout" jsonb;

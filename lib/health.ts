@@ -13,6 +13,7 @@ import {
 } from "./body-composition";
 import type { JournalState } from "./model";
 import { currentWeightKg } from "./target-history";
+import { trendAgainstPlan, weightAlert } from "./weight-trend";
 
 const values = {
   sleepHours: z.number().finite().min(0).max(24).nullable(),
@@ -337,8 +338,14 @@ export function dailyHealth(state: JournalState, date: string) {
     // the goals until there are newer ones: what the goals plan uses.
     currentWeightKg: currentWeightKg(state, date),
     // Four weeks of weigh-ins and 90 days of body fat, for fat-loss and
-    // muscle-gain coaching; readings are trends, not single verdicts.
+    // muscle-gain coaching; readings are trends, not single verdicts. The
+    // weight trend is a least-squares line (weightTrend), compared with the
+    // goals plan once its targets have run 3 or 4 weeks (trendAgainstPlan),
+    // with any note on a fast loss or a low weight still coming down
+    // (weightAlert).
     weightTrend: weightTrend(state, date),
+    planTrend: trendAgainstPlan(state, date),
+    weightAlert: weightAlert(state, date),
     bodyFat: {
       latest: latestBodyFat(state, date),
       trend: bodyFatTrend(state, offsetDate(date, -90), date),

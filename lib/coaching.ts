@@ -15,6 +15,7 @@ import { dailyTarget, foodDate, type DietTargets } from "./nutrition";
 import { cardioTitle } from "./cardio";
 import { currentWeightKg, targetsInForce } from "./target-history";
 import { acceptProposal, targetsProposal } from "./target-proposals";
+import { trendAgainstPlan, weightAlert } from "./weight-trend";
 
 export const memoryInputSchema = z
   .object({
@@ -429,6 +430,8 @@ function bodyComposition(state: JournalState, date: string) {
     latestBodyFat: latestBodyFat(state, date),
     bodyFatTrend: bodyFatTrend(state, offsetDate(date, -90), date),
     weightTrend: weightTrend(state, date),
+    planTrend: trendAgainstPlan(state, date),
+    weightAlert: weightAlert(state, date),
   };
   return Object.values(value).some((v) => v != null)
     ? { bodyComposition: value }
@@ -500,7 +503,9 @@ export function coachingContext(state: JournalState, date: string) {
           },
         }
       : {}),
-    // How the body is changing: four weeks of weigh-ins, 90 days of body
+    // How the body is changing: four weeks of weigh-ins as a least-squares
+    // trend, against the goals plan once it has run 3 or 4 weeks, any note
+    // on a fast loss or a low weight still coming down, and 90 days of body
     // fat. Left out when nothing is recorded.
     ...bodyComposition(state, date),
     approvedMemories: preferences.memories ?? [],

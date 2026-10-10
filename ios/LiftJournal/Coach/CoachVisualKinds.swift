@@ -474,7 +474,7 @@ struct VisualProgress: View {
               .foregroundStyle(Theme.inkSecondary)
           }
           IsotypeMeter(value: item.value, target: item.target, unit: per, tint: tint, markWidth: 5, height: 22)
-          Text("One mark = \(VisualAmount.long(per, unit: item.unit))")
+          Text(Self.scale(item, per: per))
             .font(.caption2.weight(.medium))
             .foregroundStyle(Theme.inkSecondary)
         }
@@ -484,9 +484,16 @@ struct VisualProgress: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-          "\(item.label): \(formatted(item.value)) of \(VisualAmount.long(item.target, unit: item.unit))")
+          "\(item.label): \(formatted(item.value)) of \(VisualAmount.long(item.target, unit: item.unit))"
+            + (item.suggested == true ? ", suggested by Coach" : ""))
       }
     }
+  }
+
+  /// "One mark = 100 kcal", and for a target that isn't one of the
+  /// athlete's own daily targets, "· Suggested by Coach".
+  static func scale(_ item: Components.Schemas.VisualTarget, per: Double) -> String {
+    "One mark = \(VisualAmount.long(per, unit: item.unit))" + (item.suggested == true ? " · Suggested by Coach" : "")
   }
 
   /// What one mark stands for: the smallest round amount (1, 2, 2.5 or 5

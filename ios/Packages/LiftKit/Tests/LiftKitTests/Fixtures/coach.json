@@ -97,6 +97,13 @@
               "value": 116,
               "target": 180,
               "unit": "g"
+            },
+            {
+              "label": "Steps",
+              "value": 6200,
+              "target": 8000,
+              "unit": "steps",
+              "suggested": true
             }
           ]
         },

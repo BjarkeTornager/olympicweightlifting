@@ -33,6 +33,7 @@ import { guardChange } from "./agent/change-guards";
 import { newTurnReads } from "./agent/read-tools";
 import { listUserImages } from "./user-images";
 import { dayRange, journalForVoice } from "./journal-summary";
+import { withSavedTargets } from "./visual-targets";
 import {
   recentConversations,
   searchConversations,
@@ -876,7 +877,7 @@ function uniqueViolation(error: unknown) {
 // the route draws it once the reply has gone.
 async function showCard(
   userId: string,
-  input: { id: string; args: unknown; callId?: string },
+  input: { id: string; args: unknown; today: string; callId?: string },
 ): Promise<VoiceResult> {
   const db = getDb();
   const picture =
@@ -914,7 +915,12 @@ async function showCard(
     return { ok: false, error: "That call id was already used." };
   }
   const args = voiceToolArgs.show_card.parse(input.args);
-  const content = cardVisual(args);
+  const card = cardVisual(args);
+  // Progress against the athlete's own daily targets (visual-targets.ts).
+  const content =
+    card.kind === "progress"
+      ? withSavedTargets(card, (await readJournal(userId)).state, input.today)
+      : card;
   const wanted = picture && content.kind === "recipe";
   // Before the transaction: the AI allowance is looked up, then cached.
   const gate = wanted ? await pictureGate() : undefined;

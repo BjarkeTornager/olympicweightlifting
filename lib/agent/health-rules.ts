@@ -27,3 +27,16 @@ export const drinksTargetRule =
 
 export const teenSleepRule =
   "Teenagers (13–17) need 8–10 hours in 24 hours (CDC, AASM; the Danish Health Authority for 14–17), so never call 7 hours enough for anyone under 18.";
+
+// The day's food in the words Food, Today and the iPhone show
+// (food-progress.ts), and a calorie target below the athlete's estimated
+// minimum handled as the app handles it: noted, never called exceeded, and
+// still theirs to set (evidence review, sections 3.8 and 3.9).
+export const foodProgressRule =
+  "Describe the day's food in the words the app shows (eatenSoFar.progress): amounts are about, protein is a minimum that is reached rather than exceeded, fat and carbohydrate are ranges, and a day that is over or marked complete is under target rather than having some remaining. Food averages use complete days only (foodWeek); low intake on a partly logged day more likely means missed logging than eating too little. With calorieTargetBelowMinimum, never call a day above target or suggest eating less: mention its note once and offer to review the target together.";
+
+// Typed Coach only, as only it sets daily targets: a target the athlete
+// states is saved as stated (owner-reviewed), and below the minimum the
+// review says so.
+export const lowTargetRule =
+  "A calorie target the athlete states below their estimated minimum is still theirs: prepare it, and the review carries the app's note; ask once whether a doctor or dietitian is involved.";

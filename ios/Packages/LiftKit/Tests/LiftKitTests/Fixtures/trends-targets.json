@@ -7,7 +7,8 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2640,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     },
     {
       "date": "2026-09-21",
@@ -15,7 +16,8 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2640,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     },
     {
       "date": "2026-09-22",
@@ -24,7 +26,8 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2640,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     },
     {
       "date": "2026-09-23",
@@ -32,7 +35,8 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2550,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     },
     {
       "date": "2026-09-24",
@@ -41,7 +45,8 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2550,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     },
     {
       "date": "2026-09-25",
@@ -49,7 +54,8 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2550,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     },
     {
       "date": "2026-09-26",
@@ -58,10 +64,15 @@
       "cardioMinutes": 0,
       "strengthSessions": 0,
       "targetCalories": 2550,
-      "targetProtein": 175
+      "targetProtein": 175,
+      "waterTargetMl": 2250
     }
   ],
   "targetCalories": 2550,
   "targetProtein": 175,
-  "waterTargetMl": 2250
+  "waterTargetMl": 2250,
+  "foodWeek": {
+    "completeDays": 0,
+    "text": "No complete days in the last 7. Mark a day complete on the website's Food page once everything is logged."
+  }
 }

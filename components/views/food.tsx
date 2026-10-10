@@ -8,8 +8,6 @@ import {
   favouriteFromMeal,
   repeatMeal,
   dietTargetsSchema,
-  dailyTarget,
-  targetProgress,
   totalNutrients,
   nutritionSummary,
   findMeals,
@@ -17,32 +15,35 @@ import {
   foodGroups,
   type Meal,
 } from "@/lib/nutrition";
+import {
+  belowMinimum,
+  completeDayAverage,
+  eatenText,
+  foodDay,
+  type NutrientProgress,
+} from "@/lib/food-progress";
 import { MealDetails } from "../meal-details";
 import { setDailyTargets } from "@/lib/target-proposals";
-import {
-  DietTargetsForm,
-  MealForm,
-  blankFoodItem,
-  nutrientKeys,
-} from "../food-forms";
+import { DietTargetsForm, MealForm, blankFoodItem } from "../food-forms";
 
 const macroLabel = { protein: "Protein", carbs: "Carbs", fat: "Fat" };
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
-// Progress toward a daily target; nothing is drawn without one.
+// Progress toward a daily target, or the top of a range; nothing is drawn
+// without one, and never past it.
 function TargetBar({
   nutrient,
-  value,
-  target,
+  progress,
 }: {
   nutrient: string;
-  value: number;
-  target: number | null;
+  progress: NutrientProgress;
 }) {
+  const target = progress.range?.high ?? progress.target;
   if (target == null || target <= 0) return null;
   return (
     <progress
       aria-label={`${nutrient} toward target`}
-      value={Math.min(value, target)}
+      value={Math.min(progress.eaten, target)}
       max={target}
     />
   );
@@ -64,7 +65,14 @@ export function FoodView({
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [targets, setTargets] = useState(nutrition.targets),
-    [showTargets, setShowTargets] = useState(false);
+    [showTargets, setShowTargets] = useState(false),
+    // A very low calorie target is saved on a second press.
+    [confirmLow, setConfirmLow] = useState(false);
+  // A calorie target below the estimated minimum gets a note as it is
+  // typed; it informs and never blocks.
+  const lowTarget = showTargets
+    ? belowMinimum(targets.calories, journal.state!, today())
+    : null;
   const [removeMealId, setRemoveMealId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const run = async (work: () => Promise<unknown>, message?: string) => {
@@ -97,7 +105,10 @@ export function FoodView({
   const mealLimit = mealWindow.key === filterKey ? mealWindow.limit : 20;
   const meals = nutrition.meals.filter((m) => m.date === date);
   const hasFood = meals.length > 0;
-  const totals = totalNutrients(meals.flatMap((m) => m.items));
+  // The day against the targets in force that day, as the iPhone and
+  // Coach say it (food-progress.ts).
+  const day = foodDay(journal.state!, date, today());
+  const calories = day.progress.calories;
   const start = new Date(`${date}T12:00:00Z`);
   start.setUTCDate(start.getUTCDate() - 6);
   const week = nutritionSummary(
@@ -105,14 +116,7 @@ export function FoodView({
     Number.isNaN(start.getTime()) ? date : start.toISOString().slice(0, 10),
     date,
   );
-  const target = (key: (typeof nutrientKeys)[number]) =>
-    dailyTarget(nutrition.targets[key]);
-  const remaining = (key: (typeof nutrientKeys)[number]) =>
-    targetProgress(
-      totals[key],
-      nutrition.targets[key],
-      key === "calories" ? "kcal" : "g",
-    );
+  const average = completeDayAverage(journal.state!, date, today());
   const weekMax = Math.max(1, ...week.days.map((day) => day.calories));
   return (
     <div className="food-page">
@@ -173,6 +177,7 @@ export function FoodView({
           variant="secondary"
           onClick={() => {
             setTargets(nutrition.targets);
+            setConfirmLow(false);
             setShowTargets(true);
           }}
         >
@@ -185,37 +190,50 @@ export function FoodView({
           <div className="food-calories">
             <span className="food-calories-label">Calories</span>
             <p>
-              <strong>{totals.calories.toLocaleString("en-GB")}</strong>
+              <strong>
+                {day.estimated && (
+                  <>
+                    <span aria-hidden="true">~</span>
+                    <span className="sr-only">about </span>
+                  </>
+                )}
+                {day.eaten.calories.toLocaleString("en-GB")}
+              </strong>
               <span>
-                {target("calories") == null
+                {calories.targetText == null
                   ? "kcal · no daily target"
-                  : `of ${target("calories")!.toLocaleString("en-GB")}\u00a0kcal`}
+                  : `of ${calories.targetText}`}
               </span>
             </p>
-            <TargetBar
-              nutrient="calories"
-              value={totals.calories}
-              target={target("calories")}
-            />
-            {target("calories") != null && (
-              <span className="fine-print">{remaining("calories")}</span>
+            <TargetBar nutrient="calories" progress={calories} />
+            {calories.targetText != null && calories.text && (
+              <span className="fine-print">{calories.text}</span>
+            )}
+            {day.belowMinimum && (
+              <p className="fine-print food-target-note" role="note">
+                {day.belowMinimum.note}
+              </p>
             )}
           </div>
           <div className="food-macros">
-            {(["protein", "carbs", "fat"] as const).map((key) => (
-              <div key={key} data-macro={key}>
-                <span>{macroLabel[key]}</span>
-                <strong>
-                  {totals[key]}&nbsp;<small>g</small>
-                </strong>
-                <TargetBar
-                  nutrient={key}
-                  value={totals[key]}
-                  target={target(key)}
-                />
-                <small>{remaining(key)}</small>
-              </div>
-            ))}
+            {(["protein", "carbs", "fat"] as const).map((key) => {
+              const p = day.progress[key];
+              return (
+                <div key={key} data-macro={key}>
+                  <span>{macroLabel[key]}</span>
+                  <strong>{eatenText(day, key)}</strong>
+                  <TargetBar nutrient={key} progress={p} />
+                  {p.targetText ? (
+                    <>
+                      <small>{sentence(p.targetText)}</small>
+                      {p.text && <small>{p.text}</small>}
+                    </>
+                  ) : (
+                    <small>No daily target</small>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -401,7 +419,9 @@ export function FoodView({
               <strong>{meal.name}</strong>
               <small>
                 {meal.type} ·{" "}
-                {totalNutrients(meal.items).calories.toLocaleString("en-GB")}
+                {Math.round(totalNutrients(meal.items).calories).toLocaleString(
+                  "en-GB",
+                )}
                 &nbsp;kcal
                 {meal.estimated ? " · estimated" : ""}
               </small>
@@ -440,9 +460,7 @@ export function FoodView({
         <h2>Last 7 days</h2>
         <p>
           {week.loggedDays} of 7 days have entries.{" "}
-          {week.loggedDays
-            ? `Average on logged days: ${Math.round(week.totals.calories / week.loggedDays).toLocaleString("en-GB")}\u00a0kcal.`
-            : "Log meals to see your pattern."}
+          {week.loggedDays ? average.text : "Log meals to see your pattern."}
         </p>
         <div className="food-week">
           {week.days.map((day) => (
@@ -458,8 +476,10 @@ export function FoodView({
                   }}
                 />
               </span>
-              <strong>{day.calories.toLocaleString("en-GB")}&nbsp;kcal</strong>
-              <small>{day.protein}&nbsp;g protein</small>
+              <strong>
+                {Math.round(day.calories).toLocaleString("en-GB")}&nbsp;kcal
+              </strong>
+              <small>{Math.round(day.protein)}&nbsp;g protein</small>
               <span>{day.date.slice(5)}</span>
             </button>
           ))}
@@ -514,8 +534,17 @@ export function FoodView({
       >
         <DietTargetsForm
           targets={targets}
-          onChange={setTargets}
-          onSubmit={() =>
+          onChange={(next) => {
+            if (next.calories !== targets.calories) setConfirmLow(false);
+            setTargets(next);
+          }}
+          note={lowTarget?.note}
+          confirm={Boolean(lowTarget?.veryLow) && confirmLow}
+          onSubmit={() => {
+            if (lowTarget?.veryLow && !confirmLow) {
+              setConfirmLow(true);
+              return;
+            }
             void run(async () => {
               const value = dietTargetsSchema.parse(targets);
               // Recorded as the plan's when they are what it gives now,
@@ -524,8 +553,8 @@ export function FoodView({
                 setDailyTargets(s, value, today());
               });
               setShowTargets(false);
-            }, "Daily targets saved.")
-          }
+            }, "Daily targets saved.");
+          }}
         />
       </Dialog>
       <Dialog

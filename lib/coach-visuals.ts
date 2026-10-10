@@ -19,6 +19,12 @@ const lineSeries = z
 const targetItem = z
   .object({ label, value: amount, target: amount.gt(0), unit })
   .strict();
+// As saved: a target that isn't one of the athlete's daily targets is marked
+// as Coach's suggestion (visual-targets.ts). Set only by the server, never
+// through Coach's tool.
+const savedTargetItem = targetItem
+  .extend({ suggested: z.boolean().optional() })
+  .strict();
 const statItem = z
   .object({
     label,
@@ -194,7 +200,11 @@ export const visualSchema = z
       .object({ ...base, kind: z.literal("line_chart"), ...lineFields })
       .strict(),
     z
-      .object({ ...base, kind: z.literal("progress"), ...progressFields })
+      .object({
+        ...base,
+        kind: z.literal("progress"),
+        targets: z.array(savedTargetItem).min(1).max(6),
+      })
       .strict(),
     z.object({ ...base, kind: z.literal("stats"), ...statsFields }).strict(),
     z

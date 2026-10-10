@@ -7,11 +7,12 @@ import { createServer, request } from "node:http";
 test("manual food logging, extra ingredients, correction, targets and locking on connection loss", async ({
   page,
   context,
-}) => {
+}, info) => {
   // A stopped real origin exercises offline navigation without WebKit's setOffline navigation bug.
+  const origin = info.project.use.baseURL ?? "http://127.0.0.1:34173";
   const proxy = createServer((incoming, outgoing) => {
     const upstream = request(
-      `http://127.0.0.1:34173${incoming.url}`,
+      `${origin}${incoming.url}`,
       { method: incoming.method, headers: incoming.headers },
       (response) => {
         outgoing.writeHead(response.statusCode ?? 502, response.headers);
@@ -81,9 +82,12 @@ test("manual food logging, extra ingredients, correction, targets and locking on
         .locator(selector)
         .first()
         .evaluate((el) => el.textContent);
-    expect(await raw(".food-calories p > span")).toBe("of 2,300 kcal");
+    // Whole numbers; the target is an estimate, and so is what's left.
+    expect(await raw(".food-calories p > span")).toBe(
+      "of about 2,300\u00a0kcal",
+    );
     expect(await raw(".food-calories .fine-print")).toBe(
-      "2,005 kcal remaining",
+      "About 2,000\u00a0kcal remaining",
     );
     expect(await raw('.food-macros [data-macro="protein"] strong')).toBe(
       "35 g",

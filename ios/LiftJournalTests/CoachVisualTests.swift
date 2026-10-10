@@ -169,6 +169,15 @@ struct CoachVisualTests {
     #expect(VisualProgress.perMark(0) == 1)
   }
 
+  @Test("A target that isn't one of the athlete's own says it is Coach's suggestion")
+  func suggestedTarget() {
+    let own = Components.Schemas.VisualTarget(label: "Protein", value: 116, target: 180, unit: "g")
+    #expect(VisualProgress.scale(own, per: 10) == "One mark = 10 g")
+    let steps = Components.Schemas.VisualTarget(
+      label: "Steps", value: 6200, target: 8000, unit: "steps", suggested: true)
+    #expect(VisualProgress.scale(steps, per: 500) == "One mark = 500 steps · Suggested by Coach")
+  }
+
   @Test("A reply's figures are numbered in order; a recipe takes no number")
   func figureNumbers() throws {
     let chart = try Self.visual(#"{"id":"a","kind":"bar_chart","title":"Sleep","unit":"h","points":[]}"#)

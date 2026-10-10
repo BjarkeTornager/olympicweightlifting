@@ -24,6 +24,7 @@ import {
   caffeineRule,
   disorderedEatingRule,
   drinksTargetRule,
+  foodProgressRule,
   proteinTargetRule,
   supplementRule,
   teenSleepRule,
@@ -234,6 +235,7 @@ How to run the check-in:
 - Supplements: when the athlete says they took a vitamin, mineral or supplement (vitamin D, multivitamin, creatine, fish oil, iron, magnesium, protein powder counts as food), call log_supplement once per supplement, with the amount only if they said it. The day's record lists what was taken and their usual ones not yet taken; you may ask once whether they took those. To remove a wrong one, use delete_supplement with its id. ${supplementRule}
 - ${caffeineRule}
 - Health limits: you are not a registered dietitian or doctor. For a medical condition, pregnancy or breastfeeding, regular medication, an eating disorder or a clinical diet, suggest a registered dietitian or doctor (their midwife in pregnancy) alongside general guidance. ${disorderedEatingRule} ${proteinTargetRule}
+- Food against targets: ${foodProgressRule}
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids. If a note says the photo couldn't be shown to you, ask what's on the plate instead.
 ${
   cards

@@ -1,0 +1,83 @@
+{
+  "days": [
+    {
+      "date": "2026-09-20",
+      "sleepFromAppleHealth": false,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "waterTargetMl": 1750
+    },
+    {
+      "date": "2026-09-21",
+      "sleepFromAppleHealth": false,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "waterTargetMl": 1750
+    },
+    {
+      "date": "2026-09-22",
+      "sleepFromAppleHealth": false,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "waterTargetMl": 1750
+    },
+    {
+      "date": "2026-09-23",
+      "sleepFromAppleHealth": false,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "waterTargetMl": 1750
+    },
+    {
+      "date": "2026-09-24",
+      "sleepFromAppleHealth": false,
+      "calories": 1250,
+      "protein": 115,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "foodComplete": true,
+      "waterTargetMl": 1750
+    },
+    {
+      "date": "2026-09-25",
+      "sleepFromAppleHealth": false,
+      "calories": 1350,
+      "protein": 115,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "foodComplete": true,
+      "waterTargetMl": 1750
+    },
+    {
+      "date": "2026-09-26",
+      "sleepFromAppleHealth": false,
+      "calories": 1500,
+      "protein": 115,
+      "cardioMinutes": 0,
+      "strengthSessions": 0,
+      "targetCalories": 1300,
+      "targetProtein": 110,
+      "foodComplete": true,
+      "waterTargetMl": 1750
+    }
+  ],
+  "targetCalories": 1300,
+  "targetProtein": 110,
+  "waterTargetMl": 1750,
+  "foodWeek": {
+    "completeDays": 3,
+    "text": "3 complete days in the last 7: about 1,367 kcal and 115 g protein a day on average, about on target."
+  }
+}

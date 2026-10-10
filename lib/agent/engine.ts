@@ -69,6 +69,7 @@ import {
   recentConversations,
 } from "../conversation-memory";
 import { dayForCoach } from "../journal-summary";
+import { withSavedTargets } from "../visual-targets";
 import { withoutEmDashes } from "./coach-style";
 import {
   drawPicture,
@@ -1125,7 +1126,13 @@ async function turn(
               throw Error(
                 "This app can't show a recipe card yet. Write the recipe in your reply instead: every ingredient with its amount, short numbered steps, and the estimated kcal and protein per serving.",
               );
-            const content = visualSchema.parse(fields);
+            // Progress against the athlete's own daily targets, never
+            // figures of the model's (visual-targets.ts).
+            const content = withSavedTargets(
+              visualSchema.parse(fields),
+              snapshot.state,
+              currentDate,
+            );
             let visual: SavedVisual = { id: uid(), content };
             let pictureNote: string | undefined;
             if (picture && content.kind !== "recipe")

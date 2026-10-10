@@ -14,6 +14,7 @@ import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
 import { Plus, ChevronRight, Flame, Mic } from "./ui/icons";
 import { burnedContext, burnedLines, burnedToday } from "@/lib/energy";
+import { foodDay } from "@/lib/food-progress";
 import { useVoiceEnabled } from "@/lib/use-voice-checkin";
 import { BarbellIcon, BowlIcon, SleepIcon } from "./ui/journal-icons";
 
@@ -36,12 +37,9 @@ export function Today({
   const burned = burnedToday(state, date);
   // Apple Health's active energy leads; training follows on its own line.
   const [lead, ...more] = burned ? burnedLines(burned) : [];
-  const kcal = meals.reduce(
-    (total, meal) =>
-      total +
-      meal.items.reduce((sum, item) => sum + Number(item.calories || 0), 0),
-    0,
-  );
+  // The day's food as Food words it (food-progress.ts).
+  const food = foodDay(state, date, date);
+  const progress = food.progress.calories.text;
   return (
     <div className="today-page">
       <div className="page-heading compact">
@@ -72,14 +70,16 @@ export function Today({
             <strong>Food</strong>
             <small>
               {meals.length
-                ? `${meals.length} ${meals.length === 1 ? "meal" : "meals"} recorded${state.nutrition.completeDays?.includes(date) ? ", day complete" : ""}`
+                ? `${meals.length} ${meals.length === 1 ? "meal" : "meals"} recorded${food.complete ? ", day complete" : ""}${food.progress.calories.targetText && progress ? ` · ${progress.charAt(0).toLowerCase()}${progress.slice(1)}` : ""}`
                 : "Add what you remember"}
             </small>
           </span>
           <span className="today-record-value">
             {meals.length ? (
               <>
-                {Math.round(kcal).toLocaleString("en-GB")} <small>kcal</small>
+                {food.estimated ? "~" : ""}
+                {food.eaten.calories.toLocaleString("en-GB")}{" "}
+                <small>kcal</small>
               </>
             ) : (
               <small>Nothing recorded yet</small>

@@ -136,11 +136,23 @@ struct TrendView: View {
           figure(average(\.heartRateVariabilityMs).map(Format.number), "ms HRV")
         }
       case .activity:
-        figure(average { $0.steps.map(Double.init) }.map(Format.number), "steps")
+        figure(
+          average { $0.steps.map(Double.init) }.map(Format.number), "steps",
+          empty: empty { $0.steps.map(Double.init) })
       case .water:
-        figure(average { $0.waterMl.map(Double.init) }.map(Format.number), "ml")
+        figure(
+          average { $0.waterMl.map(Double.init) }.map(Format.number), "ml",
+          empty: empty { $0.waterMl.map(Double.init) })
       case .food:
-        figure(average(\.calories).map(Format.number), "kcal")
+        figure(average(\.calories).map(Format.number), "kcal", empty: empty(\.calories))
+        // The last 7 days' complete days against the target, as the
+        // website says it, from a server that sends it.
+        if let week = trends?.foodWeek?.text {
+          Text(week)
+            .folio(.note)
+            .foregroundStyle(Theme.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
       case .body:
         HStack(alignment: .firstTextBaseline, spacing: 20) {
           figure(
@@ -163,6 +175,13 @@ struct TrendView: View {
     }
   }
 
+  /// Why there is no average: nothing logged, or only today, which counts
+  /// once it is over (food once marked complete).
+  private func empty(_ value: (Components.Schemas.TrendDay) -> Double?) -> String {
+    guard days.contains(where: { value($0) != nil }) else { return "Nothing logged in this range" }
+    return trend == .food ? "Today counts once it's marked complete" : "Today counts once it's over"
+  }
+
   /// Logged nights in the range, and their average from at least five.
   private var sleepNights: Int { days.compactMap(\.sleepHours).count }
   private var sleepAverage: Double? {
@@ -183,8 +202,28 @@ struct TrendView: View {
   }
 
   private func average(_ value: (Components.Schemas.TrendDay) -> Double?) -> Double? {
+    Self.average(Self.counted(days, trend: trend, today: JournalDay.string(.now)), value)
+  }
+
+  static func average(
+    _ days: [Components.Schemas.TrendDay], _ value: (Components.Schemas.TrendDay) -> Double?
+  ) -> Double? {
     let values = days.compactMap(value)
     return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+  }
+
+  /// The days an average counts. Food, drinks and steps add up through the
+  /// day, so today is left out until it is over, or for food until it is
+  /// marked complete; a partly logged day would pull the average down.
+  /// Last night's sleep and resting heart rate are whole by morning.
+  static func counted(
+    _ days: [Components.Schemas.TrendDay], trend: Trend, today: String
+  ) -> [Components.Schemas.TrendDay] {
+    switch trend {
+    case .food: days.filter { $0.date != today || $0.foodComplete == true }
+    case .water, .activity: days.filter { $0.date != today }
+    case .sleep, .heart, .body: days
+    }
   }
 
   private func average(_ key: KeyPath<Components.Schemas.TrendDay, Double?>) -> Double? {
@@ -201,10 +240,12 @@ struct TrendView: View {
     case .activity:
       bars({ $0.steps.map(Double.init) }, unit: "steps", average: average { $0.steps.map(Double.init) })
     case .water:
-      // No target line when the athlete hid the drinks target.
+      // No target line when the athlete hid the drinks target; each day's
+      // own, which follows its training, from a server that sends it.
       bars(
         { $0.waterMl.map(Double.init) }, unit: "ml",
-        target: trends.flatMap { $0.waterTargetHidden == true ? nil : Double($0.waterTargetMl) })
+        target: trends.flatMap { $0.waterTargetHidden == true ? nil : Double($0.waterTargetMl) },
+        daily: trends?.waterTargetHidden == true ? nil : { $0.waterTargetMl.map(Double.init) })
     case .food:
       // The target in force each day, from a server that sends it, else
       // today's.
@@ -387,6 +428,7 @@ struct TrendView: View {
             "\(Format.number(kcal))\(Format.target(day.targetCalories).map { " of \(Format.number($0))" } ?? "") kcal"
           },
           day.protein.map { "\(Format.number($0)) g protein" },
+          day.foodComplete == true ? "complete" : nil,
         ]
       case .body:
         [day.bodyweight.map { "\(Format.decimal($0)) kg" }, day.bodyFatPercent.map { "\(Format.decimal($0))% fat" }]

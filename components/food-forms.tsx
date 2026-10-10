@@ -203,10 +203,16 @@ export function DietTargetsForm({
   targets,
   onChange: setTargets,
   onSubmit,
+  note,
+  confirm = false,
 }: {
   targets: DietTargets;
   onChange: (targets: DietTargets) => void;
   onSubmit: () => void;
+  // A calorie target below the athlete's estimated minimum.
+  note?: string;
+  // A very low calorie target, pressed once: the next press saves it.
+  confirm?: boolean;
 }) {
   return (
     <form
@@ -252,11 +258,18 @@ export function DietTargetsForm({
           </label>
         ))}
       </div>
+      {note && (
+        <p className="notice warning" role="status">
+          {note}
+        </p>
+      )}
       <p className="fine-print">
         The goal label does not calculate a calorie deficit or change your
         targets automatically.
       </p>
-      <Button type="submit">Save targets</Button>
+      <Button type="submit">
+        {confirm ? "Save this target anyway" : "Save targets"}
+      </Button>
     </form>
   );
 }

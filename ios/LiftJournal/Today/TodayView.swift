@@ -203,32 +203,58 @@ struct TodayView: View {
     let food = today.nutrition
     let water = today.hydration
     let (amount, unit) = Format.litres(water.totalMl)
-    let (target, targetUnit) = Format.litres(water.targetMl)
-    let glasses = max(1, Int((Double(water.targetMl) / 250).rounded()))
+    let (target, targetUnit) = Format.litres(water.targetMl, digits: 2)
+    // Some of the day is an estimate: "~980".
+    let about = food.estimated == true ? "~" : ""
+    let hideOver = food.hideOverTarget == true
     return Ledger(
       energy: LedgerLine(
         title: "Energy", tint: Theme.calories, value: food.calories, target: Format.target(food.targetCalories),
-        perMark: 100, number: Format.number(food.calories), unit: "kcal",
-        targetText: food.targetCalories.map(Format.number), scale: "One mark = 100 kcal",
-        spokenUnit: "kilocalories"),
+        perMark: 100, number: about + Format.number(food.calories), unit: "kcal",
+        targetText: food.targetCalories.map { "about \(Format.number($0))" }, scale: "One mark = 100 kcal",
+        spokenUnit: "kilocalories",
+        status: Self.energyStatus(
+          food.caloriesProgress, value: food.calories, target: Format.target(food.targetCalories)),
+        hideOver: hideOver),
+      // Protein is a minimum: reached rather than passed.
       protein: LedgerLine(
         title: "Protein", tint: Theme.protein, value: food.protein, target: Format.target(food.targetProtein),
-        perMark: 10, number: Format.number(food.protein), unit: "g",
-        targetText: food.targetProtein.map { "\(Format.number($0)) g" }, scale: "10 g a mark",
-        spokenUnit: "grams"),
+        perMark: 10, number: about + Format.number(food.protein), unit: "g",
+        targetText: food.targetProtein.map { "at least \(Format.number($0)) g" }, scale: "10 g a mark",
+        spokenUnit: "grams", status: food.proteinProgress?.status, hideOver: hideOver),
       // A drinks target, an estimate, unless the athlete hid it.
       water: LedgerLine(
         title: "Drinks", tint: Theme.water, value: Double(water.totalMl),
         target: water.targetMl > 0 && water.targetHidden != true ? Double(water.targetMl) : nil, perMark: 250,
         number: amount, unit: unit, targetText: "about \(target) \(targetUnit)",
-        scale: "\(Format.number(water.totalMl / 250)) of \(Format.number(glasses)) glasses",
+        scale: Self.glassesScale(totalMl: water.totalMl, targetMl: water.targetMl),
         spokenUnit: "millilitres"),
       burned: Self.burned(today.burned),
       burnedContext: today.burned?.context,
+      targetNote: food.targetNote,
       energyLink: .food
     ) {
       model.openCoach(.message("Help me set my goals"))
     }
+  }
+
+  /// Where energy stands: the server's words when it sends them (absent
+  /// when nothing is said, as over a target that hides it), else, from a
+  /// server older than them, "250 above target" once the day has passed
+  /// it: a record, not a verdict.
+  static func energyStatus(
+    _ progress: Components.Schemas.NutrientProgress?, value: Double, target: Double?
+  ) -> String? {
+    if let progress { return progress.status }
+    guard let target, value > target else { return nil }
+    return "\(Format.number(value - target)) above target"
+  }
+
+  /// "3 of 9 glasses": each 250 ml glass to the nearest, so 740 ml is three
+  /// glasses, not two, and the target at least one.
+  static func glassesScale(totalMl: Int, targetMl: Int) -> String {
+    let glasses = { (ml: Int) in Int((Double(ml) / 250).rounded()) }
+    return "\(Format.number(glasses(totalMl))) of \(Format.number(max(1, glasses(targetMl)))) glasses"
   }
 
   /// Today's burned figures, line by line. A server from before the lines
@@ -762,7 +788,11 @@ struct FoodSection: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
           CardLabel(title: "Food", key: Category.food.tint)
           Spacer(minLength: 8)
-          Measure(value: Format.number(nutrition.calories), unit: "kcal", role: .inline).foregroundStyle(Theme.ink)
+          Measure(
+            value: (nutrition.estimated == true ? "~" : "") + Format.number(nutrition.calories), unit: "kcal",
+            role: .inline
+          )
+          .foregroundStyle(Theme.ink)
           GoArrow()
         }
         .contentShape(.rect)
@@ -770,6 +800,17 @@ struct FoodSection: View {
       .buttonStyle(CardButtonStyle())
       MacroSplit(protein: nutrition.protein, carbs: nutrition.carbs, fat: nutrition.fat)
         .padding(.top, 14)
+      // Carbohydrate and fat against their ranges, as the website shows them.
+      let ranges = Self.ranges(nutrition)
+      if !ranges.isEmpty {
+        VStack(alignment: .leading, spacing: 3) {
+          ForEach(ranges, id: \.self) { Text($0) }
+        }
+        .font(.caption2.weight(.medium).monospacedDigit())
+        .foregroundStyle(Theme.inkSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 8)
+      }
       if nutrition.meals.isEmpty {
         Paragraph("Nothing logged yet. Tell Coach what you ate, or send a photo.", language: .english)
           .folio(.note)
@@ -817,6 +858,20 @@ struct FoodSection: View {
       }
     }
     .accessibilityElement(children: .combine)
+  }
+
+  /// "Carbs about 240 to 295 g · In range", a line for each of carbohydrate
+  /// and fat with a target; none from a server older than ranges.
+  static func ranges(_ nutrition: Components.Schemas.Nutrition) -> [String] {
+    [("Carbs", nutrition.carbsProgress), ("Fat", nutrition.fatProgress)].compactMap { name, progress in
+      guard let progress else { return nil }
+      return ["\(name) \(progress.target)", progress.status].compactMap { $0 }.joined(separator: " · ")
+    }
+  }
+
+  /// "About 2,400 kcal" from the server's "about 2,400 kcal".
+  static func sentence(_ text: String) -> String {
+    text.prefix(1).uppercased() + text.dropFirst()
   }
 
   /// A meal's kind as the server names it ("breakfast"), in sentence case.

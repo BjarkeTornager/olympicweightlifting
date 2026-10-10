@@ -12,7 +12,6 @@ import {
   mealSchema,
   nutritionSummary,
   queryFoodJournal,
-  targetProgress,
   totalNutrients,
 } from "../lib/nutrition";
 import { dayForCoach } from "../lib/journal-summary";
@@ -211,10 +210,6 @@ test("a Coach target update changes only the targets it names", () => {
   assert.equal(state.nutrition.targets.calories, 2350);
 });
 test("a daily target of 0 is no target: the Food page and Coach say so", () => {
-  assert.equal(targetProgress(980, 0, "kcal"), "No daily target");
-  assert.equal(targetProgress(980, null, "kcal"), "No daily target");
-  assert.equal(targetProgress(980, 1900, "kcal"), "920\u00a0kcal remaining");
-  assert.equal(targetProgress(140, 130, "g"), "10\u00a0g above target");
   const state = emptyJournal(),
     meal = sampleMeal();
   meal.date = today();
@@ -259,8 +254,10 @@ test("a daily target of 0 is no target: the Food page and Coach say so", () => {
   assert.equal(state.nutrition.targets.calories, 0);
   state.nutrition.targets.calories = 2300;
   state.nutrition.targets.protein = 150;
-  assert.match(page(), /of 2,300\u00a0kcal/);
-  assert.match(page(), /134\u00a0g remaining/);
+  // An estimated day reads "~", the target "about", protein "at least".
+  assert.match(page(), /of about 2,300\u00a0kcal/);
+  assert.match(page(), /At least 150\u00a0g/);
+  assert.match(page(), /About 135\u00a0g remaining/);
   assert.deepEqual(dayForCoach(state, meal.date).dailyTargets, {
     ...none,
     calories: 2300,

@@ -69,11 +69,11 @@ struct ThemeTests {
     #expect(abs(energy.filled - 9.8) < 0.0001)
     #expect(energy.lead == 9)
     #expect(abs(energy.fill(9) - 0.8) < 0.0001 && energy.fill(8) == 1 && energy.fill(10) == 0)
-    #expect(energy.targetLineAfter == nil)
+    #expect(energy.targetLine == nil)
 
     let over = try #require(MeterLayout(value: 2150, target: 1900, unit: 100))
     #expect(over.marks == 22)
-    #expect(over.targetLineAfter == 19)
+    #expect(over.targetLine == 19)
 
     let protein = try #require(MeterLayout(value: 52, target: 130, unit: 10))
     #expect(protein.marks == 13)
@@ -87,6 +87,22 @@ struct ThemeTests {
     #expect(MeterLayout(value: 980, target: 0, unit: 100) == nil)
   }
 
+  @Test("A target between marks draws its line where it falls, not at the nearest mark")
+  func meterFractionalTarget() throws {
+    // 1,950 kcal is 19 and a half marks: 20 marks, the line halfway across the 20th.
+    let half = try #require(MeterLayout(value: 2000, target: 1950, unit: 100))
+    #expect(half.targetMarks == 20 && half.marks == 20)
+    #expect(half.targetLine == 19.5)
+    // Not reached yet: no line.
+    #expect(try #require(MeterLayout(value: 1940, target: 1950, unit: 100)).targetLine == nil)
+    // 1,940 kcal no longer rounds down to 19 marks, leaving its last 40 out.
+    #expect(try #require(MeterLayout(value: 0, target: 1940, unit: 100)).targetMarks == 20)
+    // A whole mark's line sits in the gap after it; a share of one across it.
+    #expect(MeterLayout.lineX(19, pitch: 10, width: 6) == 18 * 10 + 8)
+    #expect(MeterLayout.lineX(19.5, pitch: 10, width: 6) == 19 * 10 + 3)
+    #expect(MeterLayout.lineX(1, pitch: 10, width: 6) == 8)
+  }
+
   @Test("VoiceOver reads a Ledger column as one sentence")
   func ledgerSpoken() {
     let energy = LedgerLine(
@@ -97,6 +113,23 @@ struct ThemeTests {
       title: "Protein", tint: Theme.protein, value: 52, target: nil, perMark: 10, number: "52", unit: "g",
       targetText: nil, scale: "10 g a mark", spokenUnit: "grams")
     #expect(untargeted.spoken == "52 grams logged today")
+  }
+
+  @Test("A line that hides what passes its target fills its meter to the target, and says where the day stands")
+  func ledgerHideOver() {
+    var line = LedgerLine(
+      title: "Energy", tint: Theme.calories, value: 1500, target: 1300, perMark: 100, number: "~1,500", unit: "kcal",
+      targetText: "about 1,300", scale: "One mark = 100 kcal", spokenUnit: "kilocalories")
+    #expect(line.shown == 1500)
+    line.hideOver = true
+    #expect(line.shown == 1300)
+    #expect(line.spoken == "1,500 of 1,300 kilocalories")
+    let under = LedgerLine(
+      title: "Energy", tint: Theme.calories, value: 900, target: 1300, perMark: 100, number: "900", unit: "kcal",
+      targetText: "about 1,300", scale: "One mark = 100 kcal", spokenUnit: "kilocalories",
+      status: "About 400 kcal remaining", hideOver: true)
+    #expect(under.shown == 900)
+    #expect(under.spoken == "900 of 1,300 kilocalories, About 400 kcal remaining")
   }
 
   @Test("A value's numbers are set in the serif and its units beside them")

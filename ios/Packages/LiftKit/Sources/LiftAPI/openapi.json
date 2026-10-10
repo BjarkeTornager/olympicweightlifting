@@ -1493,6 +1493,21 @@
           "goals"
         ]
       },
+      "FoodWeek": {
+        "type": "object",
+        "properties": {
+          "completeDays": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "completeDays",
+          "text"
+        ]
+      },
       "HealthDay": {
         "type": "object",
         "properties": {
@@ -2349,6 +2364,20 @@
           "canStart"
         ]
       },
+      "NutrientProgress": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target"
+        ]
+      },
       "Nutrition": {
         "type": "object",
         "properties": {
@@ -2375,6 +2404,30 @@
             "items": {
               "$ref": "#/components/schemas/Meal"
             }
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "caloriesProgress": {
+            "$ref": "#/components/schemas/NutrientProgress"
+          },
+          "proteinProgress": {
+            "$ref": "#/components/schemas/NutrientProgress"
+          },
+          "carbsProgress": {
+            "$ref": "#/components/schemas/NutrientProgress"
+          },
+          "fatProgress": {
+            "$ref": "#/components/schemas/NutrientProgress"
+          },
+          "hideOverTarget": {
+            "type": "boolean"
+          },
+          "targetNote": {
+            "type": "string"
           }
         },
         "required": [
@@ -3531,6 +3584,12 @@
           },
           "targetProtein": {
             "type": "number"
+          },
+          "foodComplete": {
+            "type": "boolean"
+          },
+          "waterTargetMl": {
+            "type": "integer"
           }
         },
         "required": [
@@ -3560,6 +3619,9 @@
           },
           "waterTargetHidden": {
             "type": "boolean"
+          },
+          "foodWeek": {
+            "$ref": "#/components/schemas/FoodWeek"
           }
         },
         "required": [
@@ -3751,6 +3813,9 @@
           },
           "unit": {
             "type": "string"
+          },
+          "suggested": {
+            "type": "boolean"
           }
         },
         "required": [

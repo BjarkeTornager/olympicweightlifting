@@ -1,0 +1,94 @@
+{
+  "date": "2026-09-26",
+  "revision": 12,
+  "sleep": {
+    "fromAppleHealth": false,
+    "nights": 0
+  },
+  "body": {
+    "focus": "maintain",
+    "targetWeightKg": 60,
+    "goalNotes": [
+      "These are your own daily targets; your goals plan's estimate is about 2,150 kcal a day."
+    ]
+  },
+  "nutrition": {
+    "calories": 1500,
+    "protein": 115,
+    "carbs": 150,
+    "fat": 52,
+    "targetCalories": 1300,
+    "targetProtein": 110,
+    "meals": [
+      {
+        "id": "9c1f0c43-7a57-4a53-9a4c-2f8cf2f0c003",
+        "name": "Chicken and rice",
+        "type": "dinner",
+        "calories": 1500,
+        "protein": 115,
+        "estimated": true,
+        "createdAt": "2026-09-26T17:00:00.000Z"
+      }
+    ],
+    "estimated": true,
+    "complete": true,
+    "caloriesProgress": {
+      "target": "about 1,300 kcal"
+    },
+    "proteinProgress": {
+      "target": "at least 110 g",
+      "status": "Reached"
+    },
+    "carbsProgress": {
+      "target": "about 130 to 165 g",
+      "status": "In range"
+    },
+    "fatProgress": {
+      "target": "about 35 to 50 g"
+    },
+    "hideOverTarget": true,
+    "targetNote": "Your calorie target is below your estimated minimum of about 1,400 kcal a day, which covers your resting energy and training. Eating this little for long can harm training and health, so ask Coach to review it with you."
+  },
+  "hydration": {
+    "totalMl": 0,
+    "targetMl": 1750,
+    "estimatedTarget": false,
+    "drinks": [],
+    "targetLowMl": 1500,
+    "targetHighMl": 2250,
+    "restDayTargetMl": 1750,
+    "liftingDayTargetMl": 2250,
+    "note": "An estimate from your weight and the day's training, not a minimum. Thirst and pale urine are good everyday signs."
+  },
+  "supplements": {
+    "taken": [],
+    "usual": []
+  },
+  "strengthToday": [],
+  "activities": [],
+  "sessionsThisWeek": 0,
+  "priorities": [
+    {
+      "id": "checkin",
+      "category": "CHECK IN",
+      "title": "Start with how you feel",
+      "reason": "A quick check-in gives your training and food choices some context.",
+      "action": "Daily check-in"
+    },
+    {
+      "id": "training",
+      "category": "TRAINING",
+      "title": "Choose a session that fits today",
+      "reason": "Review your programme and how you feel. A rest day can be part of your plan.",
+      "action": "Explore programmes"
+    },
+    {
+      "id": "nutrition",
+      "category": "NUTRITION",
+      "title": "Keep your food picture up to date",
+      "reason": "1500 kcal and 115 g protein across 1 logged meal. These are recorded totals, not your full daily intake.",
+      "action": "Review food"
+    }
+  ],
+  "journalStartDate": "2026-08-30"
+}

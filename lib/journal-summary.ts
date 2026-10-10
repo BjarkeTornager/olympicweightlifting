@@ -18,6 +18,12 @@ import { supplementText, supplementsForDay } from "./supplements";
 import { describeRoute, type RouteNote } from "./route-summary";
 import { bodyFatByDate } from "./body-composition";
 import { dailyTargets } from "./nutrition";
+import {
+  completeDayAverage,
+  foodDay,
+  nutrientKeys,
+  progressLine,
+} from "./food-progress";
 import { goalsForState } from "./body-goals";
 import { formatSleepDuration } from "./health";
 
@@ -206,6 +212,8 @@ export function dayForCoach(
   );
   const round = (n: number) => Math.round(n);
   const burned = burnedToday(state, date);
+  // The day's food as Food, Today and the iPhone word it.
+  const food = foodDay(state, date, date);
   return {
     date,
     ...day,
@@ -220,7 +228,30 @@ export function dayForCoach(
       carbs_g: round(eaten.carbs_g),
       fat_g: round(eaten.fat_g),
       complete: state.nutrition.completeDays?.includes(date) ?? false,
+      // Some of it is a photo's or a description's estimate.
+      estimated: food.estimated,
+      // Each nutrient against its target, in the words the athlete sees:
+      // protein is a minimum, fat and carbohydrate are ranges.
+      progress: Object.fromEntries(
+        nutrientKeys.map((key) => [key, progressLine(food, key)]),
+      ),
+      // Nothing past a target is said: a calorie target below the
+      // estimated minimum, or anyone under 18.
+      ...(food.hideOver ? { hideOverTarget: true } : {}),
     },
+    // A calorie target below the athlete's estimated minimum, which Food
+    // shows with this note and never as "above target".
+    ...(food.belowMinimum
+      ? {
+          calorieTargetBelowMinimum: {
+            estimated_minimum_kcal: food.belowMinimum.minimumKcal,
+            note: food.belowMinimum.note,
+          },
+        }
+      : {}),
+    // The last 7 days' complete food days on average: food averages count
+    // only days marked complete, as partly logged days read low.
+    foodWeek: completeDayAverage(state, date, date).text,
     // The two figures Today shows as burned, never added together: Apple
     // Health's active energy so far, which counts all movement but only the
     // lifting a watch saw, and recorded training. Both are estimates of
@@ -318,10 +349,9 @@ export function describeDay(day: ReturnType<typeof dayForCoach>) {
       : left && `no training estimate for ${left}`,
   ].filter(Boolean);
   if (burned.length) parts.push(`Burned: ${burned.join("; ")}`);
-  const target = day.dailyTargets.calories;
   if (day.meals.length)
     parts.push(
-      `Eaten so far: ${day.eatenSoFar.calories} kcal, ${day.eatenSoFar.protein_g} g protein${target ? ` of ${target} kcal` : ""}`,
+      `Eaten so far: ${day.eatenSoFar.progress.calories}; protein ${day.eatenSoFar.progress.protein}`,
     );
   return parts.length ? parts.join(". ") + "." : "Nothing logged yet today.";
 }

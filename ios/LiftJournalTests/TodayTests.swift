@@ -304,7 +304,16 @@ struct TodayTests {
     #expect(Format.number(1899.6) == "1,900")
     #expect(Format.decimal(70.4) == "70.4")
     #expect(Format.decimal(70) == "70")
-    #expect(Format.litres(2450) == ("2.45", "L"))
+    // An amount drunk to one decimal, a target in quarter litres to two.
+    #expect(Format.litres(2420) == ("2.4", "L"))
+    #expect(Format.litres(2450, digits: 2) == ("2.45", "L"))
+    // A whole quarter litre drunk reads as the target does when it is
+    // reached: 2.25 L, not 2.2 next to "about 2.25 L".
+    #expect(Format.litres(2250) == ("2.25", "L"))
+    #expect(Format.litres(3250) == ("3.25", "L"))
+    #expect(Format.litres(2240) == ("2.2", "L"))
+    #expect(Format.litres(2500) == ("2.5", "L"))
+    #expect(Format.litres(2000) == ("2", "L"))
     #expect(Format.litres(500) == ("500", "ml"))
     #expect(Format.count(2) == "two")
     #expect(Format.count(12) == "12")
@@ -325,6 +334,61 @@ struct TodayTests {
     #expect(DrinksTargets.basis(water(estimated: false)) == "an estimate from your weight and the day's training")
     #expect(DrinksTargets.line(water(estimated: true, rest: nil, lifting: nil)) == "2 L a day, estimated")
     #expect(DrinksTargets.line(water(estimated: true, hidden: true)) == "Hidden on Today")
+  }
+
+  @Test("Energy says where the day stands in the server's words, and from an older server only past the target")
+  func energyStatus() {
+    let remaining = Components.Schemas.NutrientProgress(
+      target: "about 1,900 kcal", status: "About 450 kcal remaining")
+    #expect(TodayView.energyStatus(remaining, value: 1450, target: 1900) == "About 450 kcal remaining")
+    // Over a target below the estimated minimum, nothing is said.
+    #expect(TodayView.energyStatus(.init(target: "about 1,300 kcal"), value: 1500, target: 1300) == nil)
+    #expect(TodayView.energyStatus(nil, value: 2150, target: 1900) == "250 above target")
+    #expect(TodayView.energyStatus(nil, value: 1800, target: 1900) == nil)
+  }
+
+  @Test("Glasses count to the nearest 250 ml, and the target is at least one")
+  func glasses() {
+    #expect(TodayView.glassesScale(totalMl: 740, targetMl: 2250) == "3 of 9 glasses")
+    #expect(TodayView.glassesScale(totalMl: 1120, targetMl: 2850) == "4 of 11 glasses")
+    #expect(TodayView.glassesScale(totalMl: 100, targetMl: 0) == "0 of 1 glasses")
+  }
+
+  @Test("Carbs and fat read as ranges with where the day stands, and not at all from an older server")
+  func ranges() throws {
+    var food = try #require(PreviewData.today).nutrition
+    #expect(FoodSection.ranges(food).isEmpty)
+    food.carbsProgress = .init(target: "about 240 to 295 g", status: "In range")
+    food.fatProgress = .init(target: "about 55 to 80 g")
+    #expect(FoodSection.ranges(food) == ["Carbs about 240 to 295 g · In range", "Fat about 55 to 80 g"])
+    #expect(FoodSection.sentence("about 2,400 kcal") == "About 2,400 kcal")
+  }
+
+  @Test("Averages leave out today until it is over, and food until it is marked complete")
+  func trendAverages() {
+    let today = "2026-10-10"
+    func day(_ date: String, kcal: Double, water: Int, steps: Int) -> Components.Schemas.TrendDay {
+      .init(
+        date: date, sleepFromAppleHealth: false, steps: steps, waterMl: water, calories: kcal, cardioMinutes: 0,
+        strengthSessions: 0)
+    }
+    var days = [
+      day("2026-10-08", kcal: 2000, water: 2000, steps: 8000),
+      day("2026-10-09", kcal: 1800, water: 1800, steps: 10000),
+      day(today, kcal: 400, water: 250, steps: 900),
+    ]
+    let average = { (trend: Trend, value: (Components.Schemas.TrendDay) -> Double?) in
+      TrendView.average(TrendView.counted(days, trend: trend, today: today), value)
+    }
+    #expect(average(.food, \.calories) == 1900)
+    #expect(average(.water) { $0.waterMl.map(Double.init) } == 1900)
+    #expect(average(.activity) { $0.steps.map(Double.init) } == 9000)
+    // Last night's sleep and resting heart rate are whole by morning.
+    #expect(TrendView.counted(days, trend: .sleep, today: today).count == 3)
+    // Marked complete, today's food counts.
+    days[2].foodComplete = true
+    #expect(average(.food, \.calories) == 1400)
+    #expect(average(.water) { $0.waterMl.map(Double.init) } == 1900)
   }
 
   @Test("A target of 0 is no target: no Account row, no line in Trends, no meter on Today")

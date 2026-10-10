@@ -23,12 +23,26 @@ struct LedgerLine {
   let scale: String
   /// The unit as VoiceOver says it ("kilocalories").
   let spokenUnit: String
+  /// Where the day stands, as the website words it ("About 450 kcal
+  /// remaining", "Reached"); nil when nothing is said.
+  var status: String? = nil
+  /// Nothing past the target is drawn: a calorie target below the
+  /// athlete's estimated minimum, or under 18.
+  var hideOver = false
 
-  /// "980 of 1,900 kilocalories", or "980 kilocalories logged today" without a target.
+  /// What the meter fills to: never past the target when that is hidden.
+  var shown: Double {
+    guard hideOver, let target else { return value }
+    return min(value, target)
+  }
+
+  /// "980 of 1,900 kilocalories", or "980 kilocalories logged today" without
+  /// a target, then where the day stands.
   var spoken: String {
     let value = Format.number(value)
     guard let target else { return "\(value) \(spokenUnit) logged today" }
-    return "\(value) of \(Format.number(target)) \(spokenUnit)"
+    let amount = "\(value) of \(Format.number(target)) \(spokenUnit)"
+    return status.map { "\(amount), \($0)" } ?? amount
   }
 }
 
@@ -104,7 +118,7 @@ struct LedgerColumn<Accessory: View>: View {
       .padding(.top, 6)
       if line.target != nil {
         IsotypeMeter(
-          value: line.value, target: line.target, unit: line.perMark, tint: line.tint, markWidth: markWidth,
+          value: line.shown, target: line.target, unit: line.perMark, tint: line.tint, markWidth: markWidth,
           height: meterHeight
         )
         .padding(.top, 12)
@@ -170,6 +184,8 @@ struct Ledger: View {
   var burned: [LedgerBurn] = []
   /// "Doesn't include the energy your body uses at rest."
   var burnedContext: String?
+  /// Why the calorie target is noted: below the athlete's estimated minimum.
+  var targetNote: String?
   /// The chart the energy column opens.
   var energyLink: Trend?
   var setTarget: (() -> Void)?
@@ -182,12 +198,22 @@ struct Ledger: View {
         line: energy, role: .hero, markWidth: 7, meterHeight: 32, link: energyLink,
         setTarget: offer(energy)
       ) {
-        if let over = over(energy) {
-          Text(over)
+        if let status = energy.status {
+          Text(status)
         }
       }
       .padding(.top, 14)
-      .padding(.bottom, burned.isEmpty ? 14 : 8)
+      .padding(.bottom, burned.isEmpty && targetNote == nil ? 14 : 8)
+      if let targetNote {
+        Text(targetNote)
+          .font(.caption2.weight(.medium))
+          .foregroundStyle(Theme.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.bottom, burned.isEmpty ? 14 : 8)
+      }
+      // The burned figures beside the energy eaten, never instead of where
+      // the day stands against its target.
       if !burned.isEmpty {
         BurnedLines(lines: burned, context: burnedContext)
           .padding(.bottom, 14)
@@ -201,7 +227,11 @@ struct Ledger: View {
       layout {
         LedgerColumn(
           line: protein, markWidth: stacked ? 9 : 5, meterHeight: stacked ? 34 : 24, setTarget: offer(protein)
-        )
+        ) {
+          if let status = protein.status {
+            Text(status)
+          }
+        }
         .frame(maxWidth: .infinity)
         if !stacked {
           Rectangle().fill(Theme.rule).frame(width: 1)
@@ -225,12 +255,6 @@ struct Ledger: View {
   private func offer(_ line: LedgerLine) -> (() -> Void)? {
     let first = [energy, protein].first { $0.target == nil }
     return first?.title == line.title ? setTarget : nil
-  }
-
-  /// "250 above target", once the day has passed it: a record, not a verdict.
-  private func over(_ line: LedgerLine) -> String? {
-    guard let target = line.target, line.value > target else { return nil }
-    return "\(Format.number(line.value - target)) above target"
   }
 }
 

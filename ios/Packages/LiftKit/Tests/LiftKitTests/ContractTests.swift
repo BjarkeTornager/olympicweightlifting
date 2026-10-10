@@ -82,6 +82,35 @@ struct ContractTests {
     #expect(check.ifYesNotes?.first?.hasPrefix("You answered yes to one of the questions") == true)
   }
 
+  @Test("Today's food reads as the website words it, and nothing passes a target below the minimum")
+  func todayFood() throws {
+    let food = try fixture("today-food", as: Components.Schemas.Today.self).nutrition
+    #expect(food.estimated == true && food.complete == true)
+    #expect(food.hideOverTarget == true)
+    #expect(food.caloriesProgress?.target == "about 1,300\u{00a0}kcal")
+    #expect(food.caloriesProgress?.status == nil)
+    #expect(food.proteinProgress?.status == "Reached")
+    // Carbohydrate held at its floor runs up from it; fat over its range
+    // says nothing, as the target is below the minimum.
+    #expect(food.carbsProgress?.target == "about 130 to 165\u{00a0}g")
+    #expect(food.fatProgress?.target == "about 35 to 50\u{00a0}g" && food.fatProgress?.status == nil)
+    #expect(food.targetNote?.contains("below your estimated minimum") == true)
+    // Without targets, none of it.
+    let plain = try fixture("today", as: Components.Schemas.Today.self).nutrition
+    #expect(plain.caloriesProgress == nil && plain.hideOverTarget == nil && plain.targetNote == nil)
+  }
+
+  @Test("Trends say which days are complete, and the week's complete-day average")
+  func trendsFood() throws {
+    let trends = try fixture("trends-food", as: Components.Schemas.Trends.self)
+    #expect(trends.days.suffix(3).allSatisfy { $0.foodComplete == true })
+    #expect(trends.days.first?.foodComplete == nil)
+    #expect(trends.foodWeek?.completeDays == 3)
+    #expect(trends.foodWeek?.text.hasPrefix("3 complete days in the last 7") == true)
+    // Each day's own drinks target.
+    #expect(trends.days.allSatisfy { $0.waterTargetMl == trends.waterTargetMl })
+  }
+
   @Test("Today's Body carries the weight trend, the week's averages, the trend against the plan and a note")
   func todayWeightTrend() throws {
     let today = try fixture("today-weight-trend", as: Components.Schemas.Today.self)
@@ -172,7 +201,8 @@ struct ContractTests {
     let visuals = try #require(history.turns.dropFirst().first?.visuals)
     #expect(visuals.map(\.kind) == ["line_chart", "progress", "stats", "comparison", "split", "calendar"])
     #expect(visuals[0].series?.first?.points.last?.value == 87.7 && visuals[0].target == 85)
-    #expect(visuals[1].targets?.first?.target == 180)
+    #expect(visuals[1].targets?.first?.target == 180 && visuals[1].targets?.first?.suggested == nil)
+    #expect(visuals[1].targets?.last?.suggested == true)
     #expect(visuals[2].stats?.first?.trend == "up")
     #expect(visuals[3].afterLabel == "This week" && visuals[3].comparisons?.first?.higherIsBetter == true)
     #expect(visuals[4].parts?.map(\.value) == [464, 604])

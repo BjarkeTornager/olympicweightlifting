@@ -4,37 +4,43 @@
       "date": "2026-09-20",
       "sleepFromAppleHealth": false,
       "cardioMinutes": 0,
-      "strengthSessions": 0
+      "strengthSessions": 0,
+      "waterTargetMl": 2000
     },
     {
       "date": "2026-09-21",
       "sleepFromAppleHealth": false,
       "cardioMinutes": 0,
-      "strengthSessions": 0
+      "strengthSessions": 0,
+      "waterTargetMl": 2000
     },
     {
       "date": "2026-09-22",
       "sleepFromAppleHealth": false,
       "cardioMinutes": 0,
-      "strengthSessions": 0
+      "strengthSessions": 0,
+      "waterTargetMl": 2000
     },
     {
       "date": "2026-09-23",
       "sleepFromAppleHealth": false,
       "cardioMinutes": 0,
-      "strengthSessions": 0
+      "strengthSessions": 0,
+      "waterTargetMl": 2000
     },
     {
       "date": "2026-09-24",
       "sleepFromAppleHealth": false,
       "cardioMinutes": 0,
-      "strengthSessions": 0
+      "strengthSessions": 0,
+      "waterTargetMl": 2000
     },
     {
       "date": "2026-09-25",
       "sleepFromAppleHealth": false,
       "cardioMinutes": 0,
-      "strengthSessions": 1
+      "strengthSessions": 1,
+      "waterTargetMl": 2750
     },
     {
       "date": "2026-09-26",
@@ -49,8 +55,13 @@
       "protein": 11,
       "bodyweight": 81.4,
       "cardioMinutes": 50,
-      "strengthSessions": 0
+      "strengthSessions": 0,
+      "waterTargetMl": 2500
     }
   ],
-  "waterTargetMl": 2500
+  "waterTargetMl": 2500,
+  "foodWeek": {
+    "completeDays": 0,
+    "text": "No complete days in the last 7. Mark a day complete on the website's Food page once everything is logged."
+  }
 }

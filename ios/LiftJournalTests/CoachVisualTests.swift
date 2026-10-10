@@ -1,5 +1,6 @@
 import Foundation
 import LiftAPI
+import LiftTheme
 import SwiftUI
 import Testing
 
@@ -167,6 +168,24 @@ struct CoachVisualTests {
     #expect(VisualProgress.perMark(10000) == 500)
     #expect(VisualProgress.perMark(2450) == 200)
     #expect(VisualProgress.perMark(0) == 1)
+  }
+
+  @Test("A target that isn't one of the athlete's own says it is Coach's suggestion")
+  func suggestedTarget() {
+    let own = Components.Schemas.VisualTarget(label: "Protein", value: 116, target: 180, unit: "g")
+    #expect(VisualProgress.scale(own, per: 10) == "One mark = 10 g")
+    let steps = Components.Schemas.VisualTarget(
+      label: "Steps", value: 6200, target: 8000, unit: "steps", suggested: true)
+    #expect(VisualProgress.scale(steps, per: 500) == "One mark = 500 steps · Suggested by Coach")
+  }
+
+  @Test("A progress meter fills to its target and never past it, as on the website")
+  func progressFilled() {
+    let over = Components.Schemas.VisualTarget(label: "Energy", value: 1500, target: 1300, unit: "kcal")
+    #expect(VisualProgress.filled(over) == 1300)
+    #expect(MeterLayout(value: VisualProgress.filled(over), target: 1300, unit: 100)?.targetLine == nil)
+    let under = Components.Schemas.VisualTarget(label: "Fat", value: 75, target: 80, unit: "g")
+    #expect(VisualProgress.filled(under) == 75)
   }
 
   @Test("A reply's figures are numbered in order; a recipe takes no number")

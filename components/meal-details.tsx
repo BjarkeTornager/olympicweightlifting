@@ -14,7 +14,14 @@ const macros = (n: { protein: number; carbs: number; fat: number }) =>
   ].join(`${nb}· `);
 
 export function MealDetails({ meal }: { meal: Meal }) {
-  const total = totalNutrients(meal.items);
+  // The meal's totals in whole kcal and grams; each food as entered.
+  const sum = totalNutrients(meal.items);
+  const total = {
+    calories: Math.round(sum.calories),
+    protein: Math.round(sum.protein),
+    carbs: Math.round(sum.carbs),
+    fat: Math.round(sum.fat),
+  };
   return (
     <div className="meal-details">
       <div className="meal-details-heading">

@@ -7,21 +7,36 @@ import SwiftUI
 public struct MeterLayout: Equatable, Sendable {
   /// Marks drawn: at least the target's, more when the value passes it.
   public let marks: Int
-  /// Marks up to the target.
+  /// Marks up to the target, the last one partly the target's when the
+  /// target falls inside it (1,950 kcal is 19 and a half marks).
   public let targetMarks: Int
   /// How many marks the value fills; the last one may be partly filled.
   public let filled: Double
+  /// Where the target falls, in marks: 19.5 for 1,950 kcal.
+  public let target: Double
 
   /// Nil without a positive target or amount per mark: draw nothing.
   public init?(value: Double, target: Double?, unit: Double) {
     guard let target, target > 0, unit > 0 else { return nil }
     filled = max(0, value) / unit
-    targetMarks = max(1, Int((target / unit).rounded()))
+    self.target = target / unit
+    // A hair under a whole mark counts as it, so 1,900.0001 stays 19.
+    targetMarks = max(1, Int((self.target - 1e-6).rounded(.up)))
     marks = max(targetMarks, Int(filled.rounded(.up)))
   }
 
-  /// After which mark the target line stands, when the value runs past it.
-  public var targetLineAfter: Int? { marks > targetMarks ? targetMarks : nil }
+  /// Where the target line stands, in marks, once the value runs past the
+  /// target: at its own place, inside a mark when it falls there.
+  public var targetLine: Double? { filled > target ? target : nil }
+
+  /// The target line's centre for marks `pitch` apart and `width` wide: in
+  /// the gap after a whole mark, or across a mark at the target's share.
+  public static func lineX(_ position: Double, pitch: Double, width: Double) -> Double {
+    let whole = position.rounded(.down)
+    let share = position - whole
+    if share < 1e-6 { return (whole - 1) * pitch + (pitch + width) / 2 }
+    return whole * pitch + share * width
+  }
 
   /// The index of the furthest filled mark, which glows in dark mode.
   public var lead: Int? { filled > 0 ? Int(filled.rounded(.up)) - 1 : nil }
@@ -116,8 +131,8 @@ private struct MeterMarks: View, Animatable {
           context.fill(filled, with: .color(tint))
         }
       }
-      if let after = layout.targetLineAfter {
-        let x = CGFloat(after - 1) * pitch + (pitch + markWidth) / 2 - 0.75
+      if let line = layout.targetLine {
+        let x = CGFloat(MeterLayout.lineX(line, pitch: Double(pitch), width: Double(markWidth))) - 0.75
         context.fill(Path(CGRect(x: x, y: -5, width: 1.5, height: size.height + 10)), with: .color(Theme.ink))
       }
     }

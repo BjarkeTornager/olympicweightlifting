@@ -19,10 +19,15 @@ const lineSeries = z
 const targetItem = z
   .object({ label, value: amount, target: amount.gt(0), unit })
   .strict();
-// As saved. Keys this version doesn't know are dropped, not refused, so a
-// card a newer version saved still shows after a rollback. Coach's tool
-// keeps the strict targetItem.
-const savedTargetItem = z.object(targetItem.shape);
+// As saved: a target that isn't one of the athlete's daily targets is marked
+// as Coach's suggestion (visual-targets.ts). Set only by the server; Coach's
+// tool keeps the strict targetItem. Keys this version doesn't know are
+// dropped, not refused, so a card a newer version saved still shows after a
+// rollback.
+const savedTargetItem = z.object({
+  ...targetItem.shape,
+  suggested: z.boolean().optional(),
+});
 const statItem = z
   .object({
     label,

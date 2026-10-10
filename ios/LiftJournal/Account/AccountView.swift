@@ -286,7 +286,7 @@ enum DrinksTargets {
     if let rest = water.restDayTargetMl, let lifting = water.liftingDayTargetMl {
       return "\(FoodSection.litres(rest)) L rest · \(FoodSection.litres(lifting)) L lifting\(estimated)"
     }
-    let (litres, unit) = Format.litres(water.targetMl)
+    let (litres, unit) = Format.litres(water.targetMl, digits: 2)
     return "\(litres) \(unit) a day\(estimated)"
   }
 
@@ -318,11 +318,19 @@ private struct GoalsSection: View {
       if let percent = body?.targetBodyFatPercent {
         row("Body fat", "\(Format.decimal(percent)) %", "percent", Category.body.tint)
       }
+      // Estimates, so "about"; protein a minimum; fat and carbohydrate as
+      // the ranges Today shows, from a server that sends them.
       if let kcal = Format.target(today.nutrition.targetCalories) {
-        row("Energy", "\(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)
+        row("Energy", "About \(Format.number(kcal)) kcal a day", "flame.fill", Theme.calories)
       }
       if let grams = Format.target(today.nutrition.targetProtein) {
-        row("Protein", "\(Format.number(grams)) g a day", "fork.knife", Theme.protein)
+        row("Protein", "At least \(Format.number(grams)) g a day", "fork.knife", Theme.protein)
+      }
+      if let carbs = today.nutrition.carbsProgress {
+        row("Carbs", "\(FoodSection.sentence(carbs.target)) a day", "leaf.fill", Theme.carbs)
+      }
+      if let fat = today.nutrition.fatProgress {
+        row("Fat", "\(FoodSection.sentence(fat.target)) a day", "drop.halffull", Theme.carbs)
       }
       // On shows the drinks target on Today; off hides it.
       Toggle(isOn: shown) {

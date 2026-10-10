@@ -146,17 +146,6 @@ export function dailyTargets(targets: DietTargets): DietTargets {
     fat: dailyTarget(targets.fat),
   };
 }
-// What is left of a daily target, or that there is none.
-export function targetProgress(
-  eaten: number,
-  target: number | null | undefined,
-  unit: "kcal" | "g",
-) {
-  const goal = dailyTarget(target);
-  if (goal == null) return "No daily target";
-  const diff = Math.abs(Math.round(goal - eaten));
-  return `${diff.toLocaleString("en-GB")}\u00a0${unit} ${eaten > goal ? "above target" : "remaining"}`;
-}
 export const favouriteMealSchema = mealInputSchema
   .omit({ date: true, photoIds: true, source: true })
   .extend({

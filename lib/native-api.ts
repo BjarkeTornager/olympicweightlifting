@@ -52,6 +52,12 @@ import {
 } from "./coaching";
 import { targetsOn } from "./target-history";
 import {
+  completeDayAverage,
+  foodDay,
+  type FoodDay,
+  type NutrientKey,
+} from "./food-progress";
+import {
   energyCheckNote,
   targetNotes,
   targetsProposal,
@@ -216,6 +222,17 @@ const checkinView = z
   })
   .strict()
   .register(nativeResponses, { id: "Checkin" });
+// One nutrient against its target, as the website and Coach word it: the
+// target ("about 2,400 kcal", "at least 150 g", "about 70 to 95 g") and
+// where the day stands ("About 450 kcal remaining", "Reached", "In range"),
+// absent when nothing is said (food-progress.ts).
+const nutrientProgressView = z
+  .object({
+    target: z.string(),
+    status: z.string().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "NutrientProgress" });
 const nutritionView = z
   .object({
     calories: z.number(),
@@ -225,6 +242,22 @@ const nutritionView = z
     targetCalories: z.number().optional(),
     targetProtein: z.number().optional(),
     meals: z.array(mealView),
+    // The fields from here on are absent before 10 October.
+    // Some of the day is an estimate, so its totals read "~".
+    estimated: z.boolean().optional(),
+    // The athlete marked the day's food complete.
+    complete: z.boolean().optional(),
+    // Each nutrient with a target.
+    caloriesProgress: nutrientProgressView.optional(),
+    proteinProgress: nutrientProgressView.optional(),
+    carbsProgress: nutrientProgressView.optional(),
+    fatProgress: nutrientProgressView.optional(),
+    // Nothing past a target is shown, no text and no marks past the target
+    // line: a calorie target below the athlete's estimated minimum, or
+    // under 18.
+    hideOverTarget: z.boolean().optional(),
+    // Why, for a calorie target below the estimated minimum.
+    targetNote: z.string().optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Nutrition" });
@@ -1166,6 +1199,27 @@ function burnedForToday(burned: ReturnType<typeof burnedToday>) {
   };
 }
 
+// The day's food against its targets, worded as the website words it, so
+// the iPhone says the same (food-progress.ts).
+function nutritionProgress(day: FoodDay) {
+  const line = (key: NutrientKey) => {
+    const p = day.progress[key];
+    return p.targetText
+      ? defined({ target: p.targetText, status: p.text || undefined })
+      : undefined;
+  };
+  return {
+    estimated: day.estimated,
+    complete: day.complete,
+    caloriesProgress: line("calories"),
+    proteinProgress: line("protein"),
+    carbsProgress: line("carbs"),
+    fatProgress: line("fat"),
+    hideOverTarget: day.hideOver || undefined,
+    targetNote: day.belowMinimum?.note,
+  };
+}
+
 export function buildToday(
   state: JournalState,
   revision: number,
@@ -1183,6 +1237,7 @@ export function buildToday(
     liftingDayTargetMl: usual.liftingDayMl,
   };
   const meals = state.nutrition.meals.filter((m) => m.date === date);
+  const food = foodDay(state, date, date);
   const vitals =
     state.health.vitals?.find((v) => v.date === date) ??
     state.health.vitals?.find((v) => v.date === offsetDate(date, -1));
@@ -1238,6 +1293,7 @@ export function buildToday(
           dailyTarget(state.nutrition.targets?.calories) ?? undefined,
         targetProtein:
           dailyTarget(state.nutrition.targets?.protein) ?? undefined,
+        ...nutritionProgress(food),
         meals: meals.map((m) => {
           const total = totalNutrients(m.items);
           return {
@@ -1926,6 +1982,9 @@ const coachVisual = z
             value: z.number(),
             target: z.number(),
             unit: z.string(),
+            // Not one of the athlete's daily targets: Coach's suggestion.
+            // Absent before 10 October.
+            suggested: z.boolean().optional(),
           })
           .strict()
           .register(nativeResponses, { id: "VisualTarget" }),
@@ -2093,11 +2152,12 @@ export function flattenVisual({ id, content }: SavedVisual) {
       return {
         id,
         ...content,
-        targets: content.targets.map(({ label, value, target, unit }) => ({
-          label,
-          value,
-          target,
-          unit,
+        targets: content.targets.map((t) => ({
+          label: t.label,
+          value: t.value,
+          target: t.target,
+          unit: t.unit,
+          ...(t.suggested != null ? { suggested: t.suggested } : {}),
         })),
       };
     // The newer kinds use the same field names in the app as in Coach's
@@ -2167,6 +2227,12 @@ const trendDay = z
     // Optional, as new fields are; Trends' own targets are today's.
     targetCalories: z.number().optional(),
     targetProtein: z.number().optional(),
+    // The athlete marked the day's food complete; absent before 10
+    // October. Food averages leave out today until it is.
+    foodComplete: z.boolean().optional(),
+    // That day's drinks target, which follows its training; absent while
+    // hidden, and before 10 October.
+    waterTargetMl: int.optional(),
   })
   .strict()
   .register(nativeResponses, { id: "TrendDay" });
@@ -2179,6 +2245,13 @@ export const trendsView = z
     waterTargetMl: int,
     // The athlete hid the drinks target; absent before 4 October.
     waterTargetHidden: z.boolean().optional(),
+    // The last 7 days' complete food days on average, against the calorie
+    // target, as the website says it; absent before 10 October.
+    foodWeek: z
+      .object({ completeDays: int, text: z.string() })
+      .strict()
+      .register(nativeResponses, { id: "FoodWeek" })
+      .optional(),
   })
   .strict()
   .register(nativeResponses, { id: "Trends" });
@@ -2226,8 +2299,11 @@ export function buildTrends(
       strengthSessions: state.sessions.filter((s) => s.date === d).length,
       targetCalories: dailyTarget(targets?.calories) ?? undefined,
       targetProtein: dailyTarget(targets?.protein) ?? undefined,
+      foodComplete: state.nutrition.completeDays?.includes(d) || undefined,
+      waterTargetMl: water.hidden ? undefined : water.targetMl,
     });
   });
+  const week = completeDayAverage(state, date, date);
   return trendsView.parse(
     defined({
       days: rows,
@@ -2236,6 +2312,13 @@ export function buildTrends(
       targetProtein: dailyTarget(state.nutrition.targets?.protein) ?? undefined,
       waterTargetMl: drinksTarget.hidden ? 0 : drinksTarget.targetMl,
       ...(drinksTarget.hidden ? { waterTargetHidden: true } : {}),
+      // The iPhone can't mark a day complete yet: the website's Food can.
+      foodWeek: {
+        completeDays: week.days,
+        text: week.days
+          ? week.text
+          : "No complete days in the last 7. Mark a day complete on the website's Food page once everything is logged.",
+      },
     }),
   );
 }

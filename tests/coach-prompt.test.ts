@@ -402,7 +402,20 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // Removing that paragraph and restoring that phrase reproduces the
     // previous hash (9c003ac2…). Health, privacy and evidence text is
     // otherwise unchanged.
-    "9fdcf375d00fe44364f9c482aef897d0ee79cae9a385c2f001410308df0891a7",
+    // Revised 2026-10-10 again, deliberate and reviewed, for PR 12 (food
+    // display, sections 3.8 and 3.9 of the targets evidence review): one
+    // added line after the protein target rule, the shared food progress
+    // rule and the typed Coach's low target rule (health-rules.ts). Coach
+    // describes the day's food in the words the app shows (protein reached,
+    // fat and carbohydrate as ranges, carbohydrate never too much, under
+    // target on a day that is over), counts complete days only in averages,
+    // never calls a day above target with eatenSoFar.hideOverTarget (a
+    // calorie target below the estimated minimum, or anyone under 18), and
+    // still saves a low target the athlete states, asking once about
+    // professional support (food-progress.test.ts). Removing that line
+    // reproduces PR 8's hash (9fdcf375…). Health, privacy and evidence text
+    // is otherwise unchanged.
+    "c4ac1b53f53c633eb789bfc24955ba4aca9b03eea7dd7ae193388c8f03f98916",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);

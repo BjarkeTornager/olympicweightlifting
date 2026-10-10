@@ -97,7 +97,11 @@ export function Progress({ visual }: { visual: Kind<"progress"> }) {
       {visual.targets.map((t) => (
         <li key={t.label}>
           <div>
-            <span>{t.label}</span>
+            <span>
+              {t.label}
+              {/* A target that isn't one of the athlete's own. */}
+              {t.suggested && <small> · Suggested by Coach</small>}
+            </span>
             <strong>
               {number.format(t.value)} / {withUnit(t.target, t.unit)}
             </strong>

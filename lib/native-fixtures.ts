@@ -251,6 +251,60 @@ export function nativeFixtures() {
       notes: "",
       updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
     });
+  // Goals for a 30-year-old woman holding 60 kg, and her own lower
+  // targets since 19 September, below the plan's least: today is marked
+  // complete and over that target, which Today never calls above it, and
+  // two days before were complete too.
+  const food = emptyJournal();
+  food.createdAt = "2026-08-30T07:00:00.000Z";
+  applyGoals(
+    food,
+    {
+      age: 30,
+      sex: "female",
+      heightCm: 165,
+      weightKg: 60,
+      targetWeightKg: 60,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 3,
+      sessionMinutes: 60,
+      experience: "developing",
+    },
+    "2026-09-01",
+  );
+  setDailyTargets(
+    food,
+    { goal: "lose", calories: 1300, protein: 110, carbs: 150, fat: 45 },
+    "2026-09-19",
+  );
+  for (const [day, kcal, estimated] of [
+    [-2, 1250, false],
+    [-1, 1350, false],
+    [0, 1500, true],
+  ] as const)
+    food.nutrition.meals.push({
+      id: `9c1f0c43-7a57-4a53-9a4c-2f8cf2f0c00${day + 3}`,
+      date: offsetDate(date, day),
+      name: "Chicken and rice",
+      type: "dinner",
+      items: [
+        {
+          name: "Chicken and rice",
+          portion: "1 plate",
+          calories: kcal,
+          protein: 115,
+          carbs: 150,
+          fat: 52,
+        },
+      ],
+      source: "text",
+      estimated,
+      notes: "",
+      photoIds: [],
+      createdAt: `${offsetDate(date, day)}T17:00:00.000Z`,
+    });
+  food.nutrition.completeDays = [-2, -1, 0].map((d) => offsetDate(date, d));
   // Goals saved on 29 August at 88 kg, heading for 81 kg, and four weeks of
   // weigh-ins coming down about 1 kg a week since, faster than the plan's
   // 0.44 kg and above 1 % of bodyweight a week for 3 weeks: Today's Body
@@ -296,6 +350,8 @@ export function nativeFixtures() {
   );
   return {
     "workout.json": workoutInProgress(state),
+    "today-food.json": buildToday(food, 12, date, new Set()),
+    "trends-food.json": buildTrends(food, date, 7),
     "today.json": buildToday(state, 12, date, imported),
     "today-short-sleep.json": buildToday(shortSleep, 12, date, imported),
     "today-targets.json": buildToday(reached, 12, date, new Set()),
@@ -398,6 +454,14 @@ export function nativeFixtures() {
                 title: "Today so far",
                 targets: [
                   { label: "Protein", value: 116, target: 180, unit: "g" },
+                  // A target of Coach's own, not the athlete's.
+                  {
+                    label: "Steps",
+                    value: 6200,
+                    target: 8000,
+                    unit: "steps",
+                    suggested: true,
+                  },
                 ],
               },
               {

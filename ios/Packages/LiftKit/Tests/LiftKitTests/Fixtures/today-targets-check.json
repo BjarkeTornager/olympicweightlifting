@@ -31,7 +31,25 @@
     "fat": 0,
     "targetCalories": 2280,
     "targetProtein": 110,
-    "meals": []
+    "meals": [],
+    "estimated": false,
+    "complete": false,
+    "caloriesProgress": {
+      "target": "about 2,280 kcal",
+      "status": "About 2,300 kcal remaining"
+    },
+    "proteinProgress": {
+      "target": "at least 110 g",
+      "status": "About 110 g remaining"
+    },
+    "carbsProgress": {
+      "target": "about 255 to 315 g",
+      "status": "About 255 g remaining"
+    },
+    "fatProgress": {
+      "target": "about 60 to 85 g",
+      "status": "About 60 g remaining"
+    }
   },
   "hydration": {
     "totalMl": 0,

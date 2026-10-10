@@ -24,6 +24,7 @@ import {
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
 import { setDailyTargets, targetsProposal } from "../target-proposals";
 import { sameTargets } from "../target-history";
+import { belowMinimum } from "../food-progress";
 import { offsetDate } from "../health";
 import {
   mergeDietTargets,
@@ -204,12 +205,16 @@ export function prepareDietTargets(
     calories != null && calories > 0 && calories !== before.calories
       ? moveGoalsCheck(next, calories, currentDate)
       : null;
+  // A calorie target below the athlete's estimated minimum is still
+  // theirs to save, with the note Food shows beside it.
+  const low = belowMinimum(calories, next, currentDate);
   return {
     targets: next.nutrition.targets,
     targetsBefore: before,
     title: "Update your daily nutrition targets",
-    detail: `These are your chosen daily targets. They are not a calculated calorie prescription.${followUp ? ` Coach can check them against your weight trend with you from ${followUp.followUpDate}, about 3 weeks on.` : ""}`,
+    detail: `These are your chosen daily targets. They are not a calculated calorie prescription.${low ? ` ${low.note}` : ""}${followUp ? ` Coach can check them against your weight trend with you from ${followUp.followUpDate}, about 3 weeks on.` : ""}`,
     ...(followUp ? { plan: followUp } : {}),
+    ...(low ? { notes: [low.note] } : {}),
   };
 }
 

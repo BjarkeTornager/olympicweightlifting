@@ -280,7 +280,8 @@ test("calendar days fall on their weekday, with the days Coach left out blank", 
 });
 
 test("a progress card a newer version saved still reads, without the fields this version doesn't know", () => {
-  // As a newer version might save it: extra fields on a target.
+  // As a newer version might save it: a field on a target this version
+  // doesn't know (hidden) beside one it does (suggested).
   const saved = {
     id: crypto.randomUUID(),
     content: {
@@ -298,7 +299,9 @@ test("a progress card a newer version saved still reads, without the fields this
       ],
     },
   };
-  const known = [{ label: "Protein", value: 80, target: 110, unit: "g" }];
+  const known = [
+    { label: "Protein", value: 80, target: 110, unit: "g", suggested: false },
+  ];
   const web = savedVisualSchema.parse(saved).content;
   assert.equal(web.kind, "progress");
   assert.deepEqual(web.kind === "progress" && web.targets, known);

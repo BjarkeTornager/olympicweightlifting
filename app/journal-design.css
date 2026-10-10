@@ -2593,6 +2593,10 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 }
 .hydration-row > .notice,
 .hydration-row > .fine-print { margin: 0 16px; }
+/* Weight: the trend against the plan, and any note, below the row. */
+.weight-row > p { margin: 0 12px; font-size: 13px; line-height: 1.45; }
+.weight-row > p:last-child { margin-bottom: 10px; }
+.weight-row > .notice { display: block; padding: 12px 14px; }
 @media (prefers-reduced-motion: reduce) { .hydration-progress > span { transition: none; } }
 .supplement-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0 16px; list-style: none; }
 .supplement-chips li { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 12px; border-radius: 999px; background: var(--accent-soft); font-size: 0.9rem; }

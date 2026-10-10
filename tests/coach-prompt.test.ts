@@ -16,6 +16,7 @@ import {
   proteinTargetRule,
   supplementRule,
   teenSleepRule,
+  weightTrendRule,
 } from "../lib/agent/health-rules";
 import {
   CARBS_FLOOR_G,
@@ -383,7 +384,25 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     //   6 months old (LACTATION_KCAL_LATER).
     // Restoring those phrases reproduces the previous hash (62b81d6b…).
     // Health, privacy and evidence text is otherwise unchanged.
-    "9c003ac2e6935a9dcee4f5116bf206692736b2ee955a0ff52a488ad2f90788f8",
+    // Revised 2026-10-10, deliberate and reviewed, for PR 8 (weight trend),
+    // on top of the combined targets release:
+    // - One added core paragraph, weightTrendRule from health-rules.ts,
+    //   which the voice coach gets too: judge weight by its trend, never
+    //   one or two weigh-ins; say when the trend is about stable or there
+    //   aren't enough weigh-ins for one; and when the app notes a fast loss
+    //   or a low weight still coming down (weightAlert in weight-trend.ts),
+    //   mention it once, kindly, ask how they've been feeling, never as a
+    //   diagnosis, suggest who the note names, and never pair it with
+    //   eating less or a stricter plan (weight-trend.test.ts).
+    // - At a goals follow-up, the goals skill compares the weight trend
+    //   (weightTrend, and planTrend once the plan's targets have run 3
+    //   weeks, 4 for women and anyone who'd rather not give their sex, so
+    //   it can be missing at a first follow-up) with goals.plan's weekly
+    //   change, where it said the weekly average weight.
+    // Removing that paragraph and restoring that phrase reproduces the
+    // previous hash (9c003ac2…). Health, privacy and evidence text is
+    // otherwise unchanged.
+    "9fdcf375d00fe44364f9c482aef897d0ee79cae9a385c2f001410308df0891a7",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -413,6 +432,14 @@ test("Coach quotes active energy and training apart, as estimates, never added t
     /calories burned, always an estimate \(a watch's included\) of the energy used above rest/,
   );
   assert.match(siteHelp.health, /never added together/);
+  // Where the weight trend is shown, and what it takes: 4 weeks of targets
+  // for women before the plan's comparison, as trendAgainstPlan waits.
+  assert.match(siteHelp.health, /Today's Weight row/);
+  assert.match(siteHelp.health, /at least 4 weigh-ins spread over 14 days/);
+  assert.match(
+    siteHelp.health,
+    /run 3 weeks \(4 for women and anyone who'd rather not give their sex\)/,
+  );
 });
 
 test("Coach policy separates reported events, previews and advice", () => {
@@ -476,6 +503,7 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
       drinksTargetRule,
       teenSleepRule,
       proteinTargetRule,
+      weightTrendRule,
     ])
       assert.ok(core.includes(rule), rule.slice(0, 40));
   }
@@ -503,6 +531,10 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   assert.match(core, /the app sets no protein target: don't suggest a protein/);
   // Teens need more sleep than adults.
   assert.match(core, /Teenagers \(13–17\) need 8–10 hours/);
+  // Weight by its trend, and a note on a fast loss raised kindly, never
+  // with a stricter plan.
+  assert.match(core, /Judge weight by its trend, never by one or two/);
+  assert.match(core, /never pair it with eating less or a stricter plan/);
   // Activity guidance from WHO and the Danish Health Authority.
   assert.doesNotMatch(fullPrompt(), /NHS|nhs\.uk/);
   assert.match(core, /WHO 2020 guidelines/);
@@ -661,6 +693,15 @@ test("goal setup asks the weight class and the low-energy questions, and the goa
   // The check: one reviewed change, never below the floor, and never a
   // further cut for slow loss before the food logs are checked.
   assert.ok(followUp.startsWith("At a goals follow-up"));
+  // The least-squares trend and its state against the plan, not two
+  // weigh-ins.
+  assert.match(followUp, /weightTrend, and planTrend once the plan's/);
+  // planTrend waits 4 weeks for women, so at their first follow-up Coach
+  // compares weightTrend alone.
+  assert.match(
+    followUp,
+    /run 3 weeks, 4 for women and anyone who'd rather not give their sex, so it can be missing at a first follow-up/,
+  );
   assert.match(followUp, /offer one reviewed change/);
   assert.match(followUp, /at most 200 kcal/);
   assert.match(followUp, /never below goals\.plan\.floorKcal/);

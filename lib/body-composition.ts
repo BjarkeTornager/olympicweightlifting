@@ -191,24 +191,158 @@ export function bodyFatTrend(state: JournalState, from: string, to: string) {
   };
 }
 
-// Bodyweight over the last four weeks from weigh-ins (weighIns): the first
-// and latest and the average change a week between them.
+// A weight trend takes at least 4 weigh-ins over at least 14 days, the
+// first and latest counted, so two weeks of daily weigh-ins make one.
+// Weight swings about 0.5 kg from day to day, so two weigh-ins a week apart
+// can point the wrong way: in simulation, for a real loss of 0.5 kg a week,
+// about a quarter of the time.
+export const TREND_MIN_WEIGH_INS = 4;
+export const TREND_MIN_DAYS = 14;
+export const NOT_ENOUGH_WEIGH_INS =
+  "Not enough weigh-ins for a trend yet (it takes 4 spread over 14 days)";
+
+const dayNumber = (date: string) => Date.parse(`${date}T12:00:00Z`) / 86400000;
+
+// The weigh-ins without likely slips: one a quarter away from the middle
+// reading (185 for 85, or pounds for kilograms) is passed over, as
+// currentWeightKg passes over one a quarter away from the one before. With
+// two or fewer there is no middle to tell a slip from a change.
+export function steadyWeighIns<T extends { kg: number }>(weights: T[]) {
+  if (weights.length < 3) return weights;
+  const sorted = weights.map((w) => w.kg).sort((a, b) => a - b);
+  const half = sorted.length / 2;
+  const middle =
+    sorted.length % 2
+      ? sorted[Math.floor(half)]!
+      : (sorted[half - 1]! + sorted[half]!) / 2;
+  return weights.filter((w) => Math.abs(w.kg - middle) <= middle / 4);
+}
+
+export type WeightFit = {
+  // The least-squares slope, kg a week, and its standard error.
+  kgPerWeek: number;
+  seKgPerWeek: number;
+  // The weight on the line at the latest weigh-in.
+  trendKg: number;
+  weighIns: number;
+  // The first and latest weigh-in's days, and the days between them.
+  from: string;
+  to: string;
+  days: number;
+};
+
+// The least-squares line through dated weigh-ins, oldest first:
+// b = 7 × Σ(t − t̄)(w − w̄) / Σ(t − t̄)² kg a week, with its standard error
+// from the scatter about the line. Null for fewer than 3, or all on one
+// day, when there is no line or no error to tell.
+export function fitWeights(
+  weights: readonly { date: string; kg: number }[],
+): WeightFit | null {
+  const n = weights.length;
+  if (n < 3) return null;
+  const t = weights.map((w) => dayNumber(w.date));
+  const tMean = t.reduce((sum, x) => sum + x, 0) / n;
+  const wMean = weights.reduce((sum, w) => sum + w.kg, 0) / n;
+  let stt = 0,
+    stw = 0;
+  weights.forEach((w, i) => {
+    stt += (t[i]! - tMean) ** 2;
+    stw += (t[i]! - tMean) * (w.kg - wMean);
+  });
+  if (stt === 0) return null;
+  const perDay = stw / stt;
+  const scatter = weights.reduce(
+    (sum, w, i) => sum + (w.kg - (wMean + perDay * (t[i]! - tMean))) ** 2,
+    0,
+  );
+  return {
+    kgPerWeek: 7 * perDay,
+    seKgPerWeek: 7 * Math.sqrt(scatter / (n - 2) / stt),
+    trendKg: wMean + perDay * (t.at(-1)! - tMean),
+    weighIns: n,
+    from: weights[0]!.date,
+    to: weights.at(-1)!.date,
+    days: t.at(-1)! - t[0]!,
+  };
+}
+
+// The fit when there are enough weigh-ins for a trend: at least 4 over at
+// least the given days, the first and latest counted (14 for a trend).
+export function trendFit(
+  weights: readonly { date: string; kg: number }[],
+  minDays = TREND_MIN_DAYS,
+) {
+  const fit = fitWeights(weights);
+  return fit && fit.weighIns >= TREND_MIN_WEIGH_INS && fit.days + 1 >= minDays
+    ? fit
+    : null;
+}
+
+const dayMonth = (date: string) =>
+  new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+
+// The weeks a fit covers, in words: "over the last 3 weeks", from its first
+// weigh-in to the date, or "over 2 weeks to 12 September" when its latest
+// weigh-in is more than a week before the date, so an old trend never reads
+// as this week's. At least 2 weeks, the least a trend takes.
+export function fitPeriod(fit: WeightFit, date: string) {
+  const weeks = (days: number) => Math.max(2, Math.round(days / 7));
+  return fit.to >= daysBefore(date, 7)
+    ? `over the last ${weeks(dayNumber(date) - dayNumber(fit.from))} weeks`
+    : `over ${weeks(fit.days)} weeks to ${dayMonth(fit.to)}`;
+}
+
+// About stable: under 0.1 kg a week, or under twice its standard error,
+// when the weigh-ins can't tell it from no change.
+export const aboutStable = (fit: WeightFit) =>
+  Math.abs(fit.kgPerWeek) < Math.max(0.1, 2 * fit.seKgPerWeek);
+
+export type TrendStatus = "not_enough" | "stable" | "losing" | "gaining";
+
+// Bodyweight over the last four weeks from weigh-ins (weighIns, without
+// likely slips), by least squares rather than from the first and latest
+// alone: the change a week, to 0.1 kg and as a share of bodyweight, and
+// the trend weight, on the line at the latest weigh-in. "About stable"
+// when the change can't be told from none (aboutStable), and the weeks it
+// covers (fitPeriod). With fewer than 4 weigh-ins over 14 days, not enough
+// for a trend yet. Null with none.
 export function weightTrend(state: JournalState, date: string, days = 28) {
-  const weights = weighIns(state, daysBefore(date, days), date);
-  if (weights.length < 2) return null;
+  const weights = steadyWeighIns(weighIns(state, daysBefore(date, days), date));
+  if (!weights.length) return null;
   const first = weights[0]!,
     last = weights.at(-1)!;
-  const weeks = (Date.parse(last.date) - Date.parse(first.date)) / 604800000;
+  const fit = trendFit(weights);
+  const status: TrendStatus = !fit
+    ? "not_enough"
+    : aboutStable(fit)
+      ? "stable"
+      : fit.kgPerWeek < 0
+        ? "losing"
+        : "gaining";
+  const kgPerWeek = fit && round1(fit.kgPerWeek);
+  const percentPerWeek = fit && round1((100 * fit.kgPerWeek) / fit.trendKg);
+  const period = fit && fitPeriod(fit, date);
   return {
     weigh_ins: weights.length,
     first: { date: first.date, kg: first.kg },
     latest: { date: last.date, kg: last.kg },
-    kg_per_week:
-      weeks >= 1
-        ? Math.round(((last.kg - first.kg) / weeks) * 100) / 100
-        : null,
+    status,
+    trend_kg: fit && round1(fit.trendKg),
+    kg_per_week: kgPerWeek,
+    percent_per_week: percentPerWeek,
+    summary:
+      status === "not_enough"
+        ? NOT_ENOUGH_WEIGH_INS
+        : status === "stable"
+          ? `About stable ${period}`
+          : `${status === "losing" ? "Down" : "Up"} about ${Math.abs(kgPerWeek!)} kg a week (${Math.abs(percentPerWeek!)}% of bodyweight) ${period}`,
   };
 }
+export type WeightTrend = NonNullable<ReturnType<typeof weightTrend>>;
 
 // The lowest healthy body fat (NATA: about 5 % for men, 12 % for women) and
 // the very lean, lean and higher limits, by sex. Without a stated sex, the

@@ -82,6 +82,24 @@ struct ContractTests {
     #expect(check.ifYesNotes?.first?.hasPrefix("You answered yes to one of the questions") == true)
   }
 
+  @Test("Today's Body carries the weight trend, the week's averages, the trend against the plan and a note")
+  func todayWeightTrend() throws {
+    let today = try fixture("today-weight-trend", as: Components.Schemas.Today.self)
+    let body = try #require(today.body)
+    let trend = try #require(body.weightTrend)
+    #expect(trend.status == "losing" && trend.kgPerWeek == -1 && trend.weighIns == 15)
+    #expect(trend.text.hasPrefix("Down about 1 kg a week"))
+    #expect(body.weekAverageChangeKg == -1.1)
+    #expect(body.planTrend == "faster")
+    #expect(body.planTrendText?.hasPrefix("Faster than your goals plan") == true)
+    #expect(body.weightAlert?.level == "amber")
+    // A loss already faster than the plan brings no suggestion to cut further.
+    #expect(today.targetsProposal == nil)
+    // One weigh-in is not enough for a trend, and older apps get no change.
+    let plain = try fixture("today", as: Components.Schemas.Today.self)
+    #expect(plain.body?.weightTrend?.status == "not_enough" && plain.body?.weeklyWeightChangeKg == nil)
+  }
+
   @Test("Trends rows carry the targets in force each day")
   func trendTargets() throws {
     let trends = try fixture("trends-targets", as: Components.Schemas.Trends.self)

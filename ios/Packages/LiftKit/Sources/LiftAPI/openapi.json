@@ -686,6 +686,27 @@
           "weeklyWeightChangeKg": {
             "type": "number"
           },
+          "weightTrend": {
+            "$ref": "#/components/schemas/WeightTrend"
+          },
+          "weekAverageKg": {
+            "type": "number"
+          },
+          "previousWeekAverageKg": {
+            "type": "number"
+          },
+          "weekAverageChangeKg": {
+            "type": "number"
+          },
+          "planTrend": {
+            "type": "string"
+          },
+          "planTrendText": {
+            "type": "string"
+          },
+          "weightAlert": {
+            "$ref": "#/components/schemas/WeightAlert"
+          },
           "leanMassKg": {
             "type": "number"
           },
@@ -3861,6 +3882,49 @@
           "name",
           "detail",
           "isDefault"
+        ]
+      },
+      "WeightAlert": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "text"
+        ]
+      },
+      "WeightTrend": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "weighIns": {
+            "type": "integer"
+          },
+          "kgPerWeek": {
+            "type": "number"
+          },
+          "percentPerWeek": {
+            "type": "number"
+          },
+          "trendKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "status",
+          "text",
+          "weighIns"
         ]
       },
       "WorkoutDetail": {

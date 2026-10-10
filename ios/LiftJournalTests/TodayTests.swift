@@ -172,6 +172,48 @@ struct TodayTests {
     #expect(TodayView.stepsNote(today) == nil)
   }
 
+  @Test("The weight's change shows only beside a losing or gaining trend: this week's average on last week's, else the trend's, else an older server's change a week")
+  func weightChange() throws {
+    func change(_ json: String) throws -> String? {
+      let body = try JSONDecoder().decode(Components.Schemas.Body.self, from: Data(json.utf8))
+      return TodayView.weightChange(body).map { "\($0.kg) \($0.note)" }
+    }
+    let losing = #""weightTrend": {"status": "losing", "text": "Down", "weighIns": 9, "kgPerWeek": -0.5}"#
+    #expect(try change(#"{"weekAverageChangeKg": -0.6, \#(losing)}"#) == "-0.6 on last week's average")
+    #expect(try change("{\(losing)}") == "-0.5 a week")
+    // About stable, or too few weigh-ins: no change beside the weight, not
+    // even the week averages' noise.
+    #expect(
+      try change(#"{"weeklyWeightChangeKg": 0, "weightTrend": {"status": "stable", "text": "About stable", "weighIns": 8, "kgPerWeek": 0.1}}"#)
+        == nil)
+    #expect(
+      try change(
+        #"{"weeklyWeightChangeKg": 0, "weekAverageChangeKg": 0.4, "weightTrend": {"status": "stable", "text": "About stable", "weighIns": 28, "kgPerWeek": 0}}"#
+      ) == nil)
+    #expect(try change(#"{"weightTrend": {"status": "not_enough", "text": "Not enough", "weighIns": 2}}"#) == nil)
+    #expect(
+      try change(#"{"weekAverageChangeKg": -0.6, "weightTrend": {"status": "not_enough", "text": "Not enough", "weighIns": 6}}"#)
+        == nil)
+    // A server from before the trend sends only its change a week.
+    #expect(try change(#"{"weeklyWeightChangeKg": -0.3}"#) == "-0.3 a week")
+    #expect(TodayView.weightChange(nil) == nil)
+  }
+
+  @Test("The weight says the day it was weighed when that isn't today, and when Apple Health brought it")
+  func weighedNote() throws {
+    func note(_ date: String, health: Bool = false) throws -> String? {
+      let json = #"{"bodyweight": 82.4, "bodyweightDate": "\#(date)", "bodyweightFromAppleHealth": \#(health)}"#
+      let body = try JSONDecoder().decode(Components.Schemas.Body.self, from: Data(json.utf8))
+      return TodayView.weighedNote(body, on: "2026-10-01")
+    }
+    #expect(try note("2026-10-01") == nil)
+    #expect(try note("2026-10-01", health: true) == "From Apple Health")
+    #expect(try note("2026-09-30") == "Yesterday")
+    #expect(try note("2026-09-30", health: true) == "Yesterday · from Apple Health")
+    #expect(try note("2026-09-23") == "Wednesday 23 September")
+    #expect(TodayView.weighedNote(nil, on: "2026-10-01") == nil)
+  }
+
   @Test("Today's colophon and Profile name the athlete from one source: the display name, else the account's")
   func athleteName() throws {
     let model = AppModel()

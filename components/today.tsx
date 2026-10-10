@@ -10,6 +10,7 @@ import { nextTraining } from "@/lib/next-training";
 import { GoalsCard } from "./goals";
 import { HydrationRow } from "./hydration";
 import { SupplementsRow } from "./supplements";
+import { WeightRow } from "./weight";
 import { CheckinDialog, DailyOverview } from "./health";
 import { Button } from "./ui/button";
 import { Plus, ChevronRight, Flame, Mic } from "./ui/icons";
@@ -151,6 +152,7 @@ export function Today({
       </section>
       <HydrationRow journal={journal} />
       <SupplementsRow journal={journal} />
+      <WeightRow journal={journal} go={go} />
       <GoalsCard journal={journal} go={go} voiceEnabled={voiceEnabled} />
       <TrackingStatus accountId={journal.identity.id} go={go} />
       <section className="today-week" aria-label="This week at a glance">

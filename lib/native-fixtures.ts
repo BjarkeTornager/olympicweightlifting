@@ -251,12 +251,56 @@ export function nativeFixtures() {
       notes: "",
       updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
     });
+  // Goals saved on 29 August at 88 kg, heading for 81 kg, and four weeks of
+  // weigh-ins coming down about 1 kg a week since, faster than the plan's
+  // 0.44 kg and above 1 % of bodyweight a week for 3 weeks: Today's Body
+  // carries the trend, this week's average against last week's, the trend
+  // against the plan and an amber note.
+  const falling = emptyJournal();
+  falling.createdAt = "2026-08-27T07:00:00.000Z";
+  applyGoals(
+    falling,
+    {
+      age: 34,
+      sex: "male",
+      heightCm: 182,
+      weightKg: 88,
+      targetWeightKg: 81,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 4,
+      sessionMinutes: 75,
+      experience: "developing",
+    },
+    "2026-08-29",
+  );
+  falling.profile.body!.updatedAt = "2026-08-29T07:00:00.000Z";
+  falling.profile.targetHistory = falling.profile.targetHistory!.map((r) => ({
+    ...r,
+    setAt: "2026-08-29T07:00:00.000Z",
+  }));
+  const wiggle = [0.2, -0.1, 0.1, -0.2, 0, 0.15, -0.15];
+  [-27, -25, -23, -21, -19, -17, -15, -13, -11, -9, -7, -5, -3, -1, 0].forEach(
+    (day, i) =>
+      falling.health.checkins.push({
+        date: offsetDate(date, day),
+        sleepHours: null,
+        energy: null,
+        soreness: null,
+        waterMl: null,
+        bodyweight:
+          Math.round((88 + (day + 27) * (-1 / 7) + wiggle[i % 7]!) * 10) / 10,
+        notes: "",
+        updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
+      }),
+  );
   return {
     "workout.json": workoutInProgress(state),
     "today.json": buildToday(state, 12, date, imported),
     "today-short-sleep.json": buildToday(shortSleep, 12, date, imported),
     "today-targets.json": buildToday(reached, 12, date, new Set()),
     "today-targets-check.json": buildToday(drifted, 12, date, new Set()),
+    "today-weight-trend.json": buildToday(falling, 12, date, new Set()),
     "trends-targets.json": buildTrends(reached, date, 7),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
     "trends.json": buildTrends(state, date, 7),

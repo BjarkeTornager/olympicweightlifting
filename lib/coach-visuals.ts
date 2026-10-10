@@ -19,6 +19,10 @@ const lineSeries = z
 const targetItem = z
   .object({ label, value: amount, target: amount.gt(0), unit })
   .strict();
+// As saved. Keys this version doesn't know are dropped, not refused, so a
+// card a newer version saved still shows after a rollback. Coach's tool
+// keeps the strict targetItem.
+const savedTargetItem = z.object(targetItem.shape);
 const statItem = z
   .object({
     label,
@@ -194,7 +198,11 @@ export const visualSchema = z
       .object({ ...base, kind: z.literal("line_chart"), ...lineFields })
       .strict(),
     z
-      .object({ ...base, kind: z.literal("progress"), ...progressFields })
+      .object({
+        ...base,
+        kind: z.literal("progress"),
+        targets: z.array(savedTargetItem).min(1).max(6),
+      })
       .strict(),
     z.object({ ...base, kind: z.literal("stats"), ...statsFields }).strict(),
     z

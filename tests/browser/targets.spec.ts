@@ -1,5 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
-import { browserUser, expect, test } from "./fixtures";
+import {
+  browserUser,
+  expect,
+  isJournalSave,
+  savedJournal,
+  test,
+} from "./fixtures";
 import { emptyJournal, today } from "../../lib/domain";
 import { applyGoals } from "../../lib/body-goals";
 import { offsetDate, saveCheckin } from "../../lib/health";
@@ -38,8 +44,8 @@ test("reaching the goal suggests holding the weight; the saved target stays unti
     saveCheckin(state, { date: offsetDate(date, day), bodyweight }, date);
   let revision = 1;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -124,8 +130,8 @@ test("old targets get the higher maintenance as a suggestion, which can be kept 
   };
   let revision = 1;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
@@ -200,8 +206,8 @@ test("a suggestion that sets a deficit asks the low-energy questions first; with
     saveCheckin(state, { date: offsetDate(date, day), bodyweight }, date);
   let revision = 1;
   await context.route("**/api/journal", (r) => {
-    if (r.request().method() === "PUT") {
-      state = r.request().postDataJSON().state;
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
       revision++;
     }
     return r.fulfill({ json: { accountId: browserUser.id, state, revision } });

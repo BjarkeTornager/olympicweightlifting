@@ -265,6 +265,13 @@ struct TodayTests {
     // An amount drunk to one decimal, a target in quarter litres to two.
     #expect(Format.litres(2420) == ("2.4", "L"))
     #expect(Format.litres(2450, digits: 2) == ("2.45", "L"))
+    // A whole quarter litre drunk reads as the target does when it is
+    // reached: 2.25 L, not 2.2 next to "about 2.25 L".
+    #expect(Format.litres(2250) == ("2.25", "L"))
+    #expect(Format.litres(3250) == ("3.25", "L"))
+    #expect(Format.litres(2240) == ("2.2", "L"))
+    #expect(Format.litres(2500) == ("2.5", "L"))
+    #expect(Format.litres(2000) == ("2", "L"))
     #expect(Format.litres(500) == ("500", "ml"))
     #expect(Format.count(2) == "two")
     #expect(Format.count(12) == "12")
@@ -310,8 +317,8 @@ struct TodayTests {
     var food = try #require(PreviewData.today).nutrition
     #expect(FoodSection.ranges(food).isEmpty)
     food.carbsProgress = .init(target: "about 240 to 295 g", status: "In range")
-    food.fatProgress = .init(target: "about 60 to 85 g")
-    #expect(FoodSection.ranges(food) == ["Carbs about 240 to 295 g · In range", "Fat about 60 to 85 g"])
+    food.fatProgress = .init(target: "about 55 to 80 g")
+    #expect(FoodSection.ranges(food) == ["Carbs about 240 to 295 g · In range", "Fat about 55 to 80 g"])
     #expect(FoodSection.sentence("about 2,400 kcal") == "About 2,400 kcal")
   }
 

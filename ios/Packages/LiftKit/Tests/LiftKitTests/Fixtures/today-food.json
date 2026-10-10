@@ -40,12 +40,11 @@
       "status": "Reached"
     },
     "carbsProgress": {
-      "target": "about 130 to 150 g",
+      "target": "about 130 to 165 g",
       "status": "In range"
     },
     "fatProgress": {
-      "target": "about 45 to 60 g",
-      "status": "In range"
+      "target": "about 35 to 50 g"
     },
     "hideOverTarget": true,
     "targetNote": "Your calorie target is below your estimated minimum of about 1,400 kcal a day, which covers your resting energy and training. Eating this little for long can harm training and health, so ask Coach to review it with you."

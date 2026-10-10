@@ -33,14 +33,20 @@ export const VERY_LOW_KCAL = 800;
 // where supervised weight-loss diets start (1,200 kcal for women; the plan
 // uses 1,500 for men, whose sex is known only from the goals).
 export const LEAST_KCAL = 1200;
+// The minimum is an estimate that moves with the week's weigh-ins (about
+// 20 kcal a kg), so a target within 50 kcal of it is not below it: the
+// plan's own target at its floor stays clear of it in a heavier week.
+export const MINIMUM_MARGIN_KCAL = 50;
 // Within 100 kcal or a tenth of the target, whichever is more, a day is
 // about on target: closer than intake can be known.
 export const onTargetKcal = (target: number) => Math.max(100, target / 10);
-// Fat runs from its target up to a tenth more of the day's energy, the
-// room between a quarter of energy and 35 %, the top of the reference
-// ranges (EFSA, NASEM); carbohydrate down by the same energy, as it is
-// what's left after protein and fat. Without the energy to go by, fat
-// runs 40 % over its target and carbohydrate a fifth under.
+// Fat runs from a quarter of the day's energy to 35 %, the top of the
+// reference ranges (EFSA, NASEM), or from a target outside that up to a
+// tenth more of the energy. Carbohydrate runs down from its target by the
+// same tenth, as it is what's left after protein and fat. Without the
+// energy to go by, fat runs 40 % over its target and carbohydrate a fifth
+// under.
+export const FAT_SHARE = { low: 0.25, high: 0.35 };
 export const RANGE_SHARE = 0.1;
 
 const whole = (n: number) => Math.round(n).toLocaleString("en-GB");
@@ -57,14 +63,17 @@ export function minimumKcal(state: JournalState, today: string) {
 }
 
 export type BelowMinimum = {
+  // To the 50 kcal, as the note gives it.
   minimumKcal: number;
   // Under VERY_LOW_KCAL.
   veryLow: boolean;
   note: string;
 };
 
-// A calorie target under the athlete's estimated minimum, with a plain
-// note: it informs, never blocks, as the target stays theirs.
+// A calorie target more than MINIMUM_MARGIN_KCAL under the athlete's
+// estimated minimum, with a plain note: it informs, never blocks, as the
+// target stays theirs. The note and Coach get the minimum to the 50 kcal,
+// which the margin keeps above the target.
 export function belowMinimum(
   calories: number | null | undefined,
   state: JournalState,
@@ -73,12 +82,13 @@ export function belowMinimum(
   const target = dailyTarget(calories);
   if (target == null) return null;
   const minimum = minimumKcal(state, today);
-  if (target >= minimum) return null;
+  if (target >= minimum - MINIMUM_MARGIN_KCAL) return null;
   const veryLow = target < VERY_LOW_KCAL;
   const goals = state.profile.body != null;
-  const shown = whole(nearest(minimum, 50));
+  const rounded = nearest(minimum, 50);
+  const shown = whole(rounded);
   return {
-    minimumKcal: minimum,
+    minimumKcal: rounded,
     veryLow,
     note: veryLow
       ? `Your calorie target is in the very-low-energy range, under ${whole(VERY_LOW_KCAL)}${nb}kcal a day. Plan it with a doctor or dietitian.`
@@ -97,9 +107,11 @@ export function carbsFloorG(state: JournalState) {
 
 export type Range = { low: number; high: number };
 
-// Fat and carbohydrate as ranges around their targets (RANGE_SHARE), to
-// the 5 g outside, so the target itself is always in range. Carbohydrate
-// never goes under the floor the plan keeps, unless its target does.
+// Fat and carbohydrate as ranges around their targets (FAT_SHARE,
+// RANGE_SHARE), to the 5 g, so the target itself is always in range. Fat's
+// top is rounded down, so it never passes 35 % of energy unless its target
+// does. Carbohydrate never goes under the floor the plan keeps, unless its
+// target does; held there, its range runs up instead, never narrower.
 export function macroRanges(
   targets: DietTargets,
   floorG: number = CARBS_FLOOR_G,
@@ -114,26 +126,25 @@ export function macroRanges(
       ? 4 * protein + 4 * carbs + 9 * fat
       : null);
   const room = energy == null ? null : energy * RANGE_SHARE;
+  const fatRange = (g: number): Range => {
+    if (energy == null || room == null)
+      return { low: down5(g), high: up5(1.4 * g) };
+    const low = (energy * FAT_SHARE.low) / 9;
+    const high = (energy * FAT_SHARE.high) / 9;
+    if (g > high) return { low: down5(g), high: up5(g + room / 9) };
+    return {
+      low: down5(Math.min(g, low)),
+      high: Math.max(up5(g), down5(Math.min(g + room / 9, high))),
+    };
+  };
+  const carbsRange = (g: number): Range => {
+    const width = room == null ? 0.2 * g : room / 4;
+    const low = Math.max(Math.min(g, floorG), g - width);
+    return { low: down5(low), high: up5(Math.max(g, low + width)) };
+  };
   return {
-    fat:
-      fat == null
-        ? null
-        : {
-            low: down5(fat),
-            high: up5(fat + (room == null ? 0.4 * fat : room / 9)),
-          },
-    carbs:
-      carbs == null
-        ? null
-        : {
-            low: down5(
-              Math.max(
-                Math.min(carbs, floorG),
-                carbs - (room == null ? 0.2 * carbs : room / 4),
-              ),
-            ),
-            high: up5(carbs),
-          },
+    fat: fat == null ? null : fatRange(fat),
+    carbs: carbs == null ? null : carbsRange(carbs),
   };
 }
 
@@ -153,7 +164,8 @@ export type NutrientProgress = {
   targetText: string | null;
   state: ProgressState | null;
   // "About 450 kcal remaining", "Reached", "In range", "No daily target";
-  // empty when nothing is said, as over a target that hides it.
+  // empty when nothing is said, as over a target that hides it, or with
+  // carbohydrate over its range.
   text: string;
 };
 
@@ -211,6 +223,10 @@ function proteinProgress(
     : { ...base, targetText, state: "remaining", text: `${short} remaining` };
 }
 
+// Over its range, fat is said to be, as 35 % of energy is the top of the
+// reference ranges. Carbohydrate never is: it is what's left after protein
+// and fat, not a ceiling (lifters do well on 3 to 5 g/kg), and calories
+// already say when a day is over.
 function rangeProgress(
   key: "carbs" | "fat",
   eaten: number,
@@ -241,9 +257,10 @@ function rangeProgress(
     ...base,
     targetText,
     state: "over",
-    text: hideOver
-      ? ""
-      : `${shortBy(eaten - range.high)}${nb}g above the range`,
+    text:
+      hideOver || key === "carbs"
+        ? ""
+        : `${shortBy(eaten - range.high)}${nb}g above the range`,
   };
 }
 

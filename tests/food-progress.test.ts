@@ -2,10 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { emptyJournal } from "../lib/domain";
+import { emptyJournal, today } from "../lib/domain";
 import type { JournalState } from "../lib/model";
 import { mealSchema, type Meal } from "../lib/nutrition";
-import { applyGoals } from "../lib/body-goals";
+import { applyGoals, planGoals } from "../lib/body-goals";
+import { saveBodyFat } from "../lib/body-composition";
+import { saveCheckin } from "../lib/health";
 import { setDailyTargets } from "../lib/target-proposals";
 import {
   belowMinimum,
@@ -13,6 +15,7 @@ import {
   foodDay,
   LEAST_KCAL,
   macroRanges,
+  MINIMUM_MARGIN_KCAL,
   minimumKcal,
   progressLine,
   VERY_LOW_KCAL,
@@ -21,14 +24,21 @@ import { withSavedTargets } from "../lib/visual-targets";
 import { hydrationTargetMl } from "../lib/hydration";
 import { saveCardio } from "../lib/cardio";
 import { dayForCoach, describeDay } from "../lib/journal-summary";
-import { buildToday, buildTrends } from "../lib/native-api";
+import { buildCoach, buildToday, buildTrends } from "../lib/native-api";
 import { prepareAction } from "../lib/agent/actions";
 import { systemPrompt } from "../lib/agent/knowledge";
 import { foodProgressRule, lowTargetRule } from "../lib/agent/health-rules";
-import { visualSchema, type CoachVisual } from "../lib/coach-visuals";
+import {
+  savedVisualSchema,
+  visualSchema,
+  type CoachVisual,
+  type SavedVisual,
+} from "../lib/coach-visuals";
 import { FoodView } from "../components/views/food";
 
-const day = "2026-10-10";
+// Today on the clock FoodView reads, so the page shows the same day as the
+// tests; every other date is counted back from it.
+const day = today();
 const before = (n: number) =>
   new Date(Date.parse(`${day}T12:00:00Z`) - n * 86400000)
     .toISOString()
@@ -142,17 +152,18 @@ test("a calorie target below the estimated minimum never shows above target", ()
   assert.match(html, /below your estimated minimum/);
   assert.doesNotMatch(html, /above/);
   // The iPhone: no status past the target, told to draw no marks past it.
-  const today = buildToday(state, 1, day, new Set());
-  assert.equal(today.nutrition.hideOverTarget, true);
-  assert.equal(today.nutrition.caloriesProgress?.status, undefined);
-  assert.match(today.nutrition.targetNote!, /below your estimated minimum/);
-  assert.doesNotMatch(JSON.stringify(today.nutrition), /above/);
-  // Coach: the same words, the flag and the minimum.
+  const phone = buildToday(state, 1, day, new Set()).nutrition;
+  assert.equal(phone.hideOverTarget, true);
+  assert.equal(phone.caloriesProgress?.status, undefined);
+  assert.match(phone.targetNote!, /below your estimated minimum/);
+  assert.doesNotMatch(JSON.stringify(phone), /above/);
+  // Coach: the same words, the flag and the minimum the note gives.
   const coach = dayForCoach(state, day);
   assert.doesNotMatch(JSON.stringify(coach.eatenSoFar), /above/);
+  assert.equal(coach.eatenSoFar.hideOverTarget, true);
   assert.equal(
     coach.calorieTargetBelowMinimum?.estimated_minimum_kcal,
-    minimum,
+    Math.round(minimum / 50) * 50,
   );
   assert.doesNotMatch(describeDay(coach), /above/);
   // Over the target, but within the band, it is about on target.
@@ -173,6 +184,10 @@ test("the same day over an ordinary target does say so, and under 18 it doesn't"
   assert.equal(food.belowMinimum, null);
   assert.equal(food.progress.calories.text, "About 650\u00a0kcal above target");
   assert.match(food.progress.fat.text, /above the range/);
+  // Carbohydrate is never said to be too much, though the bar is full.
+  assert.equal(food.progress.carbs.state, "over");
+  assert.equal(food.progress.carbs.text, "");
+  assert.equal(dayForCoach(state, day).eatenSoFar.hideOverTarget, undefined);
   // A teenager's plan holds weight, and nothing reads above target.
   const teen = athlete(16);
   teen.nutrition.meals.push(
@@ -181,6 +196,79 @@ test("the same day over an ordinary target does say so, and under 18 it doesn't"
   const young = foodDay(teen, day, day);
   assert.equal(young.hideOver, true);
   assert.doesNotMatch(everyText(teen, day), /above/);
+  // Coach is told too, with no note, as the target isn't low.
+  const coach = dayForCoach(teen, day);
+  assert.equal(coach.eatenSoFar.hideOverTarget, true);
+  assert.equal(coach.calorieTargetBelowMinimum, undefined);
+  assert.doesNotMatch(JSON.stringify(coach.eatenSoFar), /above/);
+});
+
+test("the note's minimum is always above the target, and Coach gets the same figure", () => {
+  // Her least is about 1,420 kcal, which the note gives as 1,400.
+  const state = athlete();
+  const minimum = minimumKcal(state, day);
+  assert.equal(minimum, 1420);
+  // Round targets just under it are not called below "about 1,400".
+  for (const calories of [1400, 1410, 1380, 1370])
+    assert.equal(
+      foodDay(lowTarget(state, calories), day, day).belowMinimum,
+      null,
+      `${calories}`,
+    );
+  const low = foodDay(lowTarget(state, 1360), day, day).belowMinimum!;
+  assert.equal(low.minimumKcal, 1400);
+  assert.match(low.note, /about 1,400\u00a0kcal a day/);
+  assert.equal(
+    dayForCoach(state, day).calorieTargetBelowMinimum?.estimated_minimum_kcal,
+    1400,
+  );
+  // Whatever the target, a note never names a minimum at or under it.
+  for (let calories = 1000; calories <= 1500; calories += 5) {
+    const note = belowMinimum(calories, state, day);
+    if (note) assert.ok(note.minimumKcal > calories, `${calories}`);
+    assert.equal(
+      note != null,
+      calories < minimum - MINIMUM_MARGIN_KCAL,
+      `${calories}`,
+    );
+  }
+});
+
+test("the plan's own target at its floor gets no note in a heavier week", () => {
+  // A 30-year-old woman, 160 cm, 77 kg at 45 % body fat by DEXA, cutting
+  // to 68 kg with 5 hours of training a week: the plan saves its floor.
+  const state = emptyJournal();
+  saveBodyFat(state, { date: before(10), percent: 45, method: "dexa" }, day);
+  applyGoals(
+    state,
+    {
+      age: 30,
+      sex: "female",
+      heightCm: 160,
+      weightKg: 77,
+      targetWeightKg: 68,
+      targetDate: null,
+      activity: "low",
+      trainingDays: 5,
+      sessionMinutes: 60,
+      experience: "experienced",
+    },
+    before(5),
+  );
+  const saved = state.nutrition.targets.calories!;
+  assert.equal(state.profile.targetHistory?.at(-1)?.source, "plan");
+  // Worked out again today, and as her weigh-ins average half a kilo, a
+  // kilo, two kilos more, the floor sits a little above that target.
+  for (const more of [0, 0.5, 1, 2]) {
+    if (more)
+      for (const n of [3, 2, 1, 0])
+        saveCheckin(state, { date: before(n), bodyweight: 77 + more }, day);
+    assert.ok(minimumKcal(state, day) > saved, `${more} kg`);
+    const food = foodDay(state, day, day);
+    assert.equal(food.belowMinimum, null, `${more} kg`);
+    assert.equal(food.hideOver, false);
+    assert.equal(dayForCoach(state, day).calorieTargetBelowMinimum, undefined);
+  }
 });
 
 test("a very low target has its own note, and without goals the least is 1,200 kcal", () => {
@@ -224,9 +312,10 @@ test("whole numbers, about, protein reached, ranges, and under target once the d
   assert.equal(p.protein.targetText, "at least 110\u00a0g");
   assert.equal(p.protein.text, "Reached");
   assert.equal(p.protein.state, "reached");
-  // Fat a quarter of energy up to 35 %; carbohydrate down by the same.
-  assert.deepEqual(p.fat.range, { low: 60, high: 85 });
-  assert.equal(p.fat.targetText, "about 60 to 85\u00a0g");
+  // Fat a quarter of energy up to 35 %, to the 5 g inside 35 %;
+  // carbohydrate down from its target by a tenth of energy.
+  assert.deepEqual(p.fat.range, { low: 55, high: 80 });
+  assert.equal(p.fat.targetText, "about 55 to 80\u00a0g");
   assert.equal(p.fat.text, "In range");
   assert.deepEqual(p.carbs.range, { low: 240, high: 295 });
   assert.equal(p.carbs.text, "About 60\u00a0g remaining");
@@ -289,6 +378,122 @@ test("fat and carbohydrate ranges always hold the target, and carbohydrate keeps
     ).carbs!.low,
     210,
   );
+  // A fat target above 35 % of energy runs up a tenth more from it.
+  assert.deepEqual(
+    macroRanges({
+      goal: "maintain",
+      calories: 2000,
+      protein: 100,
+      carbs: 100,
+      fat: 100,
+    }).fat,
+    { low: 100, high: 125 },
+  );
+});
+
+test("the plan's fat range stays within a quarter and 35 % of energy, and carbohydrate at its floor keeps its room", () => {
+  let plans = 0;
+  let atFloor = 0;
+  for (const sex of ["female", "male"] as const)
+    for (const age of [16, 25, 45, 65])
+      for (const heightCm of [155, 165, 175, 185])
+        for (const weightKg of [50, 60, 70, 85, 100, 120])
+          for (const activity of ["low", "moderate", "high"] as const)
+            for (const trainingDays of [0, 3, 5])
+              for (const goal of [0.85, 1, 1.1]) {
+                const plan = planGoals(
+                  {
+                    age,
+                    sex,
+                    heightCm,
+                    weightKg,
+                    targetWeightKg: Math.round(weightKg * goal),
+                    targetDate: null,
+                    activity,
+                    trainingDays,
+                    sessionMinutes: 60,
+                    experience: "developing",
+                  },
+                  day,
+                );
+                if (!plan.dailyTargets || plan.carbs == null) continue;
+                plans++;
+                const kcal = plan.calories;
+                const { fat, carbs } = macroRanges({
+                  goal: "maintain",
+                  calories: kcal,
+                  protein: plan.protein,
+                  carbs: plan.carbs,
+                  fat: plan.fat,
+                });
+                const share = (g: number) => (g * 9) / kcal;
+                const at = `${sex} ${age} ${weightKg} kg ${kcal} kcal`;
+                assert.ok(fat!.low <= plan.fat! && plan.fat! <= fat!.high, at);
+                // Never over 35 %, and a quarter of energy is in range.
+                assert.ok(share(fat!.high) <= 0.355, at);
+                assert.ok(share(fat!.low) <= 0.25, at);
+                assert.ok(
+                  carbs!.low <= plan.carbs && plan.carbs <= carbs!.high,
+                );
+                assert.ok(carbs!.low >= 125, at);
+                // Never narrower than a tenth of energy, to the 5 g.
+                assert.ok(carbs!.high - carbs!.low >= kcal / 40 - 5, at);
+                if (carbs!.low === 130) atFloor++;
+              }
+  assert.ok(plans > 1000 && atFloor > 0, `${plans} plans, ${atFloor}`);
+  // 2,000 kcal: a quarter of energy (56 g) is in range on a complete day.
+  const state = emptyJournal();
+  state.nutrition.targets = {
+    goal: "maintain",
+    calories: 2000,
+    protein: 120,
+    carbs: 255,
+    fat: 60,
+  };
+  state.nutrition.meals.push(
+    meal(day, 2000, { protein: 120, carbs: 255, fat: 56 }),
+  );
+  state.nutrition.completeDays = [day];
+  const fat = foodDay(state, day, day).progress.fat;
+  assert.equal(fat.targetText, "about 55 to 75\u00a0g");
+  assert.equal(fat.text, "In range");
+});
+
+test("carbohydrate held at its floor runs up, and is never called too much", () => {
+  // A 45-year-old woman, 160 cm, 60 kg going to 51, low activity: about
+  // 1,370 kcal, with carbohydrate held at about 130 g.
+  const state = emptyJournal();
+  applyGoals(
+    state,
+    {
+      age: 45,
+      sex: "female",
+      heightCm: 160,
+      weightKg: 60,
+      targetWeightKg: 51,
+      targetDate: null,
+      activity: "low",
+      trainingDays: 0,
+      sessionMinutes: 60,
+      experience: "developing",
+    },
+    before(5),
+  );
+  const t = state.nutrition.targets;
+  assert.ok(t.carbs! <= 135, `${t.carbs} g`);
+  state.nutrition.meals.push(
+    meal(day, t.calories!, { protein: t.protein!, carbs: 145, fat: t.fat! }),
+  );
+  state.nutrition.completeDays = [day];
+  const carbs = foodDay(state, day, day).progress.carbs;
+  assert.equal(carbs.range!.low, 130);
+  assert.ok(carbs.range!.high - 130 >= t.calories! / 40 - 5);
+  assert.equal(carbs.text, "In range");
+  // Far over the range, nothing is said.
+  state.nutrition.meals = [meal(day, t.calories!, { carbs: 400 })];
+  const over = foodDay(state, day, day).progress.carbs;
+  assert.equal(over.state, "over");
+  assert.equal(over.text, "");
 });
 
 test("averages ignore today until it is complete, and count only complete days", () => {
@@ -377,8 +582,9 @@ test("Coach's progress visual shows the athlete's own daily targets", () => {
     [
       [2150, false],
       [110, false],
+      // Carbohydrate and fat to the top of their ranges, as Food draws them.
       [295, false],
-      [60, false],
+      [80, false],
       [water, false],
       [10000, true],
     ],
@@ -430,6 +636,88 @@ test("Coach's progress visual shows the athlete's own daily targets", () => {
   ) as Extract<CoachVisual, { kind: "progress" }>;
   assert.equal(own.targets[0].target, 1300);
   assert.equal(own.targets[0].suggested, undefined);
+  // Energy burned, a balance or a part of a nutrient is never the food
+  // target: shown as Coach gave it, as its suggestion, and never refused.
+  const spent = withSavedTargets(
+    visual([
+      { label: "Calories burned", value: 820, target: 1000, unit: "kcal" },
+      { label: "Active energy", value: 450, target: 600, unit: "kcal" },
+      { label: "Move goal", value: 450, target: 600, unit: "kcal" },
+      { label: "Daily deficit", value: 300, target: 500, unit: "kcal" },
+      { label: "Saturated fat", value: 18, target: 24, unit: "g" },
+      { label: "Calories out", value: 2200, target: 2400, unit: "kcal" },
+    ]),
+    state,
+    day,
+  ) as Extract<CoachVisual, { kind: "progress" }>;
+  assert.deepEqual(
+    spent.targets.map((t) => [t.target, t.suggested]),
+    [
+      [1000, true],
+      [600, true],
+      [600, true],
+      [500, true],
+      [24, true],
+      [2400, true],
+    ],
+  );
+  // An active energy goal near the food target is still not replaced.
+  const active = withSavedTargets(
+    visual([
+      { label: "Active energy", value: 820, target: 1300, unit: "kcal" },
+    ]),
+    state,
+    day,
+  ) as Extract<CoachVisual, { kind: "progress" }>;
+  assert.equal(active.targets[0].target, 1300);
+  assert.equal(active.targets[0].suggested, true);
+  // A card titled for a meal is that meal's, whatever its labels say.
+  const dinner = withSavedTargets(
+    visualSchema.parse({
+      kind: "progress",
+      title: "Dinner",
+      targets: [
+        { label: "Calories", value: 400, target: 800, unit: "kcal" },
+        { label: "Protein", value: 30, target: 70, unit: "g" },
+      ],
+    }),
+    state,
+    day,
+  ) as Extract<CoachVisual, { kind: "progress" }>;
+  assert.deepEqual(
+    dinner.targets.map((t) => [t.target, t.suggested]),
+    [
+      [800, true],
+      [70, true],
+    ],
+  );
+  // A card about energy burned leaves its kcal items alone too.
+  const moved = withSavedTargets(
+    visualSchema.parse({
+      kind: "progress",
+      title: "Today",
+      caption: "What your training burned so far",
+      targets: [{ label: "Energy", value: 300, target: 500, unit: "kcal" }],
+    }),
+    state,
+    day,
+  ) as Extract<CoachVisual, { kind: "progress" }>;
+  assert.deepEqual(moved.targets[0], {
+    label: "Energy",
+    value: 300,
+    target: 500,
+    unit: "kcal",
+    suggested: true,
+  });
+  // "Calories per day" is a daily target.
+  const perDay = withSavedTargets(
+    visual([
+      { label: "Calories per day", value: 1200, target: 2300, unit: "kcal" },
+    ]),
+    state,
+    day,
+  ) as Extract<CoachVisual, { kind: "progress" }>;
+  assert.equal(perDay.targets[0].target, 2150);
   // Other kinds pass through.
   const table = visualSchema.parse({
     kind: "table",
@@ -474,7 +762,7 @@ test("both coaches are told to use the app's words, and only typed Coach sets ta
       "~1,000\u00a0kcal of about 2,150\u00a0kcal, about 1,150\u00a0kcal remaining",
     protein: "~50\u00a0g of at least 110\u00a0g, about 60\u00a0g remaining",
     carbs: "~0\u00a0g of about 240 to 295\u00a0g, about 240\u00a0g remaining",
-    fat: "~0\u00a0g of about 60 to 85\u00a0g, about 60\u00a0g remaining",
+    fat: "~0\u00a0g of about 55 to 80\u00a0g, about 55\u00a0g remaining",
   });
   assert.equal(coach.eatenSoFar.estimated, true);
   assert.equal(coach.calorieTargetBelowMinimum, undefined);
@@ -488,20 +776,20 @@ test("the iPhone's Today carries the same words, and none without targets", () =
   const state = athlete();
   state.nutrition.meals.push(meal(day, 2100, { protein: 120 }));
   state.nutrition.completeDays = [day];
-  const today = buildToday(state, 1, day, new Set()).nutrition;
-  assert.equal(today.complete, true);
-  assert.equal(today.estimated, false);
-  assert.deepEqual(today.caloriesProgress, {
+  const phone = buildToday(state, 1, day, new Set()).nutrition;
+  assert.equal(phone.complete, true);
+  assert.equal(phone.estimated, false);
+  assert.deepEqual(phone.caloriesProgress, {
     target: "about 2,150\u00a0kcal",
     status: "About on target",
   });
-  assert.deepEqual(today.proteinProgress, {
+  assert.deepEqual(phone.proteinProgress, {
     target: "at least 110\u00a0g",
     status: "Reached",
   });
-  assert.equal(today.carbsProgress?.status, "About 240\u00a0g under the range");
-  assert.equal(today.hideOverTarget, undefined);
-  assert.equal(today.targetNote, undefined);
+  assert.equal(phone.carbsProgress?.status, "About 240\u00a0g under the range");
+  assert.equal(phone.hideOverTarget, undefined);
+  assert.equal(phone.targetNote, undefined);
   const bare = emptyJournal();
   bare.nutrition.meals.push(meal(day, 500));
   const plain = buildToday(bare, 1, day, new Set()).nutrition;
@@ -530,4 +818,44 @@ test("Trends rows carry each day's own drinks target, and none while it is hidde
   const hidden = buildTrends(state, day, 7);
   assert.ok(hidden.days.every((d) => d.waterTargetMl === undefined));
   assert.equal(hidden.waterTargetHidden, true);
+});
+
+test("a saved progress card with a target field this version doesn't know still reads", () => {
+  // As a newer version might save it: an extra field on a target.
+  const saved = {
+    id: crypto.randomUUID(),
+    content: {
+      kind: "progress",
+      title: "Today so far",
+      targets: [
+        {
+          label: "Protein",
+          value: 80,
+          target: 110,
+          unit: "g",
+          suggested: false,
+          hidden: true,
+        },
+      ],
+    },
+  };
+  const web = savedVisualSchema.parse(saved);
+  assert.deepEqual(
+    (web.content as Extract<CoachVisual, { kind: "progress" }>).targets,
+    [{ label: "Protein", value: 80, target: 110, unit: "g", suggested: false }],
+  );
+  const phone = buildCoach([
+    {
+      id: crypto.randomUUID(),
+      question: "How am I doing?",
+      photoIds: [],
+      createdAt: new Date().toISOString(),
+      status: "done",
+      reply: "Protein is on its way.",
+      visuals: [saved as unknown as SavedVisual],
+    },
+  ]);
+  assert.deepEqual(phone.turns[0].visuals?.[0].targets, [
+    { label: "Protein", value: 80, target: 110, unit: "g", suggested: false },
+  ]);
 });

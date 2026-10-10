@@ -105,8 +105,9 @@ test("a calorie target below the estimated minimum is noted, and never shown as 
   await expect(totals.locator('[data-macro="protein"]')).toContainText(
     "At least 110\u00a0gReached",
   );
+  // Carbohydrate held at its floor runs up from it.
   await expect(totals.locator('[data-macro="carbs"]')).toContainText(
-    "About 130 to 150\u00a0gIn range",
+    "About 130 to 165\u00a0gIn range",
   );
   await expect(page.locator(".food-page")).not.toContainText(/above/i);
   await page.screenshot({ path: info.outputPath("food-below-minimum.png") });
@@ -173,8 +174,9 @@ test("averages count complete days only, and today once it is marked complete", 
   // Marked complete, today counts, and what's left is under target.
   await page.getByRole("button", { name: "Mark day complete" }).click();
   await expect(calories).toHaveText("About 1,600\u00a0kcal under target");
+  // Fat from a quarter of the energy: 55 to 75 g.
   await expect(page.locator('[data-macro="fat"]')).toContainText(
-    "About 55\u00a0g under the range",
+    "About 45\u00a0g under the range",
   );
   await expect(week).toContainText(
     "2 complete days in the last 7: 1,225\u00a0kcal and 80\u00a0g protein a day on average, about 800\u00a0kcal under target.",

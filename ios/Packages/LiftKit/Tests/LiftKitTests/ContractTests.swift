@@ -90,7 +90,10 @@ struct ContractTests {
     #expect(food.caloriesProgress?.target == "about 1,300\u{00a0}kcal")
     #expect(food.caloriesProgress?.status == nil)
     #expect(food.proteinProgress?.status == "Reached")
-    #expect(food.carbsProgress?.target == "about 130 to 150\u{00a0}g")
+    // Carbohydrate held at its floor runs up from it; fat over its range
+    // says nothing, as the target is below the minimum.
+    #expect(food.carbsProgress?.target == "about 130 to 165\u{00a0}g")
+    #expect(food.fatProgress?.target == "about 35 to 50\u{00a0}g" && food.fatProgress?.status == nil)
     #expect(food.targetNote?.contains("below your estimated minimum") == true)
     // Without targets, none of it.
     let plain = try fixture("today", as: Components.Schemas.Today.self).nutrition

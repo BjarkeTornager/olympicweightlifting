@@ -2,25 +2,40 @@ import type { CoachVisual } from "./coach-visuals";
 import type { JournalState } from "./model";
 import { dailyTarget } from "./nutrition";
 import { hydrationTargetMl } from "./hydration";
-import { minimumKcal } from "./food-progress";
+import { belowMinimum, carbsFloorG, macroRanges } from "./food-progress";
 
-// A progress visual's targets for energy, protein, carbohydrate, fat or
-// drinks are the athlete's own daily targets, as Food and the iPhone show
-// them, never figures the model supplies (such as the goals plan's
-// recalculation): the server puts the saved one in. Any other target is
-// marked as suggested by Coach. A daily calorie target Coach makes up
-// below the athlete's estimated minimum is refused.
+// A progress visual's targets for energy eaten, protein, carbohydrate, fat
+// or drinks are the athlete's own daily targets, as Food and the iPhone
+// show them, never figures the model supplies (such as the goals plan's
+// recalculation): the server puts the saved one in, or the top of the
+// range for fat and carbohydrate. Any other target is marked as suggested
+// by Coach. A daily calorie target Coach makes up below the athlete's
+// estimated minimum is refused.
 
 type Daily = "calories" | "protein" | "carbs" | "fat" | "water";
 
-// What a target item measures, by its label and unit; null for anything
-// else (steps, sleep, body fat, a lift).
-function measured(label: string, unit: string): Daily | null {
+// Energy spent rather than eaten, or the balance of the two: "Calories
+// burned", "Active energy", "Move goal", "Calories out", "Daily deficit".
+const spent =
+  /burn|activ|\bmove\b|moving|expend|exercis|\bout\b|output|deficit|surplus|\bnet\b|spent|cardio/;
+// Energy eaten: a kcal item names it.
+const eaten = /calori|energy|kcal|intake|eaten|\beat|food/;
+// Part of a nutrient rather than all of it: "Saturated fat", "Sugar",
+// "Net carbs".
+const part =
+  /saturat|\bsat\b|\btrans\b|omega|mono|poly|sugar|fib(?:re|er)|starch|added|\bnet\b/;
+
+// What a target item measures, by its label and unit, and for energy by
+// the card's title and caption too; null for anything else (steps, sleep,
+// body fat, a lift, energy burned).
+function measured(label: string, unit: string, card: string): Daily | null {
   const name = label.toLowerCase();
   const u = unit.trim().toLowerCase();
   if (u === "kcal" || (/calori|energy/.test(name) && u === ""))
-    return "calories";
-  if (u === "g") {
+    return eaten.test(name) && !spent.test(`${name} ${card}`)
+      ? "calories"
+      : null;
+  if (u === "g" && !part.test(name)) {
     if (/protein/.test(name)) return "protein";
     if (/carb/.test(name)) return "carbs";
     if (/\bfats?\b/.test(name) && !/body/.test(name)) return "fat";
@@ -34,9 +49,10 @@ function measured(label: string, unit: string): Daily | null {
 }
 
 // A target for part of a day or more than one, which no daily target
-// replaces: "Protein at lunch", "Calories this week".
+// replaces, by the item's label or the card's title: "Protein at lunch",
+// "Calories this week", a card titled "Dinner".
 const notDaily =
-  /breakfast|lunch|dinner|supper|snack|meal|before|after|pre-|post-|session|workout|training|week|month|per /;
+  /breakfast|lunch|dinner|supper|snack|meal|before|after|pre-|post-|session|workout|training|week|month|per (?!day\b)/;
 
 // A figure from 0.4 to 2.5 times the daily target is meant as the day's,
 // however far off Coach's own figure is; further off, it counts something
@@ -51,7 +67,9 @@ export function withSavedTargets(
 ): CoachVisual {
   if (visual.kind !== "progress") return visual;
   const saved = state.nutrition.targets;
+  const ranges = macroRanges(saved, carbsFloorG(state));
   const water = hydrationTargetMl(state, today);
+  const card = `${visual.title} ${visual.caption ?? ""}`.toLowerCase();
   return {
     ...visual,
     targets: visual.targets.map((item) => {
@@ -62,8 +80,10 @@ export function withSavedTargets(
         target: item.target,
         unit: item.unit,
       };
-      const what = measured(given.label, given.unit);
-      const perDay = what != null && !notDaily.test(given.label.toLowerCase());
+      const what = measured(given.label, given.unit, card);
+      const perDay =
+        what != null &&
+        !notDaily.test(`${given.label} ${visual.title}`.toLowerCase());
       const litres = given.unit.trim().toLowerCase() !== "ml";
       const savedTarget = !perDay
         ? null
@@ -75,12 +95,19 @@ export function withSavedTargets(
               : water.targetMl
           : dailyTarget(saved[what!]);
       if (savedTarget != null && daily(given.target, savedTarget))
-        return { ...given, target: savedTarget };
+        return {
+          ...given,
+          // Fat and carbohydrate are ranges: drawn to the top, as on Food.
+          target:
+            what === "fat" || what === "carbs"
+              ? (ranges[what]?.high ?? savedTarget)
+              : savedTarget,
+        };
       if (what === "calories" && perDay) {
-        const least = minimumKcal(state, today);
-        if (given.target < least)
+        const low = belowMinimum(given.target, state, today);
+        if (low)
           throw Error(
-            `A daily calorie target of ${Math.round(given.target)} kcal is below the athlete's estimated minimum of about ${Math.round(least)} kcal. Show their saved daily target (dailyTargets), or none; never one of your own below it.`,
+            `A daily calorie target of ${Math.round(given.target)} kcal is below the athlete's estimated minimum of about ${low.minimumKcal} kcal. Show their saved daily target (dailyTargets), or none; never one of your own below it.`,
           );
       }
       return { ...given, suggested: true };

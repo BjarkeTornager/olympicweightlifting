@@ -160,10 +160,12 @@ enum Format {
   }
 
   /// Millilitres under a litre, else litres: to one decimal for an amount
-  /// drunk ("2.4 L"), and to two for a target set in quarter litres
-  /// ("2.25 L").
-  static func litres(_ ml: Int, digits: Int = 1) -> (String, String) {
-    ml < 1000 ? ("\(ml)", "ml") : (decimal(Double(ml) / 1000, digits: digits), "L")
+  /// drunk ("2.4 L"), or two for a whole quarter litre ("2.25 L"), so the
+  /// amount reads as the target, set in quarter litres, at the moment it
+  /// is reached.
+  static func litres(_ ml: Int, digits: Int? = nil) -> (String, String) {
+    guard ml >= 1000 else { return ("\(ml)", "ml") }
+    return (decimal(Double(ml) / 1000, digits: digits ?? (ml % 250 == 0 ? 2 : 1)), "L")
   }
 
   /// A whole number with thousands separated: "1,900".

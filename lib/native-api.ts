@@ -2084,6 +2084,20 @@ export function flattenVisual({ id, content }: SavedVisual) {
         path: content.path.map(([lat, lng]) => [lat, lng]),
         stops: content.stops,
       };
+    // Only the target fields this version knows, so a card a newer version
+    // saved still reads after a rollback.
+    case "progress":
+      return {
+        id,
+        ...content,
+        targets: content.targets.map((t) => ({
+          label: t.label,
+          value: t.value,
+          target: t.target,
+          unit: t.unit,
+          ...(t.suggested != null ? { suggested: t.suggested } : {}),
+        })),
+      };
     // The newer kinds use the same field names in the app as in Coach's
     // tool, so they pass through as they are.
     default:

@@ -235,6 +235,9 @@ export function dayForCoach(
       progress: Object.fromEntries(
         nutrientKeys.map((key) => [key, progressLine(food, key)]),
       ),
+      // Nothing past a target is said: a calorie target below the
+      // estimated minimum, or anyone under 18.
+      ...(food.hideOver ? { hideOverTarget: true } : {}),
     },
     // A calorie target below the athlete's estimated minimum, which Food
     // shows with this note and never as "above target".

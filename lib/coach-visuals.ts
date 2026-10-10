@@ -21,10 +21,12 @@ const targetItem = z
   .strict();
 // As saved: a target that isn't one of the athlete's daily targets is marked
 // as Coach's suggestion (visual-targets.ts). Set only by the server, never
-// through Coach's tool.
-const savedTargetItem = targetItem
-  .extend({ suggested: z.boolean().optional() })
-  .strict();
+// through Coach's tool. Keys this version doesn't know are dropped, not
+// refused, so a card a newer version saved still shows after a rollback.
+const savedTargetItem = z.object({
+  ...targetItem.shape,
+  suggested: z.boolean().optional(),
+});
 const statItem = z
   .object({
     label,

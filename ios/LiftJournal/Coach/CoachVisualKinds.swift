@@ -454,7 +454,8 @@ extension VisualLineChart {
 }
 
 /// Amounts against their targets, counted as on Today's Ledger: a row of
-/// marks, one for a round amount, filled to the value.
+/// marks, one for a round amount, filled to the value but never past the
+/// target, as the website draws it. The figure above still says it.
 struct VisualProgress: View {
   let visual: Visual
 
@@ -473,7 +474,7 @@ struct VisualProgress: View {
               .font(.footnote)
               .foregroundStyle(Theme.inkSecondary)
           }
-          IsotypeMeter(value: item.value, target: item.target, unit: per, tint: tint, markWidth: 5, height: 22)
+          IsotypeMeter(value: Self.filled(item), target: item.target, unit: per, tint: tint, markWidth: 5, height: 22)
           Text(Self.scale(item, per: per))
             .font(.caption2.weight(.medium))
             .foregroundStyle(Theme.inkSecondary)
@@ -488,6 +489,14 @@ struct VisualProgress: View {
             + (item.suggested == true ? ", suggested by Coach" : ""))
       }
     }
+  }
+
+  /// What the meter fills to: the value, up to the target. So a calorie
+  /// target below the athlete's minimum, or anyone under 18, gets no marks
+  /// past it, as on Today, and fat inside its range (the server sends the
+  /// range's top) never reads as over.
+  static func filled(_ item: Components.Schemas.VisualTarget) -> Double {
+    min(item.value, item.target)
   }
 
   /// "One mark = 100 kcal", and for a target that isn't one of the

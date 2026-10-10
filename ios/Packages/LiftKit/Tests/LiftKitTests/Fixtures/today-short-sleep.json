@@ -32,7 +32,8 @@
   },
   "body": {
     "bodyweight": 81.4,
-    "bodyweightDate": "2026-09-26"
+    "bodyweightDate": "2026-09-26",
+    "bodyweightFromAppleHealth": false
   },
   "nutrition": {
     "calories": 300,

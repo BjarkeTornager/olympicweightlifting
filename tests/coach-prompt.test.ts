@@ -13,10 +13,20 @@ import {
   caffeineRule,
   disorderedEatingRule,
   drinksTargetRule,
+  proteinTargetRule,
   supplementRule,
   teenSleepRule,
 } from "../lib/agent/health-rules";
-import { proteinPerKg, weeklyRates } from "../lib/body-goals";
+import {
+  CARBS_FLOOR_G,
+  LACTATION_KCAL,
+  LACTATION_KCAL_LATER,
+  macroShares,
+  POSTPARTUM_WEEKS,
+  pregnancyCarbsFloorG,
+  proteinPerKg,
+  weeklyRates,
+} from "../lib/body-goals";
 
 test("conversational prompt changes preserve the fixed health, privacy, evidence and action policy", () => {
   // The whole reviewed policy, core and skills; turns get the core plus the
@@ -255,7 +265,125 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // calories, recorded or estimated,". Restoring those two words
     // reproduces the previous hash (7786ae88…). Health, privacy and action
     // policy text is otherwise unchanged.
-    "935bdded5614012bf23f79b1d0ed661451c516aa002bf9153f73e36887205b39",
+    // Revised 2026-10-04, deliberate and reviewed, from the evidence review
+    // (PR 4, maintenance and training), brought in after the notes above,
+    // in the goal-setup paragraph only: goal setup also asks the usual
+    // session length, which the plan now uses to count training energy for
+    // the sessions it sets ("training days available and experience" and
+    // "training days and experience" gain session length), and everyday
+    // activity gains very_high for heavy manual work, which the plan counts
+    // at 2.0 times resting energy ("(low/moderate/high)" gains it).
+    // Restoring those three phrases reproduces the previous hash
+    // (935bdded…). Health, privacy and evidence text is unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 5, macros), so Coach describes the macros the plan now sets: the
+    // goal-setup paragraph adds protein from a height-adjusted weight at a
+    // BMI of 30 or more, fat at 25 % of calories and carbohydrate as the
+    // rest, at least 130 g (macroShares and CARBS_FLOOR_G in
+    // body-goals.ts); the coaching paragraph adds 2 g/kg of a
+    // height-adjusted weight at a BMI of 30 or more while losing
+    // (proteinPerKg.adjusted) and "less at a BMI of 30 or more" while
+    // gaining. Restoring those three phrases reproduces the previous hash
+    // (74eef4c7…). Health, privacy and evidence text is unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 6, pregnancy, breastfeeding and kidney inputs):
+    // - Goal setup's second message adds two optional health questions,
+    //   said to be kept with the goals only so the plan stays safe: kidney
+    //   disease or a doctor's advice to limit protein (limitProtein), and
+    //   for women and anyone who'd rather not give their sex, aged 14–55,
+    //   pregnancy or breastfeeding with the baby's age in weeks. Coach
+    //   passes them only from the athlete's answers and doesn't ask about
+    //   them outside goal setup. One added sentence says what the plan
+    //   then does (LACTATION_KCAL, POSTPARTUM_WEEKS and pregnancyCarbsFloorG
+    //   in body-goals.ts).
+    // - One added core paragraph, the protein target rule
+    //   (agent/health-rules.ts, also in the voice coach's instructions):
+    //   with no protein target, Coach suggests no protein amount, per-kg
+    //   figure or high-protein shakes, food first, and their doctor,
+    //   midwife or dietitian advises.
+    // Removing that paragraph and those two goal-setup additions
+    // reproduces the previous hash (49dda6a4…). Health, privacy and
+    // evidence text is otherwise unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 13, Coach goal-setup flow):
+    // - Goal setup's second message adds, for a goal weight below the
+    //   current one, whether it is a competition weight class and when the
+    //   weigh-in is (weightClass), and, for a goal that loses, recomposes or
+    //   aims very lean, three optional low-energy questions (stress
+    //   fracture, eating disorder or eating out of control, and for women
+    //   and anyone who'd rather not give their sex without hormonal
+    //   contraception, missed periods or cycles over 35 days), kept only as
+    //   a yes or no with the date, never as a diagnosis (energySigns).
+    //   Height and weights are passed in the athlete's own units for the
+    //   app to convert. Added sentences say what the plan then does: any
+    //   yes holds maintenance with a sports doctor or sports dietitian,
+    //   energyCheckDue asks again after 3 months at goal setup or a
+    //   follow-up only, a weight class is cut to its limit by the weigh-in
+    //   with no last-minute cut, the calories are a starting estimate, and
+    //   a plan that changes weight agrees a check about 3 weeks on.
+    // - One added goals-skill paragraph for that check: read the weight
+    //   trend and food logs, offer at most one reviewed change (current
+    //   weight, or at most 200 kcal, never below goals.plan.floorKcal),
+    //   never cut further for slow loss before checking the food logs are
+    //   complete, and ask the low-energy questions again when due.
+    // Removing that paragraph and those goal-setup additions reproduces
+    // the previous hash (9ec98b01…). Health, privacy and evidence text is
+    // otherwise unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the review of PR 13,
+    // in the goal-setup paragraph only:
+    // - The low-energy questions are asked only of athletes 18 or over and
+    //   passed never under 18 or in pregnancy, when the plan sets no
+    //   deficit, so no answer is collected that changes nothing; the
+    //   periods question leaves out anyone pregnant, breastfeeding or within
+    //   a few months of giving birth, when periods normally stop
+    //   (energyQuestionsFor in body-goals.ts).
+    // - goals.plan.energyCheckDue's questions may also be asked when the
+    //   athlete asks to go through them, as Coach's new opening offers
+    //   about every 3 months while a deficit is saved, passed with
+    //   set_body_goals and the saved goals.
+    // Restoring those two sentences reproduces the previous hash
+    // (9590c886…). Health, privacy and evidence text is otherwise
+    // unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the same review
+    // (PR 7, one weight, one target), in the private-context paragraph
+    // only: goals.plan is the recalculation at the current weight
+    // (goals.currentWeightKg, the average of the last week's weigh-ins);
+    // the Goals card on Today now shows the saved targets, so the sentence
+    // saying it shows goals.plan's calories, and the one explaining that
+    // number, go. Coach quotes dailyTargets, never goals.plan's figures; a
+    // goals.proposal is the app's suggestion, which the athlete takes or
+    // keeps theirs over on Today, and Coach may prepare set_diet_targets
+    // with exactly its targets for review, never presenting it as the
+    // current target. Targets the athlete set themselves
+    // (goals.targetsSet.source manual) stay theirs, with a suggestion only
+    // at the goal or its date (target-proposals.ts). Restoring the
+    // paragraph's previous sentences reproduces the previous hash
+    // (26c2b7ba…). Health, privacy and evidence text is otherwise
+    // unchanged.
+    // Revised 2026-10-04, deliberate and reviewed, from the review of PR 7,
+    // in the private-context paragraph only: one added sentence. When
+    // goals.plan.energyCheckDue, Coach asks the low-energy questions before
+    // taking a suggestion, and takes it with set_body_goals (the saved
+    // goals at goals.currentWeightKg, with energySigns) rather than
+    // set_diet_targets, which refuses a deficit's suggestion without them
+    // (one-target.test.ts), as Today asks them on the website and iPhone.
+    // Removing that sentence reproduces the previous hash (32e4383b…).
+    // Health, privacy and evidence text is otherwise unchanged.
+    // Revised 2026-10-10, deliberate and reviewed, from the review of the
+    // combined targets release, in the goal-setup paragraph only:
+    // - The low-energy questions are asked only at goal setup, a goals
+    //   follow-up, before taking a suggestion or when the athlete asks,
+    //   never in the middle of logging. The paragraph no longer also says
+    //   not to ask them outside goal setup, which contradicted that and the
+    //   private-context paragraph, and the later sentence that listed the
+    //   same times refers back to them.
+    // - Rather not say is null, as set_body_goals takes it, so it removes
+    //   earlier answers rather than keeping a withdrawn no.
+    // - While breastfeeding the plan adds about 400 kcal once the baby is
+    //   6 months old (LACTATION_KCAL_LATER).
+    // Restoring those phrases reproduces the previous hash (62b81d6b…).
+    // Health, privacy and evidence text is otherwise unchanged.
+    "9c003ac2e6935a9dcee4f5116bf206692736b2ee955a0ff52a488ad2f90788f8",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -347,6 +475,7 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
       disorderedEatingRule,
       drinksTargetRule,
       teenSleepRule,
+      proteinTargetRule,
     ])
       assert.ok(core.includes(rule), rule.slice(0, 40));
   }
@@ -370,6 +499,8 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   // The drinks target is not a minimum, and a clinician's limit wins.
   assert.match(core, /not a minimum/);
   assert.match(core, /fluid limit from their doctor or another clinician/);
+  // No protein figure of Coach's own when the plan sets no protein target.
+  assert.match(core, /the app sets no protein target: don't suggest a protein/);
   // Teens need more sleep than adults.
   assert.match(core, /Teenagers \(13–17\) need 8–10 hours/);
   // Activity guidance from WHO and the Danish Health Authority.
@@ -380,15 +511,17 @@ test("the health rules hold on every turn, not only when a skill loads", () => {
   // Apple's active energy is an estimate, not a measurement.
   assert.match(core, /active energy is Apple's estimate, not a measurement/);
   assert.doesNotMatch(core, /active energy and workouts .{0,80}recorded/);
-  // The saved targets are the athlete's; the plan is only a proposal, and
-  // the website's Goals card shows the plan's calories until it shows the
-  // saved target.
+  // The saved targets are the athlete's, shown everywhere, the Goals card
+  // included; the plan at the current weight only suggests new ones.
   assert.match(core, /The athlete's daily targets are dailyTargets/);
+  assert.match(core, /on the Goals card on Today and in the iPhone app/);
+  assert.doesNotMatch(core, /Goals card on Today shows goals\.plan/);
+  assert.match(core, /goals\.currentWeightKg, the average of the last week's/);
   assert.match(
     core,
-    /the website's Goals card on Today shows goals\.plan's calories, which can differ/,
+    /prepare set_diet_targets with exactly its targets for review/,
   );
-  assert.match(core, /never present it as their current target/);
+  assert.match(core, /Never present a suggestion as their current target/);
   // Moved out of the goals skill, not copied, and no supplement allowance.
   const goals = skillInstructions(["goals"]);
   assert.doesNotMatch(goals, /bingeing|purging/);
@@ -402,8 +535,11 @@ test("Coach quotes the plan's own rates and protein", () => {
   const losing = `${percent(lose.lean)}–${percent(lose.higher)} % of bodyweight a week`;
   const gaining = `${percent(gain.experienced)}–${percent(gain.new)} %`;
   const recomposing = `at most ${percent(recomposition)} %`;
-  const [setup, coaching, ...rest] = skillInstructions(["goals"]).split("\n");
+  const [setup, followUp, coaching, ...rest] = skillInstructions([
+    "goals",
+  ]).split("\n");
   assert.equal(rest.length, 0);
+  assert.ok(followUp.startsWith("At a goals follow-up"));
   // Goal setup describes the calculation.
   assert.ok(setup.includes(`losing ${losing} depending on body fat`));
   assert.ok(setup.includes(`gaining ${gaining} by experience`));
@@ -412,15 +548,43 @@ test("Coach quotes the plan's own rates and protein", () => {
   assert.ok(coaching.includes(`losing about ${losing}`));
   assert.ok(coaching.includes(`about ${gaining} a week`));
   assert.ok(coaching.includes(`${recomposing} a week either way`));
-  const { bodyweight, leanMass } = proteinPerKg;
+  const { bodyweight, leanMass, adjusted } = proteinPerKg;
   assert.ok(
     coaching.includes(
-      `the app sets ${bodyweight.losing} g/kg of bodyweight, or ${leanMass.losing} g/kg of lean mass when body fat is known`,
+      `the app sets ${bodyweight.losing} g/kg of bodyweight, ${adjusted.losing} g/kg of a height-adjusted weight at a BMI of 30 or more, or ${leanMass.losing} g/kg of lean mass when body fat is known`,
     ),
   );
   assert.ok(
     coaching.includes(
-      `the app sets ${bodyweight.other} g/kg of bodyweight, or ${leanMass.other} g/kg of lean mass`,
+      `the app sets ${bodyweight.other} g/kg of bodyweight, less at a BMI of 30 or more, or ${leanMass.other} g/kg of lean mass`,
+    ),
+  );
+  // Goal setup asks the optional health questions, and says what the plan
+  // does with them, from its own constants.
+  assert.ok(
+    setup.includes(
+      "whether they have kidney disease or a doctor has told them to limit protein (limitProtein), and, for women and anyone who'd rather not give their sex, aged 14–55, whether they're pregnant or breastfeeding",
+    ),
+  );
+  // Asked at goal setup, a goals follow-up, before taking a suggestion or
+  // when asked, as the private-context paragraph says; rather not say is
+  // null, as set_body_goals takes it.
+  assert.ok(
+    setup.includes(
+      "Ask them only at goal setup, at a goals follow-up, before taking a suggestion or when the athlete asks to go through them, never in the middle of logging.",
+    ),
+  );
+  assert.ok(!setup.includes("outside goal setup"));
+  assert.ok(setup.includes("null if they'd rather not answer"));
+  assert.ok(
+    setup.includes(
+      `adds about ${LACTATION_KCAL} kcal a day for making milk (${LACTATION_KCAL_LATER} once the baby is 6 months old), sets no deficit until the baby is ${POSTPARTUM_WEEKS} weeks old and only a gentle one after, and keeps carbohydrate at ${pregnancyCarbsFloorG.breastfeeding} g or more`,
+    ),
+  );
+  // Goal setup names the plan's fat share and carbohydrate floor.
+  assert.ok(
+    setup.includes(
+      `or from a height-adjusted weight at a BMI of 30 or more; fat ${macroShares.fat} % of calories; carbohydrate the rest, at least ${CARBS_FLOOR_G} g)`,
     ),
   );
   // Every rate and protein figure in it is one of the plan's.
@@ -433,7 +597,11 @@ test("Coach quotes the plan's own rates and protein", () => {
     for (const value of [low, high])
       assert.ok(planPercents.has(Number(value)), `${value} %`);
   const planProtein = new Set(
-    [...Object.values(bodyweight), ...Object.values(leanMass)].map(String),
+    [
+      ...Object.values(bodyweight),
+      ...Object.values(leanMass),
+      ...Object.values(adjusted),
+    ].map(String),
   );
   for (const [, value] of coaching.matchAll(/([\d.]+) g\/kg/g))
     assert.ok(planProtein.has(value), `${value} g/kg`);
@@ -453,4 +621,58 @@ test("site help says Goals calculates calories and macros", () => {
   );
   assert.match(siteHelp.nutrition, /starting estimates, not measured needs/);
   assert.match(siteHelp.nutrition, /There is no food database integration/);
+});
+
+test("goal setup asks the weight class and the low-energy questions, and the goals check offers only reviewed changes", () => {
+  const [setup, followUp] = skillInstructions(["goals"]).split("\n");
+  // A goal below the current weight may be a weight class to make.
+  assert.ok(
+    setup.includes(
+      "whether it's a competition weight class and when the weigh-in is (weightClass, with the weigh-in as targetDate)",
+    ),
+  );
+  // Before a deficit, the three questions: optional, never a diagnosis,
+  // and kept only as a yes or no with the date.
+  assert.ok(
+    setup.includes(
+      "When the goal loses weight, recomposes or aims for very lean body fat and they're 18 or over, also ask three optional yes/no questions, saying the answers are kept only as a yes or no with the date so the plan stays safe, never as a diagnosis",
+    ),
+  );
+  assert.match(setup, /any stress fracture in the last 2 years/);
+  assert.match(
+    setup,
+    /who don't use hormonal contraception and aren't pregnant, breastfeeding or within a few months of giving birth, whether they've missed a period or had cycles longer than 35 days in the last 3 months/,
+  );
+  // Never collected where the plan sets no deficit anyway.
+  assert.match(
+    setup,
+    /never under 18, in pregnancy or when the plan sets no deficit/,
+  );
+  assert.match(
+    setup,
+    /With any yes to the low-energy questions it holds their weight at maintenance and suggests a sports doctor or sports dietitian/,
+  );
+  assert.match(setup, /never in the middle of logging/);
+  // Imperial units go to the app as given.
+  assert.match(setup, /never convert them yourself/);
+  // A starting estimate, checked about 3 weeks on.
+  assert.match(setup, /Call the calories a starting estimate/);
+  assert.match(setup, /never a last-minute cut of water or food/);
+  // The check: one reviewed change, never below the floor, and never a
+  // further cut for slow loss before the food logs are checked.
+  assert.ok(followUp.startsWith("At a goals follow-up"));
+  assert.match(followUp, /offer one reviewed change/);
+  assert.match(followUp, /at most 200 kcal/);
+  assert.match(followUp, /never below goals\.plan\.floorKcal/);
+  assert.match(
+    followUp,
+    /Never answer slow loss by cutting further without first checking the food logs are complete/,
+  );
+  // A message about making a weight class loads the goals skill; an
+  // everyday weigh-in being logged doesn't.
+  assert.ok(skills.goals.signal?.test("I need to make weight by May"));
+  assert.ok(skills.goals.signal?.test("I compete in the 81 kg weight class"));
+  assert.ok(skills.goals.signal?.test("The weigh-in date is 14 November"));
+  assert.ok(skills.goals.signal?.test("Indvejningen er om en måned"));
+  assert.ok(!skills.goals.signal?.test("Morning weigh-in: 80.2 kg"));
 });

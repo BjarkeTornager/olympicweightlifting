@@ -27,7 +27,7 @@ import { foodDate } from "./nutrition";
 import { localClock, timeZoneSchema } from "./reminders";
 import { writeJournal } from "./server";
 import { healthRouteSchema, pruneRoutes, saveRoutes } from "./workout-routes";
-import { saveBodyFat } from "./body-composition";
+import { bodyMassSchema, saveBodyFat } from "./body-composition";
 
 // What the iPhone app reads from Apple Health and sends in one batch: nights
 // of sleep samples, daily heart-rate and movement summaries, and workouts.
@@ -57,8 +57,12 @@ export const healthDaySchema = vitalsSchema
   .omit({ source: true, updatedAt: true })
   .partial()
   .required({ date: true })
-  // The day's latest body fat reading from a smart scale, in percent.
-  .extend({ bodyFatPercent: z.number().finite().min(3).max(70).optional() })
+  // The day's latest body fat reading from a smart scale, in percent, and
+  // its first weight, in kg, a morning weigh-in being the steadiest.
+  .extend({
+    bodyFatPercent: z.number().finite().min(3).max(70).optional(),
+    bodyMassKg: z.number().finite().min(20).max(500).optional(),
+  })
   .strict()
   .register(nativeRequests, { id: "HealthDay" });
 export const healthSyncSchema = z
@@ -366,6 +370,29 @@ export function applyBodyFatImport(
   return true;
 }
 
+// A day's first weight from Apple Health, kept apart from check-ins (which
+// win on the same day: weighIns); an unchanged weight writes nothing.
+export function applyBodyMassImport(
+  state: JournalState,
+  day: z.infer<typeof healthDaySchema>,
+  now: Date,
+) {
+  if (day.bodyMassKg == null) return false;
+  const kg = Math.round(day.bodyMassKg * 10) / 10;
+  const previous = state.health.bodyMass?.find((m) => m.date === day.date);
+  if (previous?.kg === kg) return false;
+  state.health.bodyMass = [
+    ...(state.health.bodyMass ?? []).filter((m) => m.date !== day.date),
+    bodyMassSchema.parse({
+      date: day.date,
+      kg,
+      source: "apple-health",
+      updatedAt: now.toISOString(),
+    }),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  return true;
+}
+
 // A daily summary replaces the previous one for that date; unchanged values
 // do not count as a change, so a repeated sync writes nothing.
 export function applyVitals(
@@ -482,12 +509,14 @@ export async function syncHealth(
 
     let daysUpdated = 0;
     let bodyFatUpdated = 0;
+    let bodyMassUpdated = 0;
     for (const day of days) {
       if (day.date > today) continue;
       if (applyVitals(state, day, now)) daysUpdated++;
       if (applyBodyFatImport(state, day, today, now)) bodyFatUpdated++;
+      if (applyBodyMassImport(state, day, now)) bodyMassUpdated++;
     }
-    if (daysUpdated || bodyFatUpdated) changed = true;
+    if (daysUpdated || bodyFatUpdated || bodyMassUpdated) changed = true;
 
     const ids = [
       ...new Set([
@@ -651,6 +680,7 @@ export async function syncHealth(
       sleep: sleep.sort((a, b) => a.date.localeCompare(b.date)),
       daysUpdated,
       bodyFatUpdated,
+      bodyMassUpdated,
       workouts,
       routes,
     };

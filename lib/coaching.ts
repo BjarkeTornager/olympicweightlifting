@@ -1,11 +1,20 @@
-import { athleteAge, planForState } from "./body-goals";
+import {
+  athleteAge,
+  ENERGY_CHECK_DAYS,
+  energySigns,
+  goalsForState,
+  planForState,
+  type GoalPlan,
+} from "./body-goals";
 import { bodyFatTrend, latestBodyFat, weightTrend } from "./body-composition";
 import { z } from "zod";
 import type { JournalState } from "./model";
 import { formatSleepDuration, offsetDate } from "./health";
 import { shortSleep, sleepChange, sleepShortOpening } from "./sleep";
-import { foodDate } from "./nutrition";
+import { dailyTarget, foodDate, type DietTargets } from "./nutrition";
 import { cardioTitle } from "./cardio";
+import { currentWeightKg, targetsInForce } from "./target-history";
+import { acceptProposal, targetsProposal } from "./target-proposals";
 
 export const memoryInputSchema = z
   .object({
@@ -74,6 +83,153 @@ export function duePlans(state: JournalState, date: string) {
     .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
 }
 
+// The check agreed with a goals plan that loses, gains or recomposes
+// (followUpGoals): about 3 weeks on, the weight trend against the plan, as
+// its calories are only a starting estimate. Any change from it is a
+// reviewed proposal; the saved targets never change by themselves.
+export const GOALS_FOLLOW_UP_TITLE =
+  "Check my weight trend against my goals plan";
+export const GOALS_FOLLOW_UP_DAYS = 21;
+
+// Whether a goals plan changes the athlete's weight or body, so its
+// calories are worth checking against the weight trend: not in pregnancy,
+// when it sets no daily targets, nor when it holds their weight at
+// maintenance, after a yes to the low-energy questions, for safety or as
+// asked.
+export function goalsPlanChanges(plan: GoalPlan) {
+  return (
+    plan.dailyTargets &&
+    !(plan.direction === "maintain" && plan.calories >= plan.maintenanceKcal)
+  );
+}
+// The goals check agreed and not yet done, if any.
+export const activeGoalsCheck = (state: JournalState) =>
+  state.profile.coaching?.plans?.find(
+    (p) => p.status === "active" && p.title === GOALS_FOLLOW_UP_TITLE,
+  );
+// The day a goals check agreed today falls due, or null when the plan
+// changes nothing, or beside ten active plans (or a hundred in all), the
+// most the profile keeps; an active check is always moved on.
+export function goalsCheckDate(
+  state: JournalState,
+  plan: GoalPlan,
+  today: string,
+) {
+  if (!goalsPlanChanges(plan)) return null;
+  const plans = state.profile.coaching?.plans ?? [];
+  if (
+    !activeGoalsCheck(state) &&
+    (plans.filter((p) => p.status === "active").length >= 10 ||
+      plans.length >= 100)
+  )
+    return null;
+  return offsetDate(today, GOALS_FOLLOW_UP_DAYS);
+}
+// What the goals' review and form say about the check.
+export const goalsCheckNote = (date: string) =>
+  `These numbers are a starting estimate: from ${date}, about 3 weeks on, Coach can check them against your weight trend with you.`;
+export const goalsCheckClosedNote = (date: string) =>
+  `The check of your weight trend agreed for ${date} is closed, as this plan has no calorie change to check.`;
+
+// Agrees the goals check in the same change as the goals, on every surface
+// that saves them (Coach, voice and the goals form): saving them again
+// moves an active check on rather than adding another. A plan that no
+// longer changes the athlete's weight (in pregnancy, after a yes to the
+// low-energy questions, or holding it) closes an active check instead, so
+// Coach never comes back to a weight trend there.
+export function followUpGoals(
+  state: JournalState,
+  plan: GoalPlan,
+  today: string,
+): { agreed?: CoachPlan; closed?: CoachPlan } {
+  const existing = activeGoalsCheck(state);
+  const now = new Date().toISOString();
+  if (!goalsPlanChanges(plan)) {
+    if (!existing) return {};
+    const closed: CoachPlan = {
+      ...existing,
+      status: "dismissed",
+      outcome: `Closed on ${today}: the goals saved then have no calorie change to check.`,
+      updatedAt: now,
+    };
+    const coaching = coachSettings(state);
+    coaching.plans = (coaching.plans ?? []).map((p) =>
+      p.id === closed.id ? closed : p,
+    );
+    return { closed };
+  }
+  const followUpDate = goalsCheckDate(state, plan, today);
+  if (!followUpDate) return {};
+  const change =
+    plan.direction === "maintain"
+      ? "recomposition at a steady weight"
+      : `${plan.direction === "lose" ? "losing" : "gaining"} about ${plan.weeklyChangeKg} kg a week`;
+  const agreed: CoachPlan = {
+    id: existing?.id ?? crypto.randomUUID(),
+    title: GOALS_FOLLOW_UP_TITLE,
+    notes: `Goals saved on ${today}: ${change} at ${plan.calories.toLocaleString("en-GB")} kcal a day, a starting estimate. Compare the weekly average weight with it, check the food logs are complete first, and offer any change for review.`,
+    followUpDate,
+    status: "active",
+    outcome: "",
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  const coaching = coachSettings(state);
+  coaching.plans = [
+    ...(coaching.plans ?? []).filter((p) => p.id !== agreed.id),
+    agreed,
+  ];
+  return { agreed };
+}
+
+// New calories saved at a goals check that is due, as Coach may offer
+// instead of new goals, move the check 3 weeks on with them, so it isn't
+// offered again every day.
+export function moveGoalsCheck(
+  state: JournalState,
+  calories: number,
+  today: string,
+): CoachPlan | null {
+  const existing = activeGoalsCheck(state);
+  if (!existing || existing.followUpDate > today) return null;
+  const moved: CoachPlan = {
+    ...existing,
+    notes: `Calories set to ${calories.toLocaleString("en-GB")} kcal a day on ${today}, at the goals check, a starting estimate. Compare the weekly average weight with goals.plan's weekly change again, check the food logs are complete first, and offer any change for review.`,
+    followUpDate: offsetDate(today, GOALS_FOLLOW_UP_DAYS),
+    updatedAt: new Date().toISOString(),
+  };
+  const coaching = coachSettings(state);
+  coaching.plans = (coaching.plans ?? []).map((p) =>
+    p.id === moved.id ? moved : p,
+  );
+  return moved;
+}
+
+// Takes the plan's suggested targets (acceptProposal), with the answer to
+// the low-energy questions when it asks them, and, as every surface that
+// saves a plan's targets does, agrees the goals check with them, or closes
+// it when they hold the weight (followUpGoals).
+export function takeTargetsProposal(
+  state: JournalState,
+  today: string,
+  shown: DietTargets,
+  signs?: boolean | null,
+) {
+  const proposal = acceptProposal(state, today, shown, signs);
+  return { proposal, ...followUpGoals(state, proposal.plan, today) };
+}
+
+// A goals check still stands while the saved goals change the athlete's
+// weight and no yes to the low-energy questions is in force. In pregnancy,
+// after a yes, or once the plan holds their weight, Coach doesn't open with
+// a weight trend, even for a check agreed before.
+function goalsCheckStands(state: JournalState, date: string) {
+  const plan = planForState(state, date);
+  return (
+    plan != null && goalsPlanChanges(plan) && energySigns(state, date) !== true
+  );
+}
+
 export type CoachSuggestion = {
   id: string;
   title: string;
@@ -83,9 +239,13 @@ export type CoachSuggestion = {
 };
 
 // Openings that, once hidden, stay away for a week rather than a day: short
-// sleep changes slowly, and a daily reminder of it would nag. `hidden` maps
-// an opening's id to the date it was hidden.
-export const weeklyOpenings: readonly string[] = ["sleep-short"];
+// sleep changes slowly, and a daily reminder of it, or of optional health
+// questions, would nag. `hidden` maps an opening's id to the date it was
+// hidden.
+export const weeklyOpenings: readonly string[] = [
+  "sleep-short",
+  "goals-questions",
+];
 export function quietOpenings(hidden: Record<string, string>, date: string) {
   return Object.entries(hidden)
     .filter(
@@ -106,8 +266,58 @@ export function coachSuggestion(
   // Openings the athlete hid for a week on this device (quietOpenings).
   hidden: readonly string[] = [],
 ): CoachSuggestion {
-  const plan = duePlans(state, date)[0];
-  if (plan && state.profile.coaching?.initiative !== "on-request")
+  // A goals check that no longer stands (goalsCheckStands) isn't offered.
+  const plan = duePlans(state, date).find(
+    (p) => p.title !== GOALS_FOLLOW_UP_TITLE || goalsCheckStands(state, date),
+  );
+  const gentle = state.profile.coaching?.initiative !== "on-request";
+  if (plan?.title === GOALS_FOLLOW_UP_TITLE && gentle)
+    return {
+      id: `plan-${plan.id}-${plan.updatedAt}`,
+      title: "Time to check your goals plan",
+      observation:
+        "You agreed to check your weight trend against your goals plan around now.",
+      invitation:
+        "We can look at your weigh-ins and food logs together. Nothing changes unless you choose to save it.",
+      prompt: `Let’s check in on my agreed plan “${plan.title}”: compare my weight trend with my goals plan.`,
+    };
+  // A deficit still saved without answers to the low-energy questions in
+  // force, whichever surface saved it: about every 3 months, counted from
+  // the last answers, the goals' last save, or the plan's suggestion last
+  // taken or kept over (where "rather not say" leaves none), Coach offers
+  // them again, gently; hidden, it stays away a week. While Today's
+  // suggestion asks the same questions, it leaves them to that.
+  const goals = planForState(state, date);
+  const calories = dailyTarget(state.nutrition.targets.calories);
+  const since = [
+    state.profile.energyCheck?.date,
+    state.profile.body?.updatedAt.slice(0, 10),
+    state.profile.targetHistory?.findLast((r) => r.source === "plan")?.from,
+    state.profile.declinedTargets?.date,
+  ]
+    .filter((day): day is string => Boolean(day))
+    .sort()
+    .at(-1);
+  if (
+    gentle &&
+    !hidden.includes("goals-questions") &&
+    goals?.energyCheckDue &&
+    calories != null &&
+    calories < goals.maintenanceKcal &&
+    since != null &&
+    offsetDate(since, ENERGY_CHECK_DAYS) <= date &&
+    !targetsProposal(state, date)?.energyCheck
+  )
+    return {
+      id: "goals-questions",
+      title: "A quick check before your plan carries on",
+      observation:
+        "Your daily calories are set under maintenance, and it’s time for the few health questions that keep that safe, asked about every 3 months.",
+      invitation:
+        "They’re optional and take a minute. Nothing changes unless you choose to save it.",
+      prompt: "Let’s go through the health questions for my goals plan.",
+    };
+  if (plan && gentle)
     return {
       id: `plan-${plan.id}-${plan.updatedAt}`,
       title: "How did your plan feel?",
@@ -231,7 +441,11 @@ export function coachingContext(state: JournalState, date: string) {
     focus: "",
   };
   const suggestion = coachSuggestion(state, date);
-  const plan = planForState(state, date);
+  // The safety notes are in the plan's notes too.
+  const planned = planForState(state, date);
+  const plan = planned && { ...planned, safetyNotes: undefined };
+  const proposal = targetsProposal(state, date);
+  const set = targetsInForce(state);
   return {
     preferences: {
       initiative: preferences.initiative,
@@ -240,18 +454,42 @@ export function coachingContext(state: JournalState, date: string) {
     // Null when unknown; the voice coach gets the same.
     age: athleteAge(state),
     // Saved body goals, focus and target body fat, and the plan the app
-    // derives from them with the latest body fat reading. The target is the
-    // plan's, which sets none under 18 or in pregnancy.
+    // derives from them at the current weight with the latest body fat
+    // reading. The target is the plan's, which sets none under 18 or in
+    // pregnancy.
     ...(state.profile.body && plan
       ? {
           goals: {
-            ...state.profile.body,
+            ...goalsForState(state),
             focus: state.profile.bodyTargets?.focus,
             targetBodyFatPercent: plan.targetBodyFatPercent ?? undefined,
-            // In pregnancy the plan sets no calorie or macro targets, so
-            // Coach gets no figures to quote as one.
+            // The average of the last week's weigh-ins, or the weight given
+            // with the goals until there are newer ones: goals.plan's weight.
+            currentWeightKg: currentWeightKg(state, date) ?? undefined,
+            // How the saved daily targets (dailyTargets) were set: the
+            // plan's or the athlete's own, from which day, at which weight;
+            // the day and weight are null for targets saved before they
+            // were recorded (targetsInForce).
+            targetsSet: {
+              source: set.source,
+              from: set.from,
+              weightKg: set.weightKgAtSet,
+            },
+            // New targets the app suggests from goals.plan, which the
+            // athlete can take or keep theirs over on Today, and why.
+            ...(proposal && {
+              proposal: {
+                targets: proposal.targets,
+                reasons: proposal.reasons,
+              },
+            }),
+            // In pregnancy the plan sets no calorie or macro targets, and
+            // with kidney disease or while breastfeeding no protein target,
+            // so Coach gets no figures to quote as one.
             plan: plan.dailyTargets
-              ? plan
+              ? plan.proteinTarget
+                ? plan
+                : { ...plan, protein: undefined }
               : {
                   ...plan,
                   calories: undefined,

@@ -2,22 +2,52 @@
 import { useState } from "react";
 import {
   applyGoals,
+  babyWeeks,
   bodyGoalsRequestSchema,
   describePlan,
   describeSessions,
+  energyQuestionsFor,
+  energySigns,
+  goalsForState,
+  goalsHeading,
+  planBodyFat,
   planForState,
   planGoals,
+  POSTPARTUM_WEEKS,
+  savedTraining,
+  SESSION_MINUTES,
   splitGoals,
   type BodyGoalsInput,
 } from "@/lib/body-goals";
 import { latestBodyFat, type BodyFocus } from "@/lib/body-composition";
+import {
+  activeGoalsCheck,
+  followUpGoals,
+  goalsCheckClosedNote,
+  goalsCheckDate,
+  goalsCheckNote,
+  goalsPlanChanges,
+  takeTargetsProposal,
+} from "@/lib/coaching";
 import { today } from "@/lib/domain";
+import { dailyTarget } from "@/lib/nutrition";
+import { currentWeightKg, targetsInForce } from "@/lib/target-history";
+import {
+  energyCheckNote,
+  keepCurrentTargets,
+  targetsProposal,
+  type TargetsProposal,
+} from "@/lib/target-proposals";
 import type { JournalController } from "./journal";
+import { TargetsReview } from "./coach-proposal";
 import { Button } from "./ui/button";
 import { Dialog } from "./ui/dialog";
-import { ChevronRight, Mic, TrendingUp } from "./ui/icons";
+import { ChevronRight, Mic, Sparkles, TrendingUp } from "./ui/icons";
 
-// Today's goals row: the plan at a glance, or a way to set it up.
+// Today's goals row: the goal and the saved daily target, which is the one
+// shown everywhere, or a way to set it up. When the plan, worked out again
+// at the current weight, suggests new targets, a second row offers them
+// for review; nothing changes until the athlete takes them.
 export function GoalsCard({
   journal,
   go,
@@ -28,12 +58,23 @@ export function GoalsCard({
   voiceEnabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const body = journal.state!.profile.body;
-  const plan = planForState(journal.state!, today());
+  const [reviewing, setReviewing] = useState(false);
+  const state = journal.state!;
+  const body = state.profile.body;
+  const date = today();
+  const plan = planForState(state, date);
+  const proposal = targetsProposal(state, date);
+  const calories = dailyTarget(state.nutrition.targets.calories);
+  // Targets the athlete set themselves, beside the plan's estimate.
+  const own =
+    targetsInForce(state).source === "manual" &&
+    plan?.dailyTargets &&
+    plan.calories !== calories;
+  const suggested = proposal && dailyTarget(proposal.targets.calories);
   return (
     <>
       {body && plan ? (
-        <section className="list-card" aria-label="Your goals">
+        <section className="list-card today-records" aria-label="Your goals">
           <button
             className="list-row today-record"
             onClick={() => setOpen(true)}
@@ -44,13 +85,14 @@ export function GoalsCard({
               <small>
                 {body.targetWeightKg} kg goal ·{" "}
                 {describeSessions(plan.sessionsPerWeek).toLowerCase()}
+                {own &&
+                  ` · your own target; the plan estimates about ${plan.calories.toLocaleString("en-GB")} kcal`}
               </small>
             </span>
             <span className="today-record-value">
-              {plan.dailyTargets ? (
+              {calories != null ? (
                 <>
-                  {plan.calories.toLocaleString("en-GB")}{" "}
-                  <small>kcal/day</small>
+                  {calories.toLocaleString("en-GB")} <small>kcal/day</small>
                 </>
               ) : (
                 <small>No daily target</small>
@@ -58,6 +100,28 @@ export function GoalsCard({
             </span>
             <ChevronRight size={17} aria-hidden="true" />
           </button>
+          {proposal && (
+            <button
+              className="list-row today-record"
+              onClick={() => setReviewing(true)}
+            >
+              <Sparkles size={22} />
+              <span>
+                <strong>{proposalTitle(proposal)}</strong>
+                <small>Suggested by your goals plan</small>
+              </span>
+              <span className="today-record-value">
+                {suggested != null ? (
+                  <>
+                    {suggested.toLocaleString("en-GB")} <small>kcal/day</small>
+                  </>
+                ) : (
+                  <small>No daily target</small>
+                )}
+              </span>
+              <ChevronRight size={17} aria-hidden="true" />
+            </button>
+          )}
         </section>
       ) : (
         <section className="panel goals-start" aria-label="Your goals">
@@ -86,7 +150,145 @@ export function GoalsCard({
       >
         {open && <GoalsForm journal={journal} onDone={() => setOpen(false)} />}
       </Dialog>
+      <Dialog
+        open={reviewing && proposal != null}
+        onOpenChange={setReviewing}
+        title={proposal ? proposalTitle(proposal) : "New daily targets"}
+        description="Your goals plan suggests these. Nothing changes unless you take them."
+      >
+        {reviewing && proposal && (
+          <ProposalReview
+            journal={journal}
+            proposal={proposal}
+            onDone={() => setReviewing(false)}
+          />
+        )}
+      </Dialog>
     </>
+  );
+}
+
+const proposalTitle = (proposal: TargetsProposal) =>
+  proposal.maintain ? "Hold your weight from here" : "New daily targets";
+
+// The plan's suggestion: why, the targets now and suggested, the plan's
+// notes, and the goals check that taking it agrees or closes, as the goals
+// form says. One that sets a deficit without answers to the low-energy
+// questions in force asks them first, as the goals form does; taking it
+// then needs an answer, and with a yes the plan holds the weight instead.
+// Taking it saves the plan's targets; keeping the current ones means it
+// isn't suggested again until the plan moves on.
+function ProposalReview({
+  journal,
+  proposal,
+  onDone,
+}: {
+  journal: JournalController;
+  proposal: TargetsProposal;
+  onDone: () => void;
+}) {
+  const state = journal.state!;
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [answer, setAnswer] = useState<"" | "no" | "yes" | "skip">("");
+  const check = proposal.energyCheck;
+  const yes = check != null && answer === "yes";
+  // With a yes, the plan holding the weight is what is saved.
+  const plan = yes
+    ? planForState(state, today(), undefined, true)!
+    : proposal.plan;
+  const targets = yes ? check.ifYes : proposal.targets;
+  const checkFrom = goalsCheckDate(state, plan, today());
+  const closes = goalsPlanChanges(plan) ? undefined : activeGoalsCheck(state);
+  const choose = async (take: boolean) => {
+    setSaving(true);
+    setError("");
+    try {
+      // An answer given is kept either way; keeping needs none.
+      const signs =
+        !check || !answer
+          ? undefined
+          : answer === "skip"
+            ? null
+            : answer === "yes";
+      await journal.update((s) => {
+        if (take) takeTargetsProposal(s, today(), proposal.targets, signs);
+        else keepCurrentTargets(s, today(), proposal.targets, signs);
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save your choice.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="checkin-form goals-form">
+      <div className="goals-plan" role="status">
+        {proposal.reasons.map((reason) => (
+          <strong key={reason}>{reason}</strong>
+        ))}
+        {plan.notes
+          .filter((note) => !proposal.reasons.includes(note))
+          .map((note) => (
+            <p key={note} className="fine-print">
+              {note}
+            </p>
+          ))}
+        {checkFrom && <p className="fine-print">{goalsCheckNote(checkFrom)}</p>}
+        {closes && (
+          <p className="fine-print">
+            {goalsCheckClosedNote(closes.followUpDate)}
+          </p>
+        )}
+      </div>
+      {check && (
+        <fieldset className="goals-questions">
+          <legend>Before a deficit: a few health questions</legend>
+          <ul>
+            {check.questions.map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
+          <label>
+            Yes to any of these
+            <select
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value as typeof answer)}
+            >
+              <option value="" disabled>
+                Choose
+              </option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+              <option value="skip">Prefer not to say</option>
+            </select>
+          </label>
+          <p className="fine-print">{energyCheckNote(check)}</p>
+        </fieldset>
+      )}
+      <TargetsReview after={targets} before={proposal.current} />
+      {error && (
+        <p className="notice warning" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="button-row">
+        <Button
+          disabled={saving || (check != null && !answer)}
+          onClick={() => void choose(true)}
+        >
+          Use these targets
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={saving}
+          onClick={() => void choose(false)}
+        >
+          Keep my current targets
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -95,7 +297,10 @@ type Draft = Record<
   | "focus"
   | "bodyFatPercent"
   | "targetBodyFatPercent"
-  | "pregnancy",
+  | "pregnancy"
+  | "weeksSinceBirth"
+  | "limitProtein"
+  | "energySigns",
   string
 >;
 const focusLabels: Record<BodyFocus, string> = {
@@ -113,29 +318,50 @@ function GoalsForm({
   onDone: () => void;
 }) {
   const state = journal.state!;
-  const body = state.profile.body;
+  const body = goalsForState(state);
+  const training = savedTraining(state);
+  const health = state.profile.goalHealth;
+  // The baby's age in whole weeks today, from the day it was born. Sent
+  // back unchanged, it keeps that day (applyGoals).
+  const babyAge = babyWeeks(state, today());
+  // The low-energy answers in force: sent back unchanged, they keep their
+  // day, so saving again never stretches a no past 3 months.
+  const signs = energySigns(state, today());
+  // Sex and everyday activity are left for the athlete to choose: a default
+  // would quietly change the plan.
   const [draft, setDraft] = useState<Draft>(() => ({
     age: String(body?.age ?? (state.profile.age || "")),
-    sex: body?.sex ?? "unspecified",
+    sex: body?.sex ?? "",
     heightCm: String(body?.heightCm ?? ""),
-    weightKg: String(body?.weightKg ?? (state.profile.bodyweight || "")),
+    // The current weight: the last week's weigh-ins, or the weight last
+    // given (currentWeightKg).
+    weightKg: String(
+      currentWeightKg(state, today()) ??
+        body?.weightKg ??
+        (state.profile.bodyweight || ""),
+    ),
     targetWeightKg: String(body?.targetWeightKg ?? ""),
     targetDate: body?.targetDate ?? "",
-    activity: body?.activity ?? "moderate",
+    activity: body?.activity ?? "",
     trainingDays: String(
       body?.trainingDays ?? state.profile.lifting?.daysPerWeek ?? 3,
     ),
-    sessionMinutes: String(
-      body?.sessionMinutes ?? state.profile.lifting?.minutesPerSession ?? 75,
-    ),
-    experience: body?.experience ?? "developing",
+    sessionMinutes: String(training.sessionMinutes ?? 75),
+    experience: training.experience ?? "developing",
     focus: state.profile.bodyTargets?.focus ?? "",
     bodyFatPercent: String(latestBodyFat(state, today())?.percent ?? ""),
     targetBodyFatPercent: String(
       state.profile.bodyTargets?.targetBodyFatPercent ?? "",
     ),
     pregnancy: state.profile.goalChecks?.pregnancy ?? "",
+    weeksSinceBirth: babyAge == null ? "" : String(babyAge),
+    limitProtein: health?.limitProtein ? "yes" : "",
+    energySigns: signs == null ? "" : signs ? "yes" : "no",
   }));
+  // The goal weight is a competition weight class, its weigh-in the date.
+  const [weightClass, setWeightClass] = useState(
+    body != null && state.profile.weighIn?.classKg === body.targetWeightKg,
+  );
   // A loss towards a weight just under the healthy range, confirmed for
   // the saved goal weight.
   const [confirmed, setConfirmed] = useState(
@@ -149,10 +375,17 @@ function GoalsForm({
   const knownFat = latestBodyFat(state, today())?.percent;
   // Under 18 the plan uses no body fat, so the form doesn't ask for it.
   const minor = number(draft.age) < 18;
-  // Asked of anyone who isn't male, up to 55, and kept while it's set.
+  // Asked of women and anyone who'd rather not say, up to 55, and kept
+  // while it's set.
   const asksPregnancy =
     Boolean(draft.pregnancy) ||
-    (draft.sex !== "male" && !(number(draft.age) > 55));
+    ((draft.sex === "female" || draft.sex === "unspecified") &&
+      !(number(draft.age) > 55));
+  // A weight class is a limit to make: asked when the goal weight is below
+  // the current one, and kept while it is.
+  const classOffered =
+    number(draft.targetWeightKg) < number(draft.weightKg) ||
+    Boolean(state.profile.weighIn);
   const parsed = bodyGoalsRequestSchema.safeParse({
     ...draft,
     focus: draft.focus || undefined,
@@ -171,6 +404,33 @@ function GoalsForm({
     pregnancy:
       draft.pregnancy ||
       (state.profile.goalChecks?.pregnancy ? "neither" : undefined),
+    // Likewise an empty baby's age removes a saved one.
+    weeksSinceBirth:
+      draft.pregnancy !== "breastfeeding"
+        ? undefined
+        : draft.weeksSinceBirth.trim()
+          ? Number(draft.weeksSinceBirth)
+          : null,
+    limitProtein:
+      draft.limitProtein === "yes"
+        ? true
+        : draft.limitProtein === "no" || health?.limitProtein
+          ? false
+          : undefined,
+    // "Prefer not to say" removes saved answers.
+    energySigns:
+      draft.energySigns === "yes"
+        ? true
+        : draft.energySigns === "no"
+          ? false
+          : state.profile.energyCheck
+            ? null
+            : undefined,
+    weightClass: classOffered
+      ? weightClass
+      : state.profile.weighIn
+        ? false
+        : undefined,
     age: number(draft.age),
     heightCm: number(draft.heightCm),
     weightKg: number(draft.weightKg),
@@ -180,23 +440,78 @@ function GoalsForm({
     sessionMinutes: number(draft.sessionMinutes),
   });
   const split = parsed.success ? splitGoals(parsed.data) : null;
+  // Save stays disabled until the plan can be worked out, so the browser
+  // never points at a field: the form names a session length outside the
+  // plan's range, and the choices still to make when only those are left.
+  const issues = parsed.success ? [] : parsed.error.issues;
+  const unchosen = [
+    ...(draft.sex ? [] : ["your sex"]),
+    ...(draft.activity ? [] : ["how active you are outside training"]),
+  ];
+  const waiting =
+    draft.sessionMinutes.trim() &&
+    issues.some((issue) => issue.path[0] === "sessionMinutes")
+      ? `Give the session length in whole minutes, from ${SESSION_MINUTES.min} to ${SESSION_MINUTES.max}.`
+      : unchosen.length > 0 &&
+          issues.every(
+            (issue) => issue.path[0] === "sex" || issue.path[0] === "activity",
+          )
+        ? `Choose ${unchosen.join(" and ")} to see your daily plan.`
+        : "Fill in the numbers to see your daily plan.";
   const preview =
     split &&
-    ((lowWeightConfirmed: boolean) =>
+    ((lowWeightConfirmed: boolean, answered = true) =>
       planGoals(split.goals, today(), {
         focus: split.composition.focus,
         targetBodyFatPercent: split.composition.targetBodyFatPercent,
-        bodyFatPercent: optional(draft.bodyFatPercent) ?? null,
+        // A new reading goes with the weight given; the latest one keeps
+        // the lean mass it measured, as the saved plan will (planBodyFat).
+        bodyFatPercent:
+          split.composition.bodyFatPercent ??
+          (optional(draft.bodyFatPercent) == null
+            ? null
+            : planBodyFat(
+                state,
+                today(),
+                split.goals.weightKg,
+                split.goals.weightKg,
+              )),
         pregnancy:
           draft.pregnancy === "pregnant" || draft.pregnancy === "breastfeeding"
             ? draft.pregnancy
             : null,
+        weeksSinceBirth: split.checks.weeksSinceBirth ?? null,
+        limitProtein: draft.limitProtein === "yes",
         lowWeightConfirmed,
+        energySigns: answered ? (split.checks.energySigns ?? null) : null,
+        weightClass: split.checks.weightClass ?? false,
+        // As the saved goals will head, so the preview's notes are the
+        // saved plan's.
+        heading: goalsHeading(split.goals, split.checks.weightClass ?? false),
       }));
   // A loss towards a weight just under the healthy range waits for the
   // athlete to confirm it.
   const asksConfirmation = preview ? preview(false).confirmToLose : false;
   const plan = preview ? preview(asksConfirmation && confirmed) : null;
+  // Targets the athlete set themselves, which saving the goals replaces.
+  const ownCalories =
+    targetsInForce(state).source === "manual"
+      ? dailyTarget(state.nutrition.targets.calories)
+      : null;
+  // Saved, a plan that changes weight agrees a check of the weight trend
+  // about 3 weeks on, as with Coach, and one that doesn't closes an active
+  // check (followUpGoals).
+  const checkFrom = plan ? goalsCheckDate(state, plan, today()) : null;
+  const closes =
+    plan && !goalsPlanChanges(plan) ? activeGoalsCheck(state) : undefined;
+  // The low-energy questions come before a plan that would cut or aim very
+  // lean, and stay while there are answers to change or remove.
+  const asksEnergy =
+    Boolean(draft.energySigns) ||
+    Boolean(state.profile.energyCheck) ||
+    (preview
+      ? preview(asksConfirmation && confirmed, false).energyCheckDue
+      : false);
   const field = (key: keyof Draft) => ({
     value: draft[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -212,7 +527,7 @@ function GoalsForm({
         setError("");
         try {
           await journal.update((s) => {
-            applyGoals(
+            const saved = applyGoals(
               s,
               {
                 ...parsed.data,
@@ -220,6 +535,7 @@ function GoalsForm({
               },
               today(),
             );
+            followUpGoals(s, saved, today());
           });
           onDone();
         } catch (e) {
@@ -242,7 +558,10 @@ function GoalsForm({
         </label>
         <label>
           Sex
-          <select {...field("sex")}>
+          <select required {...field("sex")}>
+            <option value="" disabled>
+              Choose
+            </option>
             <option value="male">Male</option>
             <option value="female">Female</option>
             <option value="unspecified">Prefer not to say</option>
@@ -262,15 +581,23 @@ function GoalsForm({
         </label>
         <label>
           Active outside training
-          <select {...field("activity")}>
+          <select required {...field("activity")}>
+            <option value="" disabled>
+              Choose
+            </option>
             <option value="low">Mostly sitting</option>
             <option value="moderate">On my feet some</option>
             <option value="high">Physical work</option>
+            <option value="very_high">Heavy manual work</option>
           </select>
         </label>
         <label>
           Days I can train
           <input inputMode="numeric" required {...field("trainingDays")} />
+        </label>
+        <label>
+          Session length (min)
+          <input inputMode="numeric" required {...field("sessionMinutes")} />
         </label>
         <label>
           Focus
@@ -306,6 +633,20 @@ function GoalsForm({
             </select>
           </label>
         )}
+        {asksPregnancy && draft.pregnancy === "breastfeeding" && (
+          <label>
+            Baby&rsquo;s age (weeks, optional)
+            <input inputMode="numeric" {...field("weeksSinceBirth")} />
+          </label>
+        )}
+        <label>
+          Kidney disease, or told to limit protein
+          <select {...field("limitProtein")}>
+            <option value="">Prefer not to say</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
         <label>
           Experience
           <select {...field("experience")}>
@@ -315,13 +656,52 @@ function GoalsForm({
           </select>
         </label>
       </div>
-      {asksPregnancy && (
-        <p className="fine-print">
-          Optional. Kept with your goals only so the plan sets no targets in
-          pregnancy and no deficit while breastfeeding; choose Neither or Prefer
-          not to say to remove it.
-        </p>
+      {classOffered && (
+        <label className="goals-check">
+          <input
+            type="checkbox"
+            checked={weightClass}
+            onChange={(e) => setWeightClass(e.target.checked)}
+          />
+          My goal weight is a competition weight class, and the date is the
+          weigh-in
+        </label>
       )}
+      {asksEnergy && (
+        <fieldset className="goals-questions">
+          <legend>Before a deficit: a few health questions</legend>
+          <ul>
+            {energyQuestionsFor(
+              draft.sex === "male" ? "male" : "unspecified",
+              draft.pregnancy === "pregnant" ||
+                draft.pregnancy === "breastfeeding"
+                ? draft.pregnancy
+                : null,
+            ).map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
+          <label>
+            Yes to any of these
+            <select {...field("energySigns")}>
+              <option value="">Prefer not to say</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+          <p className="fine-print">
+            Optional, and not a diagnosis. Only a yes or no and the date are
+            kept, so the plan stays safe: with a yes it holds your weight, and a
+            sports doctor or sports dietitian can help you look into it. A no is
+            asked again after 3 months while you&rsquo;re losing weight.
+          </p>
+        </fieldset>
+      )}
+      <p className="fine-print">
+        {asksPregnancy
+          ? `Optional. Kept with your goals only so the plan stays safe: no targets in pregnancy, no deficit while breastfeeding until your baby is ${POSTPARTUM_WEEKS} weeks old, and no protein target with kidney disease or a doctor's limit on protein. Choose No, Neither or Prefer not to say to remove them.`
+          : "Optional. Kept with your goals only so the plan sets no protein target with kidney disease or a doctor's limit on protein; choose No or Prefer not to say to remove it."}
+      </p>
       {plan && split ? (
         <div className="goals-plan" role="status">
           <strong>{describePlan(split.goals, plan)}</strong>
@@ -330,11 +710,23 @@ function GoalsForm({
               {note}
             </p>
           ))}
+          {checkFrom && (
+            <p className="fine-print">{goalsCheckNote(checkFrom)}</p>
+          )}
+          {closes && (
+            <p className="fine-print">
+              {goalsCheckClosedNote(closes.followUpDate)}
+            </p>
+          )}
+          {ownCalories != null && (
+            <p className="fine-print">
+              Saving replaces your own daily targets (
+              {ownCalories.toLocaleString("en-GB")} kcal) with these.
+            </p>
+          )}
         </div>
       ) : (
-        <p className="fine-print">
-          Fill in the numbers to see your daily plan.
-        </p>
+        <p className="fine-print">{waiting}</p>
       )}
       {asksConfirmation && (
         <label className="goals-check">

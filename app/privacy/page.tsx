@@ -253,18 +253,18 @@ export default function PrivacyPage() {
         <h2>iPhone app, Apple Health and voice check-ins</h2>
         <p>
           If you connect Apple Health in the iPhone app, it reads the sleep,
-          resting heart rate, heart rate variability, steps, active energy, body
-          fat percentage (for example from a smart scale), distances and
-          workouts you allow in iOS. It sends nightly sleep, daily summaries and
-          workouts to your account so they appear in your journal; iOS may
-          deliver new data in the background. The app never writes to Apple
-          Health. Apple Health data is used only to show your journal and to
-          give Coach context when you ask it for advice. It is never used for
-          advertising, sold, or shared with anyone except the AI provider, and
-          only after you allow that. Turn the connection off in the app under
-          Account › Apple Health, or in the Health app’s sharing settings;
-          imported entries stay in your journal until you delete them or your
-          account.
+          resting heart rate, heart rate variability, steps, active energy,
+          weight and body fat percentage (for example from a smart scale; the
+          first weight of each day), distances and workouts you allow in iOS. It
+          sends nightly sleep, daily summaries and workouts to your account so
+          they appear in your journal; iOS may deliver new data in the
+          background. The app never writes to Apple Health. Apple Health data is
+          used only to show your journal and to give Coach context when you ask
+          it for advice. It is never used for advertising, sold, or shared with
+          anyone except the AI provider, and only after you allow that. Turn the
+          connection off in the app under Account › Apple Health, or in the
+          Health app’s sharing settings; imported entries stay in your journal
+          until you delete them or your account.
         </p>
         <p>
           For a workout recorded with GPS, such as an outdoor walk, run or ride,
@@ -383,10 +383,34 @@ export default function PrivacyPage() {
         </p>
         <p>
           If you choose to tell the goals form, Coach or the voice coach that
-          you are pregnant or breastfeeding, that is saved with your goals, only
-          so the goal plan never sets a calorie deficit. It is sensitive health
-          information: it is optional, Coach sees it with your goals, and
-          choosing Neither in your goals removes it.
+          you are pregnant or breastfeeding, and your baby&rsquo;s age, or that
+          you have kidney disease or a doctor has told you to limit protein,
+          that is saved with your goals, only so the goal plan stays safe: no
+          calorie deficit in pregnancy or in the first weeks after a birth, and
+          no protein target. Your baby&rsquo;s age is kept as the day it was
+          born, so the plan knows when six weeks have passed. It is sensitive
+          health information: it is optional, Coach sees it with your goals, and
+          choosing Neither, No or Prefer not to say in your goals removes it.
+        </p>
+        <p>
+          Before a plan that loses weight, and about every 3 months while it
+          does, the goals form, a suggestion of new targets on Today, Coach and
+          the voice coach may ask three optional questions about stress
+          fractures, eating and periods. Only the day you answered and whether
+          any answer was yes are saved with your goals, never which question or
+          any detail, so the plan holds your weight after a yes. Coach and the
+          voice coach see whether you answered yes, with your goals, so they
+          don&rsquo;t suggest a deficit. It is sensitive health information and
+          not a diagnosis; choosing Prefer not to say in your goals removes it.
+          If you say your goal weight is a competition weight class, the class
+          and the weigh-in day are saved with your goals too.
+        </p>
+        <p>
+          Each time your daily targets change, the targets, the day, whether
+          they came from your goals plan or from you, and the weight they were
+          set at are kept with your goals, so Trends shows the target that
+          applied each day and the plan can suggest new targets as your weight
+          changes. A suggestion never changes your targets unless you take it.
         </p>
         <p>
           When you ask Coach for a daily plan or health guidance, relevant

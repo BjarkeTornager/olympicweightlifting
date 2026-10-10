@@ -81,8 +81,9 @@ final class VoiceCall {
   /// After the coach's goodbye, how long the athlete has to keep talking.
   static let endingGrace: Duration = .seconds(12)
   /// 4: draws show_card's cards and their pictures, so the server offers
-  /// the tools.
-  static let clientVersion = "4"
+  /// the tools. 5: leaves no receipt for goals read back before saving
+  /// (`unsaved`), so the server sends that read-back as it is.
+  static let clientVersion = "5"
   private static let saveLabels = [
     "log_training": "Training", "update_training": "Workout corrected", "log_meal": "Meal",
     "update_meal": "Meal updated", "delete_meal": "Meal deleted", "log_sleep": "Sleep",
@@ -574,7 +575,9 @@ final class VoiceCall {
       }
     }
     let ok = result["ok"] as? Bool == true
-    if !reading, let index = lines.firstIndex(where: { $0.id == call.id }) {
+    if Self.unsaved(result) {
+      lines.removeAll { $0.id == call.id && $0.role == .save }
+    } else if !reading, let index = lines.firstIndex(where: { $0.id == call.id }) {
       lines[index].state = ok ? .saved : .failed
       if ok { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     }
@@ -587,6 +590,12 @@ final class VoiceCall {
       if let save = result["saveId"] { saved["save_id"] = save }
       respond(call, ["result": saved])
     }
+  }
+
+  /// Goals read back before they are saved (the server's goalsReadBack):
+  /// nothing is saved until the athlete says yes, so there is no receipt.
+  nonisolated static func unsaved(_ result: [String: Any]) -> Bool {
+    result["ok"] as? Bool == true && (result["data"] as? [String: Any])?["saved"] as? Bool == false
   }
 
   /// A card on the athlete's screen, drawn as soon as the server has kept it

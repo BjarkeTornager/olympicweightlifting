@@ -20,6 +20,7 @@ import {
   strengthBurn,
 } from "../lib/energy";
 import { dayForCoach, describeDay } from "../lib/journal-summary";
+import { currentWeightKg } from "../lib/target-history";
 import type { JournalState, Workout } from "../lib/model";
 
 const date = "2026-09-28";
@@ -32,7 +33,12 @@ function journal(weight = 80) {
 const activity = (s: JournalState, entry: Record<string, unknown>) =>
   saveCardio(s, { date, ...entry }, date);
 function aged(s: JournalState, age: number, sex: "male" | "female" = "male") {
-  s.profile.body = { ...(s.profile.body ?? {}), age, sex } as never;
+  s.profile.body = {
+    updatedAt: "2026-09-01T07:00:00.000Z",
+    ...(s.profile.body ?? {}),
+    age,
+    sex,
+  } as never;
   return s;
 }
 
@@ -346,29 +352,39 @@ test("no bodyweight, or an implausible duration, means no estimate rather than a
   );
 });
 
-test("the weight for a date is the latest check-in from the 30 days before it", () => {
+test("the weight for a date is the goals plan's current weight, the same for every estimate", () => {
   const s = emptyJournal();
-  s.profile.body = { weightKg: 95 } as never;
-  assert.equal(bodyweightKg(s, date), 95);
   s.profile.bodyweight = 90;
-  assert.equal(bodyweightKg(s, date), 90, "Settings before goal setup");
+  assert.equal(bodyweightKg(s, date), 90, "Settings without goals");
+  s.profile.body = {
+    weightKg: 95,
+    updatedAt: "2026-08-01T07:00:00.000Z",
+  } as never;
+  assert.equal(bodyweightKg(s, date), 95, "the goals' weight, given later");
   s.health.checkins.push(
-    { date: "2026-08-20", bodyweight: 70 } as never,
+    { date: "2026-08-20", bodyweight: 93 } as never,
     { date: "2026-09-10", bodyweight: 86 } as never,
-    { date: "2026-09-30", bodyweight: 84 } as never,
+    { date: "2026-09-24", bodyweight: 85 } as never,
+    { date: "2026-09-28", bodyweight: 84 } as never,
   );
-  assert.equal(bodyweightKg(s, date), 86);
-  // A weigh-in more than 30 days old no longer counts.
-  assert.equal(bodyweightKg(s, "2026-10-15"), 84);
+  // The last week's weigh-ins, averaged, as the goals plan and the drinks
+  // target use.
+  assert.equal(bodyweightKg(s, date), 84.5);
+  assert.equal(bodyweightKg(s, date), currentWeightKg(s, date));
+  // Without one in the week, the latest.
   assert.equal(bodyweightKg(s, "2026-09-15"), 86);
-  assert.equal(bodyweightKg(s, "2026-08-25"), 70);
-  assert.equal(bodyweightKg(s, "2026-10-31"), 90);
+  assert.equal(bodyweightKg(s, "2026-10-31"), 84);
+  // Before any weigh-in after the goals were given, their weight.
+  assert.equal(bodyweightKg(s, "2026-08-10"), 95);
 });
 
 test("a check-in weight far from the one before it is passed over as a slip", () => {
   // 85 kg with goals set, then a check-in of 185: a typo, or pounds.
   const s = emptyJournal();
-  s.profile.body = { weightKg: 85 } as never;
+  s.profile.body = {
+    weightKg: 85,
+    updatedAt: "2026-09-01T07:00:00.000Z",
+  } as never;
   s.health.checkins.push({ date: "2026-09-20", bodyweight: 185 } as never);
   assert.equal(bodyweightKg(s, date), 85);
   // The next weighing is trusted, and the slip stays passed over.
@@ -393,20 +409,21 @@ test("a check-in weight far from the one before it is passed over as a slip", ()
 
 test("with no weight in Settings or goals, a slip in the first weighing lasts only until the next", () => {
   const s = emptyJournal();
-  s.health.checkins.push({ date: "2026-09-20", bodyweight: 185 } as never);
+  s.health.checkins.push({ date: "2026-09-12", bodyweight: 185 } as never);
   assert.equal(bodyweightKg(s, date), 185);
   // Nothing backs 185 up, so the next weighing is used, as the latest.
-  s.health.checkins.push({ date: "2026-09-22", bodyweight: 85 } as never);
+  s.health.checkins.push({ date: "2026-09-14", bodyweight: 85 } as never);
   assert.equal(bodyweightKg(s, date), 85);
   // Two weighings in a row that agree back the weight up; a slip after
   // them is passed over.
   s.health.checkins.push(
-    { date: "2026-09-24", bodyweight: 85.5 } as never,
-    { date: "2026-09-26", bodyweight: 18.5 } as never,
+    { date: "2026-09-16", bodyweight: 85.5 } as never,
+    { date: "2026-09-24", bodyweight: 18.5 } as never,
   );
   assert.equal(bodyweightKg(s, date), 85.5);
-  // A real change is trusted once a second weighing agrees.
-  s.health.checkins.push({ date: "2026-09-27", bodyweight: 18.4 } as never);
+  // A real change is trusted once a second weighing agrees, and the
+  // weighings before it no longer count.
+  s.health.checkins.push({ date: "2026-09-26", bodyweight: 18.3 } as never);
   assert.equal(bodyweightKg(s, date), 18.4);
 });
 

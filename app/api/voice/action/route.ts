@@ -12,6 +12,7 @@ import { logFailure } from "@/lib/error-log";
 import { allowRequest } from "@/lib/server";
 import {
   cardRefusal,
+  forVoiceClient,
   runVoiceTool,
   voiceFailure,
   voiceToolArgs,
@@ -82,7 +83,12 @@ export async function POST(request: Request) {
         }
         const today = localClock(new Date(), input.timezone).date;
         try {
-          const outcome = await runVoiceTool(user.id, { ...input, today });
+          // An older app gets a goals read-back as a refusal, so it never
+          // shows one as saved.
+          const outcome = forVoiceClient(
+            await runVoiceTool(user.id, { ...input, today }),
+            request.headers,
+          );
           // The picture to draw stays on the server.
           const { job, ...result } = { job: undefined, ...outcome };
           trace.set({

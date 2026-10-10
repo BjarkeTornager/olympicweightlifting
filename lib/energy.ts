@@ -1,6 +1,7 @@
 import type { JournalState, Workout } from "./model";
 import type { CardioActivity, CardioEntry } from "./cardio";
 import { sessionMinutes, timedMinutes } from "./session-length";
+import { currentWeightKg } from "./target-history";
 
 // Calories burned. Every figure is an estimate, a watch's included, and every
 // figure is net: energy above rest, as Apple's active energy is. Without a
@@ -11,43 +12,22 @@ export type Burn = { kcal: number; estimated: boolean; method: string };
 
 // Lifting at Compendium code 02052 (squats, deadlifts, slow or explosive: 5
 // METs) less the 1 MET of rest. Measured sessions with long rests come out
-// lower, so this is a rough figure at the generous end.
-export const LIFTING_NET_KCAL_PER_KG_HOUR = 4;
+// lower, so this is a rough figure at the generous end. The burn estimate
+// and the goal plan share it: the plan adds it to maintenance, which
+// already counts resting energy, so an hour of lifting costs the same in
+// both.
+export const LIFTING_MET = 5;
+export const LIFTING_NET_KCAL_PER_KG_HOUR = LIFTING_MET - 1;
 
 // To the nearest 10 kcal: the figures are not more precise than that.
 const tens = (kcal: number) => Math.round(kcal / 10) * 10;
 
-// Within a quarter of each other: a real change between two weighings, or
-// from an older weight in Settings, where a typo (185 for 85) or pounds for
-// kilograms are not.
-const near = (a: number, b?: number | null) =>
-  b != null && b > 0 && Math.abs(a - b) <= b / 4;
-
-// Bodyweight for a date: the latest check-in weight from the 30 days up to
-// it, then the weight in Settings, then the one given when setting goals.
-// Once a weight is backed up, by Settings or goals or by two weighings in a
-// row that agree, a check-in far from both it and the weighing before is
-// passed over as a likely slip, so one typo can't double every estimate or
-// the drinks target; the next weighing that agrees with it is trusted
-// again. Until then the latest weighing is used, so a slip in the very
-// first one lasts only until the next.
+// The athlete's weight on the date, the one the goals plan and the drinks
+// target use too (currentWeightKg): the last week's weigh-ins, else the
+// latest, else the weight given with the goals or in Settings, with a
+// weigh-in that looks like a slip (185 for 85) passed over.
 export function bodyweightKg(state: JournalState, date: string) {
-  const profile = state.profile.bodyweight || state.profile.body?.weightKg;
-  let trusted: { kg: number; date: string } | null = null;
-  let backed = Boolean(profile);
-  let previous: number | null = null;
-  for (const c of state.health.checkins
-    .filter((c) => c.bodyweight != null && c.date <= date)
-    .sort((a, b) => a.date.localeCompare(b.date))) {
-    const kg = c.bodyweight!;
-    const agrees = near(kg, trusted?.kg ?? profile) || near(kg, previous);
-    if (agrees || !backed) trusted = { kg, date: c.date };
-    backed ||= agrees;
-    previous = kg;
-  }
-  const recent =
-    trusted && Date.parse(date) - Date.parse(trusted.date) <= 30 * 86400000;
-  return (recent && trusted?.kg) || profile || null;
+  return currentWeightKg(state, date);
 }
 
 // A value between Compendium bands, so a speed never jumps a whole band.

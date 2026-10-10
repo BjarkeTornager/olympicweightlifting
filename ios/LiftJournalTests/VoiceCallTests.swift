@@ -217,4 +217,12 @@ struct VoiceCallTests {
     #expect(VoiceCallView.question([Line(id: "1", role: .coach, text: "Both are in.")]) == nil)
     #expect(VoiceCallView.question([]) == nil)
   }
+
+  @Test("Goals read back before saving leave no receipt; a save or a read is told apart")
+  func readBack() {
+    #expect(VoiceCall.unsaved(["ok": true, "data": ["saved": false, "confirm_id": "3f2a9c1d7e4b"]]))
+    #expect(!VoiceCall.unsaved(["ok": true, "saved": "Set your goals", "saveId": "a1"]))
+    #expect(!VoiceCall.unsaved(["ok": true, "data": ["meals": [Any]()]]))
+    #expect(!VoiceCall.unsaved(["ok": false, "error": "That could not be saved."]))
+  }
 }

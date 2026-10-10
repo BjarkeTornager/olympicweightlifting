@@ -27,6 +27,12 @@ import {
   writeJournal,
 } from "./server";
 import { countUse } from "./feature-use";
+import {
+  goalsCheckClosedNote,
+  goalsCheckNote,
+  takeTargetsProposal,
+} from "./coaching";
+import { keepCurrentTargets } from "./target-proposals";
 
 // Every /api/v1 route is for the installed app only, and an unsupported build
 // gets a 426 it can show as "update in TestFlight".
@@ -95,8 +101,9 @@ function workoutPlanChange(raw: NativeActionInput) {
 }
 
 // The journal change for an app action. Most are Coach actions and go
-// through the same schema and rules; "use_programme", "set_hydration_target"
-// and the workout plan changes are the app's own.
+// through the same schema and rules; "use_programme", "set_hydration_target",
+// taking or keeping over suggested targets and the workout plan changes are
+// the app's own.
 function preparer(
   raw: NativeActionInput,
   today: string,
@@ -126,6 +133,61 @@ function preparer(
         state: next,
         title: "Follow this programme",
         detail: "Train suggests its next session.",
+      };
+    };
+  }
+  if (
+    raw.kind === "take_suggested_targets" ||
+    raw.kind === "keep_current_targets"
+  ) {
+    const take = raw.kind === "take_suggested_targets";
+    // As Today showed them: a target left out is none.
+    const shown = {
+      goal: raw.targets.goal,
+      calories: raw.targets.calories ?? null,
+      protein: raw.targets.protein ?? null,
+      carbs: raw.targets.carbs ?? null,
+      fat: raw.targets.fat ?? null,
+    };
+    const answer = raw.energyAnswer;
+    const signs =
+      answer === undefined
+        ? undefined
+        : answer === "prefer_not_to_say"
+          ? null
+          : answer === "yes";
+    return (state) => {
+      const next = structuredClone(state);
+      if (!take) {
+        const { held } = keepCurrentTargets(next, today, shown, signs);
+        next.updatedAt = new Date().toISOString();
+        return {
+          state: next,
+          title: "Keep your daily targets",
+          detail: held
+            ? "Your targets stay as they are, and your yes to one of the health questions is saved, so your goals plan won't suggest a deficit; a sports doctor or sports dietitian can help you look into it."
+            : "Your goals plan suggests new ones again only once it moves on from these.",
+        };
+      }
+      const { proposal, agreed, closed } = takeTargetsProposal(
+        next,
+        today,
+        shown,
+        signs,
+      );
+      next.updatedAt = new Date().toISOString();
+      const kcal = proposal.targets.calories;
+      const held = Boolean(proposal.energyCheck) && answer === "yes";
+      return {
+        state: next,
+        title: held ? "Hold your weight" : "Take the suggested daily targets",
+        detail: [
+          kcal != null
+            ? `Your daily target is now ${kcal.toLocaleString("en-GB")} kcal, ${held ? "holding your weight, as you answered yes to one of the health questions. A sports doctor or sports dietitian can help you look into it." : "a starting estimate."}`
+            : "Your daily targets are now your goals plan's.",
+          ...(agreed ? [goalsCheckNote(agreed.followUpDate)] : []),
+          ...(closed ? [goalsCheckClosedNote(closed.followUpDate)] : []),
+        ].join(" "),
       };
     };
   }

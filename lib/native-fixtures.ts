@@ -6,6 +6,8 @@ import type { CoachVisual } from "./coach-visuals";
 import { addSupplement } from "./supplements";
 import { prepareBodyGoals } from "./agent/prepare-records";
 import { offsetDate } from "./health";
+import { applyGoals } from "./body-goals";
+import { setDailyTargets } from "./target-proposals";
 import {
   buildCoach,
   buildJournal,
@@ -157,10 +159,105 @@ export function nativeFixtures() {
       notes: "",
       updatedAt: now.toISOString(),
     });
+  // Goals saved on 1 September at 88 kg, heading for 81 kg, and calories
+  // lowered by hand on 23 September. A week of weigh-ins around 81 kg since
+  // reaches the goal, so the plan suggests holding the weight there: Today
+  // carries the suggestion, and Trends the targets in force each day.
+  const reached = emptyJournal();
+  reached.createdAt = "2026-08-30T07:00:00.000Z";
+  const stamp = (at: string) =>
+    (reached.profile.targetHistory = reached.profile.targetHistory!.map(
+      (r, i, all) => (i === all.length - 1 ? { ...r, setAt: at } : r),
+    ));
+  applyGoals(
+    reached,
+    {
+      age: 34,
+      sex: "male",
+      heightCm: 182,
+      weightKg: 88,
+      targetWeightKg: 81,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 4,
+      sessionMinutes: 75,
+      experience: "developing",
+    },
+    "2026-09-01",
+  );
+  reached.profile.body!.updatedAt = "2026-09-01T07:00:00.000Z";
+  stamp("2026-09-01T07:00:00.000Z");
+  setDailyTargets(
+    reached,
+    { ...reached.nutrition.targets, calories: 2550 },
+    "2026-09-23",
+  );
+  stamp("2026-09-23T07:00:00.000Z");
+  for (const [day, kg] of [
+    [-6, 81.6],
+    [-4, 81.2],
+    [-2, 80.9],
+    [0, 81],
+  ] as const)
+    reached.health.checkins.push({
+      date: offsetDate(date, day),
+      sleepHours: null,
+      energy: null,
+      soreness: null,
+      waterMl: null,
+      bodyweight: kg,
+      notes: "",
+      updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
+    });
+  // Goals saved on 1 September at 62 kg, to hold it, and a week of
+  // weigh-ins around 63.1 kg since: the plan suggests a gentle loss back to
+  // it, a deficit with no answers to the low-energy questions, which Today
+  // asks first.
+  const drifted = emptyJournal();
+  drifted.createdAt = "2026-08-30T07:00:00.000Z";
+  applyGoals(
+    drifted,
+    {
+      age: 30,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 62,
+      targetWeightKg: 62,
+      targetDate: null,
+      activity: "moderate",
+      trainingDays: 4,
+      sessionMinutes: 75,
+      experience: "developing",
+    },
+    "2026-09-01",
+  );
+  drifted.profile.body!.updatedAt = "2026-09-01T07:00:00.000Z";
+  drifted.profile.targetHistory = drifted.profile.targetHistory!.map((r) => ({
+    ...r,
+    setAt: "2026-09-01T07:00:00.000Z",
+  }));
+  for (const [day, kg] of [
+    [-5, 63],
+    [-2, 63.2],
+    [0, 63.1],
+  ] as const)
+    drifted.health.checkins.push({
+      date: offsetDate(date, day),
+      sleepHours: null,
+      energy: null,
+      soreness: null,
+      waterMl: null,
+      bodyweight: kg,
+      notes: "",
+      updatedAt: `${offsetDate(date, day)}T06:30:00.000Z`,
+    });
   return {
     "workout.json": workoutInProgress(state),
     "today.json": buildToday(state, 12, date, imported),
     "today-short-sleep.json": buildToday(shortSleep, 12, date, imported),
+    "today-targets.json": buildToday(reached, 12, date, new Set()),
+    "today-targets-check.json": buildToday(drifted, 12, date, new Set()),
+    "trends-targets.json": buildTrends(reached, date, 7),
     "journal.json": buildJournal(state, 12, "2026-09-27", 14, imported),
     "trends.json": buildTrends(state, date, 7),
     "training.json": buildTraining(state, 12, date),
@@ -359,6 +456,7 @@ export function nativeFixtures() {
               workout: null,
               targets: goals.targets,
               targetsBefore: goals.targetsBefore,
+              notes: goals.notes,
             },
           ],
         },

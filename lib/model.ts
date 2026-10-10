@@ -4,8 +4,19 @@ import { cardioSchema } from "./cardio";
 import { healthSchema } from "./health";
 import { coachingSchema } from "./coaching";
 import { liftingBriefSchema } from "./lifting-brief";
-import { bodyGoalsSchema, goalChecksSchema } from "./body-goals";
+import {
+  bodyGoalsSchema,
+  energyCheckSchema,
+  goalChecksSchema,
+  goalHealthSchema,
+  weighInSchema,
+} from "./body-goals";
 import { bodyTargetsSchema } from "./body-composition";
+import {
+  declinedTargetsSchema,
+  TARGET_HISTORY_MAX,
+  targetRecordSchema,
+} from "./target-history";
 import {
   storedCustomProgramSchema,
   isTrainingProgram,
@@ -142,6 +153,9 @@ export const journalSchema = z
     profile: z
       .object({
         bodyweight: z.number().finite().min(0).max(1000).default(0),
+        // When the weight was last given in Settings, so it counts from then
+        // as the athlete's latest word on it (currentWeightKg).
+        bodyweightSetAt: z.iso.datetime().optional(),
         age: z.number().min(0).max(130).default(0),
         unit: z.literal("kg").default("kg"),
         name: z.string().max(120).optional(),
@@ -149,10 +163,29 @@ export const journalSchema = z
         coaching: coachingSchema.optional(),
         lifting: liftingBriefSchema.nullable().optional(),
         body: bodyGoalsSchema.optional(),
+        // Heavy manual work outside training, which profile.body saves as
+        // high (goalsForState).
+        heavyManualWork: z.boolean().optional(),
         // Focus and target body fat beside the weight goal.
         bodyTargets: bodyTargetsSchema.optional(),
         // Pregnancy, and a confirmed low goal weight, for the plan's limits.
         goalChecks: goalChecksSchema.optional(),
+        // Kidney disease or a limit on protein, and the baby's birth day
+        // while breastfeeding, for the plan's limits too.
+        goalHealth: goalHealthSchema.optional(),
+        // The day of the answers to the low-energy questions and whether
+        // any was yes, and a competition weight class the goal weight is,
+        // with its weigh-in day.
+        energyCheck: energyCheckSchema.optional(),
+        weighIn: weighInSchema.optional(),
+        // Each change to the daily targets, with where it came from, and a
+        // suggestion from the plan the athlete chose not to take
+        // (target-history.ts).
+        targetHistory: z
+          .array(targetRecordSchema)
+          .max(TARGET_HISTORY_MAX)
+          .optional(),
+        declinedTargets: declinedTargetsSchema.optional(),
       })
       .passthrough(),
     prs: z.record(z.string(), z.number().finite().min(0).max(100000)),

@@ -2601,3 +2601,7 @@ details.image-upload-area:not([open]) { border: 0; padding: 0; background: none;
 .supplement-form label { display: grid; gap: 4px; }
 .supplement-form .button-row { grid-column: 1 / -1; }
 }
+.goals-form .goals-questions { display: grid; gap: 10px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.goals-form .goals-questions legend { padding: 0 6px; font-weight: 600; }
+.goals-form .goals-questions ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; line-height: 1.4; }
+.goals-form .goals-questions .fine-print { margin: 0; }

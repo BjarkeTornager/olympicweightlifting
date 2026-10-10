@@ -32,7 +32,7 @@ struct HealthView: View {
         read("Sleep, including stages", "bed.double.fill", Theme.sleep)
         read("Resting heart rate, heart rate variability and average heart rate", "heart.fill", Theme.heart)
         read("Steps and active energy", "flame.fill", Theme.activity)
-        read("Body fat percentage from a smart scale", "scalemass.fill", Theme.body)
+        read("Weight and body fat percentage, as from a smart scale", "scalemass.fill", Theme.body)
         read(
           "Workouts: runs, walks, rides, swims, rows, hikes and more, with distance and heart rate", "figure.run",
           Theme.activity)
@@ -57,7 +57,7 @@ struct HealthView: View {
             }
           } footer: {
             Text(
-              "Lift Journal can now read your workout routes and a smart scale's body fat readings, so you and Coach can use them. Apple asks once for the new permissions."
+              "Lift Journal can now read your weight, your workout routes and a smart scale's body fat readings, so you and Coach can use them. Apple asks once for the new permissions."
             )
           }
           .themedRows()

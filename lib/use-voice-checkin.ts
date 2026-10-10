@@ -72,9 +72,11 @@ const displayTools = new Set(["show_card", "show_picture"]);
 const MAX_CALL_MINUTES = 30;
 // After the coach's goodbye, how long the athlete has to keep talking.
 const ENDING_GRACE_MS = 12000;
-// The server refuses calls from an app older than this voice protocol, and
-// offers cards (show_card) and their pictures (show_picture) from version 4.
-export const VOICE_CLIENT_VERSION = "4";
+// The server refuses calls from an app older than this voice protocol,
+// offers cards (show_card) and their pictures (show_picture) from version 4,
+// and from version 5 sends a goals plan read back before saving as it is,
+// knowing the app leaves no receipt for it.
+export const VOICE_CLIENT_VERSION = "5";
 
 type Session = {
   id: string;
@@ -798,7 +800,17 @@ export function useVoiceCheckin({
         /* Network or server restart: retry with the same id. */
       }
     }
-    if (!reading) {
+    // Goals to read back before saving (goalsReadBack) leave no receipt:
+    // nothing is saved until the athlete says yes.
+    const unsaved =
+      result.ok &&
+      "data" in result &&
+      (result.data as { saved?: unknown } | null)?.saved === false;
+    if (unsaved)
+      setLines((l) =>
+        l.filter((e) => !(e.role === "save" && e.id === call.id)),
+      );
+    else if (!reading) {
       setReceipt(call.id, result.ok ? "saved" : "failed");
       if (result.ok) onSaved();
     }

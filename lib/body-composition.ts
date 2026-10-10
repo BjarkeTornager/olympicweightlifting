@@ -28,6 +28,51 @@ export const bodyFatSchema = bodyFatInputSchema.extend({
 export type BodyFat = z.infer<typeof bodyFatSchema>;
 export type BodyFatInput = z.input<typeof bodyFatInputSchema>;
 
+// A day's weight from Apple Health (a smart scale, or one entered there):
+// the first reading of the day, as a morning weigh-in is the steadiest. Kept
+// apart from check-ins, which hold what the athlete reports here, so an
+// import never overwrites a self-report.
+export const bodyMassSchema = z
+  .object({
+    date: foodDate,
+    kg: z.number().finite().min(20).max(500),
+    source: z.literal("apple-health"),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export type BodyMass = z.infer<typeof bodyMassSchema>;
+
+export type WeighIn = {
+  date: string;
+  kg: number;
+  source: "checkin" | "apple-health";
+  // When it was recorded, for a weigh-in on the day the goals were saved.
+  updatedAt: string;
+};
+
+// One weigh-in a day, oldest first: the athlete's check-in, else Apple
+// Health's first reading of the day.
+export function weighIns(state: JournalState, from: string, to: string) {
+  const days = new Map<string, WeighIn>();
+  for (const m of state.health.bodyMass ?? [])
+    if (m.date >= from && m.date <= to)
+      days.set(m.date, {
+        date: m.date,
+        kg: m.kg,
+        source: "apple-health",
+        updatedAt: m.updatedAt,
+      });
+  for (const c of state.health.checkins)
+    if (c.bodyweight != null && c.date >= from && c.date <= to)
+      days.set(c.date, {
+        date: c.date,
+        kg: c.bodyweight,
+        source: "checkin",
+        updatedAt: c.updatedAt,
+      });
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 // What the athlete is working towards, beside the weight goal in
 // profile.body: the focus and an optional body fat target.
 export const bodyFocuses = [
@@ -47,6 +92,12 @@ export const bodyTargetsSchema = z
 export type BodyTargets = z.infer<typeof bodyTargetsSchema>;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+// The date a number of days before another.
+export function daysBefore(date: string, days: number) {
+  const day = new Date(`${date}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - days);
+  return day.toISOString().slice(0, 10);
+}
 
 export function saveBodyFat(
   state: JournalState,
@@ -120,11 +171,7 @@ export function bodyFatTrend(state: JournalState, from: string, to: string) {
   const first = readings[0]!,
     last = readings.at(-1)!;
   const weightNear = (date: string) =>
-    [...state.health.checkins]
-      .filter((c) => c.bodyweight != null && c.date <= date)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .find((c) => (Date.parse(date) - Date.parse(c.date)) / 86400000 <= 7)
-      ?.bodyweight ?? null;
+    weighIns(state, daysBefore(date, 7), date).at(-1)?.kg ?? null;
   const split = (b: BodyFat) => {
     const weight = weightNear(b.date);
     return weight == null
@@ -144,27 +191,21 @@ export function bodyFatTrend(state: JournalState, from: string, to: string) {
   };
 }
 
-// Bodyweight over the last four weeks from check-ins: the first and latest
-// weigh-ins and the average change a week between them.
+// Bodyweight over the last four weeks from weigh-ins (weighIns): the first
+// and latest and the average change a week between them.
 export function weightTrend(state: JournalState, date: string, days = 28) {
-  const from = new Date(`${date}T12:00:00Z`);
-  from.setUTCDate(from.getUTCDate() - days);
-  const start = from.toISOString().slice(0, 10);
-  const weights = state.health.checkins
-    .filter((c) => c.bodyweight != null && c.date >= start && c.date <= date)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const weights = weighIns(state, daysBefore(date, days), date);
   if (weights.length < 2) return null;
   const first = weights[0]!,
     last = weights.at(-1)!;
   const weeks = (Date.parse(last.date) - Date.parse(first.date)) / 604800000;
   return {
     weigh_ins: weights.length,
-    first: { date: first.date, kg: first.bodyweight! },
-    latest: { date: last.date, kg: last.bodyweight! },
+    first: { date: first.date, kg: first.kg },
+    latest: { date: last.date, kg: last.kg },
     kg_per_week:
       weeks >= 1
-        ? Math.round(((last.bodyweight! - first.bodyweight!) / weeks) * 100) /
-          100
+        ? Math.round(((last.kg - first.kg) / weeks) * 100) / 100
         : null,
   };
 }

@@ -14,7 +14,16 @@ import {
   supplementsForDay,
 } from "../supplements";
 import { applyGoals, describePlan, splitGoals } from "../body-goals";
+import {
+  followUpGoals,
+  goalsCheckClosedNote,
+  goalsCheckNote,
+  moveGoalsCheck,
+  takeTargetsProposal,
+} from "../coaching";
 import { bodyFatTrend, removeBodyFat, saveBodyFat } from "../body-composition";
+import { setDailyTargets, targetsProposal } from "../target-proposals";
+import { sameTargets } from "../target-history";
 import { offsetDate } from "../health";
 import {
   mergeDietTargets,
@@ -149,21 +158,65 @@ export function prepareDrink(
 export function prepareDietTargets(
   next: JournalState,
   action: ActionOf<"set_diet_targets">,
+  currentDate: string,
 ): PreparedChange {
   // Only the targets named change; the rest, and the goal, are kept.
   if (!Object.keys(action.targets).length)
     throw Error("Name the targets to change.");
   const before = next.nutrition.targets;
-  next.nutrition.targets = mergeDietTargets(before, action.targets);
+  const targets = mergeDietTargets(before, action.targets);
+  // The goals plan's suggestion, taken as on Today: recorded as the plan's,
+  // with the goals check agreed or closed in the same change.
+  const suggested = targetsProposal(next, currentDate);
+  if (suggested && sameTargets(targets, suggested.targets)) {
+    if (suggested.energyCheck)
+      throw Error(
+        "These are the goals plan's suggested targets, which set a deficit without answers to the low-energy questions. Ask them first, then prepare set_body_goals with the athlete's saved goals at goals.currentWeightKg and their answers as energySigns.",
+      );
+    const { proposal, agreed, closed } = takeTargetsProposal(
+      next,
+      currentDate,
+      targets,
+    );
+    return {
+      targets: next.nutrition.targets,
+      targetsBefore: before,
+      title: "Take your goals plan's suggested targets",
+      detail: [
+        "Your goals plan's suggested targets, a starting estimate.",
+        ...proposal.reasons,
+        ...proposal.plan.safetyNotes,
+        ...(agreed ? [goalsCheckNote(agreed.followUpDate)] : []),
+        ...(closed ? [goalsCheckClosedNote(closed.followUpDate)] : []),
+      ].join(" "),
+      ...(agreed ? { plan: agreed } : {}),
+      ...(proposal.plan.safetyNotes.length
+        ? { notes: proposal.plan.safetyNotes }
+        : {}),
+    };
+  }
+  // Recorded as the plan's when they are what it gives now, otherwise as
+  // the athlete's own (setDailyTargets).
+  setDailyTargets(next, targets, currentDate);
+  // New calories at a goals check that is due move it on (moveGoalsCheck).
+  const calories = next.nutrition.targets.calories;
+  const followUp =
+    calories != null && calories > 0 && calories !== before.calories
+      ? moveGoalsCheck(next, calories, currentDate)
+      : null;
   return {
     targets: next.nutrition.targets,
     targetsBefore: before,
     title: "Update your daily nutrition targets",
-    detail:
-      "These are your chosen daily targets. They are not a calculated calorie prescription.",
+    detail: `These are your chosen daily targets. They are not a calculated calorie prescription.${followUp ? ` Coach can check them against your weight trend with you from ${followUp.followUpDate}, about 3 weeks on.` : ""}`,
+    ...(followUp ? { plan: followUp } : {}),
   };
 }
 
+// Coach's goals change: the plan, and with one that loses, gains or
+// recomposes, the agreed check of the weight trend about 3 weeks on, or
+// with one that no longer does, an active check closed (followUpGoals), in
+// the same review.
 export function prepareBodyGoals(
   next: JournalState,
   action: ActionOf<"set_body_goals">,
@@ -171,14 +224,22 @@ export function prepareBodyGoals(
 ): PreparedChange {
   const before = next.nutrition.targets;
   const plan = applyGoals(next, action.bodyGoals, currentDate);
+  const { agreed, closed } = followUpGoals(next, plan, currentDate);
   return {
     targets: next.nutrition.targets,
     targetsBefore: before,
     title: "Set your goals",
+    // A removed or changed health answer comes first, so the review and the
+    // voice read-back never leave it out.
     detail: [
+      ...plan.changes,
       describePlan(splitGoals(action.bodyGoals).goals, plan),
       ...plan.notes,
+      ...(agreed ? [goalsCheckNote(agreed.followUpDate)] : []),
+      ...(closed ? [goalsCheckClosedNote(closed.followUpDate)] : []),
     ].join(" "),
+    ...(agreed ? { plan: agreed } : {}),
+    ...(plan.safetyNotes.length ? { notes: plan.safetyNotes } : {}),
   };
 }
 
@@ -187,6 +248,7 @@ export function prepareBodyFat(
   action: ActionOf<"record_body_fat" | "delete_body_fat">,
   currentDate: string,
 ): PreparedChange {
+  const suggested = targetsProposal(next, currentDate);
   const entry =
     action.kind === "record_body_fat"
       ? saveBodyFat(next, action.bodyFat, currentDate)
@@ -196,12 +258,20 @@ export function prepareBodyFat(
     action.kind === "record_body_fat" && trend && trend.readings > 1
       ? ` ${trend.change_points > 0 ? "+" : ""}${trend.change_points} points since ${trend.first.date}.`
       : "";
+  // A reading never changes the daily targets; when it moves the plan
+  // enough, the plan suggests new ones for the athlete to take or leave.
+  const proposal = targetsProposal(next, currentDate);
+  const targets =
+    proposal &&
+    (!suggested || !sameTargets(suggested.targets, proposal.targets))
+      ? " Your daily targets stay as they are; your goals plan now suggests new ones, which you can take or leave on Today."
+      : "";
   return {
     title:
       action.kind === "record_body_fat"
         ? "Record body fat"
         : "Remove a body fat reading",
-    detail: `${action.kind === "record_body_fat" ? "" : "Removes "}${entry.percent}% body fat on ${entry.date}${entry.method ? ` (${entry.method})` : ""}.${change}`,
+    detail: `${action.kind === "record_body_fat" ? "" : "Removes "}${entry.percent}% body fat on ${entry.date}${entry.method ? ` (${entry.method})` : ""}.${change}${targets}`,
   };
 }
 

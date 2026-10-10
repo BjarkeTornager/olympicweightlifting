@@ -5,7 +5,6 @@ import {
   applyGoals,
   planForState,
   planGoals,
-  TARGETS_DIFFER,
   type BodyGoalsInput,
 } from "../lib/body-goals";
 import {
@@ -44,8 +43,8 @@ test("with body fat known, energy and protein come from lean mass", () => {
   assert.equal(plan.leanMassKg, 75.3);
   assert.equal(plan.restingKcal, 2000);
   assert.equal(plan.focus, "lose_fat");
-  // 2.5 g per kg of lean mass while losing fat.
-  assert.equal(plan.protein, 188);
+  // 2.5 g per kg of lean mass while losing fat, to 5 g.
+  assert.equal(plan.protein, 190);
   assert.equal(plan.weeklyChangeKg, 0.44);
   // Without body fat the plan is the same as before.
   const plain = planGoals(athlete, today);
@@ -58,16 +57,16 @@ test("rates follow body fat and experience; recomposition stays gentle", () => {
   const lean = planGoals(athlete, today, { bodyFatPercent: 11 });
   assert.equal(lean.weeklyChangeKg, 0.35);
   assert.ok(lean.notes.some((n) => /already lean/.test(n)));
-  // More to lose: up to 0.75 % a week, 0.66 kg here, but not below resting
-  // energy plus training, which holds it to 0.59 kg.
+  // More to lose: up to 0.75 % a week, 0.66 kg here (723 kcal a day,
+  // within the 1,000 kcal cap at this body fat), well above resting energy
+  // plus training. (The plan for a woman held at that floor is in
+  // goal-safety.test.ts.)
   const more = planGoals({ ...athlete, targetWeightKg: 75 }, today, {
     bodyFatPercent: 28,
   });
-  assert.equal(more.calories, more.floorKcal);
-  assert.equal(more.weeklyChangeKg, 0.59);
-  assert.ok(
-    more.notes.some((n) => /loses more slowly: about 0\.59 kg/.test(n)),
-  );
+  assert.equal(more.weeklyChangeKg, 0.66);
+  assert.ok(more.calories > more.floorKcal);
+  assert.ok(!more.notes.some((n) => /loses more slowly/.test(n)));
   // Muscle comes more slowly with experience.
   const gain = (experience: BodyGoalsInput["experience"]) =>
     planGoals({ ...athlete, targetWeightKg: 92, experience }, today)
@@ -86,7 +85,7 @@ test("rates follow body fat and experience; recomposition stays gentle", () => {
     recomp.calories,
     Math.round((recomp.maintenanceKcal * 0.95) / 10) * 10,
   );
-  assert.equal(recomp.protein, 188);
+  assert.equal(recomp.protein, 190);
   // Recomposition towards a lower weight caps the loss at 0.25 % a week.
   const slow = planGoals(athlete, today, { focus: "recomposition" });
   assert.equal(slow.weeklyChangeKg, 0.22);
@@ -334,23 +333,36 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
   );
 
   // The first reading moves the plan from Mifflin–St Jeor to lean mass,
-  // about 200 kcal above the targets saved without one, so the iPhone says
-  // they differ instead of showing the plan's notes.
-  const body = buildToday(state, 1, today, new Set()).body;
-  assert.deepEqual(body, {
+  // about 200 kcal above the targets saved without one. The saved targets
+  // stay, and the iPhone says the plan suggests new ones instead of showing
+  // its notes.
+  const saved = structuredClone(state.nutrition.targets);
+  const today_ = buildToday(state, 1, today, new Set());
+  assert.deepEqual(today_.body, {
     bodyFatPercent: 14,
     bodyFatDate: today,
     bodyFatMethod: "scale",
     bodyFatFromAppleHealth: true,
     bodyweight: 87.6,
     bodyweightDate: today,
+    bodyweightFromAppleHealth: false,
     weeklyWeightChangeKg: -0.4,
     leanMassKg: 75.3,
     focus: "recomposition",
     targetWeightKg: 85,
     targetBodyFatPercent: 11,
-    goalNotes: [TARGETS_DIFFER],
+    goalNotes: [
+      "Your goals plan suggests new daily targets, about 3,110 kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app.",
+    ],
   });
+  assert.deepEqual(state.nutrition.targets, saved);
+  assert.equal(today_.nutrition.targetCalories, saved.calories);
+  assert.equal(today_.targetsProposal?.suggested.calories, 3110);
+  assert.equal(today_.targetsProposal?.current.calories, saved.calories);
+  assert.match(
+    today_.targetsProposal!.reasons[0],
+    /^Your body fat reading of 14% on 2026-09-26 puts your lean mass at about 75\.3 kg/,
+  );
   const journal = buildJournal(state, 1, "2026-09-27", 14, new Set());
   assert.deepEqual(
     journal.items

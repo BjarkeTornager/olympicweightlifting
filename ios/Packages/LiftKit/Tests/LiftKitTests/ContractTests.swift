@@ -51,6 +51,44 @@ struct ContractTests {
     #expect(plain.sleep.nights == 1 && plain.sleep.averageHours == nil && plain.sleepNote == nil)
   }
 
+  @Test("Today carries the goals plan's suggested targets beside the saved ones")
+  func todayTargets() throws {
+    let today = try fixture("today-targets", as: Components.Schemas.Today.self)
+    #expect(today.nutrition.targetCalories == 2550)
+    let proposal = try #require(today.targetsProposal)
+    #expect(proposal.title == "Hold your weight from here")
+    #expect(proposal.maintain)
+    #expect(proposal.current.goal == "lose" && proposal.current.calories == 2550)
+    #expect(proposal.suggested.goal == "maintain" && proposal.suggested.calories == 3000)
+    #expect(proposal.reasons.first?.contains("you've reached your goal of 81 kg") == true)
+    #expect(today.body?.bodyweightFromAppleHealth == false)
+    // Holding the weight asks no health questions.
+    #expect(proposal.energyCheck == nil)
+    // None without a suggestion.
+    #expect(try fixture("today", as: Components.Schemas.Today.self).targetsProposal == nil)
+  }
+
+  @Test("A suggestion that sets a deficit carries the low-energy questions, and what a yes holds")
+  func todayTargetsCheck() throws {
+    let today = try fixture("today-targets-check", as: Components.Schemas.Today.self)
+    let proposal = try #require(today.targetsProposal)
+    #expect(proposal.reasons == ["Your weight is about 63.1 kg now, above the 62 kg you aim to hold."])
+    #expect(proposal.suggested.goal == "lose" && proposal.suggested.calories == 1960)
+    let check = try #require(proposal.energyCheck)
+    #expect(check.questions.count == 3)
+    #expect(check.note.hasPrefix("Optional, and not a diagnosis."))
+    #expect(check.ifYes.goal == "maintain" && check.ifYes.calories == 2300)
+    // With a yes, the held plan's notes replace the deficit's.
+    #expect(check.ifYesNotes?.first?.hasPrefix("You answered yes to one of the questions") == true)
+  }
+
+  @Test("Trends rows carry the targets in force each day")
+  func trendTargets() throws {
+    let trends = try fixture("trends-targets", as: Components.Schemas.Trends.self)
+    #expect(trends.days.map(\.targetCalories) == [2640, 2640, 2640, 2550, 2550, 2550, 2550])
+    #expect(trends.targetCalories == 2550)
+  }
+
   @Test func journal() throws {
     let feed = try fixture("journal", as: Components.Schemas.JournalFeed.self)
     #expect(Set(feed.items.map(\.kind)).isSuperset(of: ["cardio", "meal", "sleep", "vitals", "strength"]))
@@ -92,6 +130,9 @@ struct ContractTests {
     #expect(receipt.detail.contains("Under 18 the plan doesn't set a calorie deficit"))
     #expect(receipt.detail.contains("talk it through with a parent, your coach or a doctor"))
     #expect(receipt.entries?.first?.lines.first?.value == "Maintain weight")
+    // The same note on its own, for the receipt to show in full.
+    #expect(receipt.notes?.count == 1)
+    #expect(receipt.notes?.first?.hasPrefix("Under 18 the plan doesn't set a calorie deficit") == true)
   }
 
   @Test("Today's goals bring the plan's notes, and decode without them")

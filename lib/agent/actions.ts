@@ -88,6 +88,9 @@ export type ActionPreview = {
     dayTargetMl?: number;
   };
   entries?: PreviewEntry[];
+  // Health and safety notes on the change (a goals plan's limits and who to
+  // talk to), also in detail: the iPhone shows them in full.
+  notes?: string[];
   expiresAt: string;
   status?: "saved" | "undone";
   automatic?: boolean;
@@ -112,6 +115,7 @@ export type PreviewEntry = Pick<
   | "liftingBrief"
   | "workoutReview"
   | "drink"
+  | "notes"
 >;
 type PreparedAction = PreviewEntry & {
   state: JournalState;
@@ -243,7 +247,7 @@ function applyAction(
     case "update_meal":
       return prepareMeal(next, action, currentDate);
     case "set_diet_targets":
-      return prepareDietTargets(next, action);
+      return prepareDietTargets(next, action, currentDate);
     case "log_drink":
     case "delete_drink":
       return prepareDrink(next, action, currentDate, mealDates);
@@ -351,6 +355,7 @@ export function prepareAction(
     liftingBrief: change.liftingBrief,
     training: change.training,
     drink: change.drink,
+    notes: change.notes,
     workoutReview,
     action,
   };

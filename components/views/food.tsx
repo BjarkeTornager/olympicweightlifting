@@ -18,6 +18,7 @@ import {
   type Meal,
 } from "@/lib/nutrition";
 import { MealDetails } from "../meal-details";
+import { setDailyTargets } from "@/lib/target-proposals";
 import {
   DietTargetsForm,
   MealForm,
@@ -517,8 +518,10 @@ export function FoodView({
           onSubmit={() =>
             void run(async () => {
               const value = dietTargetsSchema.parse(targets);
+              // Recorded as the plan's when they are what it gives now,
+              // otherwise as the athlete's own.
               await journal.update((s) => {
-                s.nutrition.targets = value;
+                setDailyTargets(s, value, today());
               });
               setShowTargets(false);
             }, "Daily targets saved.")

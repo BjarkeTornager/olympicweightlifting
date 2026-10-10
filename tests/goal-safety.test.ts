@@ -8,7 +8,7 @@ import {
   planGoals,
   planTargets,
   TARGETS_DIFFER,
-  type BodyGoalsInput,
+  type BodyGoals,
   type GoalPlan,
 } from "../lib/body-goals";
 import { leannessLimits, saveBodyFat } from "../lib/body-composition";
@@ -25,7 +25,9 @@ import { elevenLabsTools } from "../lib/voice-elevenlabs";
 // The safety limits every goal plan keeps, wherever it is set: the website
 // form, Coach, the voice coach and the iPhone all go through planGoals.
 const today = "2026-09-26";
-const athlete: BodyGoalsInput = {
+// Goals as profile.body saves them.
+type Goals = Omit<BodyGoals, "updatedAt">;
+const athlete: Goals = {
   age: 34,
   sex: "male",
   heightCm: 182,
@@ -37,14 +39,14 @@ const athlete: BodyGoalsInput = {
   sessionMinutes: 75,
   experience: "developing",
 };
-const teen: BodyGoalsInput = {
+const teen: Goals = {
   ...athlete,
   age: 16,
   heightCm: 175,
   weightKg: 70,
   targetWeightKg: 65,
 };
-const mother: BodyGoalsInput = {
+const mother: Goals = {
   ...athlete,
   age: 31,
   sex: "female",
@@ -472,9 +474,38 @@ test("deficits stay within 500 kcal unless body fat is high and never go below t
   assert.equal(higher.weeklyChangeKg, 0.91);
   assert.equal(higher.weeksToGoal, 44);
   assert.ok(higher.notes.some((n) => /kept to 1,000 kcal a day/.test(n)));
-  // A woman training 5 × 90 min: resting energy plus training is the floor,
-  // and the slower rate is the one stated.
+  // A woman at 70 kg and 40 % body fat, sitting most of the day and
+  // training 4 × 90 min: 0.75 % a week would be 578 kcal a day, but resting
+  // energy (1,277) plus training (240) is the floor, and the slower rate is
+  // the one stated.
   const floored = planGoals(
+    {
+      ...athlete,
+      sex: "female",
+      age: 30,
+      heightCm: 165,
+      weightKg: 70,
+      targetWeightKg: 60,
+      activity: "low",
+      trainingDays: 4,
+      sessionMinutes: 90,
+    },
+    today,
+    { bodyFatPercent: 40 },
+  );
+  assert.equal(floored.maintenanceKcal, 2030);
+  assert.equal(floored.calories, floored.floorKcal);
+  assert.equal(floored.calories, 1520);
+  assert.equal(floored.weeklyChangeKg, 0.46);
+  assert.equal(floored.weeksToGoal, 22);
+  assert.ok(
+    floored.notes.some((n) =>
+      /loses more slowly: about 0\.46 kg a week/.test(n),
+    ),
+  );
+  // The woman who hit the floor before maintenance was raised (59 kg,
+  // 5 × 90 min, 1,560 kcal) now has room for her 0.5 % a week above it.
+  const raised = planGoals(
     {
       ...athlete,
       sex: "female",
@@ -488,15 +519,9 @@ test("deficits stay within 500 kcal unless body fat is high and never go below t
     },
     today,
   );
-  assert.equal(floored.calories, floored.floorKcal);
-  assert.equal(floored.calories, 1560);
-  assert.equal(floored.weeklyChangeKg, 0.23);
-  assert.equal(floored.weeksToGoal, 18);
-  assert.ok(
-    floored.notes.some((n) =>
-      /loses more slowly: about 0\.23 kg a week/.test(n),
-    ),
-  );
+  assert.equal(raised.calories, 1670);
+  assert.ok(raised.calories > raised.floorKcal);
+  assert.equal(raised.weeklyChangeKg, 0.3);
 });
 
 test("a target date under a week away, or past, holds weight with a note", () => {
@@ -540,12 +565,13 @@ test("a target date under a week away, or past, holds weight with a note", () =>
       steady.notes.some((n) => /target date (has passed|is less than)/.test(n)),
     );
   }
-  // With no date, or one far enough off, it keeps its small cut.
+  // With no date, or one far enough off, it keeps its small cut: 95 % of
+  // 3,123 kcal.
   assert.equal(
     planGoals({ ...athlete, targetWeightKg: 88 }, today, {
       focus: "recomposition",
     }).calories,
-    2690,
+    2970,
   );
   // A week away is enough to plan, at no more than the sustainable rate.
   const week = planGoals({ ...athlete, targetDate: "2026-10-03" }, today);
@@ -555,13 +581,19 @@ test("a target date under a week away, or past, holds weight with a note", () =>
 
 test("on a wide grid every plan keeps to the floor, the gates and the deficit cap, and states the rate its calories give", () => {
   const bmi = (kg: number, cm: number) => kg / (cm / 100) ** 2;
+  const factor = { low: 1.4, moderate: 1.55, high: 1.75, very_high: 2 };
   let plans = 0;
   for (const age of [14, 16, 17, 18, 30, 50, 80])
     for (const sex of ["male", "female", "unspecified"] as const)
       for (const heightCm of [150, 165, 180, 200])
         for (const weightKg of [40, 55, 70, 90, 120, 160, 200])
           for (const change of [-0.2, -0.1, 0, 0.1, 0.2])
-            for (const activity of ["low", "moderate", "high"] as const)
+            for (const activity of [
+              "low",
+              "moderate",
+              "high",
+              "very_high",
+            ] as const)
               for (let trainingDays = 0; trainingDays <= 7; trainingDays++)
                 for (const sessionMinutes of [30, 75, 120, 180])
                   for (const bodyFatPercent of [null, 15, 35]) {
@@ -597,6 +629,17 @@ test("on a wide grid every plan keeps to the floor, the gates and the deficit ca
                     const deficit = plan.maintenanceKcal - plan.calories;
                     if (plan.calories < plan.floorKcal)
                       assert.fail(`below the floor: ${where}`);
+                    // Maintenance is never under 1.4 × resting energy, and
+                    // training adds at most 1,000 kcal a day (both figures
+                    // are rounded to 10 kcal).
+                    const everyday = plan.restingKcal * factor[activity];
+                    if (plan.maintenanceKcal < 1.4 * plan.restingKcal - 10)
+                      assert.fail(`maintenance under 1.4 × resting: ${where}`);
+                    if (
+                      plan.maintenanceKcal < everyday - 15 ||
+                      plan.maintenanceKcal > everyday + 1000 + 15
+                    )
+                      assert.fail(`training ${plan.maintenanceKcal}: ${where}`);
                     // No deficit under 18, or under BMI 18.5 now or at the
                     // goal (17.5 to 18.5 only once confirmed, never here).
                     if (
@@ -625,7 +668,7 @@ test("on a wide grid every plan keeps to the floor, the gates and the deficit ca
                         `${plan.weeklyChangeKg} kg a week from ${deficit} kcal: ${where}`,
                       );
                   }
-  assert.equal(plans, 7 * 3 * 4 * 7 * 5 * 3 * 8 * 4 * 3);
+  assert.equal(plans, 7 * 3 * 4 * 7 * 5 * 4 * 8 * 4 * 3);
 });
 
 test("pregnancy and breastfeeding never plan a deficit, and pregnancy no target, across the grid", () => {
@@ -779,12 +822,34 @@ test("Coach and the voice coach pass pregnancy to the same plan; a confirmation 
 
 test("the iPhone shows the plan's notes only beside the plan's own targets", () => {
   // Never a note that contradicts the target shown with it: the plan's
-  // notes come only with its goal and calories, within 100 kcal.
+  // notes come only with its goal and calories, within 100 kcal; otherwise
+  // a line that they differ, or that the plan suggests new ones.
   const consistent = (state: ReturnType<typeof emptyJournal>, date: string) => {
     const today = buildToday(state, 1, date, new Set());
     const notes = today.body?.goalNotes ?? [];
     const plan = planForState(state, date)!;
-    if (notes.join() === TARGETS_DIFFER) return notes;
+    // A line that stands in for the plan's notes: they differ, they are
+    // the athlete's own, or the plan suggests new ones. Only the plan's
+    // notes about the athlete may follow, with its goal.
+    const suggests = /^Your goals plan suggests new daily targets/;
+    const first = notes[0] ?? "";
+    if (
+      first === TARGETS_DIFFER ||
+      /^These are your own daily targets/.test(first) ||
+      suggests.test(first)
+    ) {
+      if (today.targetsProposal) assert.match(first, suggests);
+      if (notes.length > 1)
+        assert.equal(state.nutrition.targets.goal, plan.direction);
+      for (const note of notes.slice(1)) {
+        assert.ok(plan.notes.includes(note));
+        assert.match(
+          note,
+          /^(Under 18 the plan |In pregnancy the plan |While you're breastfeeding the plan |As you have kidney disease)/,
+        );
+      }
+      return notes;
+    }
     assert.deepEqual(notes, plan.notes);
     assert.equal(state.nutrition.targets.goal, plan.direction);
     assert.ok(Math.abs(today.nutrition.targetCalories! - plan.calories) <= 100);
@@ -794,19 +859,28 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
   // notes.
   const state = emptyJournal();
   applyGoals(state, { ...athlete, targetDate: "2026-12-01" }, today);
-  assert.equal(state.nutrition.targets.calories, 2350);
+  assert.equal(state.nutrition.targets.calories, 2640);
   assert.match(consistent(state, today).join(), /keeps to a sustainable/);
-  // Once the date has passed the plan holds at 2,830, but the saved target
-  // is still 2,350, so the iPhone says they differ rather than that the
-  // plan holds his weight.
+  // Once the date has passed the plan holds at 3,120, but the saved target
+  // is still 2,640: the iPhone suggests holding his weight, for him to take
+  // or leave, rather than saying the plan holds it.
   const later = "2026-12-05";
   assert.match(planForState(state, later)!.notes.join(), /date has passed/);
   const native = buildToday(state, 1, later, new Set());
-  assert.equal(native.nutrition.targetCalories, 2350);
-  assert.deepEqual(native.body?.goalNotes, [TARGETS_DIFFER]);
+  assert.equal(native.nutrition.targetCalories, 2640);
+  assert.deepEqual(native.body?.goalNotes, [
+    "Your goals plan suggests new daily targets, about 3,120 kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app.",
+  ]);
+  assert.equal(native.targetsProposal?.maintain, true);
+  assert.equal(native.targetsProposal?.suggested.calories, 3120);
+  assert.match(
+    native.targetsProposal!.reasons.join(),
+    /^Your target date, 2026-12-01, has passed/,
+  );
   consistent(state, later);
   // A teenager's target saved before the limits (1,730 kcal, lose) gets the
-  // same line, not "Under 18 ... it holds your weight" beside a deficit.
+  // plan's suggestion, not "Under 18 ... it holds your weight" beside a
+  // deficit.
   const teenager = emptyJournal();
   teenager.profile.body = {
     ...teen,
@@ -824,7 +898,10 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
     carbs: 204,
     fat: 48,
   };
-  assert.deepEqual(consistent(teenager, today), [TARGETS_DIFFER]);
+  assert.match(
+    consistent(teenager, today).join(),
+    /^Your goals plan suggests new daily targets/,
+  );
   // A scale's reading the next day moves the plan by a few kcal: still its
   // notes.
   applyGoals(state, { ...athlete, bodyFatPercent: 18 }, today);
@@ -840,18 +917,112 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
     state.nutrition.targets.calories,
   );
   assert.notDeepEqual(consistent(state, next), [TARGETS_DIFFER]);
-  // Targets set by hand, or none, get the line.
-  state.nutrition.targets.calories = 2800;
-  assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+  // Targets set by hand, here by an older version of the app with no
+  // record, or none, are the athlete's own, with the plan's estimate.
+  const own = [
+    "These are your own daily targets; your goals plan's estimate is about 2,770 kcal a day.",
+  ];
+  state.nutrition.targets.calories = 2300;
+  assert.deepEqual(consistent(state, next), own);
   state.nutrition.targets.calories = 0;
-  assert.deepEqual(consistent(state, next), [TARGETS_DIFFER]);
+  assert.deepEqual(consistent(state, next), own);
+});
+
+test("targets saved before maintenance rose stay as they were, and the iPhone suggests the plan's but keeps its advice for teenagers and new mothers", () => {
+  // Goals with the daily targets the previous plan saved for them, which
+  // counted "On my feet some" as 1.375 times resting energy.
+  const saved = (
+    goals: Goals,
+    targets: ReturnType<typeof emptyJournal>["nutrition"]["targets"],
+  ) => {
+    const state = emptyJournal();
+    state.profile.body = { ...goals, updatedAt: "2026-09-20T10:00:00.000Z" };
+    state.nutrition.targets = { ...targets };
+    return state;
+  };
+  // Raised maintenance never rewrites them; Food and the iPhone keep
+  // showing them, and the plan is now higher, so it suggests its own for
+  // the athlete to take or keep theirs over (target-proposals.ts).
+  const afterRelease = (
+    state: ReturnType<typeof emptyJournal>,
+    planned: number,
+  ) => {
+    const before = structuredClone(state.nutrition.targets);
+    assert.equal(regateLegacyTargets(state, today, "Europe/Copenhagen"), false);
+    assert.deepEqual(state.nutrition.targets, before);
+    assert.equal(planForState(state, today)!.calories, planned);
+    const native = buildToday(state, 1, today, new Set());
+    assert.equal(native.nutrition.targetCalories, before.calories);
+    assert.equal(native.targetsProposal?.suggested.calories, planned);
+    const notes = native.body?.goalNotes;
+    assert.equal(
+      notes?.[0],
+      `Your goals plan suggests new daily targets, about ${planned.toLocaleString("en-GB")} kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app.`,
+    );
+    return notes;
+  };
+  // An adult losing weight, 2,350 kcal saved and 2,640 planned: the
+  // suggestion alone.
+  assert.equal(
+    afterRelease(
+      saved(athlete, {
+        goal: "lose",
+        calories: 2350,
+        protein: 176,
+        carbs: 254,
+        fat: 70,
+      }),
+      2640,
+    )?.length,
+    1,
+  );
+  // Under 18 the suggestion, then the reason the plan sets no deficit.
+  const girl = {
+    ...teen,
+    sex: "female" as const,
+    heightCm: 165,
+    weightKg: 60,
+    targetWeightKg: 55,
+    trainingDays: 3,
+  };
+  const girlNotes = afterRelease(
+    saved(girl, {
+      goal: "maintain",
+      calories: 2120,
+      protein: 108,
+      carbs: 289,
+      fat: 59,
+    }),
+    2350,
+  );
+  assert.equal(girlNotes?.length, 2);
+  assert.match(
+    girlNotes![1],
+    /^Under 18 the plan doesn't set a calorie deficit/,
+  );
+  // Breastfeeding: the suggestion, then the advice to talk to a midwife.
+  const mum = saved(mother, {
+    goal: "maintain",
+    calories: 2700,
+    protein: 126,
+    carbs: 380,
+    fat: 75,
+  });
+  mum.profile.goalChecks = {
+    pregnancy: "breastfeeding",
+    lowWeightConfirmedKg: null,
+    updatedAt: "2026-09-20T10:00:00.000Z",
+  };
+  const mumNotes = afterRelease(mum, 2920);
+  assert.equal(mumNotes?.length, 2);
+  assert.match(mumNotes![1], /talk to your midwife or health visitor/);
 });
 
 test("old saved targets that break a hard limit follow the plan again, once; others are left alone", () => {
   // Goals saved before the limits, on 1 September, with the targets the old
   // plan gave for them.
   const saved = (
-    goals: BodyGoalsInput,
+    goals: Goals,
     targets: ReturnType<typeof emptyJournal>["nutrition"]["targets"],
   ) => {
     const state = emptyJournal();
@@ -927,7 +1098,8 @@ test("old saved targets that break a hard limit follow the plan again, once; oth
   );
   assert.ok(regated(thin));
   assert.equal(thin.nutrition.targets.goal, "maintain");
-  // Below resting energy plus training: up to the floor.
+  // Below resting energy plus training: it follows the plan, which now has
+  // room above the floor.
   const floored = saved(
     {
       ...athlete,
@@ -943,7 +1115,11 @@ test("old saved targets that break a hard limit follow the plan again, once; oth
     { goal: "lose", calories: 1490, protein: 118, carbs: 150, fat: 47 },
   );
   assert.ok(regated(floored));
-  assert.equal(floored.nutrition.targets.calories, 1560);
+  assert.equal(floored.nutrition.targets.calories, 1670);
+  assert.ok(
+    floored.nutrition.targets.calories! >=
+      planForState(floored, today)!.floorKcal,
+  );
   // A teenager's recomposition loses its small cut.
   const recomp = saved(
     { ...teen, targetWeightKg: 70 },
@@ -955,7 +1131,8 @@ test("old saved targets that break a hard limit follow the plan again, once; oth
     updatedAt: "2026-09-01T10:00:00.000Z",
   };
   assert.ok(regated(recomp));
-  // Within every limit: left as saved (2,350 kcal, 81 kg).
+  // Within every limit: left as saved (2,350 kcal, 81 kg). The limits are
+  // the old plan's own, so today's higher maintenance never moves it here.
   assert.equal(
     regated(
       saved(athlete, {
@@ -1007,4 +1184,78 @@ test("old saved targets that break a hard limit follow the plan again, once; oth
     updatedAt: "2026-09-01T10:00:00.000Z",
   };
   assert.equal(regated(checked), false);
+  // Targets recorded since this release are never old ones.
+  const recorded = saved(girl, {
+    goal: "lose",
+    calories: 1730,
+    protein: 120,
+    carbs: 204,
+    fat: 48,
+  });
+  recorded.profile.targetHistory = [
+    {
+      ...recorded.nutrition.targets,
+      source: "manual",
+      from: "2026-09-01",
+      setAt: "2026-09-01T10:00:00.000Z",
+      weightKgAtSet: 60,
+    },
+  ];
+  assert.equal(regated(recorded), false);
+});
+
+test("the release check leaves targets that the plan of 4 October saved, a deficit a few kcal over its cap included", () => {
+  // A 92 kg lifter aiming for 89 kg: the old plan's deficit is
+  // 506 kcal, a few over the 500 kcal cap, and the plan of 4 October, with
+  // the cap, rounded to the same 2,420 kcal. It saved these on 6 October,
+  // and its release check left the same targets saved before October.
+  const lifter: Goals = {
+    ...athlete,
+    age: 28,
+    heightCm: 180,
+    weightKg: 92,
+    targetWeightKg: 89,
+  };
+  const targets = {
+    goal: "lose" as const,
+    calories: 2420,
+    protein: 184,
+    carbs: 255,
+    fat: 74,
+  };
+  for (const updatedAt of [
+    "2026-10-06T08:00:00.000Z",
+    "2026-09-01T08:00:00.000Z",
+  ]) {
+    const state = emptyJournal();
+    state.profile.body = { ...lifter, updatedAt };
+    state.nutrition.targets = { ...targets };
+    // Raised maintenance (2,720 kcal now) never rewrites them; the plan
+    // suggests its own instead.
+    assert.equal(
+      regateLegacyTargets(state, "2026-10-12", "Europe/Copenhagen"),
+      false,
+    );
+    assert.deepEqual(state.nutrition.targets, targets);
+    assert.equal(state.profile.targetHistory, undefined);
+    assert.ok(planForState(state, "2026-10-12")!.calories > 2420);
+  }
+  // At 91.5 kg, a 503 kcal deficit, likewise.
+  const lighter = emptyJournal();
+  lighter.profile.body = {
+    ...lifter,
+    weightKg: 91.5,
+    updatedAt: "2026-10-06T08:00:00.000Z",
+  };
+  lighter.nutrition.targets = {
+    goal: "lose",
+    calories: 2410,
+    protein: 183,
+    carbs: 255,
+    fat: 73,
+  };
+  assert.equal(
+    regateLegacyTargets(lighter, "2026-10-12", "Europe/Copenhagen"),
+    false,
+  );
 });

@@ -31,7 +31,12 @@ const withBody = (
   weightKg: number,
   extra: Record<string, unknown> = {},
 ) => {
-  s.profile.body = { sex, weightKg, ...extra } as never;
+  s.profile.body = {
+    sex,
+    weightKg,
+    updatedAt: "2026-09-01T07:00:00.000Z",
+    ...extra,
+  } as never;
   return s;
 };
 
@@ -592,14 +597,18 @@ test("an older cached app gets alcohol as other and no estimates, and saving the
 });
 
 test("the drinks target takes the latest check-in weight, but not a slip", () => {
+  // Goals given before the date, as the goals plan's current weight counts
+  // only the weigh-ins since (currentWeightKg).
+  const goals = (weightKg: number) =>
+    ({ weightKg, updatedAt: "2026-09-01T07:00:00.000Z" }) as never;
   const at = (weight: number) => {
     const s = emptyJournal();
-    s.profile.body = { weightKg: weight } as never;
+    s.profile.body = goals(weight);
     return hydrationTargetMl(s, date).targetMl;
   };
   // Goals set at 85 kg; a check-in of 80 kg since is the weight used.
   const s = emptyJournal();
-  s.profile.body = { weightKg: 85 } as never;
+  s.profile.body = goals(85);
   s.health.checkins.push({ date, bodyweight: 80 } as never);
   assert.equal(hydrationTargetMl(s, date).targetMl, at(80));
   // A check-in of 185, a typo or pounds, leaves the target as it was.

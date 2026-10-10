@@ -18,6 +18,7 @@ import { supplementText, supplementsForDay } from "./supplements";
 import { describeRoute, type RouteNote } from "./route-summary";
 import { bodyFatByDate } from "./body-composition";
 import { dailyTargets } from "./nutrition";
+import { goalsForState } from "./body-goals";
 import { formatSleepDuration } from "./health";
 
 // A compact, complete picture of the journal for a date range, shared by
@@ -177,7 +178,9 @@ export function journalForVoice(
       source: b.source === "apple-health" ? "Apple Health" : "reported",
     })),
     dailyTargets: dailyTargets(state.nutrition.targets),
-    goals: state.profile.body ?? null,
+    // As the athlete chose them: heavy manual work included, which
+    // profile.body saves as "high" (goalsForState).
+    goals: goalsForState(state),
   };
 }
 

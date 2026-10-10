@@ -435,7 +435,8 @@ private struct VoiceCallCard: View {
 }
 
 /// What Coach saved, or offers to save: a sheet with the entry's name in the
-/// serif, Undo or Save, and the details on request.
+/// serif, Undo or Save, any health and safety notes in full, and the details
+/// on request.
 struct ReceiptCard: View {
   let receipt: Components.Schemas.CoachReceipt
   let busy: Bool
@@ -447,6 +448,16 @@ struct ReceiptCard: View {
 
   private var entries: [Components.Schemas.CoachReceiptEntry] { receipt.entries ?? [] }
   private var isOpen: Bool { expanded ?? (receipt.state == "pending") }
+  /// Health and safety notes (a goals plan's limits, and who to talk to),
+  /// shown in full whether the receipt is open or not.
+  private var notes: [String] { receipt.notes ?? [] }
+  /// The detail without those notes, which it also holds for older builds.
+  private var detail: String { Self.detail(receipt.detail, without: notes) }
+
+  static func detail(_ detail: String, without notes: [String]) -> String {
+    notes.reduce(detail) { $0.replacingOccurrences(of: $1, with: "") }
+      .split(separator: " ").joined(separator: " ")
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -457,7 +468,7 @@ struct ReceiptCard: View {
           .accessibilityHidden(true)
         // Only a button when there is more to show: a disabled one would
         // grey the title and detail out.
-        if !entries.isEmpty || receipt.detail.count >= 90 {
+        if !entries.isEmpty || detail.count >= 90 {
           Button {
             withAnimation(.snappy) { expanded = !isOpen }
           } label: {
@@ -471,6 +482,23 @@ struct ReceiptCard: View {
         if !typeSize.isAccessibilitySize { action }
       }
       if typeSize.isAccessibilitySize { action }
+      if !notes.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          ForEach(notes, id: \.self) { note in
+            Label {
+              Text(note).fixedSize(horizontal: false, vertical: true)
+            } icon: {
+              Image(systemName: "heart.text.square").foregroundStyle(Theme.attention)
+            }
+          }
+        }
+        .font(.footnote)
+        .foregroundStyle(Theme.ink)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.fill, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
+        .accessibilityElement(children: .combine)
+      }
       if isOpen, !entries.isEmpty {
         VStack(alignment: .leading, spacing: 12) {
           ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
@@ -489,7 +517,7 @@ struct ReceiptCard: View {
   private var summary: some View {
     VStack(alignment: .leading, spacing: 3) {
       Text(LineBreaks.title(receipt.title, size: typeSize)).folio(.entry).foregroundStyle(Theme.ink)
-      Text(receipt.detail)
+      Text(detail)
         .font(.footnote)
         .foregroundStyle(Theme.inkSecondary)
         .lineLimit(isOpen ? nil : 2)

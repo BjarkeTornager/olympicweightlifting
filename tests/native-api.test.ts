@@ -160,6 +160,14 @@ test("every action the app can send is a valid journal action", () => {
     { kind: "confirm_technique", checked: true },
     { kind: "take_load_reset", entryId: "e" },
     { kind: "set_hydration_target", hidden: true },
+    {
+      kind: "take_suggested_targets",
+      targets: { goal: "maintain", calories: 2900, protein: 160 },
+    },
+    {
+      kind: "keep_current_targets",
+      targets: { goal: "lose", calories: 2400, carbs: 260, fat: 70 },
+    },
   ];
   assert.equal(
     new Set(examples.map((e) => e.kind)).size + appOnly.length,

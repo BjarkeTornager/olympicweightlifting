@@ -210,6 +210,7 @@ export async function writeJournal(
       // Apple Health summaries come only from the iPhone sync.
       state.health.vitals ??= previous.health.vitals;
       state.health.bodyFat ??= previous.health.bodyFat;
+      state.health.bodyMass ??= previous.health.bodyMass;
       // A day stays complete while its meals are the same, food tags aside.
       const day = (meals: JournalState["nutrition"]["meals"], date: string) =>
         meals

@@ -1905,6 +1905,14 @@
           },
           "targets": {
             "$ref": "#/components/schemas/SuggestedTargets"
+          },
+          "energyAnswer": {
+            "type": "string",
+            "enum": [
+              "no",
+              "yes",
+              "prefer_not_to_say"
+            ]
           }
         },
         "required": [
@@ -3232,6 +3240,12 @@
               },
               "ifYes": {
                 "$ref": "#/components/schemas/DailyTargets"
+              },
+              "ifYesNotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [

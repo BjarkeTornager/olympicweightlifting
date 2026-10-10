@@ -20,6 +20,7 @@ import {
 import {
   CARBS_FLOOR_G,
   LACTATION_KCAL,
+  LACTATION_KCAL_LATER,
   macroShares,
   POSTPARTUM_WEEKS,
   pregnancyCarbsFloorG,
@@ -368,7 +369,21 @@ test("conversational prompt changes preserve the fixed health, privacy, evidence
     // (one-target.test.ts), as Today asks them on the website and iPhone.
     // Removing that sentence reproduces the previous hash (32e4383b…).
     // Health, privacy and evidence text is otherwise unchanged.
-    "62b81d6b154e3a8f3c897457a1fd64197568a60b86fee25b29afdbe283e3c8e4",
+    // Revised 2026-10-10, deliberate and reviewed, from the review of the
+    // combined targets release, in the goal-setup paragraph only:
+    // - The low-energy questions are asked only at goal setup, a goals
+    //   follow-up, before taking a suggestion or when the athlete asks,
+    //   never in the middle of logging. The paragraph no longer also says
+    //   not to ask them outside goal setup, which contradicted that and the
+    //   private-context paragraph, and the later sentence that listed the
+    //   same times refers back to them.
+    // - Rather not say is null, as set_body_goals takes it, so it removes
+    //   earlier answers rather than keeping a withdrawn no.
+    // - While breastfeeding the plan adds about 400 kcal once the baby is
+    //   6 months old (LACTATION_KCAL_LATER).
+    // Restoring those phrases reproduces the previous hash (62b81d6b…).
+    // Health, privacy and evidence text is otherwise unchanged.
+    "9c003ac2e6935a9dcee4f5116bf206692736b2ee955a0ff52a488ad2f90788f8",
     "A fixed-policy change requires deliberate review and a fresh evaluation baseline.",
   );
   assert.ok(coachStyle.length >= 100 && coachStyle.length <= 4500);
@@ -551,10 +566,19 @@ test("Coach quotes the plan's own rates and protein", () => {
       "whether they have kidney disease or a doctor has told them to limit protein (limitProtein), and, for women and anyone who'd rather not give their sex, aged 14–55, whether they're pregnant or breastfeeding",
     ),
   );
-  assert.ok(setup.includes("don't ask about them outside goal setup"));
+  // Asked at goal setup, a goals follow-up, before taking a suggestion or
+  // when asked, as the private-context paragraph says; rather not say is
+  // null, as set_body_goals takes it.
   assert.ok(
     setup.includes(
-      `adds about ${LACTATION_KCAL} kcal a day for making milk, sets no deficit until the baby is ${POSTPARTUM_WEEKS} weeks old and only a gentle one after, and keeps carbohydrate at ${pregnancyCarbsFloorG.breastfeeding} g or more`,
+      "Ask them only at goal setup, at a goals follow-up, before taking a suggestion or when the athlete asks to go through them, never in the middle of logging.",
+    ),
+  );
+  assert.ok(!setup.includes("outside goal setup"));
+  assert.ok(setup.includes("null if they'd rather not answer"));
+  assert.ok(
+    setup.includes(
+      `adds about ${LACTATION_KCAL} kcal a day for making milk (${LACTATION_KCAL_LATER} once the baby is 6 months old), sets no deficit until the baby is ${POSTPARTUM_WEEKS} weeks old and only a gentle one after, and keeps carbohydrate at ${pregnancyCarbsFloorG.breastfeeding} g or more`,
     ),
   );
   // Goal setup names the plan's fat share and carbohydrate floor.
@@ -622,7 +646,7 @@ test("goal setup asks the weight class and the low-energy questions, and the goa
   // Never collected where the plan sets no deficit anyway.
   assert.match(
     setup,
-    /never under 18 or in pregnancy, when the plan sets no deficit/,
+    /never under 18, in pregnancy or when the plan sets no deficit/,
   );
   assert.match(
     setup,

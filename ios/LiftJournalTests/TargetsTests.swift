@@ -58,6 +58,28 @@ struct TargetsTests {
     #expect(TargetsProposalCard.shown(proposal, answer: .yes).suggested.calories == 3000)
   }
 
+  @Test("With a yes, the notes are the held plan's, not the deficit's")
+  func heldNotes() {
+    let deficitNote = "The deficit is kept to 500 kcal a day to protect training and muscle, so the plan loses about 0.45 kg a week."
+    let heldNote = "You answered yes to one of the questions on stress fractures or eating, so the plan holds your weight at maintenance for now."
+    var deficit = proposal
+    deficit.title = "New daily targets suggested"
+    deficit.maintain = false
+    deficit.notes = [deficitNote]
+    deficit.followUp = "Coach can check them against your weight trend with you."
+    deficit.energyCheck = .init(
+      title: "Before a deficit: a few health questions",
+      questions: ["Have you had a stress fracture in the last 2 years?"],
+      note: "Optional, and not a diagnosis.",
+      ifYes: .init(goal: "maintain", calories: 3340),
+      ifYesNotes: [heldNote])
+    #expect(TargetsProposalCard.notes(deficit, answer: .no) == [deficitNote, deficit.followUp!])
+    #expect(TargetsProposalCard.notes(deficit, answer: .yes) == [heldNote])
+    // An older server sends no held notes: none, never the deficit's.
+    deficit.energyCheck?.ifYesNotes = nil
+    #expect(TargetsProposalCard.notes(deficit, answer: .yes).isEmpty)
+  }
+
   @Test("Taking or keeping sends the suggestion back as it was shown")
   func shown() {
     let sent = AppModel.shownTargets(proposal.suggested)

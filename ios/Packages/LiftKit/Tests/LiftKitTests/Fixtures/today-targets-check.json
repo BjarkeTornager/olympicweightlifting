@@ -16,7 +16,7 @@
     "focus": "lose_fat",
     "targetWeightKg": 62,
     "goalNotes": [
-      "Your goals plan suggests new daily targets, about 1,960 kcal a day. You can take them on Today on the website, or in the latest app."
+      "Your goals plan suggests new daily targets, about 1,960 kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app."
     ]
   },
   "nutrition": {
@@ -106,7 +106,10 @@
         "protein": 115,
         "carbs": 315,
         "fat": 65
-      }
+      },
+      "ifYesNotes": [
+        "You answered yes to one of the questions on stress fractures, eating or periods, so the plan holds your weight at maintenance for now. These can have many causes, and a sports doctor or sports dietitian can help you look into them and plan any change safely."
+      ]
     }
   }
 }

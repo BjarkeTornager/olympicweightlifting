@@ -407,20 +407,21 @@ final class AppModel {
 
   /// Take the daily targets the goals plan suggests, with the answer to the
   /// low-energy questions when it asked them, or keep the current ones over
-  /// them, sending the suggestion back as Today showed it: one that has
-  /// changed since is refused.
+  /// them, with any answer given, so a yes is never lost; the suggestion goes
+  /// back as Today showed it: one that has changed since is refused.
   func chooseTargets(
     _ proposal: Components.Schemas.TargetsProposal, take: Bool,
     answer: Components.Schemas.TakeSuggestedTargetsAction.EnergyAnswerPayload? = nil
   ) async {
     let shown = Self.shownTargets(proposal.suggested)
+    let given = proposal.energyCheck == nil ? nil : answer
     await save(
       take
-        ? .takeSuggestedTargets(
+        ? .takeSuggestedTargets(.init(kind: .takeSuggestedTargets, targets: shown, energyAnswer: given))
+        : .keepCurrentTargets(
           .init(
-            kind: .takeSuggestedTargets, targets: shown,
-            energyAnswer: proposal.energyCheck == nil ? nil : answer))
-        : .keepCurrentTargets(.init(kind: .keepCurrentTargets, targets: shown)),
+            kind: .keepCurrentTargets, targets: shown,
+            energyAnswer: given.flatMap { .init(rawValue: $0.rawValue) })),
       confirmation: take ? "New targets saved" : "Targets kept")
   }
 

@@ -112,10 +112,13 @@ struct TargetsProposalCard: View {
   }
 
   /// The plan's notes not already given as reasons, and the goals check the
-  /// suggestion agrees, which a yes doesn't: the plan then holds the weight.
+  /// suggestion agrees, which a yes doesn't: the plan then holds the weight,
+  /// and its own notes say why and who can help. An older server sends
+  /// none for it, and the deficit's would contradict it.
   static func notes(_ p: Components.Schemas.TargetsProposal, answer: EnergyAnswer?) -> [String] {
-    let followUp = answer == .yes && p.energyCheck != nil ? nil : p.followUp
-    return p.notes.filter { !p.reasons.contains($0) } + [followUp].compactMap { $0 }
+    let held = answer == .yes && p.energyCheck != nil
+    let notes = held ? p.energyCheck?.ifYesNotes ?? [] : p.notes
+    return notes.filter { !p.reasons.contains($0) } + [held ? nil : p.followUp].compactMap { $0 }
   }
 
   /// "Energy  2,640 → 3,000 kcal", a line for each target that changes,

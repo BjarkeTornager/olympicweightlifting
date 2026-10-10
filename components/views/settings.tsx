@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { backup, mergeImport, parseLegacyBackup } from "@/lib/domain";
 import type { JournalState } from "@/lib/model";
+import { setSettingsWeight } from "@/lib/target-history";
 import type { JournalController } from "../journal";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -123,10 +124,11 @@ export function SettingsView({
                 s.profile = {
                   ...s.profile,
                   name: String(form.get("name")),
-                  bodyweight: Number(form.get("bodyweight") || 0),
                   age: Number(form.get("age") || 0),
                   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 };
+                // A changed weight counts from now, as a weigh-in does.
+                setSettingsWeight(s, Number(form.get("bodyweight") || 0));
               });
               notify("Profile saved.");
             }}

@@ -149,28 +149,31 @@ function preparer(
       carbs: raw.targets.carbs ?? null,
       fat: raw.targets.fat ?? null,
     };
+    const answer = raw.energyAnswer;
+    const signs =
+      answer === undefined
+        ? undefined
+        : answer === "prefer_not_to_say"
+          ? null
+          : answer === "yes";
     return (state) => {
       const next = structuredClone(state);
       if (!take) {
-        keepCurrentTargets(next, today, shown);
+        const { held } = keepCurrentTargets(next, today, shown, signs);
         next.updatedAt = new Date().toISOString();
         return {
           state: next,
           title: "Keep your daily targets",
-          detail:
-            "Your goals plan suggests new ones again only once it moves on from these.",
+          detail: held
+            ? "Your targets stay as they are, and your yes to one of the health questions is saved, so your goals plan won't suggest a deficit; a sports doctor or sports dietitian can help you look into it."
+            : "Your goals plan suggests new ones again only once it moves on from these.",
         };
       }
-      const answer = raw.energyAnswer;
       const { proposal, agreed, closed } = takeTargetsProposal(
         next,
         today,
         shown,
-        answer === undefined
-          ? undefined
-          : answer === "prefer_not_to_say"
-            ? null
-            : answer === "yes",
+        signs,
       );
       next.updatedAt = new Date().toISOString();
       const kcal = proposal.targets.calories;

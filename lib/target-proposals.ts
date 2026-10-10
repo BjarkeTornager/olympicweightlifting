@@ -5,11 +5,15 @@ import {
   energyQuestionsFor,
   goalsForState,
   goalsHeading,
+  LACTATION_KCAL,
+  LACTATION_KCAL_LATER,
+  LACTATION_LATER_WEEKS,
   notesAboutAthlete,
   notesForTargets,
   planForState,
   planTargets,
   POSTPARTUM_WEEKS,
+  RECOMPOSITION_CUT,
   TARGETS_DIFFER,
   type GoalPlan,
 } from "./body-goals";
@@ -17,6 +21,7 @@ import { latestBodyFat } from "./body-composition";
 import {
   currentWeightKg,
   localDay,
+  ownProtein,
   recordTargets,
   sameTargets,
   targetsInForce,
@@ -54,8 +59,12 @@ export type TargetsProposal = {
   // When the plan sets a deficit, or aims very lean, without answers to
   // the low-energy questions in force (GoalPlan.energyCheckDue): the
   // questions, which come before the suggestion is taken, and the targets
-  // the plan gives instead with a yes, holding the weight.
-  energyCheck?: { questions: string[]; ifYes: DietTargets };
+  // the plan gives instead with a yes, holding the weight, with its notes.
+  energyCheck?: {
+    questions: string[];
+    ifYes: DietTargets;
+    ifYesNotes: string[];
+  };
 };
 
 const fmt = (kcal: number) => kcal.toLocaleString("en-GB");
@@ -109,9 +118,9 @@ export function describeTargets(t: DietTargets) {
     : `no daily targets, ${goal}`;
 }
 
-// The targets the plan gives now. When it sets no protein target, a saved
-// one is the athlete's own (their doctor's or dietitian's figure, as its
-// note advises), and stays, as it does when the goals are saved.
+// The targets the plan gives now. When it sets no protein target, the
+// athlete's own (their doctor's or dietitian's figure, as its note advises;
+// ownProtein) stays, as it does when the goals are saved.
 export function proposedTargets(
   plan: GoalPlan,
   protein: number | null,
@@ -145,11 +154,12 @@ export function targetsProposal(
   // saved none, so there is nothing to suggest.
   if (!goals || !plan?.dailyTargets) return null;
   const saved = targetsOf(state.nutrition.targets);
-  const targets = proposedTargets(plan, saved.protein);
+  const record = targetsInForce(state);
+  const protein = ownProtein(state, record);
+  const targets = proposedTargets(plan, protein);
   if (sameTargets(targets, saved)) return null;
   const weightKg = currentWeightKg(state, today);
   const now = weightKg ?? goals.weightKg;
-  const record = targetsInForce(state);
   const declined = state.profile.declinedTargets;
   // Saved before targets were recorded, by the plan as it was then
   // (targetsInForce): set at the goals' weight, on their day.
@@ -187,9 +197,17 @@ export function targetsProposal(
     ? (Date.parse(goals.targetDate) - Date.parse(today)) / 86400000
     : null;
   const passed = days != null && days < 0;
+  // A recomposition's small cut, saved as maintain, ends at its target date
+  // too (planGoals): saved calories well under maintenance, as the cut's 5 %
+  // is.
+  const baseKcal = dailyTarget(base.targets.calories);
+  const recomposing =
+    plan.focus === "recomposition" &&
+    baseKcal != null &&
+    baseKcal <= plan.maintenanceKcal * (1 - RECOMPOSITION_CUT / 2);
   const maintain =
     targets.goal === "maintain" &&
-    base.targets.goal !== "maintain" &&
+    (base.targets.goal !== "maintain" || recomposing) &&
     (plan.reachedGoal || passed);
   // Reasons that suggest new targets by themselves: the goal or its date,
   // the weight or the lean mass moving, or the old plan's maintenance.
@@ -227,14 +245,16 @@ export function targetsProposal(
       reasons.push(
         `Your weight is about ${weightKg} kg now, from ${base.weightKg} kg when ${base.since}.`,
       );
+    // A reading since then, and with lean mass known then, one that moves
+    // it by 2 kg: the lean mass holds until a new reading (planBodyFat).
     const reading = latestBodyFat(state, today);
     if (
       plan.leanMassKg != null &&
       reading &&
-      (base.leanMassKg != null
-        ? Math.abs(plan.leanMassKg - base.leanMassKg) >= LEAN_CHANGE_KG
-        : base.at != null &&
-          Date.parse(reading.updatedAt) >= Date.parse(base.at))
+      base.at != null &&
+      Date.parse(reading.updatedAt) >= Date.parse(base.at) &&
+      (base.leanMassKg == null ||
+        Math.abs(plan.leanMassKg - base.leanMassKg) >= LEAN_CHANGE_KG)
     )
       reasons.push(
         `Your body fat reading of ${reading.percent}% on ${reading.date} puts your lean mass at about ${plan.leanMassKg} kg${base.leanMassKg != null ? `, from ${base.leanMassKg} kg` : ""}, and the plan works out your energy and protein from it.`,
@@ -255,6 +275,16 @@ export function targetsProposal(
       causes.push(
         `Your baby is now ${plural(baby, "week")} old, so your goals plan can include a gentle loss.`,
       );
+    // From 6 months, less energy for making milk (LACTATION_KCAL_LATER).
+    if (
+      baby != null &&
+      baby >= LACTATION_LATER_WEEKS &&
+      (base.day == null ||
+        (babyWeeks(state, base.day) ?? 0) < LACTATION_LATER_WEEKS)
+    )
+      causes.push(
+        `Your baby is now ${plural(baby, "week")} old, so your goals plan counts about ${LACTATION_KCAL_LATER} kcal a day for making milk rather than ${LACTATION_KCAL}.`,
+      );
     // Maintenance as the old plan counted it, for targets it saved; while
     // breastfeeding the allowance for milk, which it left out, would muddle
     // the comparison.
@@ -269,6 +299,18 @@ export function targetsProposal(
           `The plan now counts your everyday movement and training more fully, so your maintenance is about ${fmt(plan.maintenanceKcal)} kcal a day rather than ${fmt(earlier)}.`,
         );
     }
+    // The plan before records set protein for everyone; now it sets none
+    // while breastfeeding, so its protein goes (ownProtein).
+    if (
+      !plan.proteinTarget &&
+      protein == null &&
+      dailyTarget(saved.protein) != null
+    )
+      reasons.push(
+        state.profile.goalChecks?.pregnancy === "breastfeeding"
+          ? "While you're breastfeeding your goals plan sets no protein target; your midwife, health visitor or a dietitian can advise you on protein."
+          : "Your goals plan now sets no protein target.",
+      );
   }
   // Slow loss is never answered here by cutting further: unless the
   // weight or lean mass has moved, a deeper cut waits for the goals check.
@@ -312,6 +354,9 @@ export function targetsProposal(
     (sameTargets(targets, declined) || nearTargets(targets, saved))
   )
     return null;
+  const held = plan.energyCheckDue
+    ? planForState(state, today, undefined, true)!
+    : null;
   return {
     targets,
     current: saved,
@@ -319,16 +364,14 @@ export function targetsProposal(
     reasons,
     plan,
     weightKg,
-    ...(plan.energyCheckDue && {
+    ...(held && {
       energyCheck: {
         questions: energyQuestionsFor(
           goals.sex,
           state.profile.goalChecks?.pregnancy,
         ),
-        ifYes: proposedTargets(
-          planForState(state, today, undefined, true)!,
-          saved.protein,
-        ),
+        ifYes: proposedTargets(held, protein),
+        ifYesNotes: held.notes,
       },
     }),
   };
@@ -377,7 +420,7 @@ export function acceptProposal(
     if (signs != null) state.profile.energyCheck = { date: today, signs };
     if (signs) {
       plan = planForState(state, today)!;
-      targets = proposedTargets(plan, state.nutrition.targets.protein);
+      targets = proposedTargets(plan, ownProtein(state));
     }
   }
   recordTargets(state, targets, today, {
@@ -389,21 +432,29 @@ export function acceptProposal(
 }
 
 // Keeps the saved targets over the plan's suggestion, which isn't made again
-// until the plan moves on from it (targetsProposal).
+// until the plan moves on from it (targetsProposal). An answer given to the
+// low-energy questions it asked is kept as when it is taken, so Coach and
+// the plan know of a yes: the suggestion kept over is then the one that
+// holds the weight (energyCheck.ifYes), which the review showed. The
+// answer is optional here, as keeping changes no targets.
 export function keepCurrentTargets(
   state: JournalState,
   today: string,
   shown: DietTargets,
+  signs?: boolean | null,
 ) {
   const proposal = shownProposal(state, today, shown);
+  const check = proposal.energyCheck;
+  if (check && signs != null)
+    state.profile.energyCheck = { date: today, signs };
   state.profile.declinedTargets = {
-    ...proposal.targets,
+    ...(check && signs ? check.ifYes : proposal.targets),
     date: today,
     at: new Date().toISOString(),
     weightKg: proposal.weightKg,
     leanMassKg: proposal.plan.leanMassKg,
   };
-  return proposal;
+  return { ...proposal, held: Boolean(check && signs) };
 }
 
 // Saves targets the athlete sets, on Food or with Coach: the plan's when
@@ -430,9 +481,9 @@ export function setDailyTargets(
 // athlete's own, with the plan's estimate; otherwise that they differ.
 // With the same goal, the plan's notes about the athlete (under 18,
 // pregnancy, breastfeeding, a limit on protein) follow any of those lines,
-// as their advice holds whatever the targets. Builds of the app from before
-// suggestions show these notes but no suggestion, so the line says where to
-// find it.
+// as their advice holds whatever the targets. The iPhone shows these notes
+// in every build, and builds from before suggestions show no suggestion on
+// Today, so the line says to update the app if it isn't there.
 export function targetNotes(
   state: JournalState,
   today: string,
@@ -444,7 +495,7 @@ export function targetNotes(
   if (proposal) {
     const kcal = dailyTarget(proposal.targets.calories);
     return [
-      `Your goals plan suggests new daily targets${kcal != null ? `, about ${fmt(kcal)} kcal a day` : ""}. You can take them on Today on the website, or in the latest app.`,
+      `Your goals plan suggests new daily targets${kcal != null ? `, about ${fmt(kcal)} kcal a day` : ""}: take them, or keep yours, on Today. If you don't see them there, update the app.`,
       ...notesAboutAthlete(plan, saved),
     ];
   }

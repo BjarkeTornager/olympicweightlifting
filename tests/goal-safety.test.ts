@@ -869,7 +869,7 @@ test("the iPhone shows the plan's notes only beside the plan's own targets", () 
   const native = buildToday(state, 1, later, new Set());
   assert.equal(native.nutrition.targetCalories, 2640);
   assert.deepEqual(native.body?.goalNotes, [
-    "Your goals plan suggests new daily targets, about 3,120 kcal a day. You can take them on Today on the website, or in the latest app.",
+    "Your goals plan suggests new daily targets, about 3,120 kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app.",
   ]);
   assert.equal(native.targetsProposal?.maintain, true);
   assert.equal(native.targetsProposal?.suggested.calories, 3120);
@@ -957,7 +957,7 @@ test("targets saved before maintenance rose stay as they were, and the iPhone su
     const notes = native.body?.goalNotes;
     assert.equal(
       notes?.[0],
-      `Your goals plan suggests new daily targets, about ${planned.toLocaleString("en-GB")} kcal a day. You can take them on Today on the website, or in the latest app.`,
+      `Your goals plan suggests new daily targets, about ${planned.toLocaleString("en-GB")} kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app.`,
     );
     return notes;
   };
@@ -1184,4 +1184,78 @@ test("old saved targets that break a hard limit follow the plan again, once; oth
     updatedAt: "2026-09-01T10:00:00.000Z",
   };
   assert.equal(regated(checked), false);
+  // Targets recorded since this release are never old ones.
+  const recorded = saved(girl, {
+    goal: "lose",
+    calories: 1730,
+    protein: 120,
+    carbs: 204,
+    fat: 48,
+  });
+  recorded.profile.targetHistory = [
+    {
+      ...recorded.nutrition.targets,
+      source: "manual",
+      from: "2026-09-01",
+      setAt: "2026-09-01T10:00:00.000Z",
+      weightKgAtSet: 60,
+    },
+  ];
+  assert.equal(regated(recorded), false);
+});
+
+test("the release check leaves targets that the plan of 4 October saved, a deficit a few kcal over its cap included", () => {
+  // A 92 kg lifter aiming for 89 kg: the old plan's deficit is
+  // 506 kcal, a few over the 500 kcal cap, and the plan of 4 October, with
+  // the cap, rounded to the same 2,420 kcal. It saved these on 6 October,
+  // and its release check left the same targets saved before October.
+  const lifter: Goals = {
+    ...athlete,
+    age: 28,
+    heightCm: 180,
+    weightKg: 92,
+    targetWeightKg: 89,
+  };
+  const targets = {
+    goal: "lose" as const,
+    calories: 2420,
+    protein: 184,
+    carbs: 255,
+    fat: 74,
+  };
+  for (const updatedAt of [
+    "2026-10-06T08:00:00.000Z",
+    "2026-09-01T08:00:00.000Z",
+  ]) {
+    const state = emptyJournal();
+    state.profile.body = { ...lifter, updatedAt };
+    state.nutrition.targets = { ...targets };
+    // Raised maintenance (2,720 kcal now) never rewrites them; the plan
+    // suggests its own instead.
+    assert.equal(
+      regateLegacyTargets(state, "2026-10-12", "Europe/Copenhagen"),
+      false,
+    );
+    assert.deepEqual(state.nutrition.targets, targets);
+    assert.equal(state.profile.targetHistory, undefined);
+    assert.ok(planForState(state, "2026-10-12")!.calories > 2420);
+  }
+  // At 91.5 kg, a 503 kcal deficit, likewise.
+  const lighter = emptyJournal();
+  lighter.profile.body = {
+    ...lifter,
+    weightKg: 91.5,
+    updatedAt: "2026-10-06T08:00:00.000Z",
+  };
+  lighter.nutrition.targets = {
+    goal: "lose",
+    calories: 2410,
+    protein: 183,
+    carbs: 255,
+    fat: 73,
+  };
+  assert.equal(
+    regateLegacyTargets(lighter, "2026-10-12", "Europe/Copenhagen"),
+    false,
+  );
 });

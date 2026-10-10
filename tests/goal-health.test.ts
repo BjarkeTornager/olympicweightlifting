@@ -7,6 +7,7 @@ import {
   CARBS_FLOOR_G,
   describePlan,
   LACTATION_KCAL,
+  LACTATION_KCAL_LATER,
   notesForTargets,
   planForState,
   planGoals,
@@ -19,10 +20,12 @@ import {
 } from "../lib/body-goals";
 import { prepareAction } from "../lib/agent/actions";
 import { localClock } from "../lib/agent/time-context";
-import { coachingContext } from "../lib/coaching";
+import { coachingContext, takeTargetsProposal } from "../lib/coaching";
 import { offsetDate } from "../lib/health";
 import { journalSchema } from "../lib/model";
 import { buildToday } from "../lib/native-api";
+import { targetsInForce } from "../lib/target-history";
+import { targetsProposal } from "../lib/target-proposals";
 import { voiceAction, voiceToolArgs } from "../lib/voice-actions";
 import { voiceContext, voiceInstruction } from "../lib/voice-checkin";
 import { elevenLabsTools } from "../lib/voice-elevenlabs";
@@ -109,7 +112,7 @@ test("breastfeeding: maintenance plus the allowance, no deficit before 6 weeks o
     assert.doesNotMatch(feedingNote(plan), /like it to lose/);
   }
   // From 6 weeks a gentle loss: 0.5 % of 76 kg is within 500 kcal a day.
-  for (const weeksSinceBirth of [6, 12, 40]) {
+  for (const weeksSinceBirth of [6, 12, 25]) {
     const plan = planGoals(mother, today, {
       pregnancy: "breastfeeding",
       weeksSinceBirth,
@@ -120,6 +123,33 @@ test("breastfeeding: maintenance plus the allowance, no deficit before 6 weeks o
     assert.equal(plan.weeklyChangeKg, 0.38);
     assert.match(feedingNote(plan), /keeps any deficit gentle/);
     assert.match(feedingNote(plan), /at most about 0\.5 kg a week/);
+  }
+  // From 6 months about 400 kcal for making milk (NASEM), as solid food
+  // takes over some feeds, and the floor counts that; past a year the
+  // note asks her to update the goals once she stops.
+  for (const weeksSinceBirth of [26, 40, 60, 260]) {
+    const plan = planGoals(mother, today, {
+      pregnancy: "breastfeeding",
+      weeksSinceBirth,
+    });
+    assert.equal(LACTATION_KCAL_LATER, 400);
+    assert.equal(
+      plan.maintenanceKcal,
+      plain.maintenanceKcal + LACTATION_KCAL_LATER,
+    );
+    assert.equal(plan.maintenanceKcal, 2850);
+    assert.equal(plan.direction, "lose");
+    assert.ok(plan.calories < plan.maintenanceKcal);
+    assert.match(
+      feedingNote(plan),
+      /adds about 400 kcal a day for making milk, as solid food now takes over some feeds, and keeps any deficit gentle/,
+    );
+    assert.equal(
+      /over a year old: if you've stopped breastfeeding, update your goals/.test(
+        feedingNote(plan),
+      ),
+      weeksSinceBirth >= 52,
+    );
   }
   // At a BMI of 25 or more the deficit stays within 500 kcal, even with
   // high body fat, which would otherwise allow 1,000.
@@ -560,6 +590,56 @@ test("a protein target the athlete sets beside a plan that sets none is their ow
   assert.deepEqual(answered.changes, [
     "Replaces your own daily targets (2,140 kcal) with your goals plan's.",
   ]);
+});
+
+test("a protein target the plan saved while breastfeeding, before records were kept, is the plan's: the suggestion and saving the goals drop it", () => {
+  // Goals saved while breastfeeding before this release, whose plan set
+  // protein for everyone, with the targets it saved.
+  const feeding = { ...mother, weightKg: 74, targetWeightKg: 66 };
+  const legacy = () => {
+    const state = emptyJournal();
+    state.profile.body = { ...feeding, updatedAt: "2026-09-20T10:00:00.000Z" };
+    state.profile.goalChecks = {
+      pregnancy: "breastfeeding",
+      lowWeightConfirmedKg: null,
+      updatedAt: "2026-09-20T10:00:00.000Z",
+    };
+    state.nutrition.targets = {
+      goal: "maintain",
+      calories: 2670,
+      protein: 133,
+      carbs: 368,
+      fat: 74,
+    };
+    return journalSchema.parse(state);
+  };
+  const later = "2026-10-12";
+  const state = legacy();
+  assert.equal(targetsInForce(state).source, "plan");
+  assert.equal(planForState(state, later)!.proteinTarget, false);
+  // The suggestion has no protein, and says why first.
+  const proposal = targetsProposal(state, later)!;
+  assert.equal(proposal.targets.protein, null);
+  assert.equal(
+    proposal.reasons[0],
+    "While you're breastfeeding your goals plan sets no protein target; your midwife, health visitor or a dietitian can advise you on protein.",
+  );
+  const native = buildToday(state, 1, later, new Set());
+  assert.equal(native.targetsProposal?.suggested.protein, undefined);
+  assert.equal(native.targetsProposal?.current.protein, 133);
+  // Taking it saves none.
+  takeTargetsProposal(state, later, proposal.targets);
+  assert.equal(state.nutrition.targets.protein, null);
+  // Saving the same goals again drops it too, never calling it their own.
+  const resaved = legacy();
+  const plan = applyGoals(
+    resaved,
+    { ...feeding, pregnancy: "breastfeeding" },
+    later,
+  );
+  assert.equal(resaved.nutrition.targets.protein, null);
+  assert.ok(!plan.notes.some((n) => /Your own protein/.test(n)));
+  assert.deepEqual(plan.changes, []);
 });
 
 test("a voice goals save that removes the kidney answer or changes the baby's age says so first", () => {

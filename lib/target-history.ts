@@ -110,6 +110,20 @@ export function targetsInForce(state: JournalState): TargetRecord & {
   };
 }
 
+// The saved protein target as the athlete's own figure (their doctor's or
+// dietitian's, perhaps), which stays beside a plan that sets none. Null
+// when the saved targets are the plan's from before records were kept: it
+// set protein for everyone then, breastfeeding included, so that protein
+// is the plan's, not theirs.
+export function ownProtein(
+  state: JournalState,
+  set: TargetRecord & { recorded: boolean } = targetsInForce(state),
+) {
+  return !set.recorded && set.source === "plan"
+    ? null
+    : dailyTarget(state.nutrition.targets.protein);
+}
+
 // Saves the daily targets with where they came from, adding them to the
 // history; a suggestion kept over before goes, as these targets replace
 // what it was compared with. Targets saved without a record (before
@@ -184,8 +198,33 @@ export function targetsOn(
   );
 }
 
-// The weight the athlete last gave the plan, and when: with the goals, or
-// the current weight when they took the plan's targets. Weigh-ins from
+// The weight given in Settings since the app recorded when, and that day.
+function settingsWeight(state: JournalState) {
+  const { bodyweight, bodyweightSetAt } = state.profile;
+  return bodyweight > 0 && bodyweightSetAt
+    ? {
+        kg: bodyweight,
+        day: localDay(bodyweightSetAt, state),
+        at: bodyweightSetAt,
+      }
+    : null;
+}
+
+// Saves the weight given in Settings, with when, so it counts from then as
+// the goals' weight does; 0 removes it.
+export function setSettingsWeight(
+  state: JournalState,
+  kg: number,
+  at = new Date().toISOString(),
+) {
+  if (kg === state.profile.bodyweight) return;
+  state.profile.bodyweight = kg;
+  if (kg > 0) state.profile.bodyweightSetAt = at;
+  else delete state.profile.bodyweightSetAt;
+}
+
+// The weight the athlete last gave, and when: with the goals, in Settings,
+// or the current weight when they took the plan's targets. Weigh-ins from
 // before then don't count towards the current weight, so the plan right
 // after saving is the one they saw.
 function weightAnchor(state: JournalState) {
@@ -199,15 +238,63 @@ function weightAnchor(state: JournalState) {
         r.from != null &&
         r.weightKgAtSet != null,
     );
-  if (plan && (!body || Date.parse(plan.setAt!) >= Date.parse(body.updatedAt)))
-    return { kg: plan.weightKgAtSet!, day: plan.from!, at: plan.setAt! };
-  return body
-    ? {
+  return (
+    [
+      plan && { kg: plan.weightKgAtSet!, day: plan.from!, at: plan.setAt! },
+      body && {
         kg: body.weightKg,
         day: localDay(body.updatedAt, state),
         at: body.updatedAt,
-      }
-    : null;
+      },
+      settingsWeight(state),
+    ]
+      .filter((a): a is { kg: number; day: string; at: string } => Boolean(a))
+      // The latest; the plan's record before the goals saved with it.
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0] ?? null
+  );
+}
+
+// The weight nearest a day, to pair with a body fat reading taken then, so
+// the lean mass it gives stays the one measured as the weight changes:
+// the weight given with the goals or in Settings, a weigh-in (weighIns),
+// or a weight the daily targets were set at (the goals' weight before they
+// were saved again), whichever is closest in days, one on or before the
+// day first. On the same day the weight given comes first, as a reading
+// given with the goals goes with it, then a weigh-in. given is a weight
+// being given with goals not saved yet. Null with no weight at all.
+export function weightNearKg(
+  state: JournalState,
+  date: string,
+  given?: { day: string; kg: number },
+) {
+  const body = state.profile.body;
+  const settings = settingsWeight(state);
+  const known = [
+    ...(given ? [{ ...given, rank: 0 }] : []),
+    ...(body
+      ? [{ day: localDay(body.updatedAt, state), kg: body.weightKg, rank: 0 }]
+      : []),
+    ...(settings ? [{ day: settings.day, kg: settings.kg, rank: 0 }] : []),
+    ...weighIns(state, "0001-01-01", "9999-12-31").map((w) => ({
+      day: w.date,
+      kg: w.kg,
+      rank: 1,
+    })),
+    ...records(state).flatMap((r) =>
+      r.from != null && r.weightKgAtSet != null
+        ? [{ day: r.from, kg: r.weightKgAtSet, rank: 2 }]
+        : [],
+    ),
+  ];
+  const apart = (day: string) => Math.abs(Date.parse(day) - Date.parse(date));
+  const after = (day: string) => Number(day > date);
+  known.sort(
+    (a, b) =>
+      apart(a.day) - apart(b.day) ||
+      after(a.day) - after(b.day) ||
+      a.rank - b.rank,
+  );
+  return known[0]?.kg ?? null;
 }
 
 // Within a quarter of each other: a real change between two weighings,
@@ -218,14 +305,14 @@ const near = (a: number, b: number | null) =>
 // The athlete's current weight, to 0.1 kg: the average of the weigh-ins in
 // the 7 days up to the date (a check-in, else Apple Health's first reading
 // of the day), else the latest weigh-in, else the weight given with the
-// goals or in Settings. The weight given with the goals counts as that
-// day's weigh-in, and earlier ones don't count, as it is the athlete's
-// latest word on it. A weigh-in a quarter away from the one before is
-// passed over as a likely slip; when the next one agrees with it, the
-// weight has really changed, and the two start afresh without the ones
-// before. Until a weight is backed up, by the goals, Settings or two
-// weigh-ins in a row that agree, the latest weigh-in is taken as given, so
-// a slip in the very first one lasts only until the next.
+// goals or in Settings. The weight given with the goals, or since in
+// Settings, counts as that day's weigh-in, and earlier ones don't count,
+// as it is the athlete's latest word on it. A weigh-in a quarter away from
+// the one before is passed over as a likely slip; when the next one agrees
+// with it, the weight has really changed, and the two start afresh without
+// the ones before. Until a weight is backed up, by the goals, Settings or
+// two weigh-ins in a row that agree, the latest weigh-in is taken as
+// given, so a slip in the very first one lasts only until the next.
 export function currentWeightKg(state: JournalState, date: string) {
   const anchor = weightAnchor(state);
   const since = anchor && anchor.day <= date ? anchor : null;

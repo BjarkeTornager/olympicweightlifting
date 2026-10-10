@@ -153,6 +153,9 @@ export const journalSchema = z
     profile: z
       .object({
         bodyweight: z.number().finite().min(0).max(1000).default(0),
+        // When the weight was last given in Settings, so it counts from then
+        // as the athlete's latest word on it (currentWeightKg).
+        bodyweightSetAt: z.iso.datetime().optional(),
         age: z.number().min(0).max(130).default(0),
         unit: z.literal("kg").default("kg"),
         name: z.string().max(120).optional(),

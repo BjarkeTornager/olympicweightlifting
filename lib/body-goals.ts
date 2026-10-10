@@ -11,9 +11,11 @@ import {
 import { LIFTING_NET_KCAL_PER_KG_HOUR } from "./energy";
 import {
   currentWeightKg,
+  ownProtein,
   recordTargets,
   sameTargets,
   targetsInForce,
+  weightNearKg,
 } from "./target-history";
 
 // A session's length in whole minutes, as the goals take it.
@@ -296,8 +298,14 @@ const LOWEST_ACTIVITY = 1.4;
 // lifting; five 4-hour sessions a week would count more at 88 kg.
 const TRAINING_KCAL_CAP = 1000;
 const KCAL_PER_KG = 7700;
-// Making milk takes about 500 kcal a day in the first six months (EFSA).
+// Making milk takes about 500 kcal a day in the first six months (EFSA,
+// NNR), and about 400 from then, as solid food takes over some feeds (IOM
+// 2005, NASEM 2023). Past a year how much is made varies too widely to
+// say, so the note asks the athlete to update the goals once they stop.
 export const LACTATION_KCAL = 500;
+export const LACTATION_KCAL_LATER = 400;
+export const LACTATION_LATER_WEEKS = 26;
+const LACTATION_YEAR_WEEKS = 52;
 // While breastfeeding, no deficit in the first weeks after the birth, nor
 // while the baby's age isn't known. After that a gentle one: at most
 // 500 kcal a day (about 0.45 kg a week) at a BMI of 25 or more, where the
@@ -334,6 +342,8 @@ export const proteinPerKg = {
   adjusted: { losing: 2, other: 1.8 },
 };
 const ADJUSTED_FROM_BMI = 30;
+// Recomposition at a steady weight eats 5 % under maintenance.
+export const RECOMPOSITION_CUT = 0.05;
 // 1.6 g/kg, about where gains in lean mass level off: the plan's protein
 // on bodyweight at a BMI of 30 or more, within the adjusted weight's
 // limits, and the least it goes down to to make room for carbohydrate.
@@ -536,7 +546,14 @@ export function planGoals(
       g.weightKg) /
     7;
   const trainingPerDay = Math.min(trainingKcal, TRAINING_KCAL_CAP);
-  const milk = breastfeeding ? LACTATION_KCAL : 0;
+  // While breastfeeding, the baby's age, when known.
+  const babyAge = breastfeeding ? (composition.weeksSinceBirth ?? null) : null;
+  const laterMilk = babyAge != null && babyAge >= LACTATION_LATER_WEEKS;
+  const milk = !breastfeeding
+    ? 0
+    : laterMilk
+      ? LACTATION_KCAL_LATER
+      : LACTATION_KCAL;
   const maintenance =
     resting * Math.max(everydayActivity[g.activity], LOWEST_ACTIVITY) +
     trainingPerDay +
@@ -693,8 +710,7 @@ export function planGoals(
   } else if (breastfeeding) {
     // No deficit until the baby is 6 weeks old, or while its age isn't
     // known; then a gentle one (breastfeedingCapKcal).
-    const weeks = composition.weeksSinceBirth ?? null;
-    const early = weeks == null || weeks < POSTPARTUM_WEEKS;
+    const early = babyAge == null || babyAge < POSTPARTUM_WEEKS;
     const asks = cutting && !minor;
     const deficit = !asks
       ? "sets no deficit"
@@ -702,11 +718,15 @@ export function planGoals(
         ? `sets no deficit until your baby is ${POSTPARTUM_WEEKS} weeks old`
         : `keeps any deficit gentle (at most about ${bmiNow >= 25 ? "0.5" : "0.25"} kg a week)`;
     const askAge =
-      asks && weeks == null
+      asks && babyAge == null
         ? ` If you'd like the plan to include a gentle loss once your baby is ${POSTPARTUM_WEEKS} weeks old, say how old your baby is.`
         : "";
+    const yearOld =
+      babyAge != null && babyAge >= LACTATION_YEAR_WEEKS
+        ? " Your baby is over a year old: if you've stopped breastfeeding, update your goals so the plan stops adding energy for milk."
+        : "";
     warn(
-      `While you're breastfeeding the plan adds about ${LACTATION_KCAL} kcal a day for making milk and ${deficit}, with no protein target.${askAge} Keep an eye on your milk supply, and talk to your midwife or health visitor before trying to lose weight.`,
+      `While you're breastfeeding the plan adds about ${milk} kcal a day for making milk${laterMilk ? ", as solid food now takes over some feeds," : ""} and ${deficit}, with no protein target.${askAge}${yearOld} Keep an eye on your milk supply, and talk to your midwife or health visitor before trying to lose weight.`,
     );
     if (early) cut = false;
   }
@@ -812,7 +832,7 @@ export function planGoals(
   // Recomposition at a steady weight: a small deficit, with training and
   // protein doing the rest.
   if (cut && focus === "recomposition" && direction === "maintain")
-    calories = maintenance * 0.95;
+    calories = maintenance * (1 - RECOMPOSITION_CUT);
   // A deficit stays within 500 kcal a day, or 1,000 kcal (about 0.9 kg a
   // week, inside the 1 kg limit) when body fat is high, while breastfeeding
   // within breastfeedingCapKcal, and never takes calories below the floor.
@@ -1224,25 +1244,70 @@ export function goalsHeading(
       : undefined;
 }
 
+// The body fat the plan works from at a weight: the latest reading's lean
+// mass, as a share of that weight. The lean mass is the one the daily
+// targets were last set with when the reading came before them, as goals
+// saved again may no longer hold the weight it was taken at; otherwise the
+// reading's at the weight nearest the day it was taken (weightNearKg). It
+// holds until a new reading, so as the athlete loses, the safer weight a
+// goal below it heads for stays where it was, and resting energy and
+// protein stay on the lean mass measured; at the reading's own weight it is
+// the reading. Null without a reading from the last 90 days. given is a
+// weight being given with the goals today, as the goals form's preview and
+// applyGoals have it before the goals are saved.
+export function planBodyFat(
+  state: JournalState,
+  today: string,
+  weightKg: number,
+  given?: number,
+) {
+  const reading = latestBodyFat(state, today);
+  if (!reading) return null;
+  const set = state.profile.targetHistory?.findLast(
+    (r) => r.source === "plan" && r.setAt != null && r.from != null,
+  );
+  const held =
+    set?.leanMassKgAtSet != null &&
+    reading.date <= set.from! &&
+    Date.parse(set.setAt!) >= Date.parse(reading.updatedAt)
+      ? set.leanMassKgAtSet
+      : null;
+  const paired = weightNearKg(
+    state,
+    reading.date,
+    given == null ? undefined : { day: today, kg: given },
+  );
+  const lean = held ?? (paired ?? weightKg) * (1 - reading.percent / 100);
+  // Never under the lowest reading accepted: a weight below the lean mass
+  // measured means it has changed, and only a new reading can say how.
+  return Math.max(3, Math.round(1000 * (1 - lean / weightKg)) / 10);
+}
+
 // The plan for the saved goals at the current weight (liveGoals), with the
-// focus, target, latest body fat and the safety checks given with them. It
-// suggests new targets (target-proposals.ts); the saved ones stay until the
-// athlete takes them. signs plans with that answer to the low-energy
-// questions instead of the one in force, as a suggestion's review shows.
+// focus, target, latest body fat (planBodyFat) and the safety checks given
+// with them. It suggests new targets (target-proposals.ts); the saved ones
+// stay until the athlete takes them. signs plans with that answer to the
+// low-energy questions instead of the one in force, as a suggestion's
+// review shows, and bodyFat with that body fat (applyGoals).
 export function planForState(
   state: JournalState,
   today: string,
   weightKg?: number,
   signs?: boolean | null,
+  bodyFat?: number | null,
 ) {
   const body = goalsForState(state);
   if (!body) return null;
   const checks = state.profile.goalChecks;
   const weightClass = state.profile.weighIn?.classKg === body.targetWeightKg;
-  return planGoals(liveGoals(state, today, weightKg)!, today, {
+  const goals = liveGoals(state, today, weightKg)!;
+  return planGoals(goals, today, {
     focus: state.profile.bodyTargets?.focus,
     targetBodyFatPercent: state.profile.bodyTargets?.targetBodyFatPercent,
-    bodyFatPercent: latestBodyFat(state, today)?.percent ?? null,
+    bodyFatPercent:
+      bodyFat === undefined
+        ? planBodyFat(state, today, goals.weightKg)
+        : bodyFat,
     pregnancy: checks?.pregnancy ?? null,
     weeksSinceBirth: babyWeeks(state, today),
     limitProtein: Boolean(state.profile.goalHealth?.limitProtein),
@@ -1309,7 +1374,8 @@ export const ASSUMED_SESSION =
 // weeks given only when they differ from the saved age, so saving the
 // goals again never moves it. A protein target saved beside a plan that set
 // none is the athlete's own, their doctor's or dietitian's figure perhaps,
-// and is kept while the plan still sets none. A new answer to the
+// and is kept while the plan still sets none, unless it is the one the plan
+// saved before records were kept (ownProtein). A new answer to the
 // low-energy questions is kept with today's date, the same answer while it
 // is in force keeps its day (so saving again never stretches a no past
 // 3 months), and null removes them. A weight class stays while the goal
@@ -1418,6 +1484,9 @@ export function applyGoals(
       updatedAt: stamp,
     };
   }
+  // The body fat as the form's preview has it, before these goals replace
+  // the weight an earlier reading was taken at.
+  const bodyFat = planBodyFat(state, today, goals.weightKg, goals.weightKg);
   const { activity, ...rest } = goals;
   state.profile.body = {
     ...rest,
@@ -1428,11 +1497,11 @@ export function applyGoals(
   else delete state.profile.heavyManualWork;
   // Planned at the weight just given, as the form's preview and Coach's
   // review show it.
-  const plan = planForState(state, today, goals.weightKg)!;
+  const plan = planForState(state, today, goals.weightKg, undefined, bodyFat)!;
   state.profile.age = goals.age;
   state.profile.bodyweight = goals.weightKg;
   const targets = planTargets(plan);
-  const own = dailyTarget(state.nutrition.targets.protein);
+  const own = ownProtein(state, replaced);
   const keepsOwn =
     own != null && !plan.proteinTarget && earlier?.proteinTarget === false;
   if (keepsOwn) targets.protein = own;

@@ -78,6 +78,8 @@ struct ContractTests {
     #expect(check.questions.count == 3)
     #expect(check.note.hasPrefix("Optional, and not a diagnosis."))
     #expect(check.ifYes.goal == "maintain" && check.ifYes.calories == 2300)
+    // With a yes, the held plan's notes replace the deficit's.
+    #expect(check.ifYesNotes?.first?.hasPrefix("You answered yes to one of the questions") == true)
   }
 
   @Test("Trends rows carry the targets in force each day")

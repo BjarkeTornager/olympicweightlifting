@@ -249,3 +249,52 @@ test("a suggestion that sets a deficit asks the low-energy questions first; with
   });
   await expect(suggestion).toHaveCount(0);
 });
+
+test("keeping the current targets after a yes to the low-energy questions saves the yes", async ({
+  page,
+  context,
+}) => {
+  const date = today();
+  let state: JournalState = emptyJournal();
+  applyGoals(
+    state,
+    {
+      ...athlete,
+      age: 30,
+      sex: "female",
+      heightCm: 168,
+      weightKg: 62,
+      targetWeightKg: 62,
+    },
+    offsetDate(date, -25),
+  );
+  for (const [day, bodyweight] of [
+    [-5, 63],
+    [-2, 63.2],
+    [0, 63.1],
+  ] as const)
+    saveCheckin(state, { date: offsetDate(date, day), bodyweight }, date);
+  let revision = 1;
+  await context.route("**/api/journal", (r) => {
+    if (isJournalSave(r.request())) {
+      state = savedJournal(r.request(), state);
+      revision++;
+    }
+    return r.fulfill({ json: { accountId: browserUser.id, state, revision } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#today");
+  const goals = page.getByRole("region", { name: "Your goals" });
+  const suggestion = goals.getByRole("button", { name: /New daily targets/ });
+  await suggestion.click();
+  const dialog = page.getByRole("dialog", { name: "New daily targets" });
+  await dialog.getByLabel("Yes to any of these").selectOption("yes");
+  // The held plan's notes, who can help included, not the deficit's.
+  await expect(dialog).toContainText("a sports doctor or sports dietitian");
+  await dialog.getByRole("button", { name: "Keep my current targets" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => state.profile.energyCheck?.signs).toBe(true);
+  expect(state.nutrition.targets.calories).toBe(2280);
+  expect(state.profile.declinedTargets?.calories).toBe(2300);
+  await expect(suggestion).toHaveCount(0);
+});

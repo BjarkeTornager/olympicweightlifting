@@ -352,7 +352,7 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
     targetWeightKg: 85,
     targetBodyFatPercent: 11,
     goalNotes: [
-      "Your goals plan suggests new daily targets, about 3,110 kcal a day. You can take them on Today on the website, or in the latest app.",
+      "Your goals plan suggests new daily targets, about 3,110 kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app.",
     ],
   });
   assert.deepEqual(state.nutrition.targets, saved);

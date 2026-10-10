@@ -396,13 +396,15 @@ const targetsProposalView = z
     // Only when the suggestion sets a deficit without answers to the
     // low-energy questions in force: they come before it is taken, and
     // take_suggested_targets carries the answer (energyAnswer). With a
-    // yes the plan holds the weight, at ifYes instead.
+    // yes the plan holds the weight, at ifYes instead, with ifYesNotes in
+    // place of notes (which an older server leaves out).
     energyCheck: z
       .object({
         title: z.string(),
         questions: z.array(z.string()),
         note: z.string(),
         ifYes: dailyTargetsView,
+        ifYesNotes: z.array(z.string()).optional(),
       })
       .strict()
       .optional(),
@@ -832,6 +834,10 @@ const keepCurrentTargets = z
   .object({
     kind: z.literal("keep_current_targets"),
     targets: suggestedTargets,
+    // An answer given to the low-energy questions before keeping, kept as
+    // when the suggestion is taken; optional, as keeping changes no
+    // targets.
+    energyAnswer: z.enum(["no", "yes", "prefer_not_to_say"]).optional(),
   })
   .strict()
   .register(nativeRequests, { id: "KeepCurrentTargetsAction" });
@@ -1004,6 +1010,7 @@ function proposalForToday(
       questions: proposal.energyCheck.questions,
       note: energyCheckNote(proposal.energyCheck),
       ifYes: view(proposal.energyCheck.ifYes),
+      ifYesNotes: proposal.energyCheck.ifYesNotes,
     },
   });
 }

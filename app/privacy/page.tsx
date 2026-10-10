@@ -394,14 +394,16 @@ export default function PrivacyPage() {
         </p>
         <p>
           Before a plan that loses weight, and about every 3 months while it
-          does, the goals form, Coach and the voice coach may ask three optional
-          questions about stress fractures, eating and periods. Only the day you
-          answered and whether any answer was yes are saved with your goals,
-          never which question or any detail, so the plan holds your weight
-          after a yes. It is sensitive health information and not a diagnosis;
-          choosing Prefer not to say in your goals removes it. If you say your
-          goal weight is a competition weight class, the class and the weigh-in
-          day are saved with your goals too.
+          does, the goals form, a suggestion of new targets on Today, Coach and
+          the voice coach may ask three optional questions about stress
+          fractures, eating and periods. Only the day you answered and whether
+          any answer was yes are saved with your goals, never which question or
+          any detail, so the plan holds your weight after a yes. Coach and the
+          voice coach see whether you answered yes, with your goals, so they
+          don&rsquo;t suggest a deficit. It is sensitive health information and
+          not a diagnosis; choosing Prefer not to say in your goals removes it.
+          If you say your goal weight is a competition weight class, the class
+          and the weigh-in day are saved with your goals too.
         </p>
         <p>
           Each time your daily targets change, the targets, the day, whether

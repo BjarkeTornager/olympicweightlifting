@@ -16,10 +16,12 @@ import {
   goalsCheckDate,
   GOALS_FOLLOW_UP_DAYS,
   GOALS_FOLLOW_UP_TITLE,
+  takeTargetsProposal,
   weeklyOpenings,
 } from "../lib/coaching";
 import { offsetDate } from "../lib/health";
 import { receiptView } from "../lib/native-api";
+import { keepCurrentTargets, targetsProposal } from "../lib/target-proposals";
 
 // Typed Coach's goal setup: feet, inches and pounds, the safety notes in
 // the review and on the iPhone, and the check of the weight trend about 3
@@ -358,4 +360,60 @@ test("goals saved on the website agree the same check, and a deficit asks the lo
   applyGoals(teen, { ...lifter, age: 16 }, today);
   teen.profile.body!.updatedAt = stamp;
   assert.notEqual(coachSuggestion(teen, expired).id, "goals-questions");
+});
+
+test("Coach leaves the low-energy questions to Today's suggestion while it asks them, and taking or keeping it quietens them for 3 months", () => {
+  // Goals saved in June with the old plan's deficit (2,350 kcal); on the
+  // release day the plan suggests new targets and asks the questions.
+  const release = "2026-10-12";
+  const legacy = () => {
+    const state = emptyJournal();
+    state.profile.body = {
+      ...lifter,
+      age: 34,
+      heightCm: 182,
+      weightKg: 88,
+      trainingDays: 4,
+      sessionMinutes: 75,
+      experience: "developing",
+      updatedAt: "2026-06-01T08:00:00.000Z",
+    };
+    state.nutrition.targets = {
+      goal: "lose",
+      calories: 2350,
+      protein: 176,
+      carbs: 254,
+      fat: 70,
+    };
+    return state;
+  };
+  const state = legacy();
+  const proposal = targetsProposal(state, release)!;
+  assert.ok(proposal.energyCheck);
+  assert.notEqual(coachSuggestion(state, release).id, "goals-questions");
+  // Taken with "rather not say": not asked again the same day, but 3
+  // months on, when the copy says the calories are under maintenance.
+  takeTargetsProposal(state, release, proposal.targets, null);
+  assert.equal(state.profile.energyCheck, undefined);
+  // The goals check it agreed comes first, then is done.
+  state.profile.coaching!.plans![0].status = "completed";
+  assert.equal(planForState(state, release)!.energyCheckDue, true);
+  assert.notEqual(coachSuggestion(state, release).id, "goals-questions");
+  const later = offsetDate(release, ENERGY_CHECK_DAYS);
+  assert.notEqual(
+    coachSuggestion(state, offsetDate(later, -1)).id,
+    "goals-questions",
+  );
+  const opening = coachSuggestion(state, later);
+  assert.equal(opening.id, "goals-questions");
+  assert.match(
+    opening.observation,
+    /^Your daily calories are set under maintenance/,
+  );
+  // Kept over, likewise.
+  const kept = legacy();
+  keepCurrentTargets(kept, release, proposal.targets);
+  assert.equal(targetsProposal(kept, release), null);
+  assert.notEqual(coachSuggestion(kept, release).id, "goals-questions");
+  assert.equal(coachSuggestion(kept, later).id, "goals-questions");
 });

@@ -215,3 +215,113 @@ test(
     }
   },
 );
+
+test(
+  "keeping the targets on the iPhone with a yes to the health questions saves the yes",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    assert.ok(
+      new URL(process.env.TEST_DATABASE_URL!).pathname.endsWith("_test"),
+      "Use a disposable database",
+    );
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+    const { getPool } = await import("../lib/db"),
+      { readJournal, writeJournal } = await import("../lib/server"),
+      { applyNativeAction } = await import("../lib/native-actions"),
+      { applyGoals } = await import("../lib/body-goals"),
+      { saveCheckin } = await import("../lib/health"),
+      { buildToday } = await import("../lib/native-api"),
+      { targetsProposal } = await import("../lib/target-proposals");
+    const pool = getPool();
+    const id = crypto.randomUUID(),
+      email = `one-target-keep-${id}@example.test`;
+    await pool.query(
+      "INSERT INTO users(id,name,email,email_verified) VALUES ($1,'QA',$2,true)",
+      [id, email],
+    );
+    await pool.query(
+      "INSERT INTO journal_invitations(id,email,created_by) VALUES($1,$2,$3)",
+      [crypto.randomUUID(), email, id],
+    );
+    try {
+      // Goals saved on 1 September at 88 kg, heading for 81 kg, and a week
+      // of weigh-ins around 85.5 kg since: a new deficit, with questions.
+      const start = await readJournal(id);
+      start.state.profile.timezone = tz;
+      applyGoals(
+        start.state,
+        {
+          age: 34,
+          sex: "male",
+          heightCm: 182,
+          weightKg: 88,
+          targetWeightKg: 81,
+          targetDate: null,
+          activity: "moderate",
+          trainingDays: 4,
+          sessionMinutes: 75,
+          experience: "developing",
+        },
+        "2026-09-01",
+      );
+      for (const [date, bodyweight] of [
+        ["2026-09-20", 85.8],
+        ["2026-09-23", 85.5],
+        ["2026-09-26", 85.2],
+      ] as const)
+        saveCheckin(start.state, { date, bodyweight }, "2026-09-26");
+      await writeJournal(id, {
+        state: start.state,
+        revision: start.revision,
+        mutationId: crypto.randomUUID(),
+      });
+      let journal = await readJournal(id);
+      const suggestion = buildToday(
+        journal.state,
+        journal.revision,
+        "2026-09-26",
+        new Set(),
+      ).targetsProposal!;
+      assert.ok(suggestion.energyCheck);
+      const before = journal.state.nutrition.targets;
+      const kept = await applyNativeAction(
+        id,
+        {
+          id: crypto.randomUUID(),
+          timezone: tz,
+          action: {
+            kind: "keep_current_targets",
+            targets: suggestion.suggested,
+            energyAnswer: "yes",
+          },
+        },
+        now,
+      );
+      assert.equal(kept.status, "saved");
+      assert.match(
+        kept.detail,
+        /your yes to one of the health questions is saved/,
+      );
+      journal = await readJournal(id);
+      assert.deepEqual(journal.state.nutrition.targets, before);
+      assert.deepEqual(journal.state.profile.energyCheck, {
+        date: "2026-09-26",
+        signs: true,
+      });
+      // The plan holds the weight now, and the suggestion kept over was
+      // that one, so none is made again.
+      assert.equal(targetsProposal(journal.state, "2026-09-26"), null);
+      assert.deepEqual(
+        (({ goal, calories }) => ({ goal, calories }))(
+          journal.state.profile.declinedTargets!,
+        ),
+        {
+          goal: suggestion.energyCheck.ifYes.goal,
+          calories: suggestion.energyCheck.ifYes.calories,
+        },
+      );
+    } finally {
+      await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    }
+  },
+);

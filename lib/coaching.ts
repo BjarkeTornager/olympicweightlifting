@@ -283,13 +283,17 @@ export function coachSuggestion(
     };
   // A deficit still saved without answers to the low-energy questions in
   // force, whichever surface saved it: about every 3 months, counted from
-  // the last answers or the goals' last save (where "rather not say" leaves
-  // none), Coach offers them again, gently; hidden, it stays away a week.
+  // the last answers, the goals' last save, or the plan's suggestion last
+  // taken or kept over (where "rather not say" leaves none), Coach offers
+  // them again, gently; hidden, it stays away a week. While Today's
+  // suggestion asks the same questions, it leaves them to that.
   const goals = planForState(state, date);
   const calories = dailyTarget(state.nutrition.targets.calories);
   const since = [
     state.profile.energyCheck?.date,
     state.profile.body?.updatedAt.slice(0, 10),
+    state.profile.targetHistory?.findLast((r) => r.source === "plan")?.from,
+    state.profile.declinedTargets?.date,
   ]
     .filter((day): day is string => Boolean(day))
     .sort()
@@ -301,13 +305,14 @@ export function coachSuggestion(
     calories != null &&
     calories < goals.maintenanceKcal &&
     since != null &&
-    offsetDate(since, ENERGY_CHECK_DAYS) <= date
+    offsetDate(since, ENERGY_CHECK_DAYS) <= date &&
+    !targetsProposal(state, date)?.energyCheck
   )
     return {
       id: "goals-questions",
       title: "A quick check before your plan carries on",
       observation:
-        "Your daily calories are set a little under maintenance, and it’s time for the few health questions that keep that safe, asked about every 3 months.",
+        "Your daily calories are set under maintenance, and it’s time for the few health questions that keep that safe, asked about every 3 months.",
       invitation:
         "They’re optional and take a minute. Nothing changes unless you choose to save it.",
       prompt: "Let’s go through the health questions for my goals plan.",

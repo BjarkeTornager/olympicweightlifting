@@ -17,6 +17,15 @@ import { currentWeightKg, recordTargets } from "./target-history";
 // saved goals change, recorded as the plan's; targets the athlete set by
 // hand are never touched. Other old targets stay, and the plan suggests
 // new ones beside them (target-proposals.ts).
+//
+// Every release since 4 October has run this check, with the plan as it
+// was then, so what is left are targets that plan gave too: a deficit or
+// floor broken by less than the calories' 10 kcal rounding, which it
+// rounded to the same targets. They are within the limits as saved, and
+// the plan as it is now, with its higher maintenance, never rewrites them;
+// it suggests new ones instead. Targets recorded since (target-history.ts)
+// are never old ones.
+const ROUNDING_KCAL = 10;
 
 const sameTargets = (a: DietTargets, b: DietTargets) =>
   (["goal", "calories", "protein", "carbs", "fat"] as const).every(
@@ -33,7 +42,8 @@ export function regateLegacyTargets(
 ) {
   const body = state.profile.body;
   // Goals saved with the checks were planned within the limits.
-  if (!body || state.profile.goalChecks) return false;
+  if (!body || state.profile.goalChecks || state.profile.targetHistory?.length)
+    return false;
   const saved = state.nutrition.targets;
   const old = oldPlanOfTargets(state, timezone);
   if (!old || old.deficit <= 0) return false;
@@ -46,8 +56,8 @@ export function regateLegacyTargets(
   const breaksLimit =
     body.age < 18 ||
     bmi < 17.5 ||
-    old.deficit > cap ||
-    old.unrounded < old.floor;
+    old.deficit >= cap + ROUNDING_KCAL ||
+    old.unrounded <= old.floor - ROUNDING_KCAL;
   if (!breaksLimit) return false;
   const plan = planForState(state, today);
   if (!plan) return false;

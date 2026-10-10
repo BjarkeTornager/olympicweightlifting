@@ -10,6 +10,7 @@ import {
   energySigns,
   goalsForState,
   goalsHeading,
+  planBodyFat,
   planForState,
   planGoals,
   POSTPARTUM_WEEKS,
@@ -203,15 +204,16 @@ function ProposalReview({
     setSaving(true);
     setError("");
     try {
+      // An answer given is kept either way; keeping needs none.
+      const signs =
+        !check || !answer
+          ? undefined
+          : answer === "skip"
+            ? null
+            : answer === "yes";
       await journal.update((s) => {
-        if (take)
-          takeTargetsProposal(
-            s,
-            today(),
-            proposal.targets,
-            !check ? undefined : answer === "skip" ? null : answer === "yes",
-          );
-        else keepCurrentTargets(s, today(), proposal.targets);
+        if (take) takeTargetsProposal(s, today(), proposal.targets, signs);
+        else keepCurrentTargets(s, today(), proposal.targets, signs);
       });
       onDone();
     } catch (e) {
@@ -462,7 +464,18 @@ function GoalsForm({
       planGoals(split.goals, today(), {
         focus: split.composition.focus,
         targetBodyFatPercent: split.composition.targetBodyFatPercent,
-        bodyFatPercent: optional(draft.bodyFatPercent) ?? null,
+        // A new reading goes with the weight given; the latest one keeps
+        // the lean mass it measured, as the saved plan will (planBodyFat).
+        bodyFatPercent:
+          split.composition.bodyFatPercent ??
+          (optional(draft.bodyFatPercent) == null
+            ? null
+            : planBodyFat(
+                state,
+                today(),
+                split.goals.weightKg,
+                split.goals.weightKg,
+              )),
         pregnancy:
           draft.pregnancy === "pregnant" || draft.pregnancy === "breastfeeding"
             ? draft.pregnancy

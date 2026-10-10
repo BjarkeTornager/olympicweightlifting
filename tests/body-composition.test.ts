@@ -247,12 +247,32 @@ test("Coach and the voice coach see body fat, weight trend and goals", () => {
     /Bodyweight: 87\.6 kg\. Body fat: 14% \(scale\)/,
   );
 
+  // Three weigh-ins are not enough for a trend (4 over 14 days are); a
+  // fourth makes one, by least squares rather than the first and latest.
   const health = dailyHealth(state, today);
   assert.deepEqual(health.weightTrend, {
     weigh_ins: 3,
     first: { date: "2026-08-29", kg: 88.4 },
     latest: { date: today, kg: 87.6 },
+    status: "not_enough",
+    trend_kg: null,
+    kg_per_week: null,
+    percent_per_week: null,
+    summary:
+      "Not enough weigh-ins for a trend yet (it takes 4 spread over 14 days)",
+  });
+  saveCheckin(state, { date: "2026-09-19", bodyweight: 87.7 }, today);
+  assert.deepEqual(dailyHealth(state, today).weightTrend, {
+    weigh_ins: 4,
+    first: { date: "2026-08-29", kg: 88.4 },
+    latest: { date: today, kg: 87.6 },
+    status: "losing",
+    // On the line at the latest weigh-in, not the reading itself.
+    trend_kg: 87.5,
     kg_per_week: -0.2,
+    percent_per_week: -0.2,
+    summary:
+      "Down about 0.2 kg a week (0.2% of bodyweight) over the last 4 weeks",
   });
   assert.equal(health.bodyFat.latest?.percent, 14);
   assert.equal(health.bodyFat.trend?.change_points, -0.5);
@@ -262,6 +282,7 @@ test("Coach and the voice coach see body fat, weight trend and goals", () => {
   assert.equal(context.goals?.focus, "lose_fat");
   assert.equal(context.goals?.plan?.bodyFatPercent, 14);
   assert.equal(context.bodyComposition?.weightTrend?.kg_per_week, -0.2);
+  assert.equal(context.bodyComposition?.weightTrend?.status, "losing");
 
   // Coach's instructions name the whole role and the limits.
   const prompt = fullPrompt();
@@ -346,7 +367,12 @@ test("the iPhone app shows body composition on Today, Journal and trends", () =>
     bodyweight: 87.6,
     bodyweightDate: today,
     bodyweightFromAppleHealth: false,
-    weeklyWeightChangeKg: -0.4,
+    // Two weigh-ins a week apart are not enough for a trend.
+    weightTrend: {
+      status: "not_enough",
+      text: "Not enough weigh-ins for a trend yet (it takes 4 spread over 14 days)",
+      weighIns: 2,
+    },
     leanMassKg: 75.3,
     focus: "recomposition",
     targetWeightKg: 85,

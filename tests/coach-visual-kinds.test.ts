@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import {
   calendarDays,
   recipeMeta,
+  savedVisualSchema,
   visualSchema,
   visualToolSchema,
+  type SavedVisual,
 } from "../lib/coach-visuals";
-import { flattenVisual } from "../lib/native-api";
+import { buildCoach, flattenVisual } from "../lib/native-api";
 
 const examples = {
   line_chart: {
@@ -275,4 +277,46 @@ test("calendar days fall on their weekday, with the days Coach left out blank", 
     }).success,
     true,
   );
+});
+
+test("a progress card a newer version saved still reads, without the fields this version doesn't know", () => {
+  // As a newer version might save it: a field on a target this version
+  // doesn't know (hidden) beside one it does (suggested).
+  const saved = {
+    id: crypto.randomUUID(),
+    content: {
+      kind: "progress",
+      title: "Today so far",
+      targets: [
+        {
+          label: "Protein",
+          value: 80,
+          target: 110,
+          unit: "g",
+          suggested: false,
+          hidden: true,
+        },
+      ],
+    },
+  };
+  const known = [
+    { label: "Protein", value: 80, target: 110, unit: "g", suggested: false },
+  ];
+  const web = savedVisualSchema.parse(saved).content;
+  assert.equal(web.kind, "progress");
+  assert.deepEqual(web.kind === "progress" && web.targets, known);
+  const phone = buildCoach([
+    {
+      id: crypto.randomUUID(),
+      question: "How am I doing?",
+      photoIds: [],
+      createdAt: new Date().toISOString(),
+      status: "done",
+      reply: "Protein is on its way.",
+      visuals: [saved as unknown as SavedVisual],
+    },
+  ]);
+  assert.deepEqual(phone.turns[0].visuals?.[0].targets, known);
+  // Coach's own tool still refuses a field it doesn't know.
+  assert.equal(visualToolSchema.safeParse(saved.content).success, false);
 });

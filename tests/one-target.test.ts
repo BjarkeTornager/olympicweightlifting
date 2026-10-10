@@ -42,6 +42,7 @@ import {
   targetsProposal,
 } from "../lib/target-proposals";
 import { voiceContext } from "../lib/voice-checkin";
+import { trendAgainstPlan } from "../lib/weight-trend";
 
 // One weight and one target: the plan works from the athlete's current
 // weight, the saved targets are the ones shown everywhere, and the plan
@@ -952,12 +953,26 @@ test("a body fat reading keeps the lean mass it measured as the weight falls, so
   assert.equal(resaved.bodyFatPercent, preview);
   assert.equal(resaved.towardsKg, 81.2);
   assert.equal(planForState(legacy, offsetDate(resave, 1))!.leanMassKg, 74.7);
-  // A new reading moves the lean mass, and says so.
+  // A new reading moves the lean mass. While the weight comes down faster
+  // than the plan (0.8 kg a week against its 0.3), the lower target it
+  // gives waits (weight-trend.ts); once the weight holds, it is suggested,
+  // and says why.
   const later = offsetDate(start, 80);
   saveBodyFat(state, { date: later, percent: 12, method: "dexa" }, later);
   assert.equal(planForState(state, later)!.leanMassKg, 71.5);
+  assert.equal(trendAgainstPlan(state, later)?.state, "faster");
+  assert.equal(targetsProposal(state, later), null);
+  const held = offsetDate(start, 98);
+  for (const day of [84, 91, 98])
+    saveCheckin(
+      state,
+      { date: offsetDate(start, day), bodyweight: 81.2 },
+      offsetDate(start, day),
+    );
+  assert.notEqual(trendAgainstPlan(state, held)?.state, "faster");
+  assert.equal(planForState(state, held)!.leanMassKg, 71.5);
   assert.match(
-    targetsProposal(state, later)!.reasons.join(" "),
+    targetsProposal(state, held)!.reasons.join(" "),
     /Your body fat reading of 12% on 2026-11-20 puts your lean mass at about 71\.5 kg, from 74\.7 kg/,
   );
 });

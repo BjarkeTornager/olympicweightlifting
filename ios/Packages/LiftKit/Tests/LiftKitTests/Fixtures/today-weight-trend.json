@@ -6,48 +6,58 @@
     "nights": 0
   },
   "checkin": {
-    "bodyweight": 81,
+    "bodyweight": 84.3,
     "notes": ""
   },
   "body": {
-    "bodyweight": 81,
+    "bodyweight": 84.3,
     "bodyweightDate": "2026-09-26",
     "bodyweightFromAppleHealth": false,
+    "weeklyWeightChangeKg": -1,
     "weightTrend": {
-      "status": "not_enough",
-      "text": "Not enough weigh-ins for a trend yet (it takes 4 spread over 14 days)",
-      "weighIns": 4
+      "status": "losing",
+      "text": "Down about 1 kg a week (1.2% of bodyweight) over the last 4 weeks",
+      "weighIns": 15,
+      "kgPerWeek": -1,
+      "percentPerWeek": -1.2,
+      "trendKg": 84.1
     },
-    "focus": "maintain",
-    "targetWeightKg": 81,
-    "goalNotes": [
-      "Your goals plan suggests new daily targets, about 3,000 kcal a day: take them, or keep yours, on Today. If you don't see them there, update the app."
-    ]
+    "weekAverageKg": 84.5,
+    "previousWeekAverageKg": 85.6,
+    "weekAverageChangeKg": -1.1,
+    "planTrend": "faster",
+    "planTrendText": "Faster than your goals plan, which loses about 0.4 kg a week.",
+    "weightAlert": {
+      "level": "amber",
+      "text": "Your weight has come down by about 1.2% of your bodyweight a week over the last 3 weeks, faster than the 1% a week usually advised. If that's more than you meant, eating a little more can ease it, and if you feel tired, low or unwell, a doctor or sports dietitian can help."
+    },
+    "focus": "lose_fat",
+    "targetWeightKg": 81
   },
   "nutrition": {
     "calories": 0,
     "protein": 0,
     "carbs": 0,
     "fat": 0,
-    "targetCalories": 2550,
+    "targetCalories": 2640,
     "targetProtein": 175,
     "meals": [],
     "estimated": false,
     "complete": false,
     "caloriesProgress": {
-      "target": "about 2,550 kcal",
-      "status": "About 2,550 kcal remaining"
+      "target": "about 2,640 kcal",
+      "status": "About 2,650 kcal remaining"
     },
     "proteinProgress": {
       "target": "at least 175 g",
       "status": "About 175 g remaining"
     },
     "carbsProgress": {
-      "target": "about 250 to 315 g",
-      "status": "About 250 g remaining"
+      "target": "about 245 to 315 g",
+      "status": "About 245 g remaining"
     },
     "fatProgress": {
-      "target": "about 70 to 95 g",
+      "target": "about 70 to 100 g",
       "status": "About 70 g remaining"
     }
   },
@@ -92,29 +102,5 @@
       "action": "Log food"
     }
   ],
-  "journalStartDate": "2026-08-30",
-  "targetsProposal": {
-    "title": "Hold your weight from here",
-    "reasons": [
-      "Your weight is about 81.2 kg now: you've reached your goal of 81 kg."
-    ],
-    "current": {
-      "goal": "lose",
-      "calories": 2550,
-      "protein": 175,
-      "carbs": 315,
-      "fat": 75
-    },
-    "suggested": {
-      "goal": "maintain",
-      "calories": 3000,
-      "protein": 145,
-      "carbs": 415,
-      "fat": 85
-    },
-    "maintain": true,
-    "notes": [
-      "You've reached your goal weight, so the plan holds your weight there. Review your goals to set a new one."
-    ]
-  }
+  "journalStartDate": "2026-08-27"
 }

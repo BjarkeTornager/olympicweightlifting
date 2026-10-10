@@ -500,6 +500,12 @@ export function HealthView({
           </strong>
           <p>
             {view.latestWeight?.date ?? "No measurement in the last 14 days"}
+            {view.weightTrend && (
+              <>
+                <br />
+                {view.weightTrend.summary}
+              </>
+            )}
           </p>
         </section>
         <section className="panel">

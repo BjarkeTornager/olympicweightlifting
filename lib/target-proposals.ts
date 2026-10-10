@@ -18,6 +18,7 @@ import {
   type GoalPlan,
 } from "./body-goals";
 import { latestBodyFat } from "./body-composition";
+import { trendAgainstPlan, weightAlert } from "./weight-trend";
 import {
   currentWeightKg,
   localDay,
@@ -314,14 +315,20 @@ export function targetsProposal(
   }
   // Slow loss is never answered here by cutting further: unless the
   // weight or lean mass has moved, a deeper cut waits for the goals check.
+  // Nor is a loss already faster than the plan, or one with a note on a
+  // fast loss or a low weight still coming down (weight-trend.ts), even
+  // when the weight has moved: a lower target would only add to it. Any
+  // note counts, as a low weight hides a fast loss at amber.
   const savedKcal = dailyTarget(saved.calories);
   if (
-    !measured &&
     saved.goal === "lose" &&
     targets.goal === "lose" &&
     kcal != null &&
     savedKcal != null &&
-    kcal < savedKcal
+    kcal < savedKcal &&
+    (!measured ||
+      trendAgainstPlan(state, today)?.state === "faster" ||
+      weightAlert(state, today) != null)
   )
     return null;
   if (!reasons.length) {

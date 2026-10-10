@@ -11,7 +11,8 @@ import {
   pregnancyStatuses,
 } from "./body-goals";
 import { describeTargets, targetsProposal } from "./target-proposals";
-import { bodyFocuses, bodyFatMethods } from "./body-composition";
+import { bodyFocuses, bodyFatMethods, weightTrend } from "./body-composition";
+import { trendAgainstPlan, weightAlert } from "./weight-trend";
 import { dayForCoach, describeDay } from "./journal-summary";
 import type { RouteNote } from "./route-summary";
 import { VOICE_CREDIT_MESSAGE } from "./voice-live";
@@ -28,6 +29,7 @@ import {
   proteinTargetRule,
   supplementRule,
   teenSleepRule,
+  weightTrendRule,
 } from "./agent/health-rules";
 import {
   speakingRule,
@@ -92,6 +94,8 @@ export function voiceContext(
   const proposal = targetsProposal(state, date);
   const plan = proposal?.plan ?? planForState(state, date);
   const shortSleep = shortSleepNote(state, date);
+  const trend = weightTrend(state, date);
+  const alert = weightAlert(state, date);
   return {
     date,
     food: state.nutrition.completeDays?.includes(date)
@@ -152,6 +156,19 @@ export function voiceContext(
           ].join(" ")
         : null,
     age: athleteAge(state),
+    // The weight trend in words, against the goals plan once its targets
+    // have run 3 or 4 weeks, and any note on a fast loss or a low weight
+    // still coming down: decided here, as the model would have a weigh-in
+    // or two to go on.
+    weight: trend
+      ? [
+          `${trend.summary}.`,
+          trendAgainstPlan(state, date)?.text,
+          alert && `Note: ${alert.text}`,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : null,
   };
 }
 
@@ -205,6 +222,7 @@ Already recorded for ${context.date}:
 - Short sleep: ${context.shortSleep ?? "nothing flagged"}
 - Training: ${context.training}
 ${context.unfinishedWorkout ? `- An unfinished workout is open: ${context.unfinishedWorkout}. It does not stop you logging other training.\n` : ""}${context.nextPlanned ? `- Next planned session in the programme: ${context.nextPlanned}\n` : ""}- Goals: ${context.goals ?? "Not set up yet"}
+- Weight trend: ${context.weight ?? "no weigh-ins in the last 4 weeks"}
 Already logged today, in short: ${describeDay(context.day)}
 Everything recorded for ${context.date} so far, in full (complete and current at the start of this call; you do not need read_journal for today, only for other days or after changes made elsewhere): ${JSON.stringify(context.day)}
 ${purpose === "goals" ? "\nThe athlete opened this call to set up their goals. Do that first; offer the check-in afterwards only if they want it.\n" : ""}
@@ -234,6 +252,7 @@ How to run the check-in:
 - Drinks: log every drink with log_drink and its millilitres (a glass about 250 ml, a bottle 500 ml, a can 330 ml unless they say otherwise; set estimated when you used one of these sizes). A drink with energy (energy drink, juice, milk, soft drink, protein shake, coffee with milk, beer, wine or spirits) also gets a log_meal. Beer, wine and spirits count as drinks, but never suggest alcohol to rehydrate. For "drinks today", a rough total is fine ("about two litres of water"): log it as one water entry. Mention progress against the day's target when useful, never when the athlete hid it. ${drinksTargetRule} To remove a wrong drink, use delete_drink with its id from the day's record.
 - Supplements: when the athlete says they took a vitamin, mineral or supplement (vitamin D, multivitamin, creatine, fish oil, iron, magnesium, protein powder counts as food), call log_supplement once per supplement, with the amount only if they said it. The day's record lists what was taken and their usual ones not yet taken; you may ask once whether they took those. To remove a wrong one, use delete_supplement with its id. ${supplementRule}
 - ${caffeineRule}
+- ${weightTrendRule}
 - Health limits: you are not a registered dietitian or doctor. For a medical condition, pregnancy or breastfeeding, regular medication, an eating disorder or a clinical diet, suggest a registered dietitian or doctor (their midwife in pregnancy) alongside general guidance. ${disorderedEatingRule} ${proteinTargetRule}
 - Food against targets: ${foodProgressRule}
 - Camera: if the athlete wants to show you their food, call open_camera, tell them to point it at the plate and tap the shutter or say "take it" (then call take_photo). When the photo arrives, name what you see with rough portions, ask for a quick yes or correction, then log_meal with that photo's id in photo_ids. If a note says the photo couldn't be shown to you, ask what's on the plate instead.

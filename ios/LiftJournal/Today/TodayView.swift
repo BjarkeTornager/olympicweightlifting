@@ -181,7 +181,7 @@ struct TodayView: View {
       }
       recovery(today).padding(.top, Theme.Space.section)
       BodySection(
-        body: today.body, weights: weekDays.map { (JournalDay.date($0.date), $0.bodyweight) }
+        body: today.body, day: today.date, weights: weekDays.map { (JournalDay.date($0.date), $0.bodyweight) }
       ) { model.showingCheckin = true }
       .padding(.top, Theme.Space.section)
       FoodSection(nutrition: today.nutrition, hydration: today.hydration, supplements: today.supplements)
@@ -279,6 +279,34 @@ struct TodayView: View {
     }
     let parts = [vitals.date == today.date ? nil : "Yesterday", energy].compactMap { $0 }
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
+  }
+
+  /// The change beside the weight, only once the trend is losing or
+  /// gaining, so none shows beside an about stable weight or too few
+  /// weigh-ins: this week's average against last week's, when each week
+  /// has 3 weigh-ins, else the trend's change a week. From a server without
+  /// the trend, its change a week as before.
+  static func weightChange(_ body: Components.Schemas.Body?) -> (kg: Double, note: String)? {
+    guard let trend = body?.weightTrend else {
+      return body?.weeklyWeightChangeKg.map { ($0, "a week") }
+    }
+    guard trend.status == "losing" || trend.status == "gaining" else { return nil }
+    if let kg = body?.weekAverageChangeKg { return (kg, "on last week's average") }
+    return trend.kgPerWeek.map { ($0, "a week") }
+  }
+
+  /// Under the weight, the day it was weighed when that isn't the record's
+  /// day ("Yesterday", else "Wednesday 1 October"), and where it came from
+  /// when Apple Health brought it.
+  static func weighedNote(_ body: Components.Schemas.Body?, on day: String) -> String? {
+    guard let date = body?.bodyweightDate, let weighed = JournalDay.date(date) else { return nil }
+    let fromHealth = body?.bodyweightFromAppleHealth == true
+    if date == day { return fromHealth ? "From Apple Health" : nil }
+    let yesterday = JournalDay.date(day).flatMap { Calendar.current.date(byAdding: .day, value: -1, to: $0) }
+    let when =
+      yesterday.map { JournalDay.string($0) } == date
+      ? "Yesterday" : weighed.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Format.locale))
+    return fromHealth ? "\(when) · from Apple Health" : when
   }
 
   // MARK: Recovery
@@ -515,11 +543,15 @@ private struct FeelCell: View {
 
 // MARK: Body
 
-/// Weight in the serif with its change over the week, a chart of the week's
-/// readings, and body fat and lean mass below. Missing values are written
-/// out: an action when there is one, a sentence when there is not.
+/// Weight in the serif with the day it was weighed and its change, a chart
+/// of the week's readings, the four weeks' trend in words and against the
+/// goals plan, any note on a fast loss or a low weight still coming down,
+/// and body fat and lean mass below. Missing values are written out: an
+/// action when there is one, a sentence when there is not.
 private struct BodySection: View {
   let body_: Components.Schemas.Body?
+  /// The record's day, yyyy-MM-dd.
+  let day: String
   /// The week's readings, oldest first.
   let weights: [(day: Date?, kg: Double?)]
   let checkIn: () -> Void
@@ -527,8 +559,11 @@ private struct BodySection: View {
   /// hairlines keep apart.
   @ScaledMetric(relativeTo: .caption2) private var chartGrowth: CGFloat = 1
 
-  init(body: Components.Schemas.Body?, weights: [(Date?, Double?)], checkIn: @escaping () -> Void) {
+  init(
+    body: Components.Schemas.Body?, day: String, weights: [(Date?, Double?)], checkIn: @escaping () -> Void
+  ) {
     body_ = body
+    self.day = day
     self.weights = weights.map { (day: $0.0, kg: $0.1) }
     self.checkIn = checkIn
   }
@@ -544,6 +579,7 @@ private struct BodySection: View {
           NavigationLink(value: Trend.body) { weight(kg) }
             .buttonStyle(CardButtonStyle())
             .padding(.top, 16)
+          if let note = body_?.weightAlert { alert(note.text).padding(.top, 14) }
         } else {
           VStack(alignment: .leading, spacing: 10) {
             NavigationLink(value: Trend.body) { weightLabel.contentShape(.rect) }
@@ -579,12 +615,9 @@ private struct BodySection: View {
     }
   }
 
-  /// The first and latest readings of the week, when there are two.
-  private var change: (kg: Double, since: Date)? {
-    let readings = weights.compactMap { item in item.kg.flatMap { kg in item.day.map { (kg, $0) } } }
-    guard let first = readings.first, let last = readings.last, readings.count > 1 else { return nil }
-    return (last.0 - first.0, first.1)
-  }
+  private var change: (kg: Double, note: String)? { TodayView.weightChange(body_) }
+
+  private var weighed: String? { TodayView.weighedNote(body_, on: day) }
 
   private var goal: (String, String)? {
     if let kg = body_?.targetWeightKg { return (Format.decimal(kg), "kg") }
@@ -610,28 +643,50 @@ private struct BodySection: View {
         if let change {
           VStack(alignment: .trailing, spacing: 2) {
             Measure(value: signed(change.kg), unit: "kg", role: .inline).foregroundStyle(Theme.ink)
-            Text("since \(change.since.formatted(.dateTime.weekday(.wide).locale(Format.locale)))")
-              .font(.footnote)
-              .foregroundStyle(Theme.inkSecondary)
-          }
-          .accessibilityElement(children: .combine)
-        } else if let weekly = body_?.weeklyWeightChangeKg {
-          VStack(alignment: .trailing, spacing: 2) {
-            Measure(value: signed(weekly), unit: "kg", role: .inline).foregroundStyle(Theme.ink)
-            Text("a week").font(.footnote).foregroundStyle(Theme.inkSecondary)
+            Text(change.note).font(.footnote).foregroundStyle(Theme.inkSecondary)
           }
           .accessibilityElement(children: .combine)
         }
       }
       .padding(.top, 10)
+      if let weighed {
+        Text(weighed).font(.footnote).foregroundStyle(Theme.inkSecondary).padding(.top, 2)
+      }
       let points = weights.enumerated().compactMap { index, item in item.kg.map { (index, $0) } }
       if points.count > 1 {
         WeightChart(points: points, days: weights.map(\.day), count: weights.count)
           .frame(height: 92 * min(chartGrowth, 1.8))
           .padding(.top, 18)
       }
+      // The four weeks' trend in words, and against the goals plan.
+      if let trend = body_?.weightTrend {
+        VStack(alignment: .leading, spacing: 4) {
+          Paragraph(trend.text, language: .english)
+          if let plan = body_?.planTrendText { Paragraph(plan, language: .english) }
+        }
+        .folio(.note)
+        .foregroundStyle(Theme.inkSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 14)
+      }
     }
     .contentShape(.rect)
+  }
+
+  /// A note on a fast loss or a low weight still coming down, set as
+  /// Coach's health notes are.
+  private func alert(_ text: String) -> some View {
+    Label {
+      Paragraph(text, language: .english).fixedSize(horizontal: false, vertical: true)
+    } icon: {
+      Image(systemName: "heart.text.square").foregroundStyle(Theme.attention)
+    }
+    .font(.footnote)
+    .foregroundStyle(Theme.ink)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(12)
+    .background(Theme.fill, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
+    .accessibilityElement(children: .combine)
   }
 
   private var bodyFat: some View {

@@ -13,6 +13,11 @@
     "bodyweight": 63.1,
     "bodyweightDate": "2026-09-26",
     "bodyweightFromAppleHealth": false,
+    "weightTrend": {
+      "status": "not_enough",
+      "text": "Not enough weigh-ins for a trend yet (it takes 4 spread over 14 days)",
+      "weighIns": 3
+    },
     "focus": "lose_fat",
     "targetWeightKg": 62,
     "goalNotes": [

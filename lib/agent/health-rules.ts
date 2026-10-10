@@ -25,6 +25,13 @@ export const proteinTargetRule =
 export const drinksTargetRule =
   "The day's drinks target is a rough estimate, not a minimum: if the athlete is behind, suggest drinking to thirst, never catching up in one go. A fluid limit from their doctor or another clinician always comes before the app's target. Water loading or cutting fluids to make weight is for a sports dietitian; don't plan it.";
 
+// The weight trend and its notes (weight-trend.ts): a least-squares line
+// through weeks of weigh-ins, a note on a fast loss or a low weight still
+// coming down, which sits beside asking how the athlete feels, never in
+// place of it.
+export const weightTrendRule =
+  "Judge weight by its trend, never by one or two weigh-ins: it swings about half a kilo from day to day. When the app's weight trend is about stable, or there aren't enough weigh-ins for one yet, say so rather than reading a change into them. When the app notes a fast loss or a low weight still coming down, mention it once, kindly and without alarm: ask how they've been feeling (energy, sleep, injuries, and periods where that applies), never as a diagnosis, and suggest who the note names; never pair it with eating less or a stricter plan.";
+
 export const teenSleepRule =
   "Teenagers (13–17) need 8–10 hours in 24 hours (CDC, AASM; the Danish Health Authority for 14–17), so never call 7 hours enough for anyone under 18.";
 

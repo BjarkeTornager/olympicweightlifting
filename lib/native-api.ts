@@ -42,6 +42,7 @@ import {
   weightTrend,
 } from "./body-composition";
 import { planForState } from "./body-goals";
+import { trendAgainstPlan, weekAverages, weightAlert } from "./weight-trend";
 import {
   activeGoalsCheck,
   goalsCheckClosedNote,
@@ -318,6 +319,29 @@ const priorityView = z
   .strict()
   .register(nativeResponses, { id: "Priority" });
 
+// The weight trend from the last four weeks' weigh-ins, by least squares
+// (weightTrend): status not_enough, stable, losing or gaining, in words,
+// and once there are enough weigh-ins the change a week and the trend
+// weight. Strings rather than enums, so a new status never stops an older
+// app reading Today.
+const weightTrendView = z
+  .object({
+    status: z.string(),
+    text: z.string(),
+    weighIns: int,
+    kgPerWeek: z.number().optional(),
+    percentPerWeek: z.number().optional(),
+    trendKg: z.number().optional(),
+  })
+  .strict()
+  .register(nativeResponses, { id: "WeightTrend" });
+// A fast loss, or a low weight still coming down (weightAlert): level
+// amber or red, and what to say.
+const weightAlertView = z
+  .object({ level: z.string(), text: z.string() })
+  .strict()
+  .register(nativeResponses, { id: "WeightAlert" });
+
 // Body composition at a glance: the latest body fat and weight, lean mass,
 // and the goal's focus and targets.
 const bodyView = z
@@ -331,8 +355,25 @@ const bodyView = z
     // The weight came from Apple Health rather than a check-in. Optional,
     // as new fields are.
     bodyweightFromAppleHealth: z.boolean().optional(),
-    // Average change a week over the last four weeks of weigh-ins.
+    // The change a week over the last four weeks of weigh-ins, by least
+    // squares: 0 when about stable, left out without enough weigh-ins for
+    // a trend. For older apps; newer ones read weightTrend.
     weeklyWeightChangeKg: z.number().optional(),
+    // The weight trend in full. Optional, as new fields are.
+    weightTrend: weightTrendView.optional(),
+    // This week's average weight and last week's, each from at least 3
+    // weigh-ins, and the change between them (weekAverages). The app shows
+    // the change only beside a trend that is losing or gaining.
+    weekAverageKg: z.number().optional(),
+    previousWeekAverageKg: z.number().optional(),
+    weekAverageChangeKg: z.number().optional(),
+    // The trend against the goals plan once its targets have run 3 weeks,
+    // 4 for women (trendAgainstPlan): on_track, slower or faster, and in
+    // words.
+    planTrend: z.string().optional(),
+    planTrendText: z.string().optional(),
+    // A note on a fast loss or a low weight still coming down.
+    weightAlert: weightAlertView.optional(),
     leanMassKg: z.number().optional(),
     // lose_fat, build_muscle, recomposition or maintain.
     focus: z.string().optional(),
@@ -979,6 +1020,10 @@ function bodyForToday(
   const fat = latestBodyFat(state, date);
   // The latest weigh-in of the last 30 days: a check-in, else Apple Health.
   const weight = weighIns(state, offsetDate(date, -30), date).at(-1);
+  const trend = weightTrend(state, date);
+  const weeks = weekAverages(state, date);
+  const against = trendAgainstPlan(state, date);
+  const alert = weightAlert(state, date);
   const plan = proposal?.plan ?? planForState(state, date);
   // Shown beside the saved targets, so only notes that describe them.
   const notes = plan ? targetNotes(state, date, proposal) : [];
@@ -992,7 +1037,24 @@ function bodyForToday(
     bodyweightFromAppleHealth: weight
       ? weight.source === "apple-health"
       : undefined,
-    weeklyWeightChangeKg: weightTrend(state, date)?.kg_per_week ?? undefined,
+    weeklyWeightChangeKg:
+      trend?.status === "stable" ? 0 : (trend?.kg_per_week ?? undefined),
+    weightTrend: trend
+      ? defined({
+          status: trend.status,
+          text: trend.summary,
+          weighIns: trend.weigh_ins,
+          kgPerWeek: trend.kg_per_week ?? undefined,
+          percentPerWeek: trend.percent_per_week ?? undefined,
+          trendKg: trend.trend_kg ?? undefined,
+        })
+      : undefined,
+    weekAverageKg: weeks?.kg,
+    previousWeekAverageKg: weeks?.previousKg,
+    weekAverageChangeKg: weeks?.changeKg,
+    planTrend: against?.state,
+    planTrendText: against?.text,
+    weightAlert: alert ? { level: alert.level, text: alert.text } : undefined,
     leanMassKg:
       fat && weight
         ? Math.round(weight.kg * (1 - fat.percent / 100) * 10) / 10
@@ -2085,7 +2147,7 @@ export function flattenVisual({ id, content }: SavedVisual) {
         stops: content.stops,
       };
     // Only the target fields this version knows, so a card a newer version
-    // saved still reads after a rollback.
+    // saved with more of them still reads after a rollback.
     case "progress":
       return {
         id,
